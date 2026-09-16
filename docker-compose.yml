@@ -1,0 +1,44 @@
+# Local development stack.
+#   docker compose up -d db              -> PostgreSQL only (run API/web from the SDKs)
+#   docker compose --profile full up -d  -> full stack from Docker images, http://localhost:8080
+# Credentials below are for local development only (port bound to 127.0.0.1).
+name: court-booking
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-courtbooking}
+      POSTGRES_USER: ${POSTGRES_USER:-courtbooking}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-courtbooking_dev}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    profiles: [full]
+    build: ./backend
+    environment:
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB:-courtbooking};Username=${POSTGRES_USER:-courtbooking};Password=${POSTGRES_PASSWORD:-courtbooking_dev}"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    profiles: [full]
+    build: ./frontend
+    environment:
+      SITE_ADDRESS: ":80"
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      - api
+
+volumes:
+  db-data:
