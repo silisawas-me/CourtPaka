@@ -30,6 +30,19 @@ export interface OpeningHoursDay {
   closesHour: number | null;
 }
 
+export interface CourtStatusChange {
+  active: boolean;
+  effectiveFrom: string;
+  changedAt: string;
+}
+
+/** What the court's timeline says after a change, which is not always what was asked for. */
+export interface CourtStatus {
+  courtId: string;
+  activeToday: boolean;
+  scheduled: CourtStatusChange[];
+}
+
 export interface OpeningHours {
   id: string;
   effectiveFrom: string;
@@ -56,8 +69,10 @@ export class CourtService {
     return this.http.put<Court>(`/api/venues/${venueId}/courts/${courtId}`, { name, position });
   }
 
-  changeCourtStatus(venueId: string, courtId: string, active: boolean): Observable<Court> {
-    return this.http.put<Court>(`/api/venues/${venueId}/courts/${courtId}/status`, { active });
+  changeCourtStatus(venueId: string, courtId: string, active: boolean): Observable<CourtStatus> {
+    return this.http.put<CourtStatus>(`/api/venues/${venueId}/courts/${courtId}/status`, {
+      active,
+    });
   }
 
   openingHours(venueId: string): Observable<OpeningHours[]> {

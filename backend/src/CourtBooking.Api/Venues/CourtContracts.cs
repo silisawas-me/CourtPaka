@@ -14,6 +14,16 @@ public sealed record CourtResponse(Guid Id, string Name, int Position, bool IsAc
 
 public sealed record CourtStatusChangeResponse(bool Active, DateOnly EffectiveFrom, DateTimeOffset ChangedAt);
 
+/// <summary>
+/// What the court's timeline says after a change: how it stands today, which is what the settings
+/// screen shows, and anything already dated ahead — so a caller can tell a change that was recorded
+/// from one the timeline already said, and cannot be surprised by a closure someone scheduled.
+/// </summary>
+public sealed record CourtStatusResponse(
+    Guid CourtId,
+    bool ActiveToday,
+    CourtStatusChangeResponse[] Scheduled);
+
 /// <summary>One weekday. Both hours null means the venue does not open that day.</summary>
 public sealed record OpeningHoursDayRequest(string Day, int? OpensHour, int? ClosesHour);
 

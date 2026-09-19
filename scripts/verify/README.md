@@ -14,7 +14,9 @@ They sign in as the seeded accounts (`owner@courtpaka.local` / `staff@courtpaka.
 `DevPassword1`) and write screenshots next to themselves. Each check prints PASS or FAIL and the
 script exits non-zero if anything failed.
 
-One rule worth keeping: wait for the response before reloading. The pages apply a change straight
+Two rules worth keeping. Wait for the section to render before counting what is in it — a count
+taken mid-load reads zero, and a check written against an empty database never notices. And wait
+for the response before reloading. The pages apply a change straight
 away and reconcile with the server, so reloading right after a click cancels the request in flight
 and the check reads the old state — which is a bug in the check, not in the page.
 

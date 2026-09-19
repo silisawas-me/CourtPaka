@@ -42,7 +42,7 @@
                   [attr.data-testid]="'rename-input-' + court.id"
                 />
                 <app-field-error [control]="renameForm.controls.name" testId="rename-error" />
-                <button type="submit" [disabled]="savingCourt() === court.id">
+                <button type="submit" [disabled]="isSaving(court)">
                   {{ i18n.t('settings.courts.saveName') }}
                 </button>
                 <button type="button" class="ghost" (click)="cancelRename()">
@@ -56,7 +56,7 @@
                 <input
                   type="checkbox"
                   [checked]="court.isActive"
-                  [disabled]="!canManage() || savingCourt() === court.id"
+                  [disabled]="!canManage() || isSaving(court)"
                   [attr.data-testid]="'court-active-' + court.id"
                   (change)="toggleCourt(court, $any($event.target).checked)"
                 />
@@ -72,6 +72,17 @@
                 >
                   {{ i18n.t('settings.courts.rename') }}
                 </button>
+              }
+
+              @for (change of scheduledFor(court); track change.effectiveFrom) {
+                <span class="muted" [attr.data-testid]="'scheduled-' + court.id">
+                  {{
+                    i18n.t(
+                      change.active ? 'settings.courts.backFrom' : 'settings.courts.outOfUseFrom'
+                    )
+                  }}
+                  {{ change.effectiveFrom }}
+                </span>
               }
             }
           </li>
@@ -157,13 +168,13 @@
 
               <select formControlName="opensHour" [attr.data-testid]="'opens-' + day">
                 @for (hour of openingHours; track hour) {
-                  <option [value]="hour">{{ hour }}:00</option>
+                  <option [ngValue]="hour">{{ hour }}:00</option>
                 }
               </select>
               <span>–</span>
               <select formControlName="closesHour" [attr.data-testid]="'closes-' + day">
                 @for (hour of closingHours; track hour) {
-                  <option [value]="hour">{{ hour }}:00</option>
+                  <option [ngValue]="hour">{{ hour }}:00</option>
                 }
               </select>
             </div>

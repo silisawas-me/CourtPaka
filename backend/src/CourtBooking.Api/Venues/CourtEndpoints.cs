@@ -134,7 +134,7 @@ public static class CourtEndpoints
     /// the court's timeline rather than a flag, so a report about a past month still knows how many
     /// courts the venue had then (PRD US-11, US-15).
     /// </summary>
-    private static async Task<Results<Ok<CourtResponse>, NotFound, ProblemHttpResult>> ChangeCourtStatusAsync(
+    private static async Task<Results<Ok<CourtStatusResponse>, NotFound, ProblemHttpResult>> ChangeCourtStatusAsync(
         Guid venueId,
         Guid courtId,
         ChangeCourtStatusRequest request,
@@ -158,15 +158,15 @@ public static class CourtEndpoints
             return TypedResults.NotFound();
         }
 
-        var changes = await StatusChangesAsync(database, venueId, effectiveFrom, cancellationToken);
-        if (VenueTimeline.CourtIsActiveOn(changes, courtId, effectiveFrom) != request.Active)
+        var upto = await StatusChangesAsync(database, venueId, effectiveFrom, cancellationToken);
+        if (VenueTimeline.CourtIsActiveOn(upto, courtId, effectiveFrom) != request.Active)
         {
-            database.CourtStatusChanges.Add(
-                court.ChangeStatus(request.Active, effectiveFrom, currentVenue.Require().UserId, timeProvider.GetUtcNow()));
+            database.CourtStatusChanges.Add(court.ChangeStatus(
+                request.Active, effectiveFrom, currentVenue.Require().UserId, timeProvider.GetUtcNow()));
             await database.SaveChangesAsync(cancellationToken);
         }
 
-        return TypedResults.Ok(await ToResponseAsync(database, court, today, cancellationToken));
+        return TypedResults.Ok(await StatusResponseAsync(database, court, today, cancellationToken));
     }
 
     private static async Task<Results<Ok<CourtStatusChangeResponse[]>, NotFound>> CourtHistoryAsync(
@@ -281,6 +281,29 @@ public static class CourtEndpoints
         {
             return false;
         }
+    }
+
+    /// <summary>Reads back the whole timeline, so the answer cannot disagree with what was stored.</summary>
+    private static async Task<CourtStatusResponse> StatusResponseAsync(
+        AppDbContext database,
+        Court court,
+        DateOnly today,
+        CancellationToken cancellationToken)
+    {
+        var changes = await database.CourtStatusChanges
+            .AsNoTracking()
+            .Where(change => change.CourtId == court.Id)
+            .ToListAsync(cancellationToken);
+
+        var scheduled = changes
+            .Where(change => change.EffectiveFrom > today)
+            .OrderBy(change => change.EffectiveFrom)
+            .ThenBy(change => change.ChangedAt)
+            .Select(change => new CourtStatusChangeResponse(change.Active, change.EffectiveFrom, change.ChangedAt))
+            .ToArray();
+
+        return new CourtStatusResponse(
+            court.Id, VenueTimeline.CourtIsActiveOn(changes, court.Id, today), scheduled);
     }
 
     private static async Task<CourtResponse> ToResponseAsync(

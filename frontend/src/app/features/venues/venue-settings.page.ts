@@ -13,6 +13,7 @@ import { TranslationService } from '../../core/i18n/translation.service';
 import {
   Court,
   CourtService,
+  CourtStatusChange,
   OpeningHours,
   OpeningHoursDay,
   WEEKDAYS,
@@ -59,7 +60,9 @@ export class VenueSettingsPage {
   protected readonly pageError = signal<string | null>(null);
   protected readonly courtError = signal<string | null>(null);
   protected readonly hoursError = signal<string | null>(null);
-  protected readonly savingCourt = signal<string | null>(null);
+  /** The courts with a change in flight; one court saving must not unlock another one. */
+  protected readonly savingCourts = signal<ReadonlySet<string>>(new Set());
+  protected readonly scheduled = signal<Record<string, CourtStatusChange[]>>({});
   protected readonly renaming = signal<string | null>(null);
   protected readonly addingCourt = signal(false);
   protected readonly savingHours = signal(false);
@@ -139,48 +142,71 @@ export class VenueSettingsPage {
 
   protected saveRename(court: Court): void {
     this.renameForm.markAllAsTouched();
-    if (this.renameForm.invalid || this.savingCourt() !== null) {
+    if (this.renameForm.invalid || this.isSaving(court)) {
       return;
     }
 
-    this.savingCourt.set(court.id);
+    this.startSaving(court.id);
     this.courtError.set(null);
 
     this.courts
       .updateCourt(this.venueId(), court.id, this.renameForm.controls.name.value, court.position)
       .subscribe({
         next: (updated) => {
-          this.savingCourt.set(null);
+          this.doneSaving(court.id);
           this.renaming.set(null);
           this.patchCourt(court.id, updated);
         },
         error: (error: unknown) => {
-          this.savingCourt.set(null);
+          this.doneSaving(court.id);
           this.courtError.set(errorKey(error));
         },
       });
   }
 
+  protected isSaving(court: Court): boolean {
+    return this.savingCourts().has(court.id);
+  }
+
+  /** Changes already dated ahead, so an owner is not surprised by a closure someone scheduled. */
+  protected scheduledFor(court: Court): CourtStatusChange[] {
+    return this.scheduled()[court.id] ?? [];
+  }
+
   protected toggleCourt(court: Court, active: boolean): void {
-    if (this.savingCourt() === court.id) {
+    if (this.isSaving(court)) {
       return;
     }
 
-    this.savingCourt.set(court.id);
+    this.startSaving(court.id);
     this.courtError.set(null);
     // Show it straight away; putting it back on refusal is what resets the checkbox.
     this.patchCourt(court.id, { isActive: active });
 
     this.courts.changeCourtStatus(this.venueId(), court.id, active).subscribe({
-      next: (updated) => {
-        this.savingCourt.set(null);
-        this.patchCourt(court.id, updated);
+      next: (status) => {
+        this.doneSaving(court.id);
+        // The server answers with its own timeline, which is not always what was asked for.
+        this.patchCourt(court.id, { isActive: status.activeToday });
+        this.scheduled.update((all) => ({ ...all, [court.id]: status.scheduled }));
       },
       error: (error: unknown) => {
-        this.savingCourt.set(null);
+        this.doneSaving(court.id);
         this.patchCourt(court.id, { isActive: court.isActive });
         this.courtError.set(errorKey(error));
       },
+    });
+  }
+
+  private startSaving(courtId: string): void {
+    this.savingCourts.update((saving) => new Set(saving).add(courtId));
+  }
+
+  private doneSaving(courtId: string): void {
+    this.savingCourts.update((saving) => {
+      const next = new Set(saving);
+      next.delete(courtId);
+      return next;
     });
   }
 
@@ -197,12 +223,18 @@ export class VenueSettingsPage {
     this.courts.setOpeningHours(this.venueId(), effectiveFrom, this.week()).subscribe({
       next: (saved) => {
         this.savingHours.set(false);
-        // The server keeps every version but only ever runs on the newest for a date, so the page
-        // shows one row per date, like the list endpoint does.
-        this.schedules.update((list) => [
-          ...list.filter((week) => week.effectiveFrom !== saved.effectiveFrom),
-          saved,
-        ]);
+        // Mirror what the list endpoint would return: one row per start date, one week in force, in
+        // date order. Without dropping the week it replaces, a week published for today would hide
+        // behind the older one that is still marked as in force.
+        this.schedules.update((list) =>
+          [
+            ...list.filter(
+              (week) =>
+                week.effectiveFrom !== saved.effectiveFrom && !(saved.inForce && week.inForce),
+            ),
+            saved,
+          ].sort((left, right) => left.effectiveFrom.localeCompare(right.effectiveFrom)),
+        );
       },
       error: (error: unknown) => {
         this.savingHours.set(false);
@@ -259,6 +291,8 @@ export class VenueSettingsPage {
     this.courtError.set(null);
     this.hoursError.set(null);
     this.renaming.set(null);
+    this.savingCourts.set(new Set());
+    this.scheduled.set({});
 
     forkJoin({
       venue: this.venues.get(venueId),

@@ -77,7 +77,8 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
         var court = await AddCourtAsync(owner, venue.Id, "Court 1");
 
         var changed = await ChangeStatusAsync(owner, venue.Id, court.Id, active: false);
-        Assert.False(changed.IsActive);
+        Assert.False(changed.ActiveToday);
+        Assert.Empty(changed.Scheduled);
 
         var history = await HistoryAsync(owner, venue.Id, court.Id);
         // Newest first: out of use today, in use from the day it was added.
@@ -94,8 +95,14 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
 
         var today = await ChangeStatusAsync(owner, venue.Id, court.Id, active: false, from: friday);
 
+        // The answer describes the timeline, not the request: the court is still in use today, and
+        // the change waiting for Friday is named so an owner cannot be surprised by it.
+        Assert.True(today.ActiveToday);
+        var waiting = Assert.Single(today.Scheduled);
+        Assert.False(waiting.Active);
+        Assert.Equal(friday, waiting.EffectiveFrom);
+
         // The list answers for a date, because the availability grid shows days ahead (US-02).
-        Assert.True(today.IsActive);
         Assert.True(Assert.Single(await ListCourtsAsync(owner, venue.Id)).IsActive);
         Assert.True(Assert.Single(await ListCourtsAsync(owner, venue.Id, friday.AddDays(-1))).IsActive);
         Assert.False(Assert.Single(await ListCourtsAsync(owner, venue.Id, friday)).IsActive);
@@ -110,7 +117,7 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
         await ChangeStatusAsync(owner, venue.Id, court.Id, active: false);
         var back = await ChangeStatusAsync(owner, venue.Id, court.Id, active: true);
 
-        Assert.True(back.IsActive);
+        Assert.True(back.ActiveToday);
         Assert.Equal(3, (await HistoryAsync(owner, venue.Id, court.Id)).Length);
     }
 
@@ -122,8 +129,25 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
 
         var unchanged = await ChangeStatusAsync(owner, venue.Id, court.Id, active: true);
 
-        Assert.True(unchanged.IsActive);
+        Assert.True(unchanged.ActiveToday);
         Assert.Single(await HistoryAsync(owner, venue.Id, court.Id));
+    }
+
+    [Fact]
+    public async Task A_change_the_timeline_already_says_still_reports_what_is_waiting()
+    {
+        var (owner, venue) = await OwnedVenueAsync();
+        var court = await AddCourtAsync(owner, venue.Id, "Court 1");
+        var friday = Today.AddDays(5);
+        await ChangeStatusAsync(owner, venue.Id, court.Id, active: false, from: friday);
+
+        // The court is already in use today, so this writes nothing — but the answer must still say
+        // that it goes out of use on Friday, or an owner would read "in use" and move on.
+        var again = await ChangeStatusAsync(owner, venue.Id, court.Id, active: true);
+
+        Assert.True(again.ActiveToday);
+        Assert.Equal(friday, Assert.Single(again.Scheduled).EffectiveFrom);
+        Assert.Equal(2, (await HistoryAsync(owner, venue.Id, court.Id)).Length);
     }
 
     [Fact]
@@ -468,13 +492,13 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
         await VenueScenario.ReadAsync<CourtResponse[]>(
             await client.GetAsync($"/api/venues/{venueId}/courts" + (on is null ? "" : $"?on={on:yyyy-MM-dd}")));
 
-    private static async Task<CourtResponse> ChangeStatusAsync(
+    private static async Task<CourtStatusResponse> ChangeStatusAsync(
         HttpClient client,
         Guid venueId,
         Guid courtId,
         bool active,
         DateOnly? from = null) =>
-        await VenueScenario.ReadAsync<CourtResponse>(
+        await VenueScenario.ReadAsync<CourtStatusResponse>(
             await client.PutAsJsonAsync(
                 $"/api/venues/{venueId}/courts/{courtId}/status", new ChangeCourtStatusRequest(active, from)));
 

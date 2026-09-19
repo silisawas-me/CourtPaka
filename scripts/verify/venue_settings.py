@@ -25,6 +25,8 @@ with sync_playwright() as p:
     check("the venue page links to its settings", page.url.endswith("/settings"), page)
 
     # 1. Add two courts.
+    # Count only once the section has rendered: either list or empty note, never mid-load.
+    page.wait_for_selector("[data-testid=court-list], [data-testid=no-courts]")
     existing = page.locator("[data-testid=court-list] li").count()
     stamp = datetime.datetime.now().strftime("%H%M%S")
     for name in (f"Court {stamp}A", f"Court {stamp}B"):
@@ -72,8 +74,8 @@ with sync_playwright() as p:
     today = datetime.date.today()
     page.fill("#effective-from", today.isoformat())
     page.uncheck("[data-testid=open-Monday]")
-    page.select_option("[data-testid=opens-Tuesday]", "7")
-    page.select_option("[data-testid=closes-Tuesday]", "24")
+    page.select_option("[data-testid=opens-Tuesday]", label="7:00")
+    page.select_option("[data-testid=closes-Tuesday]", label="24:00")
     with page.expect_response(lambda response: "/opening-hours" in response.url) as published:
         page.locator("form").last.locator("button[type=submit]").click()
     check("the week was accepted", published.value.status == 200)
