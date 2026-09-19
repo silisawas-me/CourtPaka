@@ -1,8 +1,11 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideNativeDateAdapter } from '@angular/material/core';
 import { TRANSLATIONS } from '../../core/i18n/locales';
 import {
   check,
+  isDisabled,
+  isOn,
   elementOf,
   pageProviders,
   setInput,
@@ -41,7 +44,9 @@ describe('VenueSettingsPage', () => {
     localStorage.clear();
     await TestBed.configureTestingModule({
       imports: [VenueSettingsPage],
-      providers: pageProviders(),
+      // The page provides its own adapter; the spec says so rather than the helper providing it
+      // for every page, which would hide a page that forgot to.
+      providers: [...pageProviders(), provideNativeDateAdapter()],
     }).compileComponents();
 
     httpMock = TestBed.inject(HttpTestingController);
@@ -62,6 +67,15 @@ describe('VenueSettingsPage', () => {
     httpMock.expectOne('/api/venues/v1').flush(venue(overrides));
     httpMock.expectOne('/api/venues/v1/courts').flush(courts);
     httpMock.expectOne('/api/venues/v1/opening-hours').flush(schedules);
+    fixture.detectChanges();
+  }
+
+  /** The picker works in Dates; the page turns one into the plain date the API takes. */
+  function setDate(isoDate: string): void {
+    const [year, month, day] = isoDate.split('-').map(Number);
+    fixture.componentInstance['hoursForm'].controls.effectiveFrom.setValue(
+      new Date(year, month - 1, day),
+    );
     fixture.detectChanges();
   }
 
@@ -138,7 +152,7 @@ describe('VenueSettingsPage', () => {
       .flush({ code: 'venue.not_approved' }, { status: 403, statusText: 'Forbidden' });
     fixture.detectChanges();
 
-    expect(elementOf<HTMLInputElement>(fixture, 'court-active-c1')?.checked).toBe(true);
+    expect(isOn(fixture, 'court-active-c1')).toBe(true);
     expect(textOf(fixture, 'court-error')).toBe(TRANSLATIONS.th['error.venue.not_approved']);
   });
 
@@ -148,18 +162,18 @@ describe('VenueSettingsPage', () => {
     check(fixture, '[data-testid="court-active-c1"]');
     const request = httpMock.expectOne('/api/venues/v1/courts/c1/status');
 
-    expect(elementOf<HTMLInputElement>(fixture, 'court-active-c1')?.disabled).toBe(true);
-    expect(elementOf<HTMLInputElement>(fixture, 'court-active-c2')?.disabled).toBe(false);
+    expect(isDisabled(fixture, 'court-active-c1')).toBe(true);
+    expect(isDisabled(fixture, 'court-active-c2')).toBe(false);
 
     request.flush({ courtId: 'c1', activeToday: false, scheduled: [] });
     fixture.detectChanges();
-    expect(elementOf<HTMLInputElement>(fixture, 'court-active-c1')?.disabled).toBe(false);
+    expect(isDisabled(fixture, 'court-active-c1')).toBe(false);
   });
 
   it('shows the week in force and fills the form from it', () => {
     render({}, [], [{ id: 's1', effectiveFrom: '2026-09-01', inForce: true, days: week(7, 23) }]);
 
-    expect(textOf(fixture, 'hours-in-force')).toContain('2026-09-01');
+    expect(textOf(fixture, 'hours-in-force')).toContain('2569');
     expect(textOf(fixture, 'hours-Monday')).toContain('7:00');
     const monday = fixture.componentInstance['hoursForm'].controls.days.controls.Monday;
     expect(monday.getRawValue()).toEqual({ open: true, opensHour: 7, closesHour: 23 });
@@ -168,7 +182,7 @@ describe('VenueSettingsPage', () => {
   it('sends every weekday, with a closed day as nulls', () => {
     render({}, [], [{ id: 's1', effectiveFrom: '2026-09-01', inForce: true, days: week() }]);
 
-    setInput(fixture, '#effective-from', '2026-10-01');
+    setDate('2026-10-01');
     check(fixture, '[data-testid="open-Monday"]');
     submitForm(fixture, 'form:has(#effective-from)');
 
@@ -182,7 +196,7 @@ describe('VenueSettingsPage', () => {
     request.flush({ id: 's2', effectiveFrom: '2026-10-01', inForce: false, days: week() });
     fixture.detectChanges();
 
-    expect(textOf(fixture, 'hours-upcoming')).toContain('2026-10-01');
+    expect(textOf(fixture, 'hours-upcoming')).toContain('1 ต.ค. 2569');
   });
 
   it('shows the newer week for a date it already had', () => {
@@ -195,7 +209,7 @@ describe('VenueSettingsPage', () => {
       ],
     );
 
-    setInput(fixture, '#effective-from', '2026-10-01');
+    setDate('2026-10-01');
     submitForm(fixture, 'form:has(#effective-from)');
     httpMock
       .expectOne('/api/venues/v1/opening-hours')
@@ -203,15 +217,17 @@ describe('VenueSettingsPage', () => {
     fixture.detectChanges();
 
     const upcoming = (fixture.nativeElement as HTMLElement).querySelectorAll(
-      '[data-testid="hours-upcoming"] li',
+      '[data-testid="hours-upcoming"] .entry',
     );
     expect(upcoming.length).toBe(1);
   });
 
-  it('translates a refused week', () => {
+  it('translates a refusal the form could not have known about', () => {
     render({}, [], []);
 
-    setInput(fixture, '#effective-from', '2020-01-01');
+    // The picker will not offer a past date, but the day can turn over between picking and saving,
+    // so the server's refusal still has to reach the page in the reader's language.
+    setDate('2026-10-01');
     submitForm(fixture, 'form:has(#effective-from)');
 
     httpMock
@@ -227,20 +243,31 @@ describe('VenueSettingsPage', () => {
     );
   });
 
+  it('will not send a date the server would refuse', () => {
+    render({}, [], []);
+
+    setDate('2020-01-01');
+    submitForm(fixture, 'form:has(#effective-from)');
+
+    // Nothing leaves the page: the date is before the minimum the picker allows.
+    httpMock.expectNone('/api/venues/v1/opening-hours');
+  });
+
   it('sends the hours as numbers after the user picks them', () => {
     render({}, [], [{ id: 's1', effectiveFrom: '2026-09-01', inForce: true, days: week() }]);
 
-    const opens = elementOf<HTMLSelectElement>(fixture, 'opens-Tuesday')!;
-    opens.selectedIndex = 9;
-    opens.dispatchEvent(new Event('change'));
+    // A Material select opens an overlay; setting the control is what picking an option does.
+    fixture.componentInstance[
+      'hoursForm'
+    ].controls.days.controls.Tuesday.controls.opensHour.setValue(9);
     fixture.detectChanges();
 
-    setInput(fixture, '#effective-from', '2026-10-01');
+    setDate('2026-10-01');
     submitForm(fixture, 'form:has(#effective-from)');
 
     const request = httpMock.expectOne('/api/venues/v1/opening-hours');
     const body = request.request.body as { days: { day: string; opensHour: unknown }[] };
-    // A select bound with [value] would hand back the string "9" and the type would be a lie.
+    // A select bound with [value] on a plain <option> would hand back "9" and the type would lie.
     expect(body.days[1]).toEqual({ day: 'Tuesday', opensHour: 9, closesHour: 22 });
     request.flush({ id: 's2', effectiveFrom: '2026-10-01', inForce: false, days: week() });
     fixture.detectChanges();
@@ -249,14 +276,14 @@ describe('VenueSettingsPage', () => {
   it('shows the week it just published for today instead of the one it replaced', () => {
     render({}, [], [{ id: 's1', effectiveFrom: '2026-09-01', inForce: true, days: week(6, 22) }]);
 
-    setInput(fixture, '#effective-from', '2026-09-19');
+    setDate('2026-09-19');
     submitForm(fixture, 'form:has(#effective-from)');
     httpMock
       .expectOne('/api/venues/v1/opening-hours')
       .flush({ id: 's2', effectiveFrom: '2026-09-19', inForce: true, days: week(9, 21) });
     fixture.detectChanges();
 
-    expect(textOf(fixture, 'hours-in-force')).toContain('2026-09-19');
+    expect(textOf(fixture, 'hours-in-force')).toContain('19 ก.ย. 2569');
     expect(textOf(fixture, 'hours-Monday')).toContain('9:00');
     expect(elementOf(fixture, 'hours-upcoming')).toBeNull();
   });
@@ -268,7 +295,7 @@ describe('VenueSettingsPage', () => {
       ['s2', '2026-11-01'],
       ['s3', '2026-10-01'],
     ]) {
-      setInput(fixture, '#effective-from', date);
+      setDate(date);
       submitForm(fixture, 'form:has(#effective-from)');
       httpMock
         .expectOne('/api/venues/v1/opening-hours')
@@ -278,10 +305,10 @@ describe('VenueSettingsPage', () => {
 
     const listed = [
       ...(fixture.nativeElement as HTMLElement).querySelectorAll(
-        '[data-testid="hours-upcoming"] li strong',
+        '[data-testid="hours-upcoming"] .entry-name',
       ),
     ].map((item) => item.textContent);
-    expect(listed).toEqual(['2026-10-01', '2026-11-01']);
+    expect(listed).toEqual(['1 ต.ค. 2569', '1 พ.ย. 2569']);
   });
 
   it('lets a second court be changed while the first is still saving', () => {
@@ -296,11 +323,11 @@ describe('VenueSettingsPage', () => {
     // The first answering must not unlock the second, whose request is still out.
     first.flush({ courtId: 'c1', activeToday: false, scheduled: [] });
     fixture.detectChanges();
-    expect(elementOf<HTMLInputElement>(fixture, 'court-active-c2')?.disabled).toBe(true);
+    expect(isDisabled(fixture, 'court-active-c2')).toBe(true);
 
     second.flush({ courtId: 'c2', activeToday: false, scheduled: [] });
     fixture.detectChanges();
-    expect(elementOf<HTMLInputElement>(fixture, 'court-active-c2')?.disabled).toBe(false);
+    expect(isDisabled(fixture, 'court-active-c2')).toBe(false);
   });
 
   it('says when a court is already booked to go out of use', () => {
@@ -317,8 +344,8 @@ describe('VenueSettingsPage', () => {
     fixture.detectChanges();
 
     // What the server stored wins over what the click asked for.
-    expect(elementOf<HTMLInputElement>(fixture, 'court-active-c1')?.checked).toBe(true);
-    expect(textOf(fixture, 'scheduled-c1')).toContain('2026-10-01');
+    expect(isOn(fixture, 'court-active-c1')).toBe(true);
+    expect(textOf(fixture, 'scheduled-c1')).toContain('1 ต.ค. 2569');
   });
 
   it('offers no controls to someone without the permission', () => {
@@ -328,7 +355,7 @@ describe('VenueSettingsPage', () => {
     expect(element.querySelector('#court-name')).toBeNull();
     expect(element.querySelector('#effective-from')).toBeNull();
     expect(elementOf(fixture, 'rename-c1')).toBeNull();
-    expect(elementOf<HTMLInputElement>(fixture, 'court-active-c1')?.disabled).toBe(true);
+    expect(isDisabled(fixture, 'court-active-c1')).toBe(true);
     expect(textOf(fixture, 'read-only')).toBe(TRANSLATIONS.th['settings.readOnly']);
   });
 

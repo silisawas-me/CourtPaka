@@ -1,6 +1,12 @@
-import { DatePipe } from '@angular/common';
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { AppDatePipe } from '../../core/i18n/app-date.pipe';
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { errorKey } from '../../core/http/api-error';
@@ -15,10 +21,23 @@ import {
   VenueService,
 } from '../../core/venues/venue.service';
 import { FieldError } from '../../shared/field-error';
+import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 
 @Component({
   selector: 'app-venue-detail-page',
-  imports: [ReactiveFormsModule, RouterLink, FieldError, DatePipe],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    FieldError,
+    MatButtonModule,
+    MatCardModule,
+    MatCheckboxModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatProgressBarModule,
+    AppDatePipe,
+  ],
+  providers: [FORM_FIELD_DEFAULTS],
   templateUrl: './venue-detail.page.html',
 })
 export class VenueDetailPage {

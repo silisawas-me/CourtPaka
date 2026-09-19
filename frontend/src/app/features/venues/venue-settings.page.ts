@@ -6,6 +6,17 @@ import {
   ReactiveFormsModule,
   Validators,
 } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { DateAdapter, provideNativeDateAdapter } from '@angular/material/core';
+import { MatDatepickerModule } from '@angular/material/datepicker';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { AppDatePipe } from '../../core/i18n/app-date.pipe';
+import { plainDate } from '../../core/i18n/plain-date';
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { errorKey } from '../../core/http/api-error';
@@ -21,10 +32,11 @@ import {
 } from '../../core/venues/court.service';
 import { Venue, VenueService } from '../../core/venues/venue.service';
 import { FieldError } from '../../shared/field-error';
+import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 
 /** A venue opens on the hour: 0 is the start of the day, 24 is midnight at the end of it. */
 const OPENING_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
-const CLOSING_HOURS = Array.from({ length: 24 }, (_, hour) => hour + 1);
+const CLOSING_HOURS = OPENING_HOURS.map((hour) => hour + 1);
 
 /** What the form offers before a venue says otherwise: a common Thai badminton day. */
 const DEFAULT_OPENS_HOUR = 6;
@@ -38,13 +50,29 @@ type DayForm = FormGroup<{
 
 @Component({
   selector: 'app-venue-settings-page',
-  imports: [ReactiveFormsModule, RouterLink, FieldError],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    FieldError,
+    MatButtonModule,
+    MatCardModule,
+    MatCheckboxModule,
+    MatDatepickerModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatProgressBarModule,
+    MatSlideToggleModule,
+    AppDatePipe,
+  ],
   templateUrl: './venue-settings.page.html',
+  // This is the only page with a datepicker, so its adapter stays out of the initial bundle.
+  providers: [FORM_FIELD_DEFAULTS, provideNativeDateAdapter()],
 })
 export class VenueSettingsPage {
   private readonly courts = inject(CourtService);
   private readonly venues = inject(VenueService);
   private readonly formBuilder = inject(FormBuilder);
+  private readonly dates = inject(DateAdapter);
 
   protected readonly i18n = inject(TranslationService);
   protected readonly weekdays = WEEKDAYS;
@@ -75,6 +103,15 @@ export class VenueSettingsPage {
     );
   });
 
+  /**
+   * Each court with anything dated ahead of today, so an owner is not surprised by a closure
+   * someone scheduled. Computed rather than looked up per row: a fresh [] on every change
+   * detection pass makes the template's loop re-diff every court, forever.
+   */
+  protected readonly courtRows = computed(() =>
+    this.courtList().map((court) => ({ court, scheduled: this.scheduled()[court.id] ?? [] })),
+  );
+
   protected readonly inForce = computed(
     () => this.schedules().find((week) => week.inForce) ?? null,
   );
@@ -99,13 +136,18 @@ export class VenueSettingsPage {
     name: ['', [Validators.required, Validators.maxLength(50)]],
   });
 
-  protected readonly hoursForm = this.formBuilder.nonNullable.group({
-    effectiveFrom: ['', Validators.required],
+  /** The earliest date the server will take, so the picker cannot offer a refused one. */
+  protected readonly today = signal(new Date());
+
+  protected readonly hoursForm = this.formBuilder.group({
+    effectiveFrom: this.formBuilder.control<Date | null>(null, Validators.required),
     days: this.formBuilder.nonNullable.group(this.emptyWeek()),
   });
 
   constructor() {
     effect(() => this.load(this.venueId()));
+    // The picker formats through Intl, so this is what puts the calendar in the reader's language.
+    effect(() => this.dates.setLocale(this.i18n.locale()));
   }
 
   protected addCourt(): void {
@@ -168,11 +210,6 @@ export class VenueSettingsPage {
     return this.savingCourts().has(court.id);
   }
 
-  /** Changes already dated ahead, so an owner is not surprised by a closure someone scheduled. */
-  protected scheduledFor(court: Court): CourtStatusChange[] {
-    return this.scheduled()[court.id] ?? [];
-  }
-
   protected toggleCourt(court: Court, active: boolean): void {
     if (this.isSaving(court)) {
       return;
@@ -218,9 +255,9 @@ export class VenueSettingsPage {
 
     this.savingHours.set(true);
     this.hoursError.set(null);
-    const { effectiveFrom } = this.hoursForm.getRawValue();
+    const effectiveFrom = this.hoursForm.controls.effectiveFrom.value;
 
-    this.courts.setOpeningHours(this.venueId(), effectiveFrom, this.week()).subscribe({
+    this.courts.setOpeningHours(this.venueId(), plainDate(effectiveFrom!), this.week()).subscribe({
       next: (saved) => {
         this.savingHours.set(false);
         // Mirror what the list endpoint would return: one row per start date, one week in force, in
@@ -292,6 +329,7 @@ export class VenueSettingsPage {
     this.hoursError.set(null);
     this.renaming.set(null);
     this.savingCourts.set(new Set());
+    this.today.set(new Date());
     this.scheduled.set({});
 
     forkJoin({

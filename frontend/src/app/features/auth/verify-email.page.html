@@ -1,21 +1,29 @@
-<section class="card">
-  <h1>{{ i18n.t('verify.title') }}</h1>
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>{{ i18n.t('verify.title') }}</mat-card-title>
+  </mat-card-header>
 
   @switch (state()) {
     @case ('working') {
-      <p data-testid="verify-working">{{ i18n.t('verify.working') }}</p>
+      <mat-card-content>
+        <p data-testid="verify-working">{{ i18n.t('verify.working') }}</p>
+      </mat-card-content>
     }
     @case ('done') {
-      <p class="success" data-testid="verify-success">{{ i18n.t('verify.success') }}</p>
-      <p>
-        <a routerLink="/">{{ i18n.t('app.name') }}</a>
-      </p>
+      <mat-card-content>
+        <p class="success" data-testid="verify-success">{{ i18n.t('verify.success') }}</p>
+      </mat-card-content>
+      <mat-card-actions>
+        <a matButton="filled" routerLink="/">{{ i18n.t('app.name') }}</a>
+      </mat-card-actions>
     }
     @case ('failed') {
-      <p class="form-error" data-testid="verify-error">{{ i18n.t(errorKey()) }}</p>
-      <p>
-        <a routerLink="/resend-verification">{{ i18n.t('login.resendVerification') }}</a>
-      </p>
+      <mat-card-content>
+        <p class="form-error" data-testid="verify-error">{{ i18n.t(errorKey()) }}</p>
+      </mat-card-content>
+      <mat-card-actions>
+        <a matButton routerLink="/resend-verification">{{ i18n.t('login.resendVerification') }}</a>
+      </mat-card-actions>
     }
   }
-</section>
+</mat-card>

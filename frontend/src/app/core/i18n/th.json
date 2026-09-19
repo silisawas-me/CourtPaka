@@ -1,6 +1,8 @@
 {
   "app.language": "ภาษา",
   "app.language.en": "English",
+  "app.language.short.en": "EN",
+  "app.language.short.th": "ไทย",
   "app.language.th": "ไทย",
   "app.languageNotSaved": "บันทึกภาษาไว้ในบัญชีไม่สำเร็จ หน้านี้เปลี่ยนภาษาแล้ว แต่อีเมลจะยังใช้ภาษาเดิม",
   "app.name": "CourtPaka",

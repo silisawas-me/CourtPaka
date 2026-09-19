@@ -36,3 +36,10 @@ def login(page, email: str, password: str = PASSWORD) -> None:
     page.fill("#email", email)
     page.fill("#password", password)
     page.click("button[type=submit]")
+
+
+# Material renders a checkbox as an <input> inside its host and a slide toggle as a
+# <button role="switch">, so a check written against the host would touch neither. Playwright
+# reads both through the role, which is the part Material does not get to change.
+def control(page, test_id: str):
+    return page.locator(f'[data-testid="{test_id}"]').locator("input, button").first

@@ -1,11 +1,15 @@
 import { Component, inject, signal } from '@angular/core';
+import { MatAnchor, MatButton } from '@angular/material/button';
+import { MatToolbar } from '@angular/material/toolbar';
 import { Router, RouterLink, RouterOutlet } from '@angular/router';
 import { AuthService } from './core/auth/auth.service';
 import { Language, LANGUAGES } from './core/i18n/locales';
 import { TranslationService } from './core/i18n/translation.service';
 
 @Component({
-  imports: [RouterOutlet, RouterLink],
+  // The directives, not the modules: MatButtonModule also declares icon and fab buttons,
+  // which the shell does not use but would carry into the first chunk.
+  imports: [RouterOutlet, RouterLink, MatToolbar, MatButton, MatAnchor],
   selector: 'app-root',
   styleUrl: './app.scss',
   templateUrl: './app.html',

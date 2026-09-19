@@ -1,6 +1,8 @@
 {
   "app.language": "Language",
   "app.language.en": "English",
+  "app.language.short.en": "EN",
+  "app.language.short.th": "TH",
   "app.language.th": "ไทย",
   "app.languageNotSaved": "We could not save that language to your account. This page changed, but emails keep the old language.",
   "app.name": "CourtPaka",

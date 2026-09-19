@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { App } from './app';
 import { AuthService } from './core/auth/auth.service';
 import { TRANSLATIONS } from './core/i18n/locales';
-import { pageProviders, textOf } from './testing/dom';
+import { check, pageProviders, textOf } from './testing/dom';
 
 describe('App shell', () => {
   let fixture: ComponentFixture<App>;
@@ -33,10 +33,7 @@ describe('App shell', () => {
   afterEach(() => httpMock.verify());
 
   it('saves the language on the account when a signed-in user switches', () => {
-    (fixture.nativeElement as HTMLElement)
-      .querySelector<HTMLButtonElement>('[data-testid="language-en"]')!
-      .click();
-    fixture.detectChanges();
+    check(fixture, '[data-testid="language-en"]');
 
     const request = httpMock.expectOne('/api/auth/me/language');
     expect(request.request.body).toEqual({ language: 'en' });
@@ -47,10 +44,7 @@ describe('App shell', () => {
   });
 
   it('says so when the language could not be saved to the account', () => {
-    (fixture.nativeElement as HTMLElement)
-      .querySelector<HTMLButtonElement>('[data-testid="language-en"]')!
-      .click();
-    fixture.detectChanges();
+    check(fixture, '[data-testid="language-en"]');
 
     httpMock
       .expectOne('/api/auth/me/language')

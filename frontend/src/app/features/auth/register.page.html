@@ -1,48 +1,67 @@
 @if (done()) {
-  <section class="card" data-testid="register-done">
-    <h1>{{ i18n.t('register.done.title') }}</h1>
-    <p>{{ i18n.t('register.done.body') }}</p>
-    <p>
-      <a routerLink="/login">{{ i18n.t('login.title') }}</a>
-    </p>
-  </section>
+  <mat-card data-testid="register-done">
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('register.done.title') }}</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <p>{{ i18n.t('register.done.body') }}</p>
+    </mat-card-content>
+    <mat-card-actions>
+      <a matButton="filled" routerLink="/login">{{ i18n.t('login.title') }}</a>
+    </mat-card-actions>
+  </mat-card>
 } @else {
-  <section class="card">
-    <h1>{{ i18n.t('register.title') }}</h1>
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('register.title') }}</mat-card-title>
+    </mat-card-header>
 
-    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
-      <label for="email">{{ i18n.t('common.email') }}</label>
-      <input id="email" type="email" formControlName="email" autocomplete="email" />
-      <app-field-error [control]="form.controls.email" testId="email-error" />
+    <mat-card-content>
+      <form class="stack" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('common.email') }}</mat-label>
+          <input matInput id="email" type="email" formControlName="email" autocomplete="email" />
+          <mat-error [appFieldError]="form.controls.email" testId="email-error"></mat-error>
+        </mat-form-field>
 
-      <label for="password">{{ i18n.t('common.password') }}</label>
-      <input id="password" type="password" formControlName="password" autocomplete="new-password" />
-      <app-field-error [control]="form.controls.password" testId="password-error" />
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('common.password') }}</mat-label>
+          <input
+            matInput
+            id="password"
+            type="password"
+            formControlName="password"
+            autocomplete="new-password"
+          />
+          <mat-error [appFieldError]="form.controls.password" testId="password-error"></mat-error>
+        </mat-form-field>
 
-      <label for="phone">{{ i18n.t('common.phone') }}</label>
-      <input id="phone" type="tel" formControlName="phoneNumber" autocomplete="tel" />
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('common.phone') }}</mat-label>
+          <input matInput id="phone" type="tel" formControlName="phoneNumber" autocomplete="tel" />
+        </mat-form-field>
 
-      <label class="checkbox">
-        <input type="checkbox" formControlName="acceptPolicy" />
-        {{ i18n.t('register.acceptPolicy') }}
-      </label>
-      @if (form.controls.acceptPolicy.touched && form.controls.acceptPolicy.invalid) {
-        <p class="field-error" data-testid="policy-error">
-          {{ i18n.t('register.policyRequired') }}
-        </p>
-      }
+        <mat-checkbox formControlName="acceptPolicy">
+          {{ i18n.t('register.acceptPolicy') }}
+        </mat-checkbox>
+        @if (form.controls.acceptPolicy.touched && form.controls.acceptPolicy.invalid) {
+          <p class="form-error" data-testid="policy-error">
+            {{ i18n.t('register.policyRequired') }}
+          </p>
+        }
 
-      @if (errorKey(); as key) {
-        <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
-      }
+        @if (errorKey(); as key) {
+          <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
+        }
 
-      <button type="submit" [disabled]="submitting()">
-        {{ i18n.t(submitting() ? 'common.loading' : 'register.submit') }}
-      </button>
-    </form>
+        <button matButton="filled" type="submit" [disabled]="submitting()">
+          {{ i18n.t(submitting() ? 'common.loading' : 'register.submit') }}
+        </button>
+      </form>
+    </mat-card-content>
 
-    <p>
-      <a routerLink="/login">{{ i18n.t('login.title') }}</a>
-    </p>
-  </section>
+    <mat-card-actions>
+      <a matButton routerLink="/login">{{ i18n.t('login.title') }}</a>
+    </mat-card-actions>
+  </mat-card>
 }

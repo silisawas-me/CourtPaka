@@ -1,5 +1,5 @@
-import { Injectable, signal } from '@angular/core';
-import { DEFAULT_LANGUAGE, isLanguage, Language, TRANSLATIONS } from './locales';
+import { computed, Injectable, signal } from '@angular/core';
+import { DATE_LOCALES, DEFAULT_LANGUAGE, isLanguage, Language, TRANSLATIONS } from './locales';
 
 export const LANGUAGE_STORAGE_KEY = 'courtpaka.language';
 
@@ -13,6 +13,9 @@ export class TranslationService {
   private readonly current = signal<Language>(readStoredLanguage());
 
   readonly language = this.current.asReadonly();
+
+  /** The locale dates are written in, so nothing else has to know how a language maps to one. */
+  readonly locale = computed(() => DATE_LOCALES[this.current()]);
 
   constructor() {
     // index.html ships with lang="th"; a returning visitor may have chosen otherwise.

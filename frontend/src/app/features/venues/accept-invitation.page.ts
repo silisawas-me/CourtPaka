@@ -1,4 +1,6 @@
 import { Component, inject, input, OnInit, signal } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { errorKey } from '../../core/http/api-error';
@@ -9,7 +11,7 @@ type AcceptState = 'working' | 'done' | 'failed';
 
 @Component({
   selector: 'app-accept-invitation-page',
-  imports: [RouterLink],
+  imports: [RouterLink, MatButtonModule, MatCardModule],
   templateUrl: './accept-invitation.page.html',
 })
 export class AcceptInvitationPage implements OnInit {

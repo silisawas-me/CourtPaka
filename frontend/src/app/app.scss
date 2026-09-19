@@ -1,57 +1,31 @@
-// Only the shell chrome; page-level furniture is global (see src/styles.scss).
+/** The bar stays put while a long settings page scrolls under it. */
 .bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--line);
-  background: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  gap: 0.25rem;
 }
 
 .brand {
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: var(--accent);
+  font: var(--mat-sys-title-medium);
+  color: inherit;
   text-decoration: none;
-}
-
-nav {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-
-  a {
-    color: var(--accent-dark);
-    font-size: 0.9375rem;
-  }
-
-  // Only the size differs from the shared .ghost in styles.scss.
-  .ghost {
-    padding: 0.35rem 0.75rem;
-    font-size: 0.9375rem;
-  }
 }
 
 .languages {
   display: inline-flex;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  overflow: hidden;
+  margin-left: 0.25rem;
 }
 
-.language {
-  padding: 0.25rem 0.7rem;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 0.875rem;
-  cursor: pointer;
+/** The language in use is the filled one; the other reads as the thing you can switch to. */
+.language.chosen {
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
 
-  &.active {
-    background: var(--accent);
-    color: #fff;
+/** A phone has no room for the nav and full language names, so the switch shows codes. */
+@media (max-width: 34rem) {
+  .bar {
+    padding-inline: 0.5rem;
   }
 }

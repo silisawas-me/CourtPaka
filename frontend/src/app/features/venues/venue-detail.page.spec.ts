@@ -1,7 +1,7 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TRANSLATIONS } from '../../core/i18n/locales';
-import { pageProviders, signInAs, textOf } from '../../testing/dom';
+import { check, isDisabled, isOn, pageProviders, signInAs, textOf } from '../../testing/dom';
 import { VenueDetailPage } from './venue-detail.page';
 
 const OWNER = {
@@ -71,10 +71,7 @@ describe('VenueDetailPage', () => {
 
     const element = fixture.nativeElement as HTMLElement;
     expect(element.querySelector('[data-testid="remove-u2"]')).toBeNull();
-    expect(
-      element.querySelector<HTMLInputElement>('[data-testid="permission-u2-ViewReports"]')
-        ?.disabled,
-    ).toBe(true);
+    expect(isDisabled(fixture, 'permission-u2-ViewReports')).toBe(true);
     // The invitation list is owner-only, so a staff member never asks for it.
     httpMock.expectNone('/api/venues/v1/invitations');
   });
@@ -83,8 +80,7 @@ describe('VenueDetailPage', () => {
     render('Owner', [OWNER, STAFF]);
 
     const element = fixture.nativeElement as HTMLElement;
-    element.querySelector<HTMLInputElement>('[data-testid="permission-u2-ViewReports"]')!.click();
-    fixture.detectChanges();
+    check(fixture, '[data-testid="permission-u2-ViewReports"]');
 
     const request = httpMock.expectOne('/api/venues/v1/members/u2/permissions');
     expect(request.request.body).toEqual({
@@ -96,9 +92,7 @@ describe('VenueDetailPage', () => {
     // The change is applied locally; nothing is refetched.
     httpMock.expectNone('/api/venues/v1');
     httpMock.expectNone('/api/venues/v1/members');
-    expect(
-      element.querySelector<HTMLInputElement>('[data-testid="permission-u2-ViewReports"]')?.checked,
-    ).toBe(true);
+    expect(isOn(fixture, 'permission-u2-ViewReports')).toBe(true);
   });
 
   it('removes a member from the list without refetching', () => {
@@ -167,10 +161,7 @@ describe('VenueDetailPage', () => {
   it('keeps the page when one permission change fails', () => {
     render('Owner', [OWNER, STAFF]);
 
-    (fixture.nativeElement as HTMLElement)
-      .querySelector<HTMLInputElement>('[data-testid="permission-u2-ViewReports"]')!
-      .click();
-    fixture.detectChanges();
+    check(fixture, '[data-testid="permission-u2-ViewReports"]');
 
     httpMock
       .expectOne('/api/venues/v1/members/u2/permissions')
@@ -179,11 +170,7 @@ describe('VenueDetailPage', () => {
 
     expect(textOf(fixture, 'member-error')).toBe(TRANSLATIONS.th['error.venue.not_approved']);
     // The checkbox goes back to what the server actually holds.
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
-        '[data-testid="permission-u2-ViewReports"]',
-      )?.checked,
-    ).toBe(false);
+    expect(isOn(fixture, 'permission-u2-ViewReports')).toBe(false);
     // The roster and the invite form are still there.
     expect(textOf(fixture, 'member-list')).toContain(STAFF.email);
     expect((fixture.nativeElement as HTMLElement).querySelector('#invite-email')).not.toBeNull();
@@ -193,22 +180,15 @@ describe('VenueDetailPage', () => {
     render('Owner', [OWNER, STAFF]);
 
     const element = fixture.nativeElement as HTMLElement;
-    element.querySelector<HTMLInputElement>('[data-testid="permission-u2-ViewReports"]')!.click();
-    fixture.detectChanges();
+    check(fixture, '[data-testid="permission-u2-ViewReports"]');
     const first = httpMock.expectOne('/api/venues/v1/members/u2/permissions');
 
     // Every checkbox is disabled until the first request finishes, so nothing can overwrite it.
-    expect(
-      element.querySelector<HTMLInputElement>('[data-testid="permission-u2-ManageSettings"]')
-        ?.disabled,
-    ).toBe(true);
+    expect(isDisabled(fixture, 'permission-u2-ManageSettings')).toBe(true);
 
     first.flush(null, { status: 204, statusText: 'No Content' });
     fixture.detectChanges();
-    expect(
-      element.querySelector<HTMLInputElement>('[data-testid="permission-u2-ManageSettings"]')
-        ?.disabled,
-    ).toBe(false);
+    expect(isDisabled(fixture, 'permission-u2-ManageSettings')).toBe(false);
   });
 
   it('offers no write controls on a suspended venue', () => {
@@ -223,10 +203,7 @@ describe('VenueDetailPage', () => {
     const element = fixture.nativeElement as HTMLElement;
     expect(element.querySelector('#invite-email')).toBeNull();
     expect(element.querySelector('[data-testid="remove-u2"]')).toBeNull();
-    expect(
-      element.querySelector<HTMLInputElement>('[data-testid="permission-u2-ViewReports"]')
-        ?.disabled,
-    ).toBe(true);
+    expect(isDisabled(fixture, 'permission-u2-ViewReports')).toBe(true);
   });
 
   it('replaces a pending invitation for the same address whatever the capitalisation', () => {
@@ -251,7 +228,7 @@ describe('VenueDetailPage', () => {
     }
 
     const listed = (fixture.nativeElement as HTMLElement).querySelectorAll(
-      '[data-testid="invitation-list"] li',
+      '[data-testid="invitation-list"] .entry',
     );
     expect(listed.length).toBe(1);
   });

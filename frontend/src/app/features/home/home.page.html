@@ -1,25 +1,31 @@
-<section class="card">
-  <h1>{{ i18n.t('app.name') }}</h1>
-  <p>{{ i18n.t('app.tagline') }}</p>
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>{{ i18n.t('app.name') }}</mat-card-title>
+    <mat-card-subtitle>{{ i18n.t('app.tagline') }}</mat-card-subtitle>
+  </mat-card-header>
 
-  @if (user(); as account) {
-    <p data-testid="signed-in-as">{{ i18n.t('home.signedInAs') }} {{ account.email }}</p>
-    <p data-testid="verification-state">
-      {{ i18n.t(account.emailConfirmed ? 'home.emailVerified' : 'home.emailNotVerified') }}
-    </p>
-    @if (!account.emailConfirmed) {
-      <p>
-        <a routerLink="/resend-verification">{{ i18n.t('login.resendVerification') }}</a>
+  <mat-card-content>
+    @if (user(); as account) {
+      <p data-testid="signed-in-as">{{ i18n.t('home.signedInAs') }} {{ account.email }}</p>
+      <p data-testid="verification-state">
+        {{ i18n.t(account.emailConfirmed ? 'home.emailVerified' : 'home.emailNotVerified') }}
       </p>
     }
-    <p>
-      <a routerLink="/venues" data-testid="home-venues">{{ i18n.t('nav.venues') }}</a>
-    </p>
-  } @else {
-    <p>
-      <a routerLink="/login">{{ i18n.t('nav.signIn') }}</a>
-      ·
-      <a routerLink="/register">{{ i18n.t('nav.signUp') }}</a>
-    </p>
-  }
-</section>
+  </mat-card-content>
+
+  <mat-card-actions class="row">
+    @if (user(); as account) {
+      <a matButton="filled" routerLink="/venues" data-testid="home-venues">
+        {{ i18n.t('nav.venues') }}
+      </a>
+      @if (!account.emailConfirmed) {
+        <a matButton routerLink="/resend-verification">
+          {{ i18n.t('login.resendVerification') }}
+        </a>
+      }
+    } @else {
+      <a matButton="filled" routerLink="/login">{{ i18n.t('nav.signIn') }}</a>
+      <a matButton routerLink="/register">{{ i18n.t('nav.signUp') }}</a>
+    }
+  </mat-card-actions>
+</mat-card>
