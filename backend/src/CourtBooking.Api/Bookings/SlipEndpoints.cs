@@ -105,6 +105,36 @@ public static class SlipEndpoints
             .Select(slip => (Guid?)slip.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
+        var wasWaiting = booking.Status == BookingStatus.PendingVerification;
+
+        if (!BookingTransitions.CanMove(booking.Status, BookingStatus.PendingVerification))
+        {
+            throw new InvalidOperationException(
+                $"A booking cannot go from {booking.Status} to PendingVerification (PRD 6.1).");
+        }
+
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+
+        // The hold was read a moment ago, and a hold can run out between reading it and writing.
+        // PRD 6.1 asks for the condition and the move to be decided together, so the move carries
+        // the condition: it changes nothing unless the booking is still there to change.
+        var moved = await database.Bookings
+            .Where(candidate =>
+                candidate.Id == booking.Id
+                && (candidate.Status == BookingStatus.PendingVerification
+                    || (candidate.Status == BookingStatus.Held && candidate.HoldExpiresAt > now)))
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    candidate => candidate.Status, BookingStatus.PendingVerification),
+                cancellationToken);
+
+        if (moved == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            await slips.DeleteAsync(stored.Name, CancellationToken.None);
+            return ApiProblem.Of(StatusCodes.Status409Conflict, SlipErrorCodes.HoldExpired);
+        }
+
         database.PaymentSlips.Add(new PaymentSlip
         {
             BookingId = booking.Id,
@@ -117,12 +147,10 @@ public static class SlipEndpoints
             SameBytesAsSlipId = sameBytes,
         });
 
-        var wasWaiting = booking.Status == BookingStatus.PendingVerification;
-        booking.MoveTo(BookingStatus.PendingVerification);
-
         try
         {
             await database.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
         catch
         {
@@ -132,8 +160,6 @@ public static class SlipEndpoints
             throw;
         }
 
-        // Two facts, because they answer different questions: how long a booker took to pay
-        // (PRD 1.3), and whether the booking moved (PRD 8).
         // The name is part of the template, not a parameter: a sink that groups by template has
         // to see these as different events, which is the whole point of recording them (PRD 8).
         var events = AppEvents.For(loggers);
