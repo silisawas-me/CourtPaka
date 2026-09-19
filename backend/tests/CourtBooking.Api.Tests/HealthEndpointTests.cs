@@ -5,14 +5,31 @@ using CourtBooking.Api.Tests.Infrastructure;
 
 namespace CourtBooking.Api.Tests;
 
-[Collection(PostgresCollection.Name)]
-public sealed class HealthEndpointTests(PostgresFixture postgres)
+public sealed class HealthEndpointTests : IClassFixture<PostgresFixture>, IDisposable
 {
+    // Port 1 on loopback refuses connections immediately, so the check fails fast.
+    private const string UnreachableDatabase =
+        "Host=127.0.0.1;Port=1;Database=none;Username=none;Password=none;Timeout=2";
+
+    private readonly ApiFactory _withDatabase;
+    private readonly ApiFactory _withoutDatabase;
+
+    public HealthEndpointTests(PostgresFixture postgres)
+    {
+        _withDatabase = new ApiFactory(postgres.ConnectionString);
+        _withoutDatabase = new ApiFactory(UnreachableDatabase);
+    }
+
+    public void Dispose()
+    {
+        _withDatabase.Dispose();
+        _withoutDatabase.Dispose();
+    }
+
     [Fact]
     public async Task Live_returns_healthy_without_checking_dependencies()
     {
-        await using var factory = new ApiFactory(UnreachableDatabase);
-        using var client = factory.CreateClient();
+        using var client = _withoutDatabase.CreateClient();
 
         var response = await client.GetAsync("/api/health/live");
 
@@ -25,8 +42,7 @@ public sealed class HealthEndpointTests(PostgresFixture postgres)
     [Fact]
     public async Task Ready_returns_healthy_when_database_is_reachable()
     {
-        await using var factory = new ApiFactory(postgres.ConnectionString);
-        using var client = factory.CreateClient();
+        using var client = _withDatabase.CreateClient();
 
         var response = await client.GetAsync("/api/health/ready");
 
@@ -39,8 +55,7 @@ public sealed class HealthEndpointTests(PostgresFixture postgres)
     [Fact]
     public async Task Ready_returns_service_unavailable_when_database_is_unreachable()
     {
-        await using var factory = new ApiFactory(UnreachableDatabase);
-        using var client = factory.CreateClient();
+        using var client = _withoutDatabase.CreateClient();
 
         var response = await client.GetAsync("/api/health/ready");
 
@@ -48,8 +63,4 @@ public sealed class HealthEndpointTests(PostgresFixture postgres)
         var body = await response.Content.ReadFromJsonAsync<HealthResponse>();
         Assert.Equal("Unhealthy", body!.Status);
     }
-
-    // Port 1 on loopback refuses connections immediately, so the check fails fast.
-    private const string UnreachableDatabase =
-        "Host=127.0.0.1;Port=1;Database=none;Username=none;Password=none;Timeout=2";
 }

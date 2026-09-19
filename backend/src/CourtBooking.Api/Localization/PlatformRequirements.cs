@@ -17,11 +17,15 @@ public static class PlatformRequirements
     {
         _ = BangkokTimeZone;
 
-        var thai = CultureInfo.GetCultureInfo(ThaiCultureName, predefinedOnly: true);
-        if (thai.DateTimeFormat.MonthNames[0] == CultureInfo.InvariantCulture.DateTimeFormat.MonthNames[0])
+        try
+        {
+            // Throws in globalization-invariant mode, which is what a runtime image without ICU gives us.
+            _ = CultureInfo.GetCultureInfo(ThaiCultureName, predefinedOnly: true);
+        }
+        catch (CultureNotFoundException exception)
         {
             throw new InvalidOperationException(
-                $"Culture '{ThaiCultureName}' has no Thai data. ICU is missing from the runtime image.");
+                $"Culture '{ThaiCultureName}' is unavailable. The runtime image is missing ICU.", exception);
         }
     }
 }

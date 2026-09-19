@@ -4,12 +4,14 @@ FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG TARGETARCH
 WORKDIR /src
 
-COPY global.json ./
+COPY global.json Directory.Build.props ./
 COPY src/CourtBooking.Api/CourtBooking.Api.csproj src/CourtBooking.Api/
-RUN dotnet restore src/CourtBooking.Api/CourtBooking.Api.csproj -a $TARGETARCH
+RUN --mount=type=cache,target=/root/.nuget/packages \
+    dotnet restore src/CourtBooking.Api/CourtBooking.Api.csproj -a $TARGETARCH
 
 COPY src/ src/
-RUN dotnet publish src/CourtBooking.Api/CourtBooking.Api.csproj -c Release -a $TARGETARCH --no-restore -o /app
+RUN --mount=type=cache,target=/root/.nuget/packages \
+    dotnet publish src/CourtBooking.Api/CourtBooking.Api.csproj -c Release -a $TARGETARCH --no-restore -o /app
 
 # chiseled-extra includes ICU + tzdata, required for Asia/Bangkok and Thai culture (PRD 9.2).
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra

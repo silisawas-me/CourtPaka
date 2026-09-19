@@ -15,6 +15,14 @@
 
 	handle {
 		root * /srv
+
+		# Angular builds hashed asset filenames, so their content never changes; everything
+		# else (index.html, and any deep link rewritten to it) must be revalidated.
+		@hashed path_regexp hashedasset \-[A-Z0-9]{8,}\.(js|css|woff2?|png|jpg|svg|ico)$
+		header @hashed Cache-Control "public, max-age=31536000, immutable"
+		@dynamic not path_regexp dynamicasset \-[A-Z0-9]{8,}\.(js|css|woff2?|png|jpg|svg|ico)$
+		header @dynamic Cache-Control "no-cache"
+
 		try_files {path} /index.html
 		file_server
 	}
