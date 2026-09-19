@@ -42,7 +42,7 @@ export class LoginPage {
       next: () => {
         this.submitting.set(false);
         // Come back to whatever the guard interrupted, or home when the user came here directly.
-        void this.router.navigateByUrl(this.returnUrl() ?? '/');
+        void this.router.navigateByUrl(safeReturnUrl(this.returnUrl()));
       },
       error: (error: unknown) => {
         this.submitting.set(false);
@@ -50,4 +50,9 @@ export class LoginPage {
       },
     });
   }
+}
+
+/** Only a path inside this app: "//evil.com" is a URL to somewhere else, not a route here. */
+function safeReturnUrl(candidate: string | undefined): string {
+  return candidate?.startsWith('/') && !candidate.startsWith('//') ? candidate : '/';
 }

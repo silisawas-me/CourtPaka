@@ -21,6 +21,10 @@
   <section class="card">
     <h2>{{ i18n.t('venues.members.title') }}</h2>
 
+    @if (memberError(); as key) {
+      <p class="form-error" data-testid="member-error">{{ i18n.t(key) }}</p>
+    }
+
     <ul class="list" data-testid="member-list">
       @for (row of rows(); track row.member.userId) {
         <li>
@@ -36,7 +40,7 @@
                   <input
                     type="checkbox"
                     [checked]="row.granted.has(permission)"
-                    [disabled]="!isOwner()"
+                    [disabled]="!canManage() || savingMember() !== null"
                     [attr.data-testid]="'permission-' + row.member.userId + '-' + permission"
                     (change)="togglePermission(row.member, permission, $any($event.target).checked)"
                   />
@@ -45,10 +49,11 @@
               }
             </span>
 
-            @if (isOwner()) {
+            @if (canManage()) {
               <button
                 type="button"
                 class="ghost"
+                [disabled]="savingMember() !== null"
                 [attr.data-testid]="'remove-' + row.member.userId"
                 (click)="remove(row.member)"
               >
@@ -61,7 +66,7 @@
     </ul>
   </section>
 
-  @if (isOwner()) {
+  @if (canManage()) {
     <section class="card">
       <h2>{{ i18n.t('venues.invite.title') }}</h2>
 

@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, computed, inject, input, OnInit, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
@@ -21,7 +21,7 @@ import { FieldError } from '../../shared/field-error';
   imports: [ReactiveFormsModule, RouterLink, FieldError, DatePipe],
   templateUrl: './venue-detail.page.html',
 })
-export class VenueDetailPage implements OnInit {
+export class VenueDetailPage {
   private readonly venues = inject(VenueService);
   private readonly formBuilder = inject(FormBuilder);
 
@@ -36,11 +36,18 @@ export class VenueDetailPage implements OnInit {
   protected readonly invitations = signal<VenueInvitation[]>([]);
   protected readonly loading = signal(true);
   protected readonly pageError = signal<string | null>(null);
+  protected readonly memberError = signal<string | null>(null);
   protected readonly inviteError = signal<string | null>(null);
   protected readonly inviting = signal(false);
+  protected readonly savingMember = signal<string | null>(null);
 
   /** The API reports what the caller may do here; the page never infers it from the roster. */
   protected readonly isOwner = computed(() => this.venue()?.role === 'Owner');
+
+  /** A frozen venue refuses every write, so its controls are read-only too (PRD US-20). */
+  protected readonly canManage = computed(
+    () => this.isOwner() && this.venue()?.status === 'Approved',
+  );
 
   /** Set per member so the template does not scan an array on every change detection pass. */
   protected readonly rows = computed(() =>
@@ -59,28 +66,10 @@ export class VenueDetailPage implements OnInit {
     ),
   });
 
-  ngOnInit(): void {
-    forkJoin({
-      venue: this.venues.get(this.venueId()),
-      members: this.venues.members(this.venueId()),
-    }).subscribe({
-      next: ({ venue, members }) => {
-        this.venue.set(venue);
-        this.members.set(members);
-        this.loading.set(false);
-
-        if (venue.role === 'Owner') {
-          this.venues.invitations(this.venueId()).subscribe({
-            next: (invitations) => this.invitations.set(invitations),
-            error: () => this.invitations.set([]),
-          });
-        }
-      },
-      error: (error: unknown) => {
-        this.pageError.set(errorKey(error));
-        this.loading.set(false);
-      },
-    });
+  constructor() {
+    // The router reuses this component when only the id changes, so the load follows the input
+    // rather than running once: otherwise the page would keep showing the previous venue.
+    effect(() => this.load(this.venueId()));
   }
 
   protected invite(): void {
@@ -96,9 +85,10 @@ export class VenueDetailPage implements OnInit {
     this.venues.invite(this.venueId(), email, this.selectedPermissions()).subscribe({
       next: (invitation) => {
         this.inviting.set(false);
-        // Re-inviting replaces the pending one on the server, so the list mirrors that.
+        // The server replaces any pending invitation for the same mailbox, matching on a
+        // case-insensitive address, so the list mirrors that rule.
         this.invitations.update((pending) => [
-          ...pending.filter((item) => item.email !== invitation.email),
+          ...pending.filter((item) => !sameAddress(item.email, invitation.email)),
           invitation,
         ]);
         this.inviteForm.controls.email.reset('');
@@ -115,27 +105,86 @@ export class VenueDetailPage implements OnInit {
     permission: VenuePermission,
     granted: boolean,
   ): void {
+    // Read the live list, not the row captured when the template rendered, so quick successive
+    // ticks build on each other instead of overwriting one another.
+    const current = this.members().find((item) => item.userId === member.userId);
+    if (!current || this.savingMember() !== null) {
+      return;
+    }
+
+    const previous = current.permissions;
     const next = granted
-      ? [...member.permissions, permission]
-      : member.permissions.filter((held) => held !== permission);
+      ? [...previous, permission]
+      : previous.filter((held) => held !== permission);
+
+    this.savingMember.set(member.userId);
+    this.memberError.set(null);
+    // Show the new state at once. Putting it back on refusal is what resets the checkbox: the
+    // browser has already ticked it, so only a change in the bound value writes the box back.
+    this.setPermissions(member.userId, next);
 
     this.venues.changePermissions(this.venueId(), member.userId, next).subscribe({
-      // The server accepted the exact list we sent, so patch it in rather than refetch the page.
-      next: () =>
-        this.members.update((list) =>
-          list.map((item) =>
-            item.userId === member.userId ? { ...item, permissions: next } : item,
-          ),
-        ),
-      error: (error: unknown) => this.pageError.set(errorKey(error)),
+      next: () => this.savingMember.set(null),
+      error: (error: unknown) => {
+        this.savingMember.set(null);
+        this.setPermissions(member.userId, previous);
+        // A failed checkbox must not take the whole page down with it.
+        this.memberError.set(errorKey(error));
+      },
     });
   }
 
+  private setPermissions(userId: string, permissions: VenuePermission[]): void {
+    this.members.update((list) =>
+      list.map((item) => (item.userId === userId ? { ...item, permissions } : item)),
+    );
+  }
+
   protected remove(member: VenueMember): void {
+    this.savingMember.set(member.userId);
+    this.memberError.set(null);
+
     this.venues.removeMember(this.venueId(), member.userId).subscribe({
-      next: () =>
-        this.members.update((list) => list.filter((item) => item.userId !== member.userId)),
-      error: (error: unknown) => this.pageError.set(errorKey(error)),
+      next: () => {
+        this.savingMember.set(null);
+        this.members.update((list) => list.filter((item) => item.userId !== member.userId));
+      },
+      error: (error: unknown) => {
+        this.savingMember.set(null);
+        this.memberError.set(errorKey(error));
+      },
+    });
+  }
+
+  private load(venueId: string): void {
+    this.loading.set(true);
+    this.venue.set(null);
+    this.members.set([]);
+    this.invitations.set([]);
+    this.pageError.set(null);
+    this.memberError.set(null);
+
+    forkJoin({
+      venue: this.venues.get(venueId),
+      members: this.venues.members(venueId),
+    }).subscribe({
+      next: ({ venue, members }) => {
+        this.venue.set(venue);
+        this.members.set(members);
+        this.loading.set(false);
+
+        // Only fetched when the invite section can be shown, so a frozen venue asks for nothing.
+        if (venue.role === 'Owner' && venue.status === 'Approved') {
+          this.venues.invitations(venueId).subscribe({
+            next: (invitations) => this.invitations.set(invitations),
+            error: () => this.invitations.set([]),
+          });
+        }
+      },
+      error: (error: unknown) => {
+        this.pageError.set(errorKey(error));
+        this.loading.set(false);
+      },
     });
   }
 
@@ -143,4 +192,8 @@ export class VenueDetailPage implements OnInit {
     const selected = this.inviteForm.controls.permissions.getRawValue();
     return VENUE_PERMISSIONS.filter((permission) => selected[permission]);
   }
+}
+
+function sameAddress(left: string, right: string): boolean {
+  return left.localeCompare(right, undefined, { sensitivity: 'accent' }) === 0;
 }

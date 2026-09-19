@@ -145,6 +145,117 @@ describe('VenueDetailPage', () => {
     expect(textOf(fixture, 'invitation-list')).toContain('new@example.com');
   });
 
+  it('reloads when the route moves to another venue', () => {
+    render('Owner', [OWNER, STAFF]);
+
+    fixture.componentRef.setInput('venueId', 'v2');
+    fixture.detectChanges();
+
+    // The page must not keep showing the previous venue's data under the new id.
+    httpMock
+      .expectOne('/api/venues/v2')
+      .flush({ ...venueAs('Owner'), id: 'v2', name: 'Second Court' });
+    httpMock.expectOne('/api/venues/v2/members').flush([OWNER]);
+    fixture.detectChanges();
+    httpMock.expectOne('/api/venues/v2/invitations').flush([]);
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'venue-name')).toBe('Second Court');
+    expect(textOf(fixture, 'member-list')).not.toContain(STAFF.email);
+  });
+
+  it('keeps the page when one permission change fails', () => {
+    render('Owner', [OWNER, STAFF]);
+
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLInputElement>('[data-testid="permission-u2-ViewReports"]')!
+      .click();
+    fixture.detectChanges();
+
+    httpMock
+      .expectOne('/api/venues/v1/members/u2/permissions')
+      .flush({ code: 'venue.not_approved' }, { status: 403, statusText: 'Forbidden' });
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'member-error')).toBe(TRANSLATIONS.th['error.venue.not_approved']);
+    // The checkbox goes back to what the server actually holds.
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+        '[data-testid="permission-u2-ViewReports"]',
+      )?.checked,
+    ).toBe(false);
+    // The roster and the invite form are still there.
+    expect(textOf(fixture, 'member-list')).toContain(STAFF.email);
+    expect((fixture.nativeElement as HTMLElement).querySelector('#invite-email')).not.toBeNull();
+  });
+
+  it('does not let a second change start while one is in flight', () => {
+    render('Owner', [OWNER, STAFF]);
+
+    const element = fixture.nativeElement as HTMLElement;
+    element.querySelector<HTMLInputElement>('[data-testid="permission-u2-ViewReports"]')!.click();
+    fixture.detectChanges();
+    const first = httpMock.expectOne('/api/venues/v1/members/u2/permissions');
+
+    // Every checkbox is disabled until the first request finishes, so nothing can overwrite it.
+    expect(
+      element.querySelector<HTMLInputElement>('[data-testid="permission-u2-ManageSettings"]')
+        ?.disabled,
+    ).toBe(true);
+
+    first.flush(null, { status: 204, statusText: 'No Content' });
+    fixture.detectChanges();
+    expect(
+      element.querySelector<HTMLInputElement>('[data-testid="permission-u2-ManageSettings"]')
+        ?.disabled,
+    ).toBe(false);
+  });
+
+  it('offers no write controls on a suspended venue', () => {
+    signInAs(OWNER.email);
+    fixture = TestBed.createComponent(VenueDetailPage);
+    fixture.componentRef.setInput('venueId', 'v1');
+    fixture.detectChanges();
+    httpMock.expectOne('/api/venues/v1').flush({ ...venueAs('Owner'), status: 'Suspended' });
+    httpMock.expectOne('/api/venues/v1/members').flush([OWNER, STAFF]);
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('#invite-email')).toBeNull();
+    expect(element.querySelector('[data-testid="remove-u2"]')).toBeNull();
+    expect(
+      element.querySelector<HTMLInputElement>('[data-testid="permission-u2-ViewReports"]')
+        ?.disabled,
+    ).toBe(true);
+  });
+
+  it('replaces a pending invitation for the same address whatever the capitalisation', () => {
+    render('Owner', [OWNER]);
+
+    const element = fixture.nativeElement as HTMLElement;
+    const email = element.querySelector<HTMLInputElement>('#invite-email')!;
+
+    for (const address of ['Bob@example.com', 'bob@example.com']) {
+      email.value = address;
+      email.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      element.querySelector('form')!.dispatchEvent(new Event('submit'));
+      fixture.detectChanges();
+      httpMock.expectOne('/api/venues/v1/invitations').flush({
+        id: address,
+        email: address,
+        permissions: ['VerifySlip'],
+        expiresAt: '2026-10-01T00:00:00Z',
+      });
+      fixture.detectChanges();
+    }
+
+    const listed = (fixture.nativeElement as HTMLElement).querySelectorAll(
+      '[data-testid="invitation-list"] li',
+    );
+    expect(listed.length).toBe(1);
+  });
+
   it('translates an API refusal', () => {
     render('Owner', [OWNER]);
 
