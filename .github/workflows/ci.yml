@@ -28,7 +28,7 @@ jobs:
         with:
           global-json-file: backend/global.json
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('backend/**/*.csproj', 'backend/Directory.Build.props') }}
@@ -68,8 +68,11 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Fail on critical vulnerable packages
-        run: npm audit --omit=dev --audit-level=critical
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Fail on vulnerable packages
+        run: npm audit --omit=dev --audit-level=high
 
   # Runs alongside the test jobs: it verifies the images build, it does not gate on tests.
   docker:

@@ -34,6 +34,7 @@ services:
         condition: service_healthy
     healthcheck:
       # The chiseled runtime image has no shell or curl, so ask the runtime itself.
+      # Liveness only: a database outage must not mark the API container unhealthy.
       test: ["CMD", "dotnet", "/app/CourtBooking.Api.dll", "--healthcheck"]
       interval: 10s
       timeout: 5s

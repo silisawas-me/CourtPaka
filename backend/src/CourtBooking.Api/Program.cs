@@ -15,7 +15,7 @@ if (args.Contains("--healthcheck"))
     using var probe = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
     try
     {
-        using var probeResponse = await probe.GetAsync($"http://127.0.0.1:{port}/api/health/ready");
+        using var probeResponse = await probe.GetAsync($"http://127.0.0.1:{port}/api/health/live");
         return probeResponse.IsSuccessStatusCode ? 0 : 1;
     }
     catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
@@ -41,13 +41,23 @@ if (builder.Environment.IsDevelopment())
     builder.Services.AddOpenApi();
 }
 
-// The API is only reachable through Caddy on the private Docker network (PRD 9.3),
-// so forwarded headers coming from it are trusted.
+// Only Caddy on the private Docker network may set X-Forwarded-*; anything else is ignored so the
+// client IP used by audit logs and rate limiting cannot be spoofed (PRD 8, 9.3).
+// Override with ForwardedHeaders:KnownNetworks (comma-separated CIDRs) when the proxy sits elsewhere.
+var knownProxyNetworks = (builder.Configuration["ForwardedHeaders:KnownNetworks"] ?? "127.0.0.1/8,::1/128,172.16.0.0/12")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    .Select(System.Net.IPNetwork.Parse)
+    .ToArray();
+
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
     options.KnownIPNetworks.Clear();
     options.KnownProxies.Clear();
+    foreach (var network in knownProxyNetworks)
+    {
+        options.KnownIPNetworks.Add(network);
+    }
 });
 
 var app = builder.Build();

@@ -11,11 +11,16 @@ public static class PlatformRequirements
     public const string BangkokTimeZoneId = "Asia/Bangkok";
     public const string ThaiCultureName = "th-TH";
 
-    public static TimeZoneInfo BangkokTimeZone { get; } = TimeZoneInfo.FindSystemTimeZoneById(BangkokTimeZoneId);
+    private static TimeZoneInfo? _bangkokTimeZone;
 
+    public static TimeZoneInfo BangkokTimeZone => _bangkokTimeZone ??= FindBangkokTimeZone();
+
+    /// <summary>
+    /// Fails fast with a message that names the cause, instead of a stack trace from a static initializer.
+    /// </summary>
     public static void EnsureAvailable()
     {
-        _ = BangkokTimeZone;
+        _bangkokTimeZone = FindBangkokTimeZone();
 
         try
         {
@@ -26,6 +31,19 @@ public static class PlatformRequirements
         {
             throw new InvalidOperationException(
                 $"Culture '{ThaiCultureName}' is unavailable. The runtime image is missing ICU.", exception);
+        }
+    }
+
+    private static TimeZoneInfo FindBangkokTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById(BangkokTimeZoneId);
+        }
+        catch (TimeZoneNotFoundException exception)
+        {
+            throw new InvalidOperationException(
+                $"Time zone '{BangkokTimeZoneId}' is unavailable. The runtime image is missing tzdata.", exception);
         }
     }
 }

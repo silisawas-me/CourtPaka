@@ -12,7 +12,7 @@
   <PropertyGroup>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
-    <NuGetAuditLevel>critical</NuGetAuditLevel>
+    <NuGetAuditLevel>high</NuGetAuditLevel>
     <WarningsAsErrors>$(WarningsAsErrors);NU1903;NU1904</WarningsAsErrors>
   </PropertyGroup>
 
