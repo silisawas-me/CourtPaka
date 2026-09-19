@@ -37,6 +37,8 @@ services:
       App__ApplyMigrationsOnStartup: "true"
       # Keeps auth cookies valid across restarts.
       App__DataProtectionKeysPath: "/keys"
+      # End-to-end runs come from one IP; the deployed default of 10/minute is for real users.
+      App__AuthRequestsPerMinute: "200"
     volumes:
       - api-keys:/keys
     depends_on:

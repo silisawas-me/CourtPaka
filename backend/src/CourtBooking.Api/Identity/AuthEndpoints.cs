@@ -172,19 +172,39 @@ public static class AuthEndpoints
 
     private static async Task<Results<NoContent, ProblemHttpResult>> LoginAsync(
         LoginRequest request,
-        SignInManager<AppUser> signInManager)
+        SignInManager<AppUser> signInManager,
+        UserManager<AppUser> userManager,
+        ITransactionalEmailSender emailSender,
+        CancellationToken cancellationToken)
     {
         var result = await signInManager.PasswordSignInAsync(
             request.Email, request.Password, isPersistent: true, lockoutOnFailure: true);
 
-        if (result.IsLockedOut)
+        if (result.Succeeded)
         {
-            return ApiProblem.Of(StatusCodes.Status423Locked, AuthErrorCodes.AccountLocked);
+            return TypedResults.NoContent();
         }
 
-        return result.Succeeded
-            ? TypedResults.NoContent()
-            : ApiProblem.Of(StatusCodes.Status401Unauthorized, AuthErrorCodes.InvalidCredentials);
+        // A lockout only ever happens to an address that has an account, so answering differently
+        // would turn this endpoint into a way to find out who is a member (PDPA, PRD 8).
+        // The account owner is told by email instead.
+        if (result.IsLockedOut)
+        {
+            var user = await userManager.FindByEmailAsync(request.Email);
+            if (user is not null)
+            {
+                await emailSender.SendAsync(
+                    new EmailMessage(
+                        user.Email!,
+                        user.Language,
+                        "CourtPaka: your account is temporarily locked",
+                        "Too many failed sign-in attempts locked your account for 15 minutes. "
+                            + "If this was not you, change your password once it unlocks."),
+                    cancellationToken);
+            }
+        }
+
+        return ApiProblem.Of(StatusCodes.Status401Unauthorized, AuthErrorCodes.InvalidCredentials);
     }
 
     private static async Task<NoContent> LogoutAsync(SignInManager<AppUser> signInManager)

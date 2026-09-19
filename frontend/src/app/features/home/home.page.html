@@ -1,0 +1,22 @@
+<section class="card">
+  <h1>{{ i18n.t('app.name') }}</h1>
+  <p>{{ i18n.t('app.tagline') }}</p>
+
+  @if (user(); as account) {
+    <p data-testid="signed-in-as">{{ i18n.t('home.signedInAs') }} {{ account.email }}</p>
+    <p data-testid="verification-state">
+      {{ i18n.t(account.emailConfirmed ? 'home.emailVerified' : 'home.emailNotVerified') }}
+    </p>
+    @if (!account.emailConfirmed) {
+      <p>
+        <a routerLink="/resend-verification">{{ i18n.t('login.resendVerification') }}</a>
+      </p>
+    }
+  } @else {
+    <p>
+      <a routerLink="/login">{{ i18n.t('nav.signIn') }}</a>
+      ·
+      <a routerLink="/register">{{ i18n.t('nav.signUp') }}</a>
+    </p>
+  }
+</section>

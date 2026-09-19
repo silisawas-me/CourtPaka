@@ -1,0 +1,24 @@
+<section class="card">
+  <h1>{{ i18n.t('resend.title') }}</h1>
+
+  @if (done()) {
+    <p class="success" data-testid="resend-done">{{ i18n.t('resend.done') }}</p>
+    <p>
+      <a routerLink="/login">{{ i18n.t('login.title') }}</a>
+    </p>
+  } @else {
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <label for="email">{{ i18n.t('common.email') }}</label>
+      <input id="email" type="email" formControlName="email" autocomplete="email" />
+      <app-field-error [control]="form.controls.email" testId="email-error" />
+
+      @if (errorKey(); as key) {
+        <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
+      }
+
+      <button type="submit" [disabled]="submitting()">
+        {{ i18n.t(submitting() ? 'common.loading' : 'resend.submit') }}
+      </button>
+    </form>
+  }
+</section>

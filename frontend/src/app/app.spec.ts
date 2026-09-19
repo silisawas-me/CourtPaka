@@ -1,62 +1,62 @@
-import { provideHttpClient } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-  TestRequest,
-} from '@angular/common/http/testing';
-import { TestBed } from '@angular/core/testing';
+import { HttpTestingController } from '@angular/common/http/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { App } from './app';
+import { AuthService } from './core/auth/auth.service';
+import { TRANSLATIONS } from './core/i18n/locales';
+import { pageProviders, textOf } from './testing/dom';
 
-describe('App', () => {
+describe('App shell', () => {
+  let fixture: ComponentFixture<App>;
   let httpMock: HttpTestingController;
 
   beforeEach(async () => {
+    localStorage.clear();
     await TestBed.configureTestingModule({
       imports: [App],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: pageProviders(),
     }).compileComponents();
 
     httpMock = TestBed.inject(HttpTestingController);
+    // The real app resolves the session before bootstrap; do the same here.
+    TestBed.inject(AuthService).loadCurrentUser().subscribe();
+    httpMock.expectOne('/api/auth/me').flush({
+      id: '11111111-1111-1111-1111-111111111111',
+      email: 'player@example.com',
+      emailConfirmed: true,
+      language: 'th',
+    });
+
+    fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
   });
 
   afterEach(() => httpMock.verify());
 
-  async function renderWithHealthResponse(
-    respond: (request: TestRequest) => void,
-  ): Promise<string | undefined> {
-    const fixture = TestBed.createComponent(App);
+  it('saves the language on the account when a signed-in user switches', () => {
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('[data-testid="language-en"]')!
+      .click();
     fixture.detectChanges();
-    respond(httpMock.expectOne('/api/health/ready'));
-    await fixture.whenStable();
+
+    const request = httpMock.expectOne('/api/auth/me/language');
+    expect(request.request.body).toEqual({ language: 'en' });
+    request.flush(null, { status: 204, statusText: 'No Content' });
     fixture.detectChanges();
-    const element = fixture.nativeElement as HTMLElement;
-    return element.querySelector('[data-testid="api-status"]')?.textContent?.trim();
-  }
 
-  it('shows the API status when the API is healthy', async () => {
-    const status = await renderWithHealthResponse((request) =>
-      request.flush({ status: 'Healthy', checks: [] }),
-    );
-
-    expect(status).toBe('Healthy');
+    expect(textOf(fixture, 'language-not-saved')).toBeUndefined();
   });
 
-  it('shows Unhealthy when the API reports its database is down', async () => {
-    const status = await renderWithHealthResponse((request) =>
-      request.flush(
-        { status: 'Unhealthy', checks: [] },
-        { status: 503, statusText: 'Service Unavailable' },
-      ),
-    );
+  it('says so when the language could not be saved to the account', () => {
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('[data-testid="language-en"]')!
+      .click();
+    fixture.detectChanges();
 
-    expect(status).toBe('Unhealthy');
-  });
+    httpMock
+      .expectOne('/api/auth/me/language')
+      .flush(null, { status: 500, statusText: 'Server Error' });
+    fixture.detectChanges();
 
-  it('shows unreachable when the API cannot be contacted', async () => {
-    const status = await renderWithHealthResponse((request) =>
-      request.error(new ProgressEvent('error'), { status: 0 }),
-    );
-
-    expect(status).toBe('unreachable');
+    expect(textOf(fixture, 'language-not-saved')).toBe(TRANSLATIONS.en['app.languageNotSaved']);
   });
 });
