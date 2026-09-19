@@ -11,6 +11,7 @@
 - `backend/` · .NET 10 solution `CourtBooking.slnx` · `src/CourtBooking.Api` (ASP.NET Core minimal API, EF Core + Npgsql) · `tests/CourtBooking.Api.Tests` (xUnit + Testcontainers PostgreSQL)
 - `frontend/` · Angular 22 (Vitest) · `Caddyfile` ใช้ทั้ง reverse proxy และเสิร์ฟ static
 - `docker-compose.yml` · stack สำหรับ local · `.github/workflows/ci.yml` · CI
+- `deploy/` · compose + `.env.example` + คู่มือสำหรับเครื่อง UAT/PRD · `.github/workflows/deploy.yml` · build image ขึ้น GHCR, รัน migration bundle, deploy แล้วตรวจ health (ยังไม่เคยรันจริง รอเครื่อง UAT)
 - `docs/prd.md` · PRD
 - Endpoint ของ API ทุกตัวขึ้นต้นด้วย `/api` (Caddy และ proxy ของ `ng serve` ส่งต่อตาม prefix นี้)
 - **Auth:** ASP.NET Core Identity + cookie · ผู้ใช้คือ `AppUser` · การยอมรับนโยบายเก็บเป็นแถวใหม่ใน `UserConsent` (ห้ามแก้ทับ) และเวอร์ชันนโยบายมาจาก config ฝั่ง server

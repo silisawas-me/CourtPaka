@@ -1,0 +1,157 @@
+name: Deploy
+
+# UAT deploys on every push to main; PRD is a manual run that waits for approval on the
+# environment. Both deploy the exact images built from that commit (PRD 9.4).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy
+        type: choice
+        options: [uat, prd]
+        default: uat
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-${{ inputs.environment || 'uat' }}
+  cancel-in-progress: false
+
+env:
+  API_IMAGE: ghcr.io/${{ github.repository }}-api
+  WEB_IMAGE: ghcr.io/${{ github.repository }}-web
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.images.outputs.api }}
+      web: ${{ steps.images.outputs.web }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Name the images after the commit
+        id: images
+        run: |
+          echo "api=${API_IMAGE,,}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "web=${WEB_IMAGE,,}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      # UAT is ARM64 (Oracle Cloud), PRD is AMD64, so both platforms ship (PRD 9.3).
+      - name: Build and push the API image
+        uses: docker/build-push-action@v7
+        with:
+          context: backend
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.images.outputs.api }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=min,scope=api
+
+      - name: Build and push the web image
+        uses: docker/build-push-action@v7
+        with:
+          context: frontend
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.images.outputs.web }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=min,scope=web
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: backend/global.json
+
+      # A self-contained executable that applies migrations without the SDK on the server.
+      - name: Build the migration bundle
+        working-directory: backend
+        run: |
+          dotnet tool restore
+          dotnet tool run dotnet-ef migrations bundle \
+            --project src/CourtBooking.Api \
+            --self-contained --target-runtime linux-x64 \
+            --output "$GITHUB_WORKSPACE/migrate-linux-x64" --force
+          dotnet tool run dotnet-ef migrations bundle \
+            --project src/CourtBooking.Api \
+            --self-contained --target-runtime linux-arm64 \
+            --output "$GITHUB_WORKSPACE/migrate-linux-arm64" --force
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: migration-bundles
+          path: |
+            migrate-linux-x64
+            migrate-linux-arm64
+          retention-days: 7
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'uat' }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: migration-bundles
+
+      - name: Copy the migration bundle to the server
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          source: migrate-linux-x64,migrate-linux-arm64
+          target: /opt/courtpaka/
+
+      # Schema first, then the new images: the running version must tolerate the new schema.
+      - name: Migrate, deploy and check
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            set -euo pipefail
+            cd /opt/courtpaka
+            source .env
+
+            bundle="./migrate-linux-$(dpkg --print-architecture | sed 's/amd64/x64/')"
+            chmod +x "$bundle"
+            "$bundle" --connection "Host=127.0.0.1;Port=5432;Database=$POSTGRES_DB;Username=$POSTGRES_USER;Password=$POSTGRES_PASSWORD"
+
+            # Record what is running now, so a failed health check can go back to it.
+            cp .env .env.previous
+            sed -i "s|^API_IMAGE=.*|API_IMAGE=${{ needs.build.outputs.api }}|" .env
+            sed -i "s|^WEB_IMAGE=.*|WEB_IMAGE=${{ needs.build.outputs.web }}|" .env
+
+            docker compose pull
+            if ! docker compose up -d --wait --wait-timeout 180; then
+              echo "::error::Deployment failed to become healthy; rolling back"
+              mv .env.previous .env
+              docker compose up -d --wait --wait-timeout 180
+              exit 1
+            fi
+
+            # Ask from inside the network: port 80 only redirects to HTTPS, which would pass without
+            # ever reaching the API.
+            if ! docker compose exec -T web wget -q -O - http://api:8080/api/health/ready > /dev/null; then
+              echo "::error::Readiness check failed after deployment; rolling back"
+              mv .env.previous .env
+              docker compose pull
+              docker compose up -d --wait --wait-timeout 180
+              exit 1
+            fi
+
+            docker image prune -f --filter "until=168h"
