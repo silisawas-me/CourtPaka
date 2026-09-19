@@ -13,6 +13,7 @@
 - `docker-compose.yml` · stack สำหรับ local · `.github/workflows/ci.yml` · CI
 - `docs/prd.md` · PRD
 - Endpoint ของ API ทุกตัวขึ้นต้นด้วย `/api` (Caddy และ proxy ของ `ng serve` ส่งต่อตาม prefix นี้)
+- **Auth:** ASP.NET Core Identity + cookie · ผู้ใช้คือ `AppUser` · error ของ API ส่งเป็น `code` ใน ProblemDetails แล้วให้ frontend แปลเป็นข้อความ (US-23) · endpoint ที่ต้องยืนยันอีเมลแล้วใช้ policy `AuthorizationPolicies.EmailConfirmed`
 
 ## คำสั่ง
 ต้องมี: .NET SDK 10, Node 24 LTS, Docker Desktop ที่เปิดอยู่ (integration test ใช้ Testcontainers)
@@ -23,7 +24,9 @@
 | รัน API (dev, http://localhost:5230) | `dotnet run --project backend/src/CourtBooking.Api` |
 | รัน frontend (dev, http://localhost:4200 proxy `/api` ไป API) | `cd frontend && npm start` |
 | รันทั้งระบบเหมือน production (http://localhost:8080) | `docker compose --profile full up -d --build` |
-| ติดตั้ง dependencies | `dotnet restore backend` · `cd frontend && npm ci` |
+| ติดตั้ง dependencies | `dotnet restore backend` · `dotnet tool restore --tool-manifest backend/dotnet-tools.json` · `cd frontend && npm ci` |
+| สร้าง migration ใหม่ | `dotnet tool run dotnet-ef migrations add <ชื่อ> --project backend/src/CourtBooking.Api --output-dir Data/Migrations` |
+| Apply migration ลง database | `dotnet tool run dotnet-ef database update --project backend/src/CourtBooking.Api` |
 | Test backend ทั้งหมด | `dotnet test backend` |
 | Test backend บางตัว | `dotnet test backend --filter "FullyQualifiedName~HealthEndpointTests"` |
 | Test frontend | `cd frontend && npm test -- --watch=false` |

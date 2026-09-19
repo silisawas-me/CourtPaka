@@ -1,8 +1,11 @@
 using CourtBooking.Api.Data;
 using CourtBooking.Api.Health;
+using CourtBooking.Api.Identity;
 using CourtBooking.Api.Localization;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 const string ReadyTag = "ready";
@@ -35,6 +38,56 @@ builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connect
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AppDbContext>(name: "database", tags: [ReadyTag]);
 builder.Services.AddProblemDetails();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<IEmailSender, LoggingEmailSender>();
+
+builder.Services
+    .AddIdentityCore<AppUser>(options =>
+    {
+        options.User.RequireUniqueEmail = true;
+        options.SignIn.RequireConfirmedEmail = false; // Verification gates booking, not signing in (PRD US-01).
+        options.Password.RequiredLength = 8;
+        options.Password.RequireNonAlphanumeric = false;
+        // Five failures lock the account for fifteen minutes (PRD US-01).
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+        options.Lockout.AllowedForNewUsers = true;
+    })
+    .AddRoles<IdentityRole<Guid>>()
+    .AddEntityFrameworkStores<AppDbContext>()
+    .AddSignInManager()
+    .AddClaimsPrincipalFactory<AppUserClaimsPrincipalFactory>()
+    .AddDefaultTokenProviders();
+
+builder.Services
+    .AddAuthentication(IdentityConstants.ApplicationScheme)
+    .AddCookie(IdentityConstants.ApplicationScheme, options =>
+    {
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        // Caddy terminates TLS in every deployed environment; dev machines and tests run over plain HTTP.
+        options.Cookie.SecurePolicy = builder.Environment.IsProduction()
+            ? CookieSecurePolicy.Always
+            : CookieSecurePolicy.SameAsRequest;
+        options.ExpireTimeSpan = TimeSpan.FromDays(14);
+        options.SlidingExpiration = true;
+        // An API answers with status codes; redirects to login pages belong to the SPA.
+        options.Events.OnRedirectToLogin = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        };
+        options.Events.OnRedirectToAccessDenied = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Task.CompletedTask;
+        };
+    });
+
+builder.Services.AddAuthorizationBuilder()
+    // Actions that create real-world commitments (booking, payment) require a verified address.
+    .AddPolicy(AuthorizationPolicies.EmailConfirmed, policy =>
+        policy.RequireAuthenticatedUser().RequireClaim(AppClaimTypes.EmailConfirmed, "true"));
 
 if (builder.Environment.IsDevelopment())
 {
@@ -65,6 +118,8 @@ var app = builder.Build();
 app.UseForwardedHeaders();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+app.UseAuthentication();
+app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {
@@ -73,6 +128,8 @@ if (app.Environment.IsDevelopment())
 
 // Caddy and the dev-server proxy forward "/api" unchanged, so the API mounts everything under it once here.
 var api = app.MapGroup("/api");
+
+api.MapAuthEndpoints();
 
 // Liveness: the process is running. Readiness: dependencies such as the database are reachable.
 api.MapHealthChecks("/health/live", new HealthCheckOptions
