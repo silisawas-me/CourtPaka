@@ -1,7 +1,7 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TRANSLATIONS } from '../../core/i18n/locales';
-import { pageProviders, setInput, submitForm, textOf } from '../../testing/dom';
+import { clickOn, pageProviders, setInput, submitForm, textOf } from '../../testing/dom';
 import { LoginPage } from './login.page';
 
 describe('LoginPage', () => {
@@ -61,5 +61,18 @@ describe('LoginPage', () => {
     fixture.detectChanges();
 
     expect(textOf(fixture, 'page-title')).toBe(TRANSLATIONS.en['login.title']);
+  });
+
+  it('shows the password only while it is asked for', () => {
+    const password = () =>
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>('#password')!;
+
+    expect(password().type).toBe('password');
+
+    clickOn(fixture, 'toggle-password');
+    expect(password().type).toBe('text');
+
+    clickOn(fixture, 'toggle-password');
+    expect(password().type).toBe('password');
   });
 });

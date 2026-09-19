@@ -3,11 +3,13 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconButton } from '@angular/material/button';
 import { MatInputModule } from '@angular/material/input';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { errorKey } from '../../core/http/api-error';
 import { TranslationService } from '../../core/i18n/translation.service';
+import { Alpaca } from '../../shared/alpaca';
 import { FieldError } from '../../shared/field-error';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 
@@ -21,9 +23,11 @@ import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
     MatCardModule,
     MatFormFieldModule,
     MatInputModule,
+    Alpaca,
   ],
   providers: [FORM_FIELD_DEFAULTS],
   templateUrl: './login.page.html',
+  styleUrl: './login.page.scss',
 })
 export class LoginPage {
   private readonly auth = inject(AuthService);
@@ -35,6 +39,16 @@ export class LoginPage {
     email: ['', [Validators.required, Validators.email]],
     password: ['', Validators.required],
   });
+
+  /**
+   * Whether the password is readable. A password nobody can check is how a sign-in fails twice,
+   * and it starts hidden because someone may be standing behind them.
+   */
+  protected readonly passwordShown = signal(false);
+
+  protected togglePassword(): void {
+    this.passwordShown.update((shown) => !shown);
+  }
 
   /** Set by the auth guard when it interrupts a page that needs an account. */
   readonly returnUrl = input<string>();
