@@ -27,7 +27,7 @@ public static class BookingValidation
         DateTimeOffset now,
         DateOnly today)
     {
-        if (slots.Count == 0)
+        if (slots.Count == 0 || slots.Any(slot => slot is null))
         {
             return BookingErrorCodes.NoSlots;
         }
@@ -40,6 +40,13 @@ public static class BookingValidation
         if (slots.Distinct().Count() != slots.Count)
         {
             return BookingErrorCodes.DuplicateSlot;
+        }
+
+        // A booking is made from one grid, and one grid is one day. It also bounds the work: the
+        // settings in force have to be read once per day the booking touches.
+        if (slots.Select(slot => slot.Date).Distinct().Count() > 1)
+        {
+            return BookingErrorCodes.MoreThanOneDay;
         }
 
         foreach (var slot in slots)

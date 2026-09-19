@@ -50,30 +50,55 @@ public static class BookedSlots
             .Where(slot => !Lapsed(database, now).Any(over => over.Id == slot.BookingId));
 
     /// <summary>
-    /// Lets go of the hours lapsed holds still claim, and marks them
+    /// Lets go of the hours lapsed holds claim on these courts, and marks those holds
     /// <see cref="BookingStatus.Expired"/>.
     ///
     /// A read can tell a lapsed hold from a live one on its own; the database cannot, because the
     /// exclusion constraint only sees <see cref="BookingSlot.IsActive"/>. Without this, an hour the
     /// grid calls free stays unbookable for as long as that column says otherwise — which, with no
     /// expiry job yet, is forever. So the write releases them itself rather than waiting for a job
-    /// (PRD 9.2). Running it twice does nothing the first run did not.
+    /// (PRD 9.2).
+    ///
+    /// It is scoped to the courts being booked rather than sweeping the table: a booking only needs
+    /// the hours it is asking for, and two bookings at unrelated venues should not be taking locks
+    /// on each other's rows. Running it twice does nothing the first run did not.
     /// </summary>
     public static async Task ReleaseLapsedAsync(
         AppDbContext database,
+        IReadOnlyCollection<Guid> courtIds,
+        DateTimeOffset from,
+        DateTimeOffset until,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
+        if (courtIds.Count == 0)
+        {
+            return;
+        }
+
         var lapsed = Lapsed(database, now);
 
-        await database.BookingSlots
-            .Where(slot => slot.IsActive && lapsed.Any(over => over.Id == slot.BookingId))
+        var released = await database.BookingSlots
+            .Where(slot =>
+                slot.IsActive
+                && courtIds.Contains(slot.CourtId)
+                && slot.StartsAt >= from
+                && slot.StartsAt < until
+                && lapsed.Any(over => over.Id == slot.BookingId))
             .ExecuteUpdateAsync(
                 setters => setters.SetProperty(slot => slot.IsActive, false), cancellationToken);
 
-        await lapsed.ExecuteUpdateAsync(
-            setters => setters.SetProperty(booking => booking.Status, BookingStatus.Expired),
-            cancellationToken);
+        if (released == 0)
+        {
+            return;
+        }
+
+        // Only the holds that just lost a slot, and only once there is something to say about them.
+        await lapsed
+            .Where(booking => !booking.Slots.Any(slot => slot.IsActive))
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(booking => booking.Status, BookingStatus.Expired),
+                cancellationToken);
     }
 
     /// <summary>

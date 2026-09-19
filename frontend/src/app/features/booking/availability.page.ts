@@ -118,7 +118,11 @@ export class AvailabilityPage {
     this.picked().reduce((sum, slot) => sum + slot.bahtPerHour, 0),
   );
 
-  /** A held booking, once one has been made. Paying for it is US-04. */
+  /**
+   * A held booking, once one has been made. It stays on screen while the booker looks at other
+   * days, because it is on a fifteen-minute clock and there is nowhere else yet to see it; each
+   * row names its own date. Its own page arrives with US-04.
+   */
   protected readonly held = signal<Booking | null>(null);
   protected readonly holding = signal(false);
   protected readonly bookingError = signal<string | null>(null);
@@ -169,6 +173,12 @@ export class AvailabilityPage {
     effect(() => {
       this.chosen();
       untracked(() => this.clearPicks());
+    });
+
+    // A hold belongs to the venue it was made at; another venue's page must not show it.
+    effect(() => {
+      this.venueId();
+      untracked(() => this.held.set(null));
     });
   }
 
@@ -231,6 +241,8 @@ export class AvailabilityPage {
           this.held.set(booking);
           this.picks.set([]);
           this.holding.set(false);
+          // The hours it just took are no longer free, and the grid on screen still says they are.
+          this.refresh.update((attempt) => attempt + 1);
         },
         error: (failure: unknown) => {
           this.bookingError.set(errorKey(failure));

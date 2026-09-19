@@ -23,9 +23,15 @@ public sealed class VenueScenario(ApiTestFixture api)
 
     public string NewCode() => Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
 
-    public async Task<HttpClient> SignedInClientAsync() => (await SignedInClientWithEmailAsync()).Client;
+    /// <summary>
+    /// A signed-in account. Its address is verified unless the test is about what happens when it
+    /// is not: registering leaves it unverified, and signing in works either way (PRD US-01).
+    /// </summary>
+    public async Task<HttpClient> SignedInClientAsync(bool verifyEmail = true) =>
+        (await SignedInClientWithEmailAsync(verifyEmail)).Client;
 
-    public async Task<(HttpClient Client, string Email)> SignedInClientWithEmailAsync()
+    public async Task<(HttpClient Client, string Email)> SignedInClientWithEmailAsync(
+        bool verifyEmail = true)
     {
         var client = api.CreateClient();
         var email = NewEmail();
@@ -37,7 +43,25 @@ public sealed class VenueScenario(ApiTestFixture api)
         var login = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, Password));
         Assert.Equal(HttpStatusCode.NoContent, login.StatusCode);
 
+        if (verifyEmail)
+        {
+            await ConfirmEmailAsync(email);
+        }
+
         return (client, email);
+    }
+
+    /// <summary>
+    /// Marks the address verified without the round trip through the emailed link, which
+    /// AuthEndpointTests covers on its own.
+    /// </summary>
+    public async Task ConfirmEmailAsync(string email)
+    {
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await database.Users
+            .Where(user => user.Email == email)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(user => user.EmailConfirmed, true));
     }
 
     public async Task<VenueResponse> CreateVenueAsync(HttpClient client) =>

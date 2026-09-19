@@ -2,7 +2,10 @@
 
 import datetime
 import pathlib
+import re
+import subprocess
 import sys
+import urllib.parse
 import uuid
 
 BASE = "http://localhost:8080"
@@ -52,7 +55,47 @@ def new_booker(page) -> str:
     )
     if registered.status != 201:
         raise RuntimeError(f"Could not register a booker: {registered.status} {registered.text()}")
+
+    verify_email(page, email)
     return email
+
+
+def verify_email(page, email: str) -> None:
+    """Booking needs a verified address (PRD US-01). The link is emailed, and in Development the
+    email sender logs it, so the check follows the same link a real booker would click."""
+    logs = subprocess.run(
+        ["docker", "compose", "logs", "--no-log-prefix", "api"],
+        cwd=pathlib.Path(__file__).resolve().parents[2],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=True,
+    ).stdout
+
+    # The sender logs the recipient on one line and the body on the next, so the newest link under
+    # this address is the one to follow. Registering twice would leave an older one above it.
+    link = None
+    addressed = False
+    for line in logs.splitlines():
+        if line.startswith("      Email to ") or "Email to " in line:
+            addressed = f"Email to {email} " in line or f"Email to {email}[" in line
+        elif addressed:
+            found = re.search(r"(https?://\S*/verify-email\?\S+)", line)
+            if found:
+                link = found.group(1)
+                addressed = False
+
+    if link is None:
+        raise RuntimeError(f"No verification link was logged for {email}.")
+
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(link.rstrip(".")).query)
+    verified = page.request.post(
+        f"{BASE}/api/auth/verify-email",
+        data={"userId": query["userId"][0], "token": query["token"][0]},
+    )
+    if verified.status != 204:
+        raise RuntimeError(f"Could not verify {email}: {verified.status} {verified.text()}")
 
 
 def login(page, email: str, password: str = PASSWORD) -> None:

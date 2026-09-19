@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using CourtBooking.Api.Bookings;
+using CourtBooking.Api.Identity;
 using CourtBooking.Api.Localization;
 using CourtBooking.Api.Tests.Infrastructure;
 using CourtBooking.Api.Venues;
@@ -99,7 +100,7 @@ public sealed class BookingTests(ApiTestFixture api) : IClassFixture<ApiTestFixt
     {
         var (_, venue, courtId) = await BookableVenueAsync();
         var bookers = await Task.WhenAll(
-            Enumerable.Range(0, 4).Select(_ => scenario.SignedInClientAsync()));
+            Enumerable.Range(0, 8).Select(_ => scenario.SignedInClientAsync()));
 
         var answers = await Task.WhenAll(
             bookers.Select(booker => PostAsync(booker, venue.Id, (courtId, Tomorrow, 20))));
@@ -107,7 +108,13 @@ public sealed class BookingTests(ApiTestFixture api) : IClassFixture<ApiTestFixt
         Assert.Single(answers, answer => answer.StatusCode == HttpStatusCode.Created);
         foreach (var refused in answers.Where(answer => answer.StatusCode != HttpStatusCode.Created))
         {
-            Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+            // The server's own error log is in the message, so a 500 here says what caused it.
+            Assert.Equal(
+                HttpStatusCode.Conflict,
+                refused.StatusCode == HttpStatusCode.Conflict
+                    ? HttpStatusCode.Conflict
+                    : throw new Xunit.Sdk.XunitException(
+                        $"{refused.StatusCode}: {api.Errors.LastFailure}"));
             Assert.Equal(BookingErrorCodes.SlotJustTaken, await refused.ErrorCodeAsync());
         }
     }
@@ -142,6 +149,66 @@ public sealed class BookingTests(ApiTestFixture api) : IClassFixture<ApiTestFixt
         var again = await HoldAsync(booker, venue.Id, (courtId, Tomorrow, 19));
 
         Assert.Equal(nameof(BookingStatus.Held), again.Status);
+    }
+
+    [Fact]
+    public async Task Two_requests_from_one_booker_at_once_leave_them_holding_one_booking()
+    {
+        var (_, venue, courtId) = await BookableVenueAsync();
+        var booker = await scenario.SignedInClientAsync();
+
+        // A double tap on a slow connection: both requests pass the read, and the database decides.
+        var answers = await Task.WhenAll(
+            PostAsync(booker, venue.Id, (courtId, Tomorrow, 18)),
+            PostAsync(booker, venue.Id, (courtId, Tomorrow, 19)));
+
+        Assert.Single(answers, answer => answer.StatusCode == HttpStatusCode.Created);
+        var refused = answers.Single(answer => answer.StatusCode != HttpStatusCode.Created);
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Equal(BookingErrorCodes.AlreadyHolding, await refused.ErrorCodeAsync());
+    }
+
+    [Fact]
+    public async Task Booking_needs_a_verified_email()
+    {
+        var (_, venue, courtId) = await BookableVenueAsync();
+        // Registering leaves the address unverified, and signing in is allowed anyway (PRD US-01).
+        var booker = await scenario.SignedInClientAsync(verifyEmail: false);
+
+        var refused = await PostAsync(booker, venue.Id, (courtId, Tomorrow, 18));
+
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+        Assert.Equal(AuthErrorCodes.EmailNotVerified, await refused.ErrorCodeAsync());
+    }
+
+    [Fact]
+    public async Task One_booking_cannot_span_two_days()
+    {
+        var (_, venue, courtId) = await BookableVenueAsync();
+        var booker = await scenario.SignedInClientAsync();
+
+        var refused = await PostAsync(
+            booker,
+            venue.Id,
+            (courtId, Tomorrow, 18),
+            (courtId, Tomorrow.AddDays(1), 18));
+
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal(BookingErrorCodes.MoreThanOneDay, await refused.ErrorCodeAsync());
+    }
+
+    [Fact]
+    public async Task A_slot_that_is_not_there_is_refused_rather_than_breaking()
+    {
+        var (_, venue, _) = await BookableVenueAsync();
+        var booker = await scenario.SignedInClientAsync();
+
+        var refused = await booker.PostAsJsonAsync(
+            "/api/bookings",
+            new { venueId = venue.Id, slots = new object?[] { null } });
+
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal(BookingErrorCodes.NoSlots, await refused.ErrorCodeAsync());
     }
 
     [Fact]

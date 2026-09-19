@@ -31,6 +31,7 @@ public static class BookingErrorCodes
     public const string NoSlots = "booking.no_slots";
     public const string TooManySlots = "booking.too_many_slots";
     public const string DuplicateSlot = "booking.duplicate_slot";
+    public const string MoreThanOneDay = "booking.more_than_one_day";
     public const string StartsTooSoon = "booking.starts_too_soon";
     public const string HourNotAvailable = "booking.hour_not_available";
 

@@ -20,6 +20,32 @@ public static class BookingEndpoints
     /// <summary>Postgres raises this when an exclusion constraint refuses a row.</summary>
     private const string ExclusionViolation = "23P01";
 
+    /// <summary>And this when a unique index does.</summary>
+    private const string UniqueViolation = "23505";
+
+    /// <summary>
+    /// And this when it breaks a standoff by killing one of the transactions involved. Two bookers
+    /// reaching for the same hour meet at the exclusion constraint, and Postgres resolves that as a
+    /// deadlock as readily as a constraint violation. The victim rolled back whole, so its write
+    /// can simply be made again — and the second attempt is refused with a reason (PRD BR-04).
+    /// </summary>
+    private const string Deadlock = "40P01";
+
+    /// <summary>
+    /// How many times a deadlocked write is made again. Postgres takes a second to notice a
+    /// standoff, so each retry costs the loser about that; the winner pays nothing. Several bookers
+    /// on one hour can knock each other over more than once, and being refused with a reason is
+    /// worth a few seconds where failing is not.
+    /// </summary>
+    private const int DeadlockRetries = 4;
+
+    /// <summary>
+    /// How long a deadlocked write waits before trying again. Victims all wake at the same instant,
+    /// so retrying immediately puts them straight back into each other; a short random pause is
+    /// what spreads them out.
+    /// </summary>
+    private static readonly TimeSpan RetryJitter = TimeSpan.FromMilliseconds(120);
+
     public static void MapBookingEndpoints(this IEndpointRouteBuilder routes)
     {
         var bookings = routes.MapGroup("/bookings").WithTags("Bookings").RequireAuthorization();
@@ -46,51 +72,105 @@ public static class BookingEndpoints
 
         if (BookingValidation.Validate(slots, now, today) is { } invalid)
         {
-            return ApiProblem.Of(StatusCodes.Status400BadRequest, invalid);
+            return Refuse(loggers, StatusCodes.Status400BadRequest, invalid, bookerId);
+        }
+
+        // An address nobody has proved they can read is not enough to hold a court (PRD US-01).
+        // Signing in unverified is allowed on purpose; this is the gate that is not.
+        if (!await database.Users
+            .Where(user => user.Id == bookerId)
+            .Select(user => user.EmailConfirmed)
+            .SingleOrDefaultAsync(cancellationToken))
+        {
+            return Refuse(
+                loggers, StatusCodes.Status403Forbidden, AuthErrorCodes.EmailNotVerified, bookerId);
         }
 
         if (await PublicVenueEndpoints.ApprovedAsync(database, request.VenueId, cancellationToken)
             is not { } venue)
         {
-            return ApiProblem.Of(StatusCodes.Status404NotFound, VenueErrorCodes.NotFound);
+            return Refuse(
+                loggers, StatusCodes.Status404NotFound, VenueErrorCodes.NotFound, bookerId);
         }
-
-        // Hours whose hold is over go back on sale before anything is read or written, because the
-        // database's view of them is what decides whether this booking can have them (PRD 9.2).
-        await BookedSlots.ReleaseLapsedAsync(database, now, cancellationToken);
 
         // One hold at a time, so an abandoned pick cannot sit on hours nobody is paying for
         // (PRD S-22).
         if (await BookedSlots.LiveHolds(database, now)
             .AnyAsync(held => held.BookerUserId == bookerId, cancellationToken))
         {
-            return ApiProblem.Of(StatusCodes.Status409Conflict, BookingErrorCodes.AlreadyHolding);
+            return Refuse(
+                loggers, StatusCodes.Status409Conflict, BookingErrorCodes.AlreadyHolding, bookerId);
         }
 
         var priced = await PriceSlotsAsync(database, venue.Id, slots, now, cancellationToken);
         if (priced.Error is { } unavailable)
         {
-            return ApiProblem.Of(StatusCodes.Status409Conflict, unavailable);
+            return Refuse(loggers, StatusCodes.Status409Conflict, unavailable, bookerId);
         }
 
-        var booking = Booking.Hold(
-            venue.Id,
-            bookerId,
-            await InForcePolicyIdAsync(database, venue.Id, cancellationToken),
-            priced.Slots,
-            now);
-        database.Bookings.Add(booking);
+        var policyId = await InForcePolicyIdAsync(database, venue.Id, cancellationToken);
+        var booking = Booking.Hold(venue.Id, bookerId, policyId, priced.Slots, now);
 
-        try
+        for (var attempt = 0; ; attempt++)
         {
-            await database.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException failure)
-            when (failure.InnerException is PostgresException { SqlState: ExclusionViolation })
-        {
-            // Someone took the same hour between the grid being read and this write. The whole
-            // booking is refused rather than partly made (PRD BR-04).
-            return ApiProblem.Of(StatusCodes.Status409Conflict, BookingErrorCodes.SlotJustTaken);
+            database.ChangeTracker.Clear();
+
+            await using var transaction =
+                await database.Database.BeginTransactionAsync(cancellationToken);
+
+            // Queue for the hours being taken, in one fixed order, before touching the index that
+            // guards them. Without this, bookers reaching for the same hour collide inside the
+            // exclusion constraint's index and Postgres breaks the standoff by killing one of them
+            // with a deadlock — a 500, where waiting a moment gives a real answer. The constraint
+            // is still what guarantees the rule; this only decides who asks it first.
+            foreach (var key in booking.Slots.Select(LockKey).Order())
+            {
+                await database.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_advisory_xact_lock({key})", cancellationToken);
+            }
+
+            database.Bookings.Add(booking);
+
+            try
+            {
+                await database.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                break;
+            }
+            catch (DbUpdateException failure)
+                when (failure.InnerException is PostgresException { SqlState: ExclusionViolation })
+            {
+                // Someone took the same hour between the grid being read and this write. The whole
+                // booking is refused rather than partly made (PRD BR-04).
+                return Refuse(
+                    loggers,
+                    StatusCodes.Status409Conflict,
+                    BookingErrorCodes.SlotJustTaken,
+                    bookerId);
+            }
+            catch (DbUpdateException failure)
+                when (failure.InnerException is PostgresException { SqlState: UniqueViolation })
+            {
+                // The booker's other request won the race to hold something (PRD S-22). The read
+                // above answers this for one request at a time; the index answers it for two.
+                return Refuse(
+                    loggers,
+                    StatusCodes.Status409Conflict,
+                    BookingErrorCodes.AlreadyHolding,
+                    bookerId);
+            }
+            catch (DbUpdateException failure)
+                when (failure.InnerException is PostgresException { SqlState: Deadlock }
+                    && attempt < DeadlockRetries)
+            {
+                // The queue above should prevent this; nothing was written, so it is safe to ask
+                // again after a moment rather than fail a booking on a transient standoff.
+                await Task.Delay(
+                    TimeSpan.FromMilliseconds(
+                        Random.Shared.Next((int)RetryJitter.TotalMilliseconds) * (attempt + 1)),
+                    timeProvider,
+                    cancellationToken);
+            }
         }
 
         AppEvents.For(loggers).LogInformation(
@@ -103,6 +183,32 @@ public static class BookingEndpoints
         return TypedResults.Created(
             $"/api/bookings/{booking.Id}",
             ToResponse(booking, venue.Name, priced.CourtNames));
+    }
+
+    /// <summary>
+    /// One number per court-hour, the same for everyone asking for it. Two different hours sharing
+    /// a number only means they queue behind each other, which costs a moment and nothing else.
+    /// </summary>
+    private static long LockKey(BookingSlot slot)
+    {
+        Span<byte> id = stackalloc byte[16];
+        slot.CourtId.TryWriteBytes(id);
+        return BitConverter.ToInt64(id[..8]) ^ BitConverter.ToInt64(id[8..]) ^ slot.StartsAt.UtcTicks;
+    }
+
+    /// <summary>
+    /// A booking that did not happen, and why. How often bookers are turned away, and for which
+    /// reason, is the number worth watching once this is in front of people (PRD 8).
+    /// </summary>
+    private static ProblemHttpResult Refuse(
+        ILoggerFactory loggers,
+        int status,
+        string code,
+        Guid bookerId)
+    {
+        AppEvents.For(loggers).LogInformation(
+            "booking_refused {Code} {Status} {BookerUserId}", code, status, bookerId);
+        return ApiProblem.Of(status, code);
     }
 
     /// <summary>
@@ -123,6 +229,17 @@ public static class BookingEndpoints
 
         var names = courts.ToDictionary(court => court.Id, court => court.Name);
         var priced = new List<SlotPrice>(slots.Count);
+
+        // Hours whose hold is over go back on sale before the day is read, because the database's
+        // view of them is what decides whether this booking can have them (PRD 9.2).
+        var date = slots.Select(slot => slot.Date).Distinct().Single();
+        await BookedSlots.ReleaseLapsedAsync(
+            database,
+            [.. slots.Select(slot => slot.CourtId).Distinct()],
+            PlatformRequirements.BangkokHour(date, 0),
+            PlatformRequirements.BangkokHour(date.AddDays(1), 0),
+            now,
+            cancellationToken);
 
         foreach (var picked in slots.GroupBy(slot => slot.Date))
         {

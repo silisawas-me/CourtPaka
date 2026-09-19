@@ -4,12 +4,16 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace CourtBooking.Api.Tests.Infrastructure;
 
 public sealed class ApiFactory(string connectionString) : WebApplicationFactory<Program>
 {
     public const string PrivacyPolicyVersion = "2026-09-01";
+
+    /// <summary>What the API logged at Error, so a 500 in a test can name its cause.</summary>
+    public CapturedLogs Errors { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -27,6 +31,8 @@ public sealed class ApiFactory(string connectionString) : WebApplicationFactory<
 
         // The suite registers a user per test; at the production hashing cost that alone would take
         // longer than everything else it does. Nothing here tests the hash itself.
+        builder.ConfigureLogging(logging => logging.AddProvider(Errors));
+
         builder.ConfigureServices(services =>
             services.Configure<PasswordHasherOptions>(options => options.IterationCount = 1));
     }

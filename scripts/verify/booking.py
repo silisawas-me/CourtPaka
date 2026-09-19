@@ -2,7 +2,9 @@
 
 import datetime
 
-from harness import BASE, SEEDED_VENUE, Checks, new_booker, sign_in, venue_today
+import uuid
+
+from harness import BASE, PASSWORD, SEEDED_VENUE, Checks, new_booker, sign_in, venue_today
 from playwright.sync_api import expect, sync_playwright
 
 check = Checks(__file__)
@@ -100,11 +102,10 @@ with sync_playwright() as p:
     )
     check("and the picks are spent", page.locator("[data-testid=booking-summary]").count() == 0)
 
-    # 4. The hours are now taken, for everyone.
-    page.reload()
-    page.wait_for_selector("[data-testid=availability-grid]")
+    # 4. The hours are now taken, and the page says so without being asked again.
+    page.wait_for_selector(f"[data-testid={cells[0]}].booked")
     check(
-        "the hours it holds now read as booked",
+        "the hours it holds read as booked without a reload",
         page.locator(f"[data-testid={cells[0]}]").get_attribute("class").find("booked") >= 0,
         page,
     )
@@ -125,8 +126,39 @@ with sync_playwright() as p:
         page,
     )
 
-    # 6. Another booker cannot take an hour that is already held.
+    # 7. Another booker cannot take an hour that is already held.
     taken_court, taken_hour = cells[0].removeprefix("cell-").rsplit("-", 1)
+
+    # 6. An address nobody has proved they can read cannot hold a court (PRD US-01).
+    unverified = f"unverified-{uuid.uuid4().hex[:12]}@example.com"
+    page.request.post(
+        f"{BASE}/api/auth/register",
+        data={
+            "email": unverified,
+            "password": PASSWORD,
+            "privacyPolicyVersion": page.request.get(
+                f"{BASE}/api/auth/privacy-policy").json()["version"],
+            "language": "th",
+            "phoneNumber": None,
+        },
+    )
+    stranger = browser.new_page()
+    sign_in(stranger, unverified)
+    refused_unverified = stranger.request.post(
+        f"{BASE}/api/bookings",
+        data={
+            "venueId": venue_id,
+            "slots": [
+                {"courtId": taken_court, "date": tomorrow.isoformat(), "hour": int(taken_hour) + 1}
+            ],
+        },
+    )
+    check("an unverified address cannot book", refused_unverified.status == 403)
+    check(
+        "and names the rule",
+        refused_unverified.json().get("code") == "auth.email_not_verified",
+    )
+
     other = browser.new_page()
     sign_in_as_booker(other)
     refused = other.request.post(
@@ -141,7 +173,7 @@ with sync_playwright() as p:
     check("an hour someone else holds is refused", refused.status == 409)
     check("and names the rule", refused.json().get("code") == "booking.slot_just_taken")
 
-    # 7. The lead time is the server's, not the page's.
+    # 8. The lead time is the server's, not the page's.
     too_soon = other.request.post(
         f"{BASE}/api/bookings",
         data={

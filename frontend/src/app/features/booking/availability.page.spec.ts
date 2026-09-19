@@ -191,9 +191,27 @@ describe('AvailabilityPage', () => {
     });
     fixture.detectChanges();
 
+    // The hours it just took are read again, so the grid stops offering them.
+    expectRead().flush(
+      day({
+        courts: [
+          {
+            courtId: 'c1',
+            name: 'Court 1',
+            hours: [
+              { hour: 18, status: 'Booked', bahtPerHour: 300 },
+              { hour: 19, status: 'Booked', bahtPerHour: 300 },
+            ],
+          },
+        ],
+      }),
+    );
+    fixture.detectChanges();
+
     expect(textOf(fixture, 'held-total')).toContain('600');
     // The picks are spent, so the summary is gone and nothing can be booked twice.
     expect(elementOf(fixture, 'booking-summary')).toBeNull();
+    expect(elementOf(fixture, 'cell-c1-18')?.querySelector('button')).toBeNull();
   });
 
   it('explains a refusal and re-reads the day, because the grid has moved on', () => {
@@ -228,6 +246,9 @@ describe('AvailabilityPage', () => {
     fixture.detectChanges();
 
     expect(elementOf(fixture, 'cell-c1-18')?.classList.contains('booked')).toBe(true);
+    // The pick is gone with it, and the reason is still on screen rather than gone with the pick.
+    expect(elementOf(fixture, 'booking-summary')).toBeNull();
+    expect(textOf(fixture, 'booking-error')).toBe(TRANSLATIONS.th['error.booking.slot_just_taken']);
   });
 
   it('re-prices the summary from the grid it is looking at, not from what it picked', () => {

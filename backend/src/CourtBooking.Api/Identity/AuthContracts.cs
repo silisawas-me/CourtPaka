@@ -31,6 +31,9 @@ public static class AuthErrorCodes
     public const string InvalidEmail = "auth.invalid_email";
     public const string PrivacyPolicyOutdated = "auth.privacy_policy_outdated";
     public const string RegistrationFailed = "auth.registration_failed";
+
+    /// <summary>Signing in is allowed unverified; booking is not (PRD US-01).</summary>
+    public const string EmailNotVerified = "auth.email_not_verified";
 }
 
 public static class RateLimitPolicies

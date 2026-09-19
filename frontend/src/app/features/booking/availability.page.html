@@ -128,6 +128,14 @@
   </mat-card>
 }
 
+@if (bookingError(); as key) {
+  <mat-card>
+    <mat-card-content>
+      <p class="form-error" data-testid="booking-error">{{ i18n.t(key) }}</p>
+    </mat-card-content>
+  </mat-card>
+}
+
 @if (picked().length > 0) {
   <mat-card data-testid="booking-summary">
     <mat-card-header>
@@ -143,10 +151,6 @@
         }
       </ul>
       <p data-testid="summary-total">{{ i18n.t('booking.total') }}: {{ total() }}</p>
-
-      @if (bookingError(); as key) {
-        <p class="form-error" data-testid="booking-error">{{ i18n.t(key) }}</p>
-      }
     </mat-card-content>
 
     <mat-card-actions>
