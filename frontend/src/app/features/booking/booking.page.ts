@@ -133,8 +133,12 @@ export class BookingPage {
         this.loading.set(false);
       },
       error: (failure: unknown) => {
-        this.booking.set(null);
-        this.pageError.set(errorKey(failure));
+        // A quiet read is a second opinion, not the page's own content: if it fails, what is on
+        // screen — including the reason the upload was refused — is still the better answer.
+        if (!quiet) {
+          this.booking.set(null);
+          this.pageError.set(errorKey(failure));
+        }
         this.loading.set(false);
       },
     });

@@ -196,6 +196,24 @@ public sealed class VenueScenario(ApiTestFixture api)
                 booking => booking.HoldExpiresAt, DateTimeOffset.UtcNow.AddMinutes(-1)));
     }
 
+    /// <summary>
+    /// Writes off every hold whose time is up, the way a booking at those hours would. Lets a test
+    /// see what a booker meets once something has recorded the expiry, not only implied it.
+    /// </summary>
+    public async Task ExpireLapsedHoldsAsync()
+    {
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await BookedSlots.ReleaseOwnLapsedAsync(
+            database,
+            await database.Bookings
+                .Where(booking => booking.Status == BookingStatus.Held)
+                .Select(booking => booking.BookerUserId)
+                .FirstAsync(),
+            DateTimeOffset.UtcNow,
+            CancellationToken.None);
+    }
+
     public async Task<VenueMemberResponse[]> GetMembersAsync(HttpClient client, Guid venueId) =>
         await ReadAsync<VenueMemberResponse[]>(await client.GetAsync($"/api/venues/{venueId}/members"));
 

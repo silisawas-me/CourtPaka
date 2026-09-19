@@ -64,7 +64,10 @@ public static class SlipEndpoints
 
         // The server's clock decides, not the page's countdown (PRD US-04). A booker who has
         // already transferred is told to talk to the venue rather than left with nothing to do.
-        if (BookedSlots.HasLapsed(booking, now))
+        // Either the hold has quietly run out, or something has already written that down — a
+        // booker whose hours were taken by someone else meets the second. Both need the answer
+        // that tells them what to do about money they may already have sent.
+        if (BookedSlots.HasLapsed(booking, now) || booking.Status == BookingStatus.Expired)
         {
             return ApiProblem.Of(StatusCodes.Status409Conflict, SlipErrorCodes.HoldExpired);
         }
@@ -93,7 +96,11 @@ public static class SlipEndpoints
         // and the booker is deliberately not told (PRD BR-07).
         var sameBytes = await database.PaymentSlips
             .Where(slip =>
-                slip.Sha256 == stored.Sha256 && slip.Booking!.VenueId == booking.VenueId)
+                slip.Sha256 == stored.Sha256
+                && slip.Booking!.VenueId == booking.VenueId
+                // Re-sending the same picture for the same booking is a booker correcting
+                // themselves, not a slip used twice.
+                && slip.BookingId != booking.Id)
             .OrderBy(slip => slip.UploadedAt)
             .Select(slip => (Guid?)slip.Id)
             .FirstOrDefaultAsync(cancellationToken);
@@ -112,26 +119,37 @@ public static class SlipEndpoints
 
         var wasWaiting = booking.Status == BookingStatus.PendingVerification;
         booking.MoveTo(BookingStatus.PendingVerification);
-        await database.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch
+        {
+            // The bytes are on the volume but nothing will ever reference them, and that volume is
+            // in the backup set (deploy/README.md). Take them back out.
+            await slips.DeleteAsync(stored.Name, CancellationToken.None);
+            throw;
+        }
 
         // Two facts, because they answer different questions: how long a booker took to pay
         // (PRD 1.3), and whether the booking moved (PRD 8).
+        // The name is part of the template, not a parameter: a sink that groups by template has
+        // to see these as different events, which is the whole point of recording them (PRD 8).
         var events = AppEvents.For(loggers);
-        events.LogInformation(
-            "{Event} {BookingId} {VenueId} {Bytes} {SameBytes}",
-            wasWaiting ? "slip_replaced" : "slip_uploaded",
-            booking.Id,
-            booking.VenueId,
-            stored.ByteSize,
-            sameBytes is not null);
-
-        if (!wasWaiting)
+        if (wasWaiting)
         {
             events.LogInformation(
-                "{Event} {BookingId} {VenueId}",
-                BookingTransitions.EventName(booking.Status),
-                booking.Id,
-                booking.VenueId);
+                "slip_replaced {BookingId} {VenueId} {Bytes} {SameBytes}",
+                booking.Id, booking.VenueId, stored.ByteSize, sameBytes is not null);
+        }
+        else
+        {
+            events.LogInformation(
+                "slip_uploaded {BookingId} {VenueId} {Bytes} {SameBytes}",
+                booking.Id, booking.VenueId, stored.ByteSize, sameBytes is not null);
+            events.LogInformation(
+                "booking_pending_verification {BookingId} {VenueId}", booking.Id, booking.VenueId);
         }
 
         return TypedResults.Ok(

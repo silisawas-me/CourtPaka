@@ -99,11 +99,8 @@ public static class BookedSlots
         }
 
         // Only the holds that just lost a slot, and only once there is something to say about them.
-        await lapsed
-            .Where(booking => !booking.Slots.Any(slot => slot.IsActive))
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(booking => booking.Status, BookingStatus.Expired),
-                cancellationToken);
+        await ExpireAsync(
+            lapsed.Where(booking => !booking.Slots.Any(slot => slot.IsActive)), cancellationToken);
     }
 
     /// <summary>

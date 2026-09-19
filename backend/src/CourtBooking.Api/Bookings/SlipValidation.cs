@@ -20,9 +20,6 @@ public static class SlipValidation
     /// <summary>Enough to recognise every shape we accept.</summary>
     public static readonly int SniffBytes = Shapes.Max(shape => shape.Magic.Length);
 
-    /// <summary>What a booker's file picker should offer, which the server checks again anyway.</summary>
-    public static string Accept => string.Join(',', Shapes.Select(shape => shape.ContentType));
-
     /// <summary>
     /// The content type these bytes actually are, or null for anything we do not take. The answer
     /// is what gets stored and served, not the header the uploader sent.

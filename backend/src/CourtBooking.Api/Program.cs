@@ -205,8 +205,10 @@ if (startupOptions.SeedDevelopmentData && app.Environment.IsDevelopment())
 app.UseForwardedHeaders();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
-app.UseRateLimiter();
 app.UseAuthentication();
+// After authentication, so a limit that counts people can see who is asking. Before it, every
+// caller is anonymous and a per-user partition silently becomes a per-address one.
+app.UseRateLimiter();
 app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())

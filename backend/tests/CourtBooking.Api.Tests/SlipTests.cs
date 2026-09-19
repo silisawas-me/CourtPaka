@@ -80,6 +80,41 @@ public sealed class SlipTests(ApiTestFixture api) : IClassFixture<ApiTestFixture
     }
 
     [Fact]
+    public async Task Re_sending_the_same_picture_for_the_same_booking_is_not_a_duplicate()
+    {
+        var (booker, booking) = await HeldBookingAsync();
+        var bytes = Jpeg();
+        await UploadAsync(booker, booking.Id, bytes);
+
+        // A booker tapping "send a different slip" and picking the same photograph again is
+        // correcting themselves, not using one slip twice (PRD BR-07).
+        await UploadAsync(booker, booking.Id, bytes);
+
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var slips = await database.PaymentSlips
+            .Where(slip => slip.BookingId == booking.Id)
+            .ToListAsync();
+
+        Assert.Equal(2, slips.Count);
+        Assert.All(slips, slip => Assert.Null(slip.SameBytesAsSlipId));
+    }
+
+    [Fact]
+    public async Task A_booking_already_marked_expired_still_says_to_contact_the_venue()
+    {
+        var (booker, booking) = await HeldBookingAsync();
+        await scenario.LapseHoldAsync(booking.Id);
+        // Someone else takes the hours, which is what writes the hold off.
+        await scenario.ExpireLapsedHoldsAsync();
+
+        var refused = await UploadAsync(booker, booking.Id, Jpeg());
+
+        // Not "this booking is not waiting for payment": the booker may have already transferred.
+        Assert.Equal(SlipErrorCodes.HoldExpired, await refused.ErrorCodeAsync());
+    }
+
+    [Fact]
     public async Task The_same_picture_at_another_venue_is_not_flagged()
     {
         var bytes = Jpeg();
@@ -230,6 +265,29 @@ public sealed class SlipTests(ApiTestFixture api) : IClassFixture<ApiTestFixture
     }
 
     [Fact]
+    public async Task One_bookers_uploads_do_not_use_up_another_bookers_allowance()
+    {
+        // Every test client comes from the same address, which is the point: bookers at one venue
+        // share a connection, so the limit has to count people (PRD 8, Security).
+        var (first, firstBooking) = await HeldBookingAsync();
+        for (var attempt = 0; attempt < UploadsPerHourInTests; attempt++)
+        {
+            Assert.Equal(
+                HttpStatusCode.OK,
+                (await UploadAsync(first, firstBooking.Id, Jpeg())).StatusCode);
+        }
+
+        Assert.Equal(
+            HttpStatusCode.TooManyRequests,
+            (await UploadAsync(first, firstBooking.Id, Jpeg())).StatusCode);
+
+        var (second, secondBooking) = await HeldBookingAsync();
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await UploadAsync(second, secondBooking.Id, Jpeg())).StatusCode);
+    }
+
+    [Fact]
     public async Task Sending_a_slip_needs_an_account()
     {
         var (_, booking) = await HeldBookingAsync();
@@ -238,6 +296,9 @@ public sealed class SlipTests(ApiTestFixture api) : IClassFixture<ApiTestFixture
 
         Assert.Equal(HttpStatusCode.Unauthorized, refused.StatusCode);
     }
+
+    /// <summary>What ApiFactory configures, low enough that a test can reach it.</summary>
+    private const int UploadsPerHourInTests = 4;
 
     /// <summary>The first bytes of each shape, which is all the server reads to recognise them.</summary>
     private static byte[] Jpeg() => [0xFF, 0xD8, 0xFF, 0xE0, .. "JFIF payload"u8];

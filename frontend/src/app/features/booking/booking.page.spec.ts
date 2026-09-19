@@ -148,6 +148,25 @@ describe('BookingPage', () => {
     expect(elementOf(fixture, 'send-slip')).toBeNull();
   });
 
+  it('keeps the refusal on screen when the read that follows it also fails', () => {
+    render();
+
+    choose(file());
+    httpMock
+      .expectOne('/api/bookings/b1/slip')
+      .flush({ code: 'slip.hold_expired' }, { status: 409, statusText: 'Conflict' });
+    fixture.detectChanges();
+
+    // The session went away between the two calls; the useful message must survive it.
+    httpMock
+      .expectOne('/api/bookings/b1')
+      .flush({ code: 'auth.unauthorized' }, { status: 401, statusText: 'Unauthorized' });
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'upload-error')).toBe(TRANSLATIONS.th['error.slip.hold_expired']);
+    expect(elementOf(fixture, 'booking-total')).not.toBeNull();
+  });
+
   it('translates a booking that is not the reader s', () => {
     fixture = TestBed.createComponent(BookingPage);
     fixture.componentRef.setInput('bookingId', 'b1');

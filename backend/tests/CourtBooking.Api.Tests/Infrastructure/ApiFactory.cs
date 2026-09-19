@@ -34,8 +34,8 @@ public sealed class ApiFactory(string connectionString) : WebApplicationFactory<
         builder.UseSetting("App:SessionRevalidationSeconds", "0");
         // Slips go to a directory of this run's own, thrown away with it.
         builder.UseSetting("App:SlipStoragePath", SlipStoragePath);
-        // The suite uploads far more than one person would.
-        builder.UseSetting("App:UploadsPerHour", "10000");
+        // Low enough that a test can reach the limit; see SlipTests.UploadsPerHourInTests.
+        builder.UseSetting("App:UploadsPerHour", "4");
 
         // The suite registers a user per test; at the production hashing cost that alone would take
         // longer than everything else it does. Nothing here tests the hash itself.

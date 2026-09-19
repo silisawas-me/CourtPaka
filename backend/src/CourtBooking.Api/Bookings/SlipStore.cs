@@ -16,6 +16,12 @@ public interface ISlipStore
 
     /// <summary>Opens a slip for reading, or null when the store no longer holds it.</summary>
     Task<Stream?> OpenAsync(string storedName, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Forgets a slip. Needed when a write is rolled back, and by the erasure a booker may ask for
+    /// (PDPA, PRD 8) — a row that cascades away must not leave its bytes behind.
+    /// </summary>
+    Task DeleteAsync(string storedName, CancellationToken cancellationToken);
 }
 
 public readonly record struct StoredSlip(string Name, long ByteSize, string Sha256);
@@ -48,16 +54,32 @@ public sealed class LocalSlipStore(string root) : ISlipStore
         return new StoredSlip(name, file.Length, Convert.ToHexStringLower(hash.Hash!));
     }
 
-    public Task<Stream?> OpenAsync(string storedName, CancellationToken cancellationToken)
+    public Task DeleteAsync(string storedName, CancellationToken cancellationToken)
     {
-        // The name came from SaveAsync, but it arrives here from the database, so it is checked
-        // rather than trusted: a name with a separator in it would leave the directory.
-        if (storedName.Length == 0 || storedName.AsSpan().ContainsAny('/', '\\', ':') || storedName.Contains(".."))
+        if (Resolve(storedName) is { } path)
         {
-            return Task.FromResult<Stream?>(null);
+            File.Delete(path);
         }
 
-        var path = Path.Combine(root, storedName);
-        return Task.FromResult<Stream?>(File.Exists(path) ? File.OpenRead(path) : null);
+        return Task.CompletedTask;
     }
+
+    public Task<Stream?> OpenAsync(string storedName, CancellationToken cancellationToken)
+    {
+        var path = Resolve(storedName);
+        return Task.FromResult<Stream?>(
+            path is not null && File.Exists(path) ? File.OpenRead(path) : null);
+    }
+
+    /// <summary>
+    /// The file a stored name points at, or null if the name could point anywhere else. The name
+    /// came from SaveAsync, but it arrives here from the database, so it is checked rather than
+    /// trusted: a name with a separator in it would leave the directory.
+    /// </summary>
+    private string? Resolve(string storedName) =>
+        storedName.Length == 0
+        || storedName.AsSpan().ContainsAny('/', '\\', ':')
+        || storedName.Contains("..")
+            ? null
+            : Path.Combine(root, storedName);
 }
