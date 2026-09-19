@@ -200,6 +200,20 @@ public sealed class SlipTests(ApiTestFixture api) : IClassFixture<ApiTestFixture
     }
 
     [Fact]
+    public async Task A_slip_is_handed_over_as_a_download_never_rendered_in_the_page()
+    {
+        var (booker, booking) = await HeldBookingAsync();
+        await UploadAsync(booker, booking.Id, Pdf(), "application/pdf", "slip.pdf");
+
+        var served = await booker.GetAsync($"/api/bookings/{booking.Id}/slip");
+
+        // A PDF is a program as much as a document, and it came from a stranger. Rendered inline
+        // it would run in the site's own origin; as a download it runs nowhere.
+        Assert.Equal("attachment", served.Content.Headers.ContentDisposition?.DispositionType);
+        Assert.Equal("nosniff", served.Headers.GetValues("X-Content-Type-Options").Single());
+    }
+
+    [Fact]
     public async Task Sending_a_slip_needs_an_account()
     {
         var (_, booking) = await HeldBookingAsync();
@@ -211,6 +225,8 @@ public sealed class SlipTests(ApiTestFixture api) : IClassFixture<ApiTestFixture
 
     /// <summary>The first bytes of each shape, which is all the server reads to recognise them.</summary>
     private static byte[] Jpeg() => [0xFF, 0xD8, 0xFF, 0xE0, .. "JFIF payload"u8];
+
+    private static byte[] Pdf() => [0x25, 0x50, 0x44, 0x46, .. "-1.7 slip"u8];
 
     private static byte[] Png() => [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, .. "IHDR"u8];
 

@@ -131,6 +131,7 @@ public static class SlipEndpoints
     private static async Task<Results<FileStreamHttpResult, NotFound, ProblemHttpResult>> DownloadAsync(
         Guid bookingId,
         ClaimsPrincipal principal,
+        HttpResponse response,
         AppDbContext database,
         ISlipStore slips,
         CancellationToken cancellationToken)
@@ -151,9 +152,18 @@ public static class SlipEndpoints
         }
 
         var content = await slips.OpenAsync(slip.StoredName, cancellationToken);
-        return content is null
-            ? TypedResults.NotFound()
-            : TypedResults.File(content, slip.ContentType);
+        if (content is null)
+        {
+            return TypedResults.NotFound();
+        }
+
+        // Never rendered in the page's own origin. A PDF is a program as much as a document, and
+        // this one came from whoever is holding the booking; handing it to the browser as a
+        // download rather than a view means nothing in it runs next to the reader's session.
+        // nosniff is set here as well as at the proxy, because the API is reachable without one.
+        response.Headers.XContentTypeOptions = "nosniff";
+        return TypedResults.File(
+            content, slip.ContentType, fileDownloadName: slip.StoredName);
     }
 }
 
