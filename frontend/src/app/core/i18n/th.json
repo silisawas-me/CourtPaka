@@ -54,6 +54,7 @@
   "error.pricing.no_tiers": "ต้องมีอย่างน้อยหนึ่งขั้น",
   "error.pricing.overlapping_bands": "ช่วงราคาซ้อนกัน หนึ่งชั่วโมงมีได้ราคาเดียว",
   "error.pricing.tiers_not_in_order": "ยกเลิกเร็วกว่าต้องได้คืนไม่น้อยกว่ายกเลิกช้ากว่า",
+  "error.pricing.too_many_bands": "ช่วงราคามากเกินไป",
   "error.pricing.too_many_tiers": "ตั้งได้ไม่เกิน 3 ขั้น",
   "error.sessionNotEstablished": "เข้าสู่ระบบไม่สำเร็จ กรุณาเปิดหน้านี้ใหม่แล้วลองอีกครั้ง",
   "error.tooManyRequests": "ทำรายการถี่เกินไป กรุณารอสักครู่แล้วลองใหม่",

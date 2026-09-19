@@ -52,6 +52,21 @@ public sealed class PricingTests(ApiTestFixture api)
     }
 
     [Fact]
+    public async Task More_bands_than_there_are_hours_in_a_week_is_refused()
+    {
+        var (owner, venue) = await OpenVenueAsync();
+        var tooMany = Enumerable.Range(0, PricingValidation.MaxBands + 1)
+            .Select(_ => new PriceBandRequest(nameof(DayOfWeek.Monday), 6, 7, 200m))
+            .ToArray();
+
+        var response = await owner.PutAsJsonAsync(
+            $"/api/venues/{venue.Id}/prices", new SetPricesRequest(tooMany));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(PricingErrorCodes.TooManyBands, await response.ErrorCodeAsync());
+    }
+
+    [Fact]
     public async Task Two_bands_may_not_cover_the_same_hour()
     {
         var (owner, venue) = await OpenVenueAsync();

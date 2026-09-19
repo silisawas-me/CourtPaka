@@ -10,6 +10,12 @@ public static class PricingValidation
     public const int MaxTiers = 3;
 
     /// <summary>
+    /// One band per hour of every day is as fine-grained as a price can be, so anything past that
+    /// is a mistake or a mishap rather than a price list.
+    /// </summary>
+    public const int MaxBands = 7 * 24;
+
+    /// <summary>
     /// Turns the submitted bands into the rows to store, or names the first thing wrong with them.
     /// Two bands may not cover the same hour, because then the hour has two prices.
     /// </summary>
@@ -21,6 +27,11 @@ public static class PricingValidation
         if (bands is null || bands.Count == 0)
         {
             return PricingErrorCodes.NoBands;
+        }
+
+        if (bands.Count > MaxBands)
+        {
+            return PricingErrorCodes.TooManyBands;
         }
 
         foreach (var band in bands)

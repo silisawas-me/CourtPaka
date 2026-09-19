@@ -26,6 +26,7 @@ public sealed record CancellationPolicyResponse(
 public static class PricingErrorCodes
 {
     public const string NoBands = "pricing.no_bands";
+    public const string TooManyBands = "pricing.too_many_bands";
     public const string InvalidPrice = "pricing.invalid_price";
     public const string OverlappingBands = "pricing.overlapping_bands";
     public const string HourWithoutPrice = "pricing.hour_without_price";

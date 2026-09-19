@@ -54,6 +54,7 @@
   "error.pricing.no_tiers": "At least one step is needed.",
   "error.pricing.overlapping_bands": "Two bands cover the same hour; an hour can only have one price.",
   "error.pricing.tiers_not_in_order": "Cancelling earlier can never get less back than cancelling later.",
+  "error.pricing.too_many_bands": "That is more price bands than a week has hours.",
   "error.pricing.too_many_tiers": "At most three steps.",
   "error.sessionNotEstablished": "Sign in did not complete. Reload the page and try again.",
   "error.tooManyRequests": "Too many requests. Wait a moment and try again.",
