@@ -44,8 +44,14 @@ public sealed class ApiTestFixture : IAsyncLifetime
     {
         // Disposing the derived factory does not dispose the one it was derived from.
         Api.Dispose();
+        var slips = _root.SlipStoragePath;
         _root.Dispose();
         await _container.DisposeAsync();
+
+        if (Directory.Exists(slips))
+        {
+            Directory.Delete(slips, recursive: true);
+        }
     }
 
     public HttpClient CreateClient() => Api.CreateClient();

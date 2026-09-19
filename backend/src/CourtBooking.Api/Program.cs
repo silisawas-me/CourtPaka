@@ -45,6 +45,8 @@ var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException("Connection string 'Default' is not configured.");
 
 builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+builder.Services.AddSingleton<ISlipStore>(services =>
+    new LocalSlipStore(services.GetRequiredService<IOptions<AppOptions>>().Value.SlipStoragePath));
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AppDbContext>(name: "database", tags: [ReadyTag]);
 builder.Services.AddProblemDetails();
@@ -136,6 +138,19 @@ builder.Services.AddScoped<IAuthorizationHandler, VenuePermissionHandler>();
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    // Per person rather than per address: the limit is about one account sending files, and
+    // several bookers at one venue share an address.
+    options.AddPolicy(RateLimitPolicies.Upload, context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            CallerId.TryOf(context.User)?.ToString()
+                ?? context.Connection.RemoteIpAddress?.ToString()
+                ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = appOptions?.UploadsPerHour ?? 10,
+                Window = TimeSpan.FromHours(1),
+            }));
+
     options.AddPolicy(RateLimitPolicies.Auth, context =>
         RateLimitPartition.GetFixedWindowLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",

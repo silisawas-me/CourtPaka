@@ -33,8 +33,12 @@ services:
       # Schema changes are applied by the deploy job before the new image starts (PRD 9.4).
       App__ApplyMigrationsOnStartup: "false"
       App__DataProtectionKeysPath: "/keys"
+      # Payment slips (US-04). A named volume, so redeploying the image keeps them; they move to
+      # object storage before real venues use this (PRD 9.1), and that volume is in the backup set.
+      App__SlipStoragePath: "/slips"
     volumes:
       - api-keys:/keys
+      - api-slips:/slips
     depends_on:
       db:
         condition: service_healthy
@@ -65,5 +69,6 @@ services:
 volumes:
   db-data:
   api-keys:
+  api-slips:
   caddy-data:
   caddy-config:

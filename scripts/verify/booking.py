@@ -79,17 +79,18 @@ with sync_playwright() as p:
     page.click(f"[data-testid={cells[1]}] button")
 
     # 3. Confirming holds the hours.
+    grid_url = page.url
     with page.expect_response(lambda response: response.url.endswith("/api/bookings")) as answer:
         page.click("[data-testid=book]")
     check("confirming is accepted", answer.value.status == 201)
 
-    page.wait_for_selector("[data-testid=held-booking]")
+    page.wait_for_selector("[data-testid=countdown]")
     held = answer.value.json()
+    check("it opens the page that pays for the hold", f"/bookings/{held['id']}" in page.url, page)
     # The API answers baht as a decimal, so 400 arrives as 400.0 and has to be read as a number.
     check(
-        "the hold says what it costs",
-        f"{held['totalBaht']:g}" in page.locator("[data-testid=held-total]").inner_text(),
-        page,
+        "which says what it costs",
+        f"{held['totalBaht']:g}" in page.locator("[data-testid=booking-total]").inner_text(),
     )
     check("the hold covers both hours", len(held["slots"]) == 2)
     check(
@@ -100,12 +101,12 @@ with sync_playwright() as p:
         )
         == datetime.timedelta(minutes=15),
     )
-    check("and the picks are spent", page.locator("[data-testid=booking-summary]").count() == 0)
 
-    # 4. The hours are now taken, and the page says so without being asked again.
-    page.wait_for_selector(f"[data-testid={cells[0]}].booked")
+    # 4. Back on the grid, the hours it took are taken, for everyone.
+    page.goto(grid_url)
+    page.wait_for_selector("[data-testid=availability-grid]")
     check(
-        "the hours it holds read as booked without a reload",
+        "the hours it holds read as booked",
         page.locator(f"[data-testid={cells[0]}]").get_attribute("class").find("booked") >= 0,
         page,
     )

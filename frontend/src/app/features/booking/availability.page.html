@@ -40,30 +40,6 @@
   </mat-card>
 }
 
-@if (held(); as booking) {
-  <mat-card data-testid="held-booking">
-    <mat-card-header>
-      <mat-card-title>{{ i18n.t('booking.held.title') }}</mat-card-title>
-      <mat-card-subtitle data-testid="held-expires">
-        {{ i18n.t('booking.held.expires') }}
-      </mat-card-subtitle>
-    </mat-card-header>
-
-    <mat-card-content>
-      <ul class="stack">
-        @for (slot of booking.slots; track slot.courtId + slot.hour) {
-          <li data-testid="held-slot">
-            {{ slot.date | appDate: i18n.locale() }} · {{ slot.courtName }} · {{ slot.hour }}:00 ·
-            {{ slot.bahtPerHour }}
-          </li>
-        }
-      </ul>
-      <p data-testid="held-total">{{ i18n.t('booking.total') }}: {{ booking.totalBaht }}</p>
-      <p class="muted">{{ i18n.t('booking.held.paymentComing') }}</p>
-    </mat-card-content>
-  </mat-card>
-}
-
 @if (day(); as grid) {
   <mat-card>
     <mat-card-header>

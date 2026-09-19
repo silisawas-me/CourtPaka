@@ -39,3 +39,4 @@ Five rules worth keeping.
 | `venue_pricing.py` | Prices and the cancellation policy (US-11) |
 | `booking_grid.py` | Venue search and the court-by-hour grid (US-02) |
 | `booking.py` | Picking hours, the summary, and holding them (US-03) |
+| `payment.py` | The countdown, sending the slip, and who may read it (US-04) |

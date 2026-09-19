@@ -29,6 +29,11 @@ export const routes: Routes = [
       import('./features/booking/venue-search.page').then((m) => m.VenueSearchPage),
   },
   {
+    path: 'bookings/:bookingId',
+    loadComponent: () => import('./features/bookings/booking.page').then((m) => m.BookingPage),
+    canActivate: [authGuard],
+  },
+  {
     path: 'book/:venueId',
     loadComponent: () =>
       import('./features/booking/availability.page').then((m) => m.AvailabilityPage),

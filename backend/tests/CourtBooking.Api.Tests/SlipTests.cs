@@ -1,0 +1,251 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Security.Cryptography;
+using CourtBooking.Api.Bookings;
+using CourtBooking.Api.Data;
+using CourtBooking.Api.Tests.Infrastructure;
+using CourtBooking.Api.Venues;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace CourtBooking.Api.Tests;
+
+/// <summary>Paying for a hold by sending a picture of the transfer: PRD US-04, BR-07.</summary>
+public sealed class SlipTests(ApiTestFixture api) : IClassFixture<ApiTestFixture>
+{
+    private readonly VenueScenario scenario = new(api);
+
+    [Fact]
+    public async Task Sending_a_slip_puts_the_booking_in_the_venues_queue()
+    {
+        var (booker, booking) = await HeldBookingAsync();
+
+        var answer = await UploadAsync(booker, booking.Id, Jpeg());
+
+        var updated = await VenueScenario.ReadAsync<BookingResponse>(answer);
+        Assert.Equal(nameof(BookingStatus.PendingVerification), updated.Status);
+        Assert.NotNull(updated.SlipUploadedAt);
+    }
+
+    [Fact]
+    public async Task A_better_picture_replaces_the_one_being_checked_and_keeps_the_first()
+    {
+        var (booker, booking) = await HeldBookingAsync();
+        await UploadAsync(booker, booking.Id, Jpeg());
+
+        var second = await UploadAsync(booker, booking.Id, Png());
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+
+        // Both rows survive: what the venue was shown at each point is part of the record.
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var slips = await database.PaymentSlips
+            .Where(slip => slip.BookingId == booking.Id)
+            .OrderBy(slip => slip.UploadedAt)
+            .ToListAsync();
+
+        Assert.Equal(2, slips.Count);
+        Assert.Equal("image/jpeg", slips[0].ContentType);
+        Assert.Equal("image/png", slips[1].ContentType);
+
+        // And the one served back is the newest.
+        var served = await booker.GetAsync($"/api/bookings/{booking.Id}/slip");
+        Assert.Equal("image/png", served.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task The_same_picture_at_one_venue_is_flagged_without_telling_the_booker()
+    {
+        var (_, venue, courts) = await scenario.BookableVenueAsync(courts: 2);
+        var bytes = Jpeg();
+
+        var first = await scenario.SignedInClientAsync();
+        var firstBooking = await HoldAsync(first, venue.Id, courts[0], 18);
+        await UploadAsync(first, firstBooking.Id, bytes);
+
+        var second = await scenario.SignedInClientAsync();
+        var secondBooking = await HoldAsync(second, venue.Id, courts[1], 18);
+        var answer = await UploadAsync(second, secondBooking.Id, bytes);
+
+        // The booker is told nothing: it is accepted exactly like any other slip (PRD BR-07).
+        var updated = await VenueScenario.ReadAsync<BookingResponse>(answer);
+        Assert.Equal(nameof(BookingStatus.PendingVerification), updated.Status);
+
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var flagged = await database.PaymentSlips.SingleAsync(
+            slip => slip.BookingId == secondBooking.Id);
+        Assert.NotNull(flagged.SameBytesAsSlipId);
+    }
+
+    [Fact]
+    public async Task The_same_picture_at_another_venue_is_not_flagged()
+    {
+        var bytes = Jpeg();
+
+        var (_, firstVenue, firstCourts) = await scenario.BookableVenueAsync();
+        var first = await scenario.SignedInClientAsync();
+        var firstBooking = await HoldAsync(first, firstVenue.Id, firstCourts[0], 18);
+        await UploadAsync(first, firstBooking.Id, bytes);
+
+        var (_, otherVenue, otherCourts) = await scenario.BookableVenueAsync();
+        var second = await scenario.SignedInClientAsync();
+        var secondBooking = await HoldAsync(second, otherVenue.Id, otherCourts[0], 18);
+        await UploadAsync(second, secondBooking.Id, bytes);
+
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var slip = await database.PaymentSlips.SingleAsync(
+            candidate => candidate.BookingId == secondBooking.Id);
+        Assert.Null(slip.SameBytesAsSlipId);
+    }
+
+    [Fact]
+    public async Task A_slip_that_arrives_after_the_hold_is_refused_with_a_reason_to_act_on()
+    {
+        var (booker, booking) = await HeldBookingAsync();
+        await scenario.LapseHoldAsync(booking.Id);
+
+        var refused = await UploadAsync(booker, booking.Id, Jpeg());
+
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Equal(SlipErrorCodes.HoldExpired, await refused.ErrorCodeAsync());
+    }
+
+    [Fact]
+    public async Task A_file_that_is_not_a_slip_is_refused_whatever_it_claims_to_be()
+    {
+        var (booker, booking) = await HeldBookingAsync();
+
+        // Named and declared as a photograph, but the bytes are a script.
+        var refused = await UploadAsync(
+            booker, booking.Id, "<script>alert(1)</script>"u8.ToArray(), "image/jpeg", "slip.jpg");
+
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal(SlipErrorCodes.UnsupportedFile, await refused.ErrorCodeAsync());
+    }
+
+    [Fact]
+    public async Task A_file_over_five_megabytes_is_refused()
+    {
+        var (booker, booking) = await HeldBookingAsync();
+        var big = new byte[PaymentSlip.MaxBytes + 1];
+        Jpeg().CopyTo(big, 0);
+
+        var refused = await UploadAsync(booker, booking.Id, big);
+
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal(SlipErrorCodes.TooLarge, await refused.ErrorCodeAsync());
+    }
+
+    [Fact]
+    public async Task Someone_elses_booking_is_not_theirs_to_pay_for_or_to_look_at()
+    {
+        var (_, booking) = await HeldBookingAsync();
+        var stranger = await scenario.SignedInClientAsync();
+
+        var upload = await UploadAsync(stranger, booking.Id, Jpeg());
+        Assert.Equal(HttpStatusCode.NotFound, upload.StatusCode);
+
+        var read = await stranger.GetAsync($"/api/bookings/{booking.Id}");
+        Assert.Equal(HttpStatusCode.NotFound, read.StatusCode);
+
+        var slip = await stranger.GetAsync($"/api/bookings/{booking.Id}/slip");
+        Assert.Equal(HttpStatusCode.NotFound, slip.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_booker_reads_their_own_booking_back()
+    {
+        var (booker, booking) = await HeldBookingAsync();
+
+        var read = await VenueScenario.ReadAsync<BookingResponse>(
+            await booker.GetAsync($"/api/bookings/{booking.Id}"));
+
+        Assert.Equal(booking.Id, read.Id);
+        Assert.Equal(nameof(BookingStatus.Held), read.Status);
+        Assert.Null(read.SlipUploadedAt);
+    }
+
+    [Fact]
+    public async Task A_hold_whose_time_is_up_reads_as_expired_before_anything_writes_that()
+    {
+        var (booker, booking) = await HeldBookingAsync();
+        await scenario.LapseHoldAsync(booking.Id);
+
+        var read = await VenueScenario.ReadAsync<BookingResponse>(
+            await booker.GetAsync($"/api/bookings/{booking.Id}"));
+
+        Assert.Equal(nameof(BookingStatus.Expired), read.Status);
+    }
+
+    [Fact]
+    public async Task The_stored_bytes_are_the_bytes_that_were_sent()
+    {
+        var (booker, booking) = await HeldBookingAsync();
+        var bytes = Png();
+        await UploadAsync(booker, booking.Id, bytes);
+
+        var served = await booker.GetAsync($"/api/bookings/{booking.Id}/slip");
+
+        Assert.Equal(bytes, await served.Content.ReadAsByteArrayAsync());
+        Assert.Equal("image/png", served.Content.Headers.ContentType?.MediaType);
+
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var slip = await database.PaymentSlips.SingleAsync(s => s.BookingId == booking.Id);
+        Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(bytes)), slip.Sha256);
+        Assert.Equal(bytes.Length, slip.ByteSize);
+    }
+
+    [Fact]
+    public async Task Sending_a_slip_needs_an_account()
+    {
+        var (_, booking) = await HeldBookingAsync();
+
+        var refused = await UploadAsync(api.CreateClient(), booking.Id, Jpeg());
+
+        Assert.Equal(HttpStatusCode.Unauthorized, refused.StatusCode);
+    }
+
+    /// <summary>The first bytes of each shape, which is all the server reads to recognise them.</summary>
+    private static byte[] Jpeg() => [0xFF, 0xD8, 0xFF, 0xE0, .. "JFIF payload"u8];
+
+    private static byte[] Png() => [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, .. "IHDR"u8];
+
+    private static async Task<HttpResponseMessage> UploadAsync(
+        HttpClient client,
+        Guid bookingId,
+        byte[] bytes,
+        string contentType = "image/jpeg",
+        string fileName = "slip.jpg")
+    {
+        using var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent(bytes);
+        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        form.Add(file, "file", fileName);
+
+        return await client.PostAsync($"/api/bookings/{bookingId}/slip", form);
+    }
+
+    private async Task<(HttpClient Booker, BookingResponse Booking)> HeldBookingAsync()
+    {
+        var (_, venue, courts) = await scenario.BookableVenueAsync();
+        var booker = await scenario.SignedInClientAsync();
+        return (booker, await HoldAsync(booker, venue.Id, courts[0], 18));
+    }
+
+    private static async Task<BookingResponse> HoldAsync(
+        HttpClient client,
+        Guid venueId,
+        Guid courtId,
+        int hour) =>
+        await VenueScenario.ReadAsync<BookingResponse>(
+            await client.PostAsJsonAsync(
+                "/api/bookings",
+                new CreateBookingRequest(
+                    venueId,
+                    [new BookingSlotRequest(courtId, VenueScenario.Today.AddDays(1), hour)])),
+            HttpStatusCode.Created);
+}

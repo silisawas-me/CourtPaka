@@ -47,4 +47,16 @@ public sealed class AppOptions
     /// <summary>How often a sign-in cookie is re-checked against the user row (lockout, deletion, password change).</summary>
     [Range(0, 86_400)]
     public int SessionRevalidationSeconds { get; init; } = 900;
+
+    /// <summary>
+    /// Where uploaded payment slips are written. They leave the container's filesystem for object
+    /// storage before this is in front of real venues (PRD 9.1); until then the path has to be a
+    /// mounted volume, or a restart loses them.
+    /// </summary>
+    [Required]
+    public required string SlipStoragePath { get; init; }
+
+    /// <summary>Uploads an hour per person (PRD 8, Security).</summary>
+    [Range(1, 10_000)]
+    public int UploadsPerHour { get; init; } = 10;
 }
