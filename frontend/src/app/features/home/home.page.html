@@ -1,0 +1,25 @@
+<section class="card">
+  <h1>{{ 'app.name' | translate }}</h1>
+  <p>{{ 'app.tagline' | translate }}</p>
+
+  @if (user(); as account) {
+    <p data-testid="signed-in-as">{{ 'home.signedInAs' | translate }} {{ account.email }}</p>
+    <p data-testid="verification-state">
+      {{ (account.emailConfirmed ? 'home.emailVerified' : 'home.emailNotVerified') | translate }}
+    </p>
+    @if (!account.emailConfirmed) {
+      <a routerLink="/resend-verification">{{ 'login.resendVerification' | translate }}</a>
+    }
+  } @else {
+    <p>
+      <a routerLink="/login">{{ 'nav.signIn' | translate }}</a>
+      ·
+      <a routerLink="/register">{{ 'nav.signUp' | translate }}</a>
+    </p>
+  }
+
+  <p class="muted">
+    {{ 'home.apiStatus' | translate }}:
+    <strong data-testid="api-status">{{ 'status.' + apiStatus() | translate }}</strong>
+  </p>
+</section>

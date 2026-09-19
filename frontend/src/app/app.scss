@@ -1,6 +1,61 @@
-.shell {
-  max-width: 40rem;
-  margin: 3rem auto;
-  padding: 0 1rem;
-  font-family: system-ui, sans-serif;
+// Only the shell chrome; page-level furniture is global (see src/styles.scss).
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+
+.brand {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+nav {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+
+  a {
+    color: var(--accent-dark);
+    font-size: 0.9375rem;
+  }
+
+  button[data-testid='sign-out'] {
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    background: #fff;
+    font: inherit;
+    font-size: 0.9375rem;
+    cursor: pointer;
+  }
+}
+
+.languages {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.language {
+  padding: 0.25rem 0.7rem;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+
+  &.active {
+    background: var(--accent);
+    color: #fff;
+  }
 }

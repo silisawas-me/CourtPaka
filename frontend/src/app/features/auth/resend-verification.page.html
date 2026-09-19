@@ -1,0 +1,29 @@
+<section class="card">
+  <h1>{{ 'resend.title' | translate }}</h1>
+
+  @if (done()) {
+    <p class="success" data-testid="resend-done">{{ 'resend.done' | translate }}</p>
+    <a routerLink="/login">{{ 'login.title' | translate }}</a>
+  } @else {
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <label for="email">{{ 'common.email' | translate }}</label>
+      <input id="email" type="email" formControlName="email" autocomplete="email" />
+      @if (form.controls.email.touched && form.controls.email.invalid) {
+        <p class="field-error" data-testid="email-error">
+          {{
+            (form.controls.email.hasError('required') ? 'common.required' : 'common.emailInvalid')
+              | translate
+          }}
+        </p>
+      }
+
+      @if (errorKey(); as key) {
+        <p class="form-error" data-testid="form-error">{{ key | translate }}</p>
+      }
+
+      <button type="submit" [disabled]="submitting()">
+        {{ (submitting() ? 'common.loading' : 'resend.submit') | translate }}
+      </button>
+    </form>
+  }
+</section>

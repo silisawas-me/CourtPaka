@@ -1,8 +1,33 @@
-<main class="shell">
-  <h1>CourtPaka</h1>
-  <p>
-    API status: <strong data-testid="api-status">{{ apiStatus() }}</strong>
-  </p>
-</main>
+<header class="bar">
+  <a class="brand" routerLink="/">{{ 'app.name' | translate }}</a>
 
-<router-outlet />
+  <nav>
+    @if (user()) {
+      <button type="button" data-testid="sign-out" (click)="signOut()">
+        {{ 'nav.signOut' | translate }}
+      </button>
+    } @else {
+      <a routerLink="/login">{{ 'nav.signIn' | translate }}</a>
+      <a routerLink="/register">{{ 'nav.signUp' | translate }}</a>
+    }
+
+    <span class="languages" aria-label="{{ 'app.language' | translate }}">
+      @for (option of languages; track option) {
+        <button
+          type="button"
+          class="language"
+          [class.active]="language() === option"
+          [attr.aria-pressed]="language() === option"
+          [attr.data-testid]="'language-' + option"
+          (click)="switchLanguage(option)"
+        >
+          {{ 'app.language.' + option | translate }}
+        </button>
+      }
+    </span>
+  </nav>
+</header>
+
+<main class="shell">
+  <router-outlet />
+</main>

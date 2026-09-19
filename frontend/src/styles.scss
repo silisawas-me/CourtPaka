@@ -1,1 +1,155 @@
-/* You can add global styles to this file, and also import other style files */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700&display=swap');
+
+/**
+ * Shared page furniture lives here on purpose: routed page components render their own markup,
+ * and Angular scopes component styles to their own template, so card/form rules must be global.
+ */
+:root {
+  --ink: #16241c;
+  --muted: #5c6b63;
+  --line: #d8e2db;
+  --accent: #1d7a4c;
+  --accent-dark: #145c39;
+  --danger: #b3261e;
+
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: #f7faf8;
+  color: var(--ink);
+  font-family:
+    'Noto Sans Thai',
+    system-ui,
+    -apple-system,
+    sans-serif;
+  line-height: 1.55;
+}
+
+.shell {
+  max-width: 30rem;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.875rem;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(22 36 28 / 6%);
+
+  h1 {
+    margin: 0;
+    font-size: 1.5rem;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  a {
+    color: var(--accent-dark);
+  }
+}
+
+form {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--muted);
+
+  &:not(:first-of-type) {
+    margin-top: 0.75rem;
+  }
+
+  &.checkbox {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    font-weight: 400;
+    color: var(--ink);
+  }
+}
+
+input[type='email'],
+input[type='password'],
+input[type='tel'] {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  font: inherit;
+  background: #fff;
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+}
+
+input[type='checkbox'] {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--accent);
+}
+
+.card button[type='submit'],
+.card button[type='button'] {
+  margin-top: 1rem;
+  padding: 0.7rem 1rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--accent-dark);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: progress;
+  }
+}
+
+.field-error,
+.form-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.875rem;
+}
+
+.form-error {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  background: #fdecea;
+}
+
+.success {
+  color: var(--accent-dark);
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.875rem;
+}

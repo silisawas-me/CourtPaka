@@ -1,0 +1,17 @@
+<section class="card">
+  <h1>{{ 'verify.title' | translate }}</h1>
+
+  @switch (state()) {
+    @case ('working') {
+      <p data-testid="verify-working">{{ 'verify.working' | translate }}</p>
+    }
+    @case ('done') {
+      <p class="success" data-testid="verify-success">{{ 'verify.success' | translate }}</p>
+      <a routerLink="/">{{ 'app.name' | translate }}</a>
+    }
+    @case ('failed') {
+      <p class="form-error" data-testid="verify-error">{{ errorKey() | translate }}</p>
+      <a routerLink="/resend-verification">{{ 'login.resendVerification' | translate }}</a>
+    }
+  }
+</section>
