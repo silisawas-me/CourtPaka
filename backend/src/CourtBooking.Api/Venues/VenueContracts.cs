@@ -24,4 +24,8 @@ public static class VenueErrorCodes
     public const string InvalidPermissions = "venue.invalid_permissions";
     public const string InvitationInvalid = "venue.invitation_invalid";
     public const string InvitationForAnotherAddress = "venue.invitation_for_another_address";
+    public const string InvalidCode = "venue.invalid_code";
+    public const string InvalidName = "venue.invalid_name";
+    public const string InvalidEmail = "venue.invalid_email";
+    public const string NotApproved = "venue.not_approved";
 }

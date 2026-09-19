@@ -28,6 +28,8 @@ services:
     profiles: [full]
     build: ./backend
     environment:
+      # This stack is a development one; deployed environments run as Production (PRD 9.3, 9.4).
+      ASPNETCORE_ENVIRONMENT: "Development"
       ConnectionStrings__Default: "Host=db;Port=5432;Database=courtbooking;Username=courtbooking;Password=courtbooking_dev"
       App__BaseUrl: "http://localhost:8080"
       App__PrivacyPolicyVersion: "2026-09-01"

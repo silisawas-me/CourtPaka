@@ -172,7 +172,8 @@ if (startupOptions.ApplyMigrationsOnStartup)
     await migrationScope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
 }
 
-if (startupOptions.SeedDevelopmentData)
+// Two locks, because these accounts have a published password: the flag AND a development host.
+if (startupOptions.SeedDevelopmentData && app.Environment.IsDevelopment())
 {
     await DevelopmentSeeder.SeedAsync(app.Services);
 }

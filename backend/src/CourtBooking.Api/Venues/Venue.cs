@@ -29,17 +29,11 @@ public enum VenueStatus
     Suspended = 4,
 }
 
-/// <summary>Anything a venue owns; the venue decides who may see or change it (PRD 8, 9.2).</summary>
-public interface IVenueScoped
-{
-    Guid VenueId { get; }
-}
-
 /// <summary>
 /// What a person may do at one venue. Owners implicitly hold every permission, so the stored flags
 /// only ever describe staff (PRD US-14).
 /// </summary>
-public sealed class VenueMembership : IVenueScoped
+public sealed class VenueMembership
 {
     public Guid Id { get; init; } = Guid.CreateVersion7();
 
@@ -65,7 +59,7 @@ public sealed class VenueMembership : IVenueScoped
 /// An offer of staff access. It exists before the person does, because the invited address may not
 /// have an account yet (PRD US-14).
 /// </summary>
-public sealed class VenueInvitation : IVenueScoped
+public sealed class VenueInvitation
 {
     public Guid Id { get; init; } = Guid.CreateVersion7();
 

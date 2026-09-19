@@ -55,6 +55,12 @@ public static class VenueEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
+        var invalid = VenueValidation.ValidateCode(request.Code) ?? VenueValidation.ValidateName(request.Name);
+        if (invalid is not null)
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, invalid);
+        }
+
         var now = timeProvider.GetUtcNow();
         var venue = new Venue
         {
@@ -107,12 +113,18 @@ public static class VenueEndpoints
         // Authorization already loaded the venue this request runs against.
         TypedResults.Ok(ToResponse(currentVenue.Require().Venue!));
 
-    private static async Task<Results<NoContent, NotFound>> RenameAsync(
+    private static async Task<Results<NoContent, NotFound, ProblemHttpResult>> RenameAsync(
         Guid venueId,
         RenameVenueRequest request,
         AppDbContext database,
         CancellationToken cancellationToken)
     {
+        var invalid = VenueValidation.ValidateName(request.Name);
+        if (invalid is not null)
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, invalid);
+        }
+
         var updated = await database.Venues
             .Where(venue => venue.Id == venueId)
             .ExecuteUpdateAsync(
@@ -178,6 +190,12 @@ public static class VenueEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, VenueErrorCodes.InvalidPermissions);
         }
 
+        var invalidEmail = VenueValidation.ValidateEmail(request.Email);
+        if (invalidEmail is not null)
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, invalidEmail);
+        }
+
         var email = request.Email.Trim();
         var existing = await userManager.FindByEmailAsync(email);
         if (existing is not null
@@ -188,6 +206,13 @@ public static class VenueEndpoints
         }
 
         var now = timeProvider.GetUtcNow();
+
+        // One live invitation per address: re-inviting replaces the old link instead of leaving
+        // several valid tokens the owner cannot revoke.
+        await database.VenueInvitations
+            .Where(item => item.VenueId == venueId && item.Email == email && item.AcceptedAt == null)
+            .ExecuteDeleteAsync(cancellationToken);
+
         var token = GenerateToken();
         var invitation = new VenueInvitation
         {
@@ -256,6 +281,9 @@ public static class VenueEndpoints
         if (await database.VenueMemberships.AnyAsync(
                 member => member.VenueId == invitation.VenueId && member.UserId == user.Id, cancellationToken))
         {
+            // Nothing left to accept, so the invitation stops being pending.
+            invitation.AcceptedAt = now;
+            await database.SaveChangesAsync(cancellationToken);
             return ApiProblem.Of(StatusCodes.Status409Conflict, VenueErrorCodes.AlreadyMember);
         }
 
@@ -268,7 +296,16 @@ public static class VenueEndpoints
             CreatedAt = now,
         });
         invitation.AcceptedAt = now;
-        await database.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (DbErrors.IsUniqueViolation(exception))
+        {
+            // Two accepts raced (a double click, a retry); the membership already exists.
+            return ApiProblem.Of(StatusCodes.Status409Conflict, VenueErrorCodes.AlreadyMember);
+        }
 
         return TypedResults.Ok(ToResponse(invitation.Venue!));
     }

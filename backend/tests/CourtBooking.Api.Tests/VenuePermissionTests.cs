@@ -1,9 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Web;
+using CourtBooking.Api.Data;
 using CourtBooking.Api.Identity;
 using CourtBooking.Api.Tests.Infrastructure;
 using CourtBooking.Api.Venues;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CourtBooking.Api.Tests;
 
@@ -250,6 +254,90 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData(null, "Smash Court", VenueErrorCodes.InvalidCode)]
+    [InlineData("", "Smash Court", VenueErrorCodes.InvalidCode)]
+    [InlineData("AB", "Smash Court", VenueErrorCodes.InvalidCode)]
+    [InlineData("TOOLONGCODE", "Smash Court", VenueErrorCodes.InvalidCode)]
+    [InlineData("AB CD", "Smash Court", VenueErrorCodes.InvalidCode)]
+    [InlineData("ABC123", null, VenueErrorCodes.InvalidName)]
+    [InlineData("ABC124", "   ", VenueErrorCodes.InvalidName)]
+    public async Task A_malformed_venue_is_refused_with_a_code(string? code, string? name, string expected)
+    {
+        var owner = await SignedInClientAsync();
+
+        var response = await owner.PostAsJsonAsync("/api/venues", new { code, name });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(expected, await ReadErrorCodeAsync(response));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("not an address")]
+    public async Task A_malformed_invitation_address_is_refused_with_a_code(string? email)
+    {
+        var owner = await SignedInClientAsync();
+        var venue = await CreateVenueAsync(owner);
+
+        var response = await owner.PostAsJsonAsync($"/api/venues/{venue.Id}/invitations", new { email });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(VenueErrorCodes.InvalidEmail, await ReadErrorCodeAsync(response));
+    }
+
+    [Fact]
+    public async Task Renaming_with_an_empty_name_is_refused_with_a_code()
+    {
+        var owner = await SignedInClientAsync();
+        var venue = await CreateVenueAsync(owner);
+
+        var response = await owner.PutAsJsonAsync($"/api/venues/{venue.Id}", new { name = "  " });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(VenueErrorCodes.InvalidName, await ReadErrorCodeAsync(response));
+    }
+
+    [Fact]
+    public async Task Re_inviting_the_same_address_replaces_the_pending_invitation()
+    {
+        var owner = await SignedInClientAsync();
+        var venue = await CreateVenueAsync(owner);
+        var (staff, staffEmail) = await SignedInClientWithEmailAsync();
+        var first = await InviteAsync(owner, venue.Id, staffEmail);
+        var firstToken = ReadInvitationToken(staffEmail);
+
+        var second = await InviteAsync(owner, venue.Id, staffEmail, VenuePermissions.All);
+
+        var pending = await owner.GetFromJsonAsync<VenueInvitationResponse[]>(
+            $"/api/venues/{venue.Id}/invitations");
+        Assert.Equal([second.Id], pending!.Select(invitation => invitation.Id));
+
+        // The replaced link no longer works.
+        var replaced = await staff.PostAsJsonAsync(
+            "/api/venues/invitations/accept", new AcceptInvitationRequest(first.Id, firstToken));
+        Assert.Equal(HttpStatusCode.BadRequest, replaced.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_suspended_venue_can_be_read_but_not_changed()
+    {
+        var owner = await SignedInClientAsync();
+        var venue = await CreateVenueAsync(owner);
+        await SetStatusAsync(venue.Id, VenueStatus.Suspended);
+
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync($"/api/venues/{venue.Id}")).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await owner.PutAsJsonAsync($"/api/venues/{venue.Id}", new RenameVenueRequest("New name"))).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await owner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/invitations",
+                new InviteMemberRequest("someone@example.com", null))).StatusCode);
+    }
+
     [Fact]
     public async Task Anonymous_callers_are_refused()
     {
@@ -320,6 +408,22 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
         var body = api.Emails.LastTo(email).Body;
         var url = new Uri(body[body.IndexOf("http", StringComparison.Ordinal)..].Trim());
         return HttpUtility.ParseQueryString(url.Query)["token"]!;
+    }
+
+    private async Task SetStatusAsync(Guid venueId, VenueStatus status)
+    {
+        // Platform Admin approval arrives with US-20; until then the test sets the status directly.
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await database.Venues
+            .Where(venue => venue.Id == venueId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(venue => venue.Status, status));
+    }
+
+    private static async Task<string?> ReadErrorCodeAsync(HttpResponseMessage response)
+    {
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return document.RootElement.TryGetProperty("code", out var code) ? code.GetString() : null;
     }
 
     private static async Task<VenueMemberResponse[]> GetMembersAsync(HttpClient client, Guid venueId)
