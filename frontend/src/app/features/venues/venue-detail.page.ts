@@ -1,0 +1,199 @@
+import { DatePipe } from '@angular/common';
+import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { forkJoin } from 'rxjs';
+import { errorKey } from '../../core/http/api-error';
+import { TranslationService } from '../../core/i18n/translation.service';
+import {
+  STAFF_DEFAULT_PERMISSIONS,
+  Venue,
+  VenueInvitation,
+  VenueMember,
+  VenuePermission,
+  VENUE_PERMISSIONS,
+  VenueService,
+} from '../../core/venues/venue.service';
+import { FieldError } from '../../shared/field-error';
+
+@Component({
+  selector: 'app-venue-detail-page',
+  imports: [ReactiveFormsModule, RouterLink, FieldError, DatePipe],
+  templateUrl: './venue-detail.page.html',
+})
+export class VenueDetailPage {
+  private readonly venues = inject(VenueService);
+  private readonly formBuilder = inject(FormBuilder);
+
+  protected readonly i18n = inject(TranslationService);
+  protected readonly permissions = VENUE_PERMISSIONS;
+
+  /** Bound from the route, so the id stays right when this page gains child routes. */
+  readonly venueId = input.required<string>();
+
+  protected readonly venue = signal<Venue | null>(null);
+  protected readonly members = signal<VenueMember[]>([]);
+  protected readonly invitations = signal<VenueInvitation[]>([]);
+  protected readonly loading = signal(true);
+  protected readonly pageError = signal<string | null>(null);
+  protected readonly memberError = signal<string | null>(null);
+  protected readonly inviteError = signal<string | null>(null);
+  protected readonly inviting = signal(false);
+  protected readonly savingMember = signal<string | null>(null);
+
+  /** The API reports what the caller may do here; the page never infers it from the roster. */
+  protected readonly isOwner = computed(() => this.venue()?.role === 'Owner');
+
+  /** A frozen venue refuses every write, so its controls are read-only too (PRD US-20). */
+  protected readonly canManage = computed(
+    () => this.isOwner() && this.venue()?.status === 'Approved',
+  );
+
+  /** Set per member so the template does not scan an array on every change detection pass. */
+  protected readonly rows = computed(() =>
+    this.members().map((member) => ({ member, granted: new Set(member.permissions) })),
+  );
+
+  protected readonly inviteForm = this.formBuilder.nonNullable.group({
+    email: ['', [Validators.required, Validators.email]],
+    permissions: this.formBuilder.nonNullable.group(
+      Object.fromEntries(
+        VENUE_PERMISSIONS.map((permission) => [
+          permission,
+          [STAFF_DEFAULT_PERMISSIONS.includes(permission)],
+        ]),
+      ) as Record<VenuePermission, [boolean]>,
+    ),
+  });
+
+  constructor() {
+    // The router reuses this component when only the id changes, so the load follows the input
+    // rather than running once: otherwise the page would keep showing the previous venue.
+    effect(() => this.load(this.venueId()));
+  }
+
+  protected invite(): void {
+    this.inviteForm.markAllAsTouched();
+    if (this.inviteForm.controls.email.invalid || this.inviting()) {
+      return;
+    }
+
+    this.inviting.set(true);
+    this.inviteError.set(null);
+    const email = this.inviteForm.controls.email.value;
+
+    this.venues.invite(this.venueId(), email, this.selectedPermissions()).subscribe({
+      next: (invitation) => {
+        this.inviting.set(false);
+        // The server replaces any pending invitation for the same mailbox, matching on a
+        // case-insensitive address, so the list mirrors that rule.
+        this.invitations.update((pending) => [
+          ...pending.filter((item) => !sameAddress(item.email, invitation.email)),
+          invitation,
+        ]);
+        this.inviteForm.controls.email.reset('');
+      },
+      error: (error: unknown) => {
+        this.inviting.set(false);
+        this.inviteError.set(errorKey(error));
+      },
+    });
+  }
+
+  protected togglePermission(
+    member: VenueMember,
+    permission: VenuePermission,
+    granted: boolean,
+  ): void {
+    // Read the live list, not the row captured when the template rendered, so quick successive
+    // ticks build on each other instead of overwriting one another.
+    const current = this.members().find((item) => item.userId === member.userId);
+    if (!current || this.savingMember() !== null) {
+      return;
+    }
+
+    const previous = current.permissions;
+    const next = granted
+      ? [...previous, permission]
+      : previous.filter((held) => held !== permission);
+
+    this.savingMember.set(member.userId);
+    this.memberError.set(null);
+    // Show the new state at once. Putting it back on refusal is what resets the checkbox: the
+    // browser has already ticked it, so only a change in the bound value writes the box back.
+    this.setPermissions(member.userId, next);
+
+    this.venues.changePermissions(this.venueId(), member.userId, next).subscribe({
+      next: () => this.savingMember.set(null),
+      error: (error: unknown) => {
+        this.savingMember.set(null);
+        this.setPermissions(member.userId, previous);
+        // A failed checkbox must not take the whole page down with it.
+        this.memberError.set(errorKey(error));
+      },
+    });
+  }
+
+  private setPermissions(userId: string, permissions: VenuePermission[]): void {
+    this.members.update((list) =>
+      list.map((item) => (item.userId === userId ? { ...item, permissions } : item)),
+    );
+  }
+
+  protected remove(member: VenueMember): void {
+    this.savingMember.set(member.userId);
+    this.memberError.set(null);
+
+    this.venues.removeMember(this.venueId(), member.userId).subscribe({
+      next: () => {
+        this.savingMember.set(null);
+        this.members.update((list) => list.filter((item) => item.userId !== member.userId));
+      },
+      error: (error: unknown) => {
+        this.savingMember.set(null);
+        this.memberError.set(errorKey(error));
+      },
+    });
+  }
+
+  private load(venueId: string): void {
+    this.loading.set(true);
+    this.venue.set(null);
+    this.members.set([]);
+    this.invitations.set([]);
+    this.pageError.set(null);
+    this.memberError.set(null);
+
+    forkJoin({
+      venue: this.venues.get(venueId),
+      members: this.venues.members(venueId),
+    }).subscribe({
+      next: ({ venue, members }) => {
+        this.venue.set(venue);
+        this.members.set(members);
+        this.loading.set(false);
+
+        // Only fetched when the invite section can be shown, so a frozen venue asks for nothing.
+        if (venue.role === 'Owner' && venue.status === 'Approved') {
+          this.venues.invitations(venueId).subscribe({
+            next: (invitations) => this.invitations.set(invitations),
+            error: () => this.invitations.set([]),
+          });
+        }
+      },
+      error: (error: unknown) => {
+        this.pageError.set(errorKey(error));
+        this.loading.set(false);
+      },
+    });
+  }
+
+  private selectedPermissions(): VenuePermission[] {
+    const selected = this.inviteForm.controls.permissions.getRawValue();
+    return VENUE_PERMISSIONS.filter((permission) => selected[permission]);
+  }
+}
+
+function sameAddress(left: string, right: string): boolean {
+  return left.localeCompare(right, undefined, { sensitivity: 'accent' }) === 0;
+}

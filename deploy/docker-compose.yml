@@ -1,0 +1,69 @@
+# Deployed stack (UAT and PRD). Everything environment-specific comes from the .env file next to
+# this one on the server (chmod 600, never in git) — see deploy/README.md.
+#   docker compose pull && docker compose up -d --wait
+name: courtpaka
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    # Loopback only, so the migration bundle the deploy job copies here can reach the database.
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  api:
+    image: ${API_IMAGE:?set API_IMAGE to the ghcr.io tag being deployed}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      App__BaseUrl: ${APP_BASE_URL:?set APP_BASE_URL to the public origin}
+      App__PrivacyPolicyVersion: ${PRIVACY_POLICY_VERSION:?set PRIVACY_POLICY_VERSION}
+      # Schema changes are applied by the deploy job before the new image starts (PRD 9.4).
+      App__ApplyMigrationsOnStartup: "false"
+      App__DataProtectionKeysPath: "/keys"
+    volumes:
+      - api-keys:/keys
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "dotnet", "/app/CourtBooking.Api.dll", "--healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  web:
+    image: ${WEB_IMAGE:?set WEB_IMAGE to the ghcr.io tag being deployed}
+    restart: unless-stopped
+    environment:
+      # A bare domain makes Caddy obtain and renew the certificate itself (PRD 9.3).
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS to the domain}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  db-data:
+  api-keys:
+  caddy-data:
+  caddy-config:

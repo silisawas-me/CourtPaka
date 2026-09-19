@@ -158,7 +158,7 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
 
         var granted = await owner.PutAsJsonAsync(
             $"/api/venues/{venue.Id}/members/{staffId}/permissions",
-            new ChangePermissionsRequest(VenuePermissions.StaffDefault | VenuePermissions.ManageSettings));
+            new ChangePermissionsRequest(["VerifySlip", "ManageBookings", "CloseCourt", "ManageSettings"]));
         Assert.Equal(HttpStatusCode.NoContent, granted.StatusCode);
 
         var allowed = await staff.PutAsJsonAsync($"/api/venues/{venue.Id}", new RenameVenueRequest("Renamed"));
@@ -166,7 +166,7 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
 
         await owner.PutAsJsonAsync(
             $"/api/venues/{venue.Id}/members/{staffId}/permissions",
-            new ChangePermissionsRequest(VenuePermissions.StaffDefault));
+            new ChangePermissionsRequest(["VerifySlip", "ManageBookings", "CloseCourt"]));
 
         var refused = await staff.PutAsJsonAsync($"/api/venues/{venue.Id}", new RenameVenueRequest("Renamed again"));
         Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
@@ -183,10 +183,10 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
         var staffId = (await GetMembersAsync(owner, venue.Id)).Single(m => m.Email == staffEmail).UserId;
 
         var invite = await staff.PostAsJsonAsync(
-            $"/api/venues/{venue.Id}/invitations", new InviteMemberRequest(outsiderEmail, VenuePermissions.All));
+            $"/api/venues/{venue.Id}/invitations", new InviteMemberRequest(outsiderEmail, VenuePermissionSet.Describe(VenuePermissions.All)));
         var escalate = await staff.PutAsJsonAsync(
             $"/api/venues/{venue.Id}/members/{staffId}/permissions",
-            new ChangePermissionsRequest(VenuePermissions.All));
+            new ChangePermissionsRequest(VenuePermissionSet.Describe(VenuePermissions.All)));
         var remove = await staff.DeleteAsync($"/api/venues/{venue.Id}/members/{staffId}");
         var invitations = await staff.GetAsync($"/api/venues/{venue.Id}/invitations");
 
@@ -205,7 +205,7 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
 
         var change = await owner.PutAsJsonAsync(
             $"/api/venues/{venue.Id}/members/{ownerId}/permissions",
-            new ChangePermissionsRequest(VenuePermissions.None));
+            new ChangePermissionsRequest([]));
         var remove = await owner.DeleteAsync($"/api/venues/{venue.Id}/members/{ownerId}");
 
         Assert.Equal(HttpStatusCode.Conflict, change.StatusCode);
@@ -249,7 +249,7 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
 
         var response = await owner.PostAsJsonAsync(
             $"/api/venues/{venue.Id}/invitations",
-            new InviteMemberRequest("someone@example.com", (VenuePermissions)1024));
+            new InviteMemberRequest("someone@example.com", ["NotAPermission"]));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -308,7 +308,7 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
         var first = await InviteAsync(owner, venue.Id, staffEmail);
         var firstToken = ReadInvitationToken(staffEmail);
 
-        var second = await InviteAsync(owner, venue.Id, staffEmail, VenuePermissions.All);
+        var second = await InviteAsync(owner, venue.Id, staffEmail, VenuePermissionSet.Describe(VenuePermissions.All));
 
         var pending = await owner.GetFromJsonAsync<VenueInvitationResponse[]>(
             $"/api/venues/{venue.Id}/invitations");
@@ -326,11 +326,11 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
         var owner = await SignedInClientAsync();
         var venue = await CreateVenueAsync(owner);
         var (staff, staffEmail) = await SignedInClientWithEmailAsync();
-        var permissive = await InviteAsync(owner, venue.Id, staffEmail.ToUpperInvariant(), VenuePermissions.All);
+        var permissive = await InviteAsync(owner, venue.Id, staffEmail.ToUpperInvariant(), VenuePermissionSet.Describe(VenuePermissions.All));
         var permissiveToken = ReadInvitationToken(staffEmail.ToUpperInvariant());
 
         // The owner changes their mind and re-invites the same mailbox, typed differently.
-        await InviteAsync(owner, venue.Id, staffEmail.ToLowerInvariant(), VenuePermissions.StaffDefault);
+        await InviteAsync(owner, venue.Id, staffEmail.ToLowerInvariant(), ["VerifySlip"]);
 
         var replaced = await staff.PostAsJsonAsync(
             "/api/venues/invitations/accept", new AcceptInvitationRequest(permissive.Id, permissiveToken));
@@ -417,7 +417,7 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
         HttpClient owner,
         Guid venueId,
         string email,
-        VenuePermissions? permissions = null)
+        string[]? permissions = null)
     {
         var response = await owner.PostAsJsonAsync(
             $"/api/venues/{venueId}/invitations", new InviteMemberRequest(email, permissions));

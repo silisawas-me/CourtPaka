@@ -88,7 +88,8 @@ label {
 
 input[type='email'],
 input[type='password'],
-input[type='tel'] {
+input[type='tel'],
+input[type='text'] {
   width: 100%;
   padding: 0.6rem 0.75rem;
   border: 1px solid var(--line);
@@ -128,6 +129,52 @@ input[type='checkbox'] {
     opacity: 0.6;
     cursor: progress;
   }
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.75rem;
+    align-items: baseline;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--line);
+
+    &:last-child {
+      padding-bottom: 0;
+      border-bottom: 0;
+    }
+  }
+}
+
+.permissions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+  width: 100%;
+
+  .checkbox {
+    font-size: 0.875rem;
+  }
+}
+
+/** Secondary button: quiet next to the filled primary one. */
+.ghost {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
 }
 
 .field-error,

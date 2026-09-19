@@ -1,0 +1,10 @@
+# The deploy workflow pins the actions that handle the SSH key to a commit, which is only safe if
+# something bumps them deliberately.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: chore(ci)

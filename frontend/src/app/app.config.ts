@@ -5,7 +5,7 @@ import {
   provideAppInitializer,
   provideBrowserGlobalErrorListeners,
 } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { catchError, of } from 'rxjs';
 import { AuthService } from './core/auth/auth.service';
 import { apiErrorInterceptor } from './core/http/api-error';
@@ -14,7 +14,8 @@ import { routes } from './app.routes';
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
-    provideRouter(routes),
+    // Route parameters arrive as component inputs, so pages do not read route snapshots.
+    provideRouter(routes, withComponentInputBinding()),
     provideHttpClient(withFetch(), withInterceptors([apiErrorInterceptor])),
     // A session cookie may already exist; resolve it before the first route renders so guards and
     // pages never have to distinguish "signed out" from "not loaded yet". A failure here must never

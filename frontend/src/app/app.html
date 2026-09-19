@@ -3,6 +3,7 @@
 
   <nav>
     @if (user()) {
+      <a routerLink="/venues" data-testid="nav-venues">{{ i18n.t('nav.venues') }}</a>
       <button type="button" class="ghost" data-testid="sign-out" (click)="signOut()">
         {{ i18n.t('nav.signOut') }}
       </button>

@@ -1,0 +1,112 @@
+@if (loading()) {
+  <section class="card">
+    <p>{{ i18n.t('common.loading') }}</p>
+  </section>
+} @else if (pageError(); as key) {
+  <section class="card">
+    <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
+    <p>
+      <a routerLink="/venues">{{ i18n.t('venues.title') }}</a>
+    </p>
+  </section>
+} @else if (venue(); as current) {
+  <section class="card">
+    <h1 data-testid="venue-name">{{ current.name }}</h1>
+    <p class="muted">{{ current.code }} · {{ i18n.t('venues.status.' + current.status) }}</p>
+    @if (current.status !== 'Approved') {
+      <p class="muted" data-testid="venue-not-approved">{{ i18n.t('venues.notApprovedYet') }}</p>
+    }
+  </section>
+
+  <section class="card">
+    <h2>{{ i18n.t('venues.members.title') }}</h2>
+
+    @if (memberError(); as key) {
+      <p class="form-error" data-testid="member-error">{{ i18n.t(key) }}</p>
+    }
+
+    <ul class="list" data-testid="member-list">
+      @for (row of rows(); track row.member.userId) {
+        <li>
+          <strong>{{ row.member.email }}</strong>
+          <span class="muted">{{ i18n.t('venues.role.' + row.member.role) }}</span>
+
+          @if (row.member.role === 'Owner') {
+            <span class="muted">{{ i18n.t('venues.members.ownerHasAll') }}</span>
+          } @else {
+            <span class="permissions">
+              @for (permission of permissions; track permission) {
+                <label class="checkbox">
+                  <input
+                    type="checkbox"
+                    [checked]="row.granted.has(permission)"
+                    [disabled]="!canManage() || savingMember() !== null"
+                    [attr.data-testid]="'permission-' + row.member.userId + '-' + permission"
+                    (change)="togglePermission(row.member, permission, $any($event.target).checked)"
+                  />
+                  {{ i18n.t('venues.permission.' + permission) }}
+                </label>
+              }
+            </span>
+
+            @if (canManage()) {
+              <button
+                type="button"
+                class="ghost"
+                [disabled]="savingMember() !== null"
+                [attr.data-testid]="'remove-' + row.member.userId"
+                (click)="remove(row.member)"
+              >
+                {{ i18n.t('venues.members.remove') }}
+              </button>
+            }
+          }
+        </li>
+      }
+    </ul>
+  </section>
+
+  @if (canManage()) {
+    <section class="card">
+      <h2>{{ i18n.t('venues.invite.title') }}</h2>
+
+      <form [formGroup]="inviteForm" (ngSubmit)="invite()" novalidate>
+        <label for="invite-email">{{ i18n.t('common.email') }}</label>
+        <input id="invite-email" type="email" formControlName="email" autocomplete="off" />
+        <app-field-error [control]="inviteForm.controls.email" testId="invite-email-error" />
+
+        <span class="permissions" formGroupName="permissions">
+          @for (permission of permissions; track permission) {
+            <label class="checkbox">
+              <input type="checkbox" [formControlName]="permission" />
+              {{ i18n.t('venues.permission.' + permission) }}
+            </label>
+          }
+        </span>
+
+        @if (inviteError(); as key) {
+          <p class="form-error" data-testid="invite-error">{{ i18n.t(key) }}</p>
+        }
+
+        <button type="submit" [disabled]="inviting()">
+          {{ i18n.t(inviting() ? 'common.loading' : 'venues.invite.submit') }}
+        </button>
+      </form>
+
+      @if (invitations().length > 0) {
+        <h3>{{ i18n.t('venues.invite.pending') }}</h3>
+        <ul class="list" data-testid="invitation-list">
+          @for (invitation of invitations(); track invitation.id) {
+            <li>
+              <strong>{{ invitation.email }}</strong>
+              <span class="muted"
+                >{{ i18n.t('venues.invite.expires') }}
+                {{ invitation.expiresAt | date: 'mediumDate' }}</span
+              >
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  }
+}
