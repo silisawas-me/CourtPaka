@@ -34,6 +34,13 @@ public static class PlatformRequirements
         }
     }
 
+    /// <summary>
+    /// Today in Thai time. Opening hours, closures and every report are counted by the Bangkok date,
+    /// never the server's (PRD BR-10), so nothing may call DateTime.Today.
+    /// </summary>
+    public static DateOnly BangkokToday(TimeProvider timeProvider) =>
+        DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), BangkokTimeZone).DateTime);
+
     private static TimeZoneInfo FindBangkokTimeZone()
     {
         try

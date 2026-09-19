@@ -1,0 +1,194 @@
+@if (loading()) {
+  <section class="card">
+    <p>{{ i18n.t('common.loading') }}</p>
+  </section>
+} @else if (pageError(); as key) {
+  <section class="card">
+    <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
+    <p>
+      <a routerLink="/venues">{{ i18n.t('venues.title') }}</a>
+    </p>
+  </section>
+} @else if (venue(); as current) {
+  <section class="card">
+    <h1 data-testid="venue-name">{{ current.name }}</h1>
+    <p class="muted">
+      <a [routerLink]="['/venues', current.id]">{{ i18n.t('settings.backToVenue') }}</a>
+    </p>
+    @if (!canManage()) {
+      <p class="muted" data-testid="read-only">{{ i18n.t('settings.readOnly') }}</p>
+    }
+  </section>
+
+  <section class="card">
+    <h2>{{ i18n.t('settings.courts.title') }}</h2>
+
+    @if (courtError(); as key) {
+      <p class="form-error" data-testid="court-error">{{ i18n.t(key) }}</p>
+    }
+
+    @if (courtList().length === 0) {
+      <p data-testid="no-courts">{{ i18n.t('settings.courts.none') }}</p>
+    } @else {
+      <ul class="list" data-testid="court-list">
+        @for (court of courtList(); track court.id) {
+          <li>
+            @if (renaming() === court.id) {
+              <form [formGroup]="renameForm" (ngSubmit)="saveRename(court)" novalidate>
+                <input
+                  type="text"
+                  formControlName="name"
+                  autocomplete="off"
+                  [attr.data-testid]="'rename-input-' + court.id"
+                />
+                <app-field-error [control]="renameForm.controls.name" testId="rename-error" />
+                <button type="submit" [disabled]="isSaving(court)">
+                  {{ i18n.t('settings.courts.saveName') }}
+                </button>
+                <button type="button" class="ghost" (click)="cancelRename()">
+                  {{ i18n.t('common.cancel') }}
+                </button>
+              </form>
+            } @else {
+              <strong>{{ court.name }}</strong>
+
+              <label class="checkbox">
+                <input
+                  type="checkbox"
+                  [checked]="court.isActive"
+                  [disabled]="!canManage() || isSaving(court)"
+                  [attr.data-testid]="'court-active-' + court.id"
+                  (change)="toggleCourt(court, $any($event.target).checked)"
+                />
+                {{ i18n.t('settings.courts.inUse') }}
+              </label>
+
+              @if (canManage()) {
+                <button
+                  type="button"
+                  class="ghost"
+                  [attr.data-testid]="'rename-' + court.id"
+                  (click)="startRename(court)"
+                >
+                  {{ i18n.t('settings.courts.rename') }}
+                </button>
+              }
+
+              @for (change of scheduledFor(court); track change.effectiveFrom) {
+                <span class="muted" [attr.data-testid]="'scheduled-' + court.id">
+                  {{
+                    i18n.t(
+                      change.active ? 'settings.courts.backFrom' : 'settings.courts.outOfUseFrom'
+                    )
+                  }}
+                  {{ change.effectiveFrom }}
+                </span>
+              }
+            }
+          </li>
+        }
+      </ul>
+    }
+
+    @if (canManage()) {
+      <form [formGroup]="newCourtForm" (ngSubmit)="addCourt()" novalidate>
+        <label for="court-name">{{ i18n.t('settings.courts.name') }}</label>
+        <input id="court-name" type="text" formControlName="name" autocomplete="off" />
+        <app-field-error [control]="newCourtForm.controls.name" testId="court-name-error" />
+
+        <button type="submit" [disabled]="addingCourt()">
+          {{ i18n.t(addingCourt() ? 'common.loading' : 'settings.courts.add') }}
+        </button>
+      </form>
+    }
+  </section>
+
+  <section class="card">
+    <h2>{{ i18n.t('settings.hours.title') }}</h2>
+
+    @if (inForce(); as week) {
+      <p class="muted" data-testid="hours-in-force">
+        {{ i18n.t('settings.hours.inForce') }} {{ week.effectiveFrom }}
+      </p>
+      <ul class="list" data-testid="hours-current">
+        @for (day of inForceWeek(); track day.day) {
+          <li>
+            <strong>{{ i18n.t('settings.day.' + day.day) }}</strong>
+            <span [attr.data-testid]="'hours-' + day.day">
+              {{
+                day.opensHour === null
+                  ? i18n.t('settings.hours.closed')
+                  : day.opensHour + ':00 – ' + day.closesHour + ':00'
+              }}
+            </span>
+          </li>
+        }
+      </ul>
+    } @else {
+      <p data-testid="no-hours">{{ i18n.t('settings.hours.none') }}</p>
+    }
+
+    @if (upcoming().length > 0) {
+      <h3>{{ i18n.t('settings.hours.upcoming') }}</h3>
+      <ul class="list" data-testid="hours-upcoming">
+        @for (week of upcoming(); track week.id) {
+          <li>
+            <strong>{{ week.effectiveFrom }}</strong>
+            @if (canManage()) {
+              <button
+                type="button"
+                class="ghost"
+                [attr.data-testid]="'edit-week-' + week.effectiveFrom"
+                (click)="editWeek(week)"
+              >
+                {{ i18n.t('settings.hours.copyIntoForm') }}
+              </button>
+            }
+          </li>
+        }
+      </ul>
+    }
+
+    @if (canManage()) {
+      <form [formGroup]="hoursForm" (ngSubmit)="saveHours()" novalidate>
+        <label for="effective-from">{{ i18n.t('settings.hours.effectiveFrom') }}</label>
+        <input id="effective-from" type="date" formControlName="effectiveFrom" />
+        <app-field-error
+          [control]="hoursForm.controls.effectiveFrom"
+          testId="effective-from-error"
+        />
+
+        <div formGroupName="days">
+          @for (day of weekdays; track day) {
+            <div class="day-row" [formGroupName]="day">
+              <label class="checkbox">
+                <input type="checkbox" formControlName="open" [attr.data-testid]="'open-' + day" />
+                {{ i18n.t('settings.day.' + day) }}
+              </label>
+
+              <select formControlName="opensHour" [attr.data-testid]="'opens-' + day">
+                @for (hour of openingHours; track hour) {
+                  <option [ngValue]="hour">{{ hour }}:00</option>
+                }
+              </select>
+              <span>–</span>
+              <select formControlName="closesHour" [attr.data-testid]="'closes-' + day">
+                @for (hour of closingHours; track hour) {
+                  <option [ngValue]="hour">{{ hour }}:00</option>
+                }
+              </select>
+            </div>
+          }
+        </div>
+
+        @if (hoursError(); as key) {
+          <p class="form-error" data-testid="hours-error">{{ i18n.t(key) }}</p>
+        }
+
+        <button type="submit" [disabled]="savingHours()">
+          {{ i18n.t(savingHours() ? 'common.loading' : 'settings.hours.publish') }}
+        </button>
+      </form>
+    }
+  </section>
+}

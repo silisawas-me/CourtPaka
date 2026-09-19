@@ -64,7 +64,7 @@ public sealed class AuthEndpointTests(ApiTestFixture api)
             "/api/auth/register", NewRegistration(NewEmail()) with { PrivacyPolicyVersion = "2020-01-01" });
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.Equal(AuthErrorCodes.PrivacyPolicyOutdated, await ReadErrorCodeAsync(response));
+        Assert.Equal(AuthErrorCodes.PrivacyPolicyOutdated, await response.ErrorCodeAsync());
     }
 
     [Fact]
@@ -106,7 +106,7 @@ public sealed class AuthEndpointTests(ApiTestFixture api)
             "/api/auth/verify-email", new VerifyEmailRequest(userId, token[..^4] + "AAAA"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(AuthErrorCodes.InvalidVerificationToken, await ReadErrorCodeAsync(response));
+        Assert.Equal(AuthErrorCodes.InvalidVerificationToken, await response.ErrorCodeAsync());
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public sealed class AuthEndpointTests(ApiTestFixture api)
         var response = await client.PostAsJsonAsync("/api/auth/register", NewRegistration(NewEmail(), password));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(AuthErrorCodes.WeakPassword, await ReadErrorCodeAsync(response));
+        Assert.Equal(AuthErrorCodes.WeakPassword, await response.ErrorCodeAsync());
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public sealed class AuthEndpointTests(ApiTestFixture api)
         var response = await client.PostAsJsonAsync("/api/auth/register", NewRegistration("not-an-email"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(AuthErrorCodes.InvalidEmail, await ReadErrorCodeAsync(response));
+        Assert.Equal(AuthErrorCodes.InvalidEmail, await response.ErrorCodeAsync());
     }
 
     [Fact]
@@ -159,7 +159,7 @@ public sealed class AuthEndpointTests(ApiTestFixture api)
             "/api/auth/register", NewRegistration(NewEmail()) with { Language = "fr" });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(AuthErrorCodes.UnsupportedLanguage, await ReadErrorCodeAsync(response));
+        Assert.Equal(AuthErrorCodes.UnsupportedLanguage, await response.ErrorCodeAsync());
     }
 
     [Fact]
@@ -179,7 +179,7 @@ public sealed class AuthEndpointTests(ApiTestFixture api)
         var lockedOut = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, DefaultPassword));
 
         Assert.Equal(HttpStatusCode.Unauthorized, lockedOut.StatusCode);
-        Assert.Equal(AuthErrorCodes.InvalidCredentials, await ReadErrorCodeAsync(lockedOut));
+        Assert.Equal(AuthErrorCodes.InvalidCredentials, await lockedOut.ErrorCodeAsync());
         Assert.Contains("locked", _api.Emails.LastTo(email).Subject, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -202,7 +202,7 @@ public sealed class AuthEndpointTests(ApiTestFixture api)
 
         // Same status and same code, so the endpoint cannot be used to find out who has an account.
         Assert.Equal(unknownResponse.StatusCode, lockedResponse.StatusCode);
-        Assert.Equal(await ReadErrorCodeAsync(unknownResponse), await ReadErrorCodeAsync(lockedResponse));
+        Assert.Equal(await unknownResponse.ErrorCodeAsync(), await lockedResponse.ErrorCodeAsync());
     }
 
     [Fact]
@@ -342,9 +342,4 @@ public sealed class AuthEndpointTests(ApiTestFixture api)
         return (Guid.Parse(query["userId"]!), query["token"]!);
     }
 
-    private static async Task<string?> ReadErrorCodeAsync(HttpResponseMessage response)
-    {
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        return document.RootElement.TryGetProperty("code", out var code) ? code.GetString() : null;
-    }
 }

@@ -31,6 +31,26 @@ public sealed class VenuePermissionRequirement : IAuthorizationRequirement
 }
 
 /// <summary>
+/// The policies venue endpoints are mapped with. Declaring the right one at map time is what keeps
+/// an endpoint from being reachable by the wrong member (PRD US-14).
+/// </summary>
+public static class VenuePolicies
+{
+    /// <summary>Any member of the venue, whatever their permissions.</summary>
+    public static Action<AuthorizationPolicyBuilder> Member =>
+        policy => policy.RequireAuthenticatedUser().AddRequirements(VenuePermissionRequirement.Member);
+
+    public static Action<AuthorizationPolicyBuilder> OwnerOnly =>
+        policy => policy.RequireAuthenticatedUser().AddRequirements(VenuePermissionRequirement.Owner);
+
+    /// <summary>Courts, opening hours, prices and the cancellation policy (PRD US-11).</summary>
+    public static Action<AuthorizationPolicyBuilder> Settings => Needs(VenuePermissions.ManageSettings);
+
+    public static Action<AuthorizationPolicyBuilder> Needs(VenuePermissions permission) =>
+        policy => policy.RequireAuthenticatedUser().AddRequirements(VenuePermissionRequirement.Needs(permission));
+}
+
+/// <summary>
 /// The membership the current request runs under. Populated once by the authorization handler, so
 /// endpoints do not query it again.
 /// </summary>

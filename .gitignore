@@ -23,3 +23,8 @@ npm-debug.log*
 .idea/
 .DS_Store
 Thumbs.db
+
+# The browser checks: their screenshots are rewritten on every run, and Python caches itself.
+scripts/verify/shots/
+__pycache__/
+*.pyc

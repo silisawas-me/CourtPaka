@@ -200,3 +200,15 @@ input[type='checkbox'] {
   color: var(--muted);
   font-size: 0.875rem;
 }
+
+/* One weekday of the opening-hours form: the checkbox and both hour pickers on one line. */
+.day-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+
+  .checkbox {
+    min-width: 9rem;
+  }
+}

@@ -19,7 +19,8 @@
 - **สิทธิ์:** ผูกกับสนาม ไม่ใช่ role ระดับระบบ · `VenueMembership` เก็บ role + permission flags · endpoint ใต้ `/api/venues/{venueId}` ประกาศสิทธิ์ที่ต้องใช้ตอน map ด้วย `Member`, `OwnerOnly` หรือ `Needs(VenuePermissions.X)` ใน `VenueEndpoints` ซึ่งสร้าง `VenuePermissionRequirement` ให้ · Owner มีทุกสิทธิ์เสมอและถอนไม่ได้ · สนามที่ถูกระงับหรือถูกปฏิเสธจะอ่านได้อย่างเดียว · membership ของ request ปัจจุบันอยู่ใน `CurrentVenue` (handler โหลดให้แล้ว ไม่ต้อง query ซ้ำ)
 - **Config ที่ทุก environment ต้องมี:** `App:BaseUrl`, `App:PrivacyPolicyVersion` (ตรวจตอนเริ่มระบบ ถ้าไม่มีจะไม่ยอมเริ่ม) · `App:RequireSecureCookies` ปิดได้เฉพาะ dev/test · `App:ApplyMigrationsOnStartup` และ `App:SeedDevelopmentData` เปิดเฉพาะ local
 - **อีเมล:** Development เท่านั้นที่ log เนื้อหาอีเมล (`LoggingEmailSender` — ใช้ดูลิงก์ยืนยัน/คำเชิญตอน dev) นอกนั้นใช้ `UndeliveredEmailSender` ที่ไม่ส่งจริงและไม่ log เนื้อหา เพราะ body มี token ใช้ครั้งเดียว ผู้ให้บริการจริงรอ US-06
-- **บัญชีสำหรับ dev** (seed จะทำงานเฉพาะเมื่อเปิด flag **และ** environment เป็น Development): `owner@courtpaka.local` และ `staff@courtpaka.local` รหัสผ่าน `DevPassword1` สนาม `DEV01`
+- **คอร์ทและเวลาเปิด-ปิด:** `Court` + `CourtStatusChange` (ประวัติวันเปิด/ปิดใช้งาน ใช้ตอนคิด utilization ย้อนหลัง US-15) · `OpeningHoursSchedule` เก็บเป็นเวอร์ชันตามวันที่เริ่มใช้ ไม่ทับของเก่า · เวลาเป็นชั่วโมงเต็ม เปิด 0–23 ปิด 1–24 (24 = เที่ยงคืน) ยังไม่รองรับข้ามคืน · วันที่ทุกอย่างคิดเป็นเวลาไทยผ่าน `PlatformRequirements.BangkokToday()` ห้ามใช้ `DateTime.Today`
+- **บัญชีสำหรับ dev** (seed จะทำงานเฉพาะเมื่อเปิด flag **และ** environment เป็น Development): `owner@courtpaka.local` และ `staff@courtpaka.local` รหัสผ่าน `DevPassword1` สนาม `DEV01` พร้อมคอร์ท 4 คอร์ทและเวลาเปิด-ปิด 06:00–22:00 ทุกวัน
 
 ## คำสั่ง
 ต้องมี: .NET SDK 10, Node 24 LTS, Docker Desktop ที่เปิดอยู่ (integration test ใช้ Testcontainers)
@@ -39,6 +40,7 @@
 | Build (เหมือน CI) | `dotnet build backend -c Release -warnaserror` · `cd frontend && npm run build` |
 | Build image arm64 (UAT) | `docker buildx build --platform linux/arm64 backend` |
 | ตรวจ health | `GET /api/health/live` (process) · `GET /api/health/ready` (รวม database) |
+| ตรวจ flow จริงบนเบราว์เซอร์ | `python scripts/verify/venue_settings.py` (ต้องเปิด stack ด้วย `--profile full` ก่อน ดู `scripts/verify/README.md`) |
 
 ## วิธีทำงาน
 - **ทำงานจากเป้าหมาย:** งานแต่ละชิ้นผูกกับ user story / acceptance criteria ใน `docs/prd.md` ถ้า requirement ไม่ชัด ให้ถามก่อนลงมือ

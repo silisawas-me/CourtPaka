@@ -35,6 +35,12 @@ export const routes: Routes = [
       import('./features/venues/venue-detail.page').then((m) => m.VenueDetailPage),
   },
   {
+    path: 'venues/:venueId/settings',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/venues/venue-settings.page').then((m) => m.VenueSettingsPage),
+  },
+  {
     path: 'venue-invitation',
     canActivate: [authGuard],
     loadComponent: () =>

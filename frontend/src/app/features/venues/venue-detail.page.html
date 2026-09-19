@@ -16,6 +16,11 @@
     @if (current.status !== 'Approved') {
       <p class="muted" data-testid="venue-not-approved">{{ i18n.t('venues.notApprovedYet') }}</p>
     }
+    <p>
+      <a [routerLink]="['/venues', current.id, 'settings']" data-testid="settings-link">{{
+        i18n.t('settings.title')
+      }}</a>
+    </p>
   </section>
 
   <section class="card">

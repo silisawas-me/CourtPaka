@@ -1,4 +1,5 @@
 using CourtBooking.Api.Identity;
+using CourtBooking.Api.Localization;
 using CourtBooking.Api.Venues;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,9 @@ public static class DevelopmentSeeder
     public const string StaffEmail = "staff@courtpaka.local";
     public const string Password = "DevPassword1";
     public const string VenueCode = "DEV01";
+    public const int CourtCount = 4;
+    public const int OpensHour = 6;
+    public const int ClosesHour = 22;
 
     public static async Task SeedAsync(IServiceProvider services, CancellationToken cancellationToken = default)
     {
@@ -43,7 +47,60 @@ public static class DevelopmentSeeder
         await EnsureMembershipAsync(
             database, venue.Id, staff.Id, VenueRole.Staff, VenuePermissions.StaffDefault, time);
 
+        // Courts and a week of opening hours, so the availability screens have something to show
+        // without anyone setting a venue up by hand first.
+        await EnsureCourtsAsync(database, venue.Id, owner.Id, time, cancellationToken);
+        await EnsureOpeningHoursAsync(database, venue.Id, owner.Id, time, cancellationToken);
+
         await database.SaveChangesAsync(cancellationToken);
+    }
+
+    private static async Task EnsureCourtsAsync(
+        AppDbContext database,
+        Guid venueId,
+        Guid ownerId,
+        TimeProvider time,
+        CancellationToken cancellationToken)
+    {
+        if (await database.Courts.AnyAsync(court => court.VenueId == venueId, cancellationToken))
+        {
+            return;
+        }
+
+        var now = time.GetUtcNow();
+        var today = PlatformRequirements.BangkokToday(time);
+
+        for (var index = 0; index < CourtCount; index++)
+        {
+            // Through the same factory the endpoint uses, so the court and its first status row are
+            // always written together.
+            var (court, status) = Court.Open(venueId, $"Court {index + 1}", index, ownerId, today, now);
+            database.Courts.Add(court);
+            database.CourtStatusChanges.Add(status);
+        }
+    }
+
+    private static async Task EnsureOpeningHoursAsync(
+        AppDbContext database,
+        Guid venueId,
+        Guid ownerId,
+        TimeProvider time,
+        CancellationToken cancellationToken)
+    {
+        if (await database.OpeningHoursSchedules.AnyAsync(
+                schedule => schedule.VenueId == venueId, cancellationToken))
+        {
+            return;
+        }
+
+        var week = Enum.GetValues<DayOfWeek>().Select(day => new WeekdayHours(day, OpensHour, ClosesHour));
+
+        database.OpeningHoursSchedules.Add(OpeningHoursSchedule.Create(
+            venueId,
+            PlatformRequirements.BangkokToday(time),
+            week,
+            ownerId,
+            time.GetUtcNow()));
     }
 
     private static async Task<AppUser> EnsureUserAsync(UserManager<AppUser> users, string email)

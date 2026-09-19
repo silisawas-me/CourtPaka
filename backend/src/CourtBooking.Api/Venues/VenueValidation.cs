@@ -25,12 +25,14 @@ public static class VenueValidation
             : null;
     }
 
-    public static string? ValidateName(string? name)
+    public static string? ValidateName(string? name) =>
+        ValidateText(name, NameMaxLength, VenueErrorCodes.InvalidName);
+
+    /// <summary>The rule every free-text field shares: something, once trimmed, and not too long.</summary>
+    public static string? ValidateText(string? value, int maxLength, string code)
     {
-        var trimmed = name?.Trim();
-        return string.IsNullOrEmpty(trimmed) || trimmed.Length > NameMaxLength
-            ? VenueErrorCodes.InvalidName
-            : null;
+        var trimmed = value?.Trim();
+        return string.IsNullOrEmpty(trimmed) || trimmed.Length > maxLength ? code : null;
     }
 
     public static string? ValidateEmail(string? email)
