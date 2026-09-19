@@ -41,6 +41,25 @@ public static class PlatformRequirements
     public static DateOnly BangkokToday(TimeProvider timeProvider) =>
         DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), BangkokTimeZone).DateTime);
 
+    /// <summary>
+    /// The instant a Bangkok date and whole hour begins, as UTC. Hours are chosen as "6pm on the
+    /// 5th" at the venue but stored in UTC (PRD BR-10), and Postgres timestamptz only accepts an
+    /// offset of zero. Thailand has no daylight saving, so the conversion is total: every local
+    /// hour exists exactly once.
+    /// </summary>
+    public static DateTimeOffset BangkokHour(DateOnly date, int hour)
+    {
+        var local = date.ToDateTime(TimeOnly.MinValue).AddHours(hour);
+        return new DateTimeOffset(local, BangkokTimeZone.GetUtcOffset(local)).ToUniversalTime();
+    }
+
+    /// <summary>The Bangkok date and hour an instant falls in, which is how a slot is shown.</summary>
+    public static (DateOnly Date, int Hour) BangkokDateAndHour(DateTimeOffset at)
+    {
+        var local = TimeZoneInfo.ConvertTime(at, BangkokTimeZone).DateTime;
+        return (DateOnly.FromDateTime(local), local.Hour);
+    }
+
     private static TimeZoneInfo FindBangkokTimeZone()
     {
         try

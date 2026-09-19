@@ -234,7 +234,7 @@ public static class AuthEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.UnsupportedLanguage);
         }
 
-        if (!Guid.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+        if (CallerId.TryOf(principal) is not { } userId)
         {
             return TypedResults.NotFound();
         }

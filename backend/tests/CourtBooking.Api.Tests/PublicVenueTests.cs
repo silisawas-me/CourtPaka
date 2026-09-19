@@ -216,30 +216,20 @@ public sealed class PublicVenueTests(ApiTestFixture api)
         Assert.Equal(VenueScenario.Today.AddDays(Availability.BookableDaysAhead), day.Date);
     }
 
-    /// <summary>A venue a booker could actually use: approved, with a court, hours and prices.</summary>
-    private async Task<(HttpClient Owner, PublicVenueResponse Venue)> BookableVenueAsync()
-    {
-        var owner = await scenario.SignedInClientAsync();
-        var venue = await scenario.CreateVenueAsync(owner);
-        await VenueScenario.SetHoursAsync(owner, venue.Id, VenueScenario.Today);
-        await VenueScenario.SetPricesAsync(owner, venue.Id, VenueScenario.AllWeek(6, 22, 200m));
-
-        var court = await owner.PostAsJsonAsync(
-            $"/api/venues/{venue.Id}/courts", new CreateCourtRequest("Court 1"));
-        Assert.Equal(HttpStatusCode.Created, court.StatusCode);
-
-        // Venue approval arrives with US-20; until then the test sets the status directly.
-        await scenario.SetStatusAsync(venue.Id, VenueStatus.Approved);
-
-        return (owner, new PublicVenueResponse(
-            venue.Id, venue.Name, venue.AddressLine, venue.District, venue.Province));
-    }
 
 
 
     private static async Task<CourtResponse[]> CourtsAsync(HttpClient client, Guid venueId) =>
         await VenueScenario.ReadAsync<CourtResponse[]>(
             await client.GetAsync($"/api/venues/{venueId}/courts"));
+
+    /// <summary>An approved venue a booker can see, with one court, open and priced.</summary>
+    private async Task<(HttpClient Owner, PublicVenueResponse Venue)> BookableVenueAsync()
+    {
+        var (owner, venue, _) = await scenario.BookableVenueAsync();
+        return (owner, new PublicVenueResponse(
+            venue.Id, venue.Name, venue.AddressLine, venue.District, venue.Province));
+    }
 
     private static async Task<AvailabilityResponse> ReadAvailabilityAsync(
         HttpClient client,

@@ -15,9 +15,7 @@
   <mat-card>
     <mat-card-header>
       <mat-card-title data-testid="venue-name">{{ current.name }}</mat-card-title>
-      <mat-card-subtitle>
-        {{ current | venueAddress }}
-      </mat-card-subtitle>
+      <mat-card-subtitle>{{ current | venueAddress }}</mat-card-subtitle>
     </mat-card-header>
 
     <mat-card-content>
@@ -27,7 +25,7 @@
           id="day"
           matInput
           readonly
-          [formControl]="picked"
+          [formControl]="dayField"
           [matDatepicker]="picker"
           [min]="today"
           [max]="lastBookableDay()"
@@ -42,12 +40,36 @@
   </mat-card>
 }
 
+@if (held(); as booking) {
+  <mat-card data-testid="held-booking">
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('booking.held.title') }}</mat-card-title>
+      <mat-card-subtitle data-testid="held-expires">
+        {{ i18n.t('booking.held.expires') }}
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <ul class="stack">
+        @for (slot of booking.slots; track slot.courtId + slot.hour) {
+          <li data-testid="held-slot">
+            {{ slot.date | appDate: i18n.locale() }} · {{ slot.courtName }} · {{ slot.hour }}:00 ·
+            {{ slot.bahtPerHour }}
+          </li>
+        }
+      </ul>
+      <p data-testid="held-total">{{ i18n.t('booking.total') }}: {{ booking.totalBaht }}</p>
+      <p class="muted">{{ i18n.t('booking.held.paymentComing') }}</p>
+    </mat-card-content>
+  </mat-card>
+}
+
 @if (day(); as grid) {
   <mat-card>
     <mat-card-header>
-      <mat-card-title data-testid="grid-date">{{
-        grid.date | appDate: i18n.locale()
-      }}</mat-card-title>
+      <mat-card-title data-testid="grid-date">
+        {{ grid.date | appDate: i18n.locale() }}
+      </mat-card-title>
     </mat-card-header>
 
     <mat-card-content>
@@ -72,16 +94,28 @@
                     <td
                       [class.free]="cell.status === 'Free'"
                       [class.closed]="cell.status === 'Closed'"
+                      [class.booked]="cell.status === 'Booked'"
+                      [class.picked]="isPicked(court.courtId, cell.hour)"
                       [attr.data-testid]="'cell-' + court.courtId + '-' + cell.hour"
-                      [attr.aria-label]="
-                        court.name +
-                        ' ' +
-                        cell.hour +
-                        ':00 ' +
-                        i18n.t('availability.status.' + cell.status)
-                      "
                     >
-                      <span class="price">{{ cell.bahtPerHour ?? '—' }}</span>
+                      @if (cell.status === 'Free' && cell.bahtPerHour !== null) {
+                        <button
+                          type="button"
+                          class="cell-button"
+                          [attr.aria-pressed]="isPicked(court.courtId, cell.hour)"
+                          [attr.aria-label]="cellLabel(court.name, cell.hour, cell.status)"
+                          (click)="toggle(court.courtId, cell.hour)"
+                        >
+                          <span class="price">{{ cell.bahtPerHour }}</span>
+                        </button>
+                      } @else {
+                        <span
+                          class="price"
+                          [attr.aria-label]="cellLabel(court.name, cell.hour, cell.status)"
+                        >
+                          {{ cell.bahtPerHour ?? '—' }}
+                        </span>
+                      }
                     </td>
                   }
                 </tr>
@@ -91,10 +125,43 @@
         </div>
       }
     </mat-card-content>
+  </mat-card>
+}
+
+@if (bookingError(); as key) {
+  <mat-card>
+    <mat-card-content>
+      <p class="form-error" data-testid="booking-error">{{ i18n.t(key) }}</p>
+    </mat-card-content>
+  </mat-card>
+}
+
+@if (picked().length > 0) {
+  <mat-card data-testid="booking-summary">
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('booking.summary.title') }}</mat-card-title>
+    </mat-card-header>
+
+    <mat-card-content>
+      <ul class="stack">
+        @for (slot of picked(); track slot.courtId + slot.hour) {
+          <li data-testid="summary-slot">
+            {{ slot.courtName }} · {{ slot.hour }}:00 · {{ slot.bahtPerHour }}
+          </li>
+        }
+      </ul>
+      <p data-testid="summary-total">{{ i18n.t('booking.total') }}: {{ total() }}</p>
+    </mat-card-content>
 
     <mat-card-actions>
       @if (signedIn()) {
-        <button matButton="filled" type="button" disabled data-testid="book">
+        <button
+          matButton="filled"
+          type="button"
+          data-testid="book"
+          [disabled]="holding()"
+          (click)="confirm()"
+        >
           {{ i18n.t('availability.book') }}
         </button>
       } @else {
@@ -102,6 +169,9 @@
           {{ i18n.t('availability.signInToBook') }}
         </a>
       }
+      <button matButton type="button" data-testid="clear-picks" (click)="clearPicks()">
+        {{ i18n.t('booking.summary.clear') }}
+      </button>
     </mat-card-actions>
   </mat-card>
 }

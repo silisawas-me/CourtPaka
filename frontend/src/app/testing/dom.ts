@@ -87,6 +87,14 @@ export function submitForm(fixture: ComponentFixture<unknown>, selector = 'form'
   fixture.detectChanges();
 }
 
+/**
+ * Presses what a data-testid names. The same traversal as check(): Material puts the test id on
+ * the host and the control inside it, and so does the availability grid.
+ */
+export function clickOn(fixture: ComponentFixture<unknown>, testId: string): void {
+  check(fixture, `[data-testid="${testId}"]`);
+}
+
 /** The element a data-testid names, typed as whatever the caller needs to read off it. */
 export function elementOf<T extends Element>(
   fixture: ComponentFixture<unknown>,

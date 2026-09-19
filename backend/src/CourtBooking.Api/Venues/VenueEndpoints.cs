@@ -72,12 +72,12 @@ public static class VenueEndpoints
         // The terms a venue starts with are a row like any other, so a booking made on day one has
         // a policy to point at rather than a default resolved somewhere else (PRD S-11, BR-05).
         database.CancellationPolicies.Add(CancellationPolicy.Create(
-            venue.Id, CancellationPolicy.Default, UserId(principal), now));
+            venue.Id, CancellationPolicy.Default, CallerId.Of(principal), now));
         // The person who applies runs the venue, so they start as its owner (PRD US-10).
         database.VenueMemberships.Add(new VenueMembership
         {
             VenueId = venue.Id,
-            UserId = UserId(principal),
+            UserId = CallerId.Of(principal),
             Role = VenueRole.Owner,
             Permissions = VenuePermissions.None, // Owners derive their permissions from the role.
             CreatedAt = now,
@@ -101,7 +101,7 @@ public static class VenueEndpoints
         AppDbContext database,
         CancellationToken cancellationToken)
     {
-        var userId = UserId(principal);
+        var userId = CallerId.Of(principal);
         var memberships = await database.VenueMemberships
             .AsNoTracking()
             .Where(member => member.UserId == userId)
@@ -401,9 +401,6 @@ public static class VenueEndpoints
 
     private static string HashToken(string token) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
-
-    private static Guid UserId(ClaimsPrincipal principal) =>
-        Guid.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     private static VenueResponse ToResponse(Venue venue, VenueRole role, VenuePermissions permissions) =>
         new(

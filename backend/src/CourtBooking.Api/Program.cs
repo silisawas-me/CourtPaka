@@ -1,4 +1,5 @@
 using CourtBooking.Api;
+using CourtBooking.Api.Bookings;
 using CourtBooking.Api.Data;
 using CourtBooking.Api.Email;
 using CourtBooking.Api.Health;
@@ -205,6 +206,7 @@ api.MapAuthEndpoints();
 api.MapVenueEndpoints();
 // Looking is public; booking is not (PRD US-02).
 api.MapPublicVenueEndpoints();
+api.MapBookingEndpoints();
 
 // Liveness: the process is running. Readiness: dependencies such as the database are reachable.
 api.MapHealthChecks("/health/live", new HealthCheckOptions

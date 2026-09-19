@@ -25,6 +25,9 @@ public sealed class ApiTestFixture : IAsyncLifetime
 
     public string ConnectionString => _container.GetConnectionString();
 
+    /// <summary>What the API logged at Error, so a test that meets a 500 can say why.</summary>
+    public CapturedLogs Errors => _root.Errors;
+
     public async Task InitializeAsync()
     {
         await _container.StartAsync();

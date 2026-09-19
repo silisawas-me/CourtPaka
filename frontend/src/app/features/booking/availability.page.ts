@@ -1,4 +1,4 @@
-import { Component, computed, inject, input, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -10,6 +10,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Router, RouterLink } from '@angular/router';
 import { catchError, EMPTY, switchMap, tap } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
+import { Booking, BookingService } from '../../core/bookings/booking.service';
 import { errorKey } from '../../core/http/api-error';
 import { AppDatePipe } from '../../core/i18n/app-date.pipe';
 import { fromPlainDate, plainDate, venueToday } from '../../core/i18n/plain-date';
@@ -19,9 +20,15 @@ import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 import { provideLocalizedDateAdapter } from '../../shared/localized-date-adapter';
 import { VenueAddressPipe } from '../../shared/venue-address.pipe';
 
+/** A court-hour, keyed the way the grid is. */
+function key(courtId: string, hour: number): string {
+  return `${courtId}@${hour}`;
+}
+
 /**
- * The court-by-hour grid for one day at one venue (PRD US-02). Anyone can read it; taking an hour
- * needs an account, which is what the button says when there is no session.
+ * The court-by-hour grid for one day at one venue, and the hours taken from it (PRD US-02, US-03).
+ * Anyone can read it; taking an hour needs an account, which is what the button says when there is
+ * no session.
  *
  * The day comes from the URL, so the page has one source of truth for what it shows, and a grid a
  * booker is looking at can be sent to whoever they are playing with.
@@ -29,7 +36,6 @@ import { VenueAddressPipe } from '../../shared/venue-address.pipe';
 @Component({
   selector: 'app-availability-page',
   imports: [
-    VenueAddressPipe,
     ReactiveFormsModule,
     RouterLink,
     MatButtonModule,
@@ -39,6 +45,7 @@ import { VenueAddressPipe } from '../../shared/venue-address.pipe';
     MatInputModule,
     MatProgressBarModule,
     AppDatePipe,
+    VenueAddressPipe,
   ],
   providers: [FORM_FIELD_DEFAULTS, provideLocalizedDateAdapter()],
   templateUrl: './availability.page.html',
@@ -46,6 +53,7 @@ import { VenueAddressPipe } from '../../shared/venue-address.pipe';
 })
 export class AvailabilityPage {
   private readonly venues = inject(PublicVenueService);
+  private readonly bookings = inject(BookingService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
 
@@ -54,7 +62,7 @@ export class AvailabilityPage {
 
   readonly venueId = input.required<string>();
 
-  /** From <c>?date=</c>; no date means today at the venue, which is where a booker starts. */
+  /** From ?date=; no date means today at the venue, which is where a booker starts. */
   readonly date = input<string>();
 
   protected readonly chosen = computed(() => this.date() ?? plainDate(venueToday()));
@@ -79,11 +87,58 @@ export class AvailabilityPage {
       : Array.from({ length: closes - opens }, (_, index) => opens + index);
   });
 
-  protected readonly picked: FormControl<Date> =
+  /**
+   * What the booker has picked, as keys into the grid rather than copies of it. The name and the
+   * price are read back off the day that is on screen, so a grid re-read after a refusal cannot
+   * leave the summary quoting a price the venue no longer charges.
+   */
+  private readonly picks = signal<readonly string[]>([]);
+
+  /** The picked hours as the summary shows them, in the order they were picked. */
+  protected readonly picked = computed(() => {
+    const grid = this.day();
+    return this.picks().flatMap((pick) => {
+      const courtId = pick.slice(0, pick.lastIndexOf('@'));
+      const hour = Number(pick.slice(pick.lastIndexOf('@') + 1));
+      const court = grid?.courts.find((row) => row.courtId === courtId);
+      const cell = court?.hours.find((slot) => slot.hour === hour);
+      // An hour that stopped being free while it was picked is no longer picked: someone else
+      // took it, or the venue closed it, and the summary says what can still be booked.
+      return court && cell?.status === 'Free' && cell.bahtPerHour !== null
+        ? [{ courtId, courtName: court.name, hour, bahtPerHour: cell.bahtPerHour }]
+        : [];
+    });
+  });
+
+  private readonly pickedKeys = computed(
+    () => new Set(this.picked().map((slot) => key(slot.courtId, slot.hour))),
+  );
+
+  protected readonly total = computed(() =>
+    this.picked().reduce((sum, slot) => sum + slot.bahtPerHour, 0),
+  );
+
+  /**
+   * A held booking, once one has been made. It stays on screen while the booker looks at other
+   * days, because it is on a fifteen-minute clock and there is nowhere else yet to see it; each
+   * row names its own date. Its own page arrives with US-04.
+   */
+  protected readonly held = signal<Booking | null>(null);
+  protected readonly holding = signal(false);
+  protected readonly bookingError = signal<string | null>(null);
+
+  protected readonly dayField: FormControl<Date> =
     inject(FormBuilder).nonNullable.control(venueToday());
 
-  /** What the page is showing: the two halves of it that come from the route. */
-  private readonly asked = computed(() => ({ venueId: this.venueId(), date: this.chosen() }));
+  /** Bumped to read the day again without changing what the page is showing. */
+  private readonly refresh = signal(0);
+
+  /** What the page is showing: the two halves of it that come from the route, and a retry. */
+  private readonly asked = computed(() => ({
+    venueId: this.venueId(),
+    date: this.chosen(),
+    attempt: this.refresh(),
+  }));
 
   constructor() {
     // switchMap drops the answer to a day the booker has already moved off, so going back and
@@ -94,7 +149,7 @@ export class AvailabilityPage {
           this.loading.set(true);
           this.pageError.set(null);
           // The field follows the URL, never the other way round: picking a day navigates.
-          this.picked.setValue(fromPlainDate(this.chosen()) ?? venueToday());
+          this.dayField.setValue(fromPlainDate(this.chosen()) ?? venueToday());
         }),
         switchMap(({ venueId, date }) =>
           this.venues.availability(venueId, date).pipe(
@@ -113,6 +168,18 @@ export class AvailabilityPage {
         this.day.set(day);
         this.loading.set(false);
       });
+
+    // A booking is made from one grid, so moving to another day starts the pick again.
+    effect(() => {
+      this.chosen();
+      untracked(() => this.clearPicks());
+    });
+
+    // A hold belongs to the venue it was made at; another venue's page must not show it.
+    effect(() => {
+      this.venueId();
+      untracked(() => this.held.set(null));
+    });
   }
 
   protected pick(date: Date | null): void {
@@ -122,5 +189,68 @@ export class AvailabilityPage {
         queryParamsHandling: 'merge',
       });
     }
+  }
+
+  protected isPicked(courtId: string, hour: number): boolean {
+    return this.pickedKeys().has(key(courtId, hour));
+  }
+
+  /** Picking is a toggle, so the way to drop an hour is to touch it again. */
+  protected toggle(courtId: string, hour: number): void {
+    this.bookingError.set(null);
+    const picked = key(courtId, hour);
+    this.picks.update((picks) =>
+      picks.includes(picked) ? picks.filter((held) => held !== picked) : [...picks, picked],
+    );
+  }
+
+  /** The accessible name of a cell, so the button and the plain hour read the same. */
+  protected cellLabel(courtName: string, hour: number, status: string): string {
+    return `${courtName} ${hour}:00 ${this.i18n.t('availability.status.' + status)}`;
+  }
+
+  protected clearPicks(): void {
+    this.picks.set([]);
+    this.bookingError.set(null);
+  }
+
+  /**
+   * Takes the hours. The grid may be minutes old, so the server prices and checks them again; a
+   * refusal re-reads the day, because the reason is usually that the grid has moved on.
+   */
+  protected confirm(): void {
+    const slots = this.picked();
+    if (slots.length === 0 || this.holding()) {
+      return;
+    }
+
+    this.holding.set(true);
+    this.bookingError.set(null);
+
+    this.bookings
+      .hold(
+        this.venueId(),
+        slots.map((slot) => ({
+          courtId: slot.courtId,
+          date: this.chosen(),
+          hour: slot.hour,
+        })),
+      )
+      .subscribe({
+        next: (booking) => {
+          this.held.set(booking);
+          this.picks.set([]);
+          this.holding.set(false);
+          // The hours it just took are no longer free, and the grid on screen still says they are.
+          this.refresh.update((attempt) => attempt + 1);
+        },
+        error: (failure: unknown) => {
+          this.bookingError.set(errorKey(failure));
+          this.holding.set(false);
+          // The reason is usually that the grid has moved on, so read the day again — through the
+          // one stream the page loads days with, not a second one beside it.
+          this.refresh.update((attempt) => attempt + 1);
+        },
+      });
   }
 }
