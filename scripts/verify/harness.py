@@ -1,5 +1,6 @@
 """Shared plumbing for the browser checks: where the stack is, who to sign in as, how to report."""
 
+import datetime
 import pathlib
 import sys
 
@@ -59,6 +60,18 @@ THAI_MONTHS_FULL = [
 ]
 
 
+def venue_today():
+    """Today where the venues are. The server validates against the Bangkok date, so a check run
+    from another zone must ask about the same day the server would."""
+    return datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7))).date()
+
+
+def day_is_offered(page, date) -> bool:
+    """Whether the open calendar will let that day be chosen."""
+    cell = page.locator(f'[aria-label="{calendar_label(date)}"]')
+    return cell.count() == 1 and cell.get_attribute("aria-disabled") != "true"
+
+
 def calendar_label(date) -> str:
     """How the datepicker labels one day, which names the month as well as the number."""
     return f"{date.day} {THAI_MONTHS_FULL[date.month - 1]} {date.year + 543}"
@@ -71,8 +84,9 @@ def thai_date(date) -> str:
 def pick_date(page, date) -> None:
     """Drives the calendar, because the field itself is read-only: Intl prints Thai dates but
     cannot read one back, so typing into it would be thrown away."""
-    page.click("mat-datepicker-toggle button")
-    page.wait_for_selector("mat-calendar")
+    if page.locator("mat-calendar").count() == 0:
+        page.click("mat-datepicker-toggle button")
+        page.wait_for_selector("mat-calendar")
 
     # The calendar opens on whatever the field holds, which can be either side of the target, so
     # walk in the direction that closes the gap and stop if the picker's minimum blocks the way.

@@ -1,14 +1,12 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
+import { VenueAddress } from './venue.service';
 
-export interface PublicVenue {
+export interface PublicVenue extends VenueAddress {
   id: string;
   code: string;
   name: string;
-  addressLine: string;
-  district: string;
-  province: string;
 }
 
 /** Free to take, or outside the venue's hours. Booked arrives with US-03. */
@@ -27,14 +25,14 @@ export interface CourtAvailability {
 }
 
 export interface Availability {
+  venue: PublicVenue;
   date: string;
+  /** The last day the server will accept, so the picker offers exactly those days (PRD S-04). */
+  lastBookableDate: string;
   opensHour: number | null;
   closesHour: number | null;
   courts: CourtAvailability[];
 }
-
-/** How far ahead a booker may look, matching what the server accepts (PRD S-04). */
-export const BOOKABLE_DAYS_AHEAD = 30;
 
 /** The venues a booker can see and the hours they can take. None of it needs a session. */
 @Injectable({ providedIn: 'root' })
@@ -47,10 +45,7 @@ export class PublicVenueService {
     });
   }
 
-  venue(venueId: string): Observable<PublicVenue> {
-    return this.http.get<PublicVenue>(`/api/venues/${venueId}/public`);
-  }
-
+  /** The day's grid and the venue it belongs to, which is everything the grid page draws. */
   availability(venueId: string, date: string): Observable<Availability> {
     return this.http.get<Availability>(`/api/venues/${venueId}/availability`, {
       params: { date },

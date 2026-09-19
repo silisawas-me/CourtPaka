@@ -27,7 +27,7 @@
             <span class="stack">
               <span class="entry-name">{{ venue.name }}</span>
               <span class="muted">
-                {{ venue.addressLine }} · {{ venue.district }} · {{ venue.province }}
+                {{ venue | venueAddress }}
               </span>
             </span>
           </a>

@@ -7,7 +7,8 @@ public sealed record CreateVenueRequest(
     string District,
     string Province);
 
-public sealed record RenameVenueRequest(
+/// <summary>The venue's public details: what it is called and where a booker will find it.</summary>
+public sealed record UpdateVenueRequest(
     string Name,
     string AddressLine,
     string District,
@@ -48,7 +49,9 @@ public static class VenueErrorCodes
     public const string InvitationForAnotherAddress = "venue.invitation_for_another_address";
     public const string InvalidCode = "venue.invalid_code";
     public const string InvalidName = "venue.invalid_name";
-    public const string InvalidAddress = "venue.invalid_address";
+    public const string InvalidAddressLine = "venue.invalid_address_line";
+    public const string InvalidDistrict = "venue.invalid_district";
+    public const string InvalidProvince = "venue.invalid_province";
     public const string InvalidEmail = "venue.invalid_email";
     public const string NotApproved = "venue.not_approved";
 }
@@ -68,11 +71,15 @@ public sealed record HourResponse(int Hour, string Status, decimal? BahtPerHour)
 public sealed record CourtAvailabilityResponse(Guid CourtId, string Name, HourResponse[] Hours);
 
 /// <summary>
-/// One day at one venue. The opening hours are named as well as the cells, so a page can say "closed
-/// today" rather than drawing an empty grid.
+/// One day at one venue, and the venue itself, so the page that draws the grid needs one request.
+/// The opening hours are named as well as the cells, so it can say "closed today" rather than
+/// drawing an empty grid. <see cref="LastBookableDate"/> is the server's booking window, so the
+/// picker offers exactly the days the server will accept.
 /// </summary>
 public sealed record AvailabilityResponse(
+    PublicVenueResponse Venue,
     DateOnly Date,
+    DateOnly LastBookableDate,
     int? OpensHour,
     int? ClosesHour,
     CourtAvailabilityResponse[] Courts);

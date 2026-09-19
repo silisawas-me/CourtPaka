@@ -15,7 +15,6 @@ public sealed class PublicVenueTests(ApiTestFixture api)
 {
     private readonly VenueScenario scenario = new(api);
 
-    private static DateOnly Today => PlatformRequirements.BangkokToday(TimeProvider.System);
 
     [Fact]
     public async Task A_booker_who_has_not_signed_in_can_read_the_grid()
@@ -23,12 +22,26 @@ public sealed class PublicVenueTests(ApiTestFixture api)
         var (_, venue) = await BookableVenueAsync();
         var anonymous = api.CreateClient();
 
-        var day = await ReadAvailabilityAsync(anonymous, venue.Id, Today);
+        var day = await ReadAvailabilityAsync(anonymous, venue.Id, VenueScenario.Today);
 
         var court = Assert.Single(day.Courts);
         Assert.Equal(16, court.Hours.Length); // 06:00 to 22:00.
         Assert.All(court.Hours, hour => Assert.Equal(nameof(HourStatus.Free), hour.Status));
         Assert.All(court.Hours, hour => Assert.Equal(200m, hour.BahtPerHour));
+    }
+
+    [Fact]
+    public async Task The_day_names_the_venue_and_the_end_of_the_booking_window()
+    {
+        var (_, venue) = await BookableVenueAsync();
+        var anonymous = api.CreateClient();
+
+        var day = await ReadAvailabilityAsync(anonymous, venue.Id, VenueScenario.Today);
+
+        // The page draws the venue's name and address from this, so it asks once, not twice.
+        Assert.Equal(venue, day.Venue);
+        Assert.Equal(
+            VenueScenario.Today.AddDays(Availability.BookableDaysAhead), day.LastBookableDate);
     }
 
     [Fact]
@@ -38,9 +51,6 @@ public sealed class PublicVenueTests(ApiTestFixture api)
         await scenario.SetStatusAsync(venue.Id, VenueStatus.Suspended);
         var anonymous = api.CreateClient();
 
-        Assert.Equal(
-            HttpStatusCode.NotFound,
-            (await anonymous.GetAsync($"/api/venues/{venue.Id}/public")).StatusCode);
         Assert.Equal(
             HttpStatusCode.NotFound,
             (await anonymous.GetAsync($"/api/venues/{venue.Id}/availability")).StatusCode);
@@ -79,8 +89,8 @@ public sealed class PublicVenueTests(ApiTestFixture api)
     public async Task A_day_the_venue_is_closed_has_no_hours_at_all()
     {
         var (owner, venue) = await BookableVenueAsync();
-        var closedDay = Today.AddDays(1);
-        await PublishWeekAsync(owner, venue.Id, Today, closedOn: closedDay.DayOfWeek);
+        var closedDay = VenueScenario.Today.AddDays(1);
+        await VenueScenario.SetHoursAsync(owner, venue.Id, VenueScenario.Today, closedOn: closedDay.DayOfWeek);
         var anonymous = api.CreateClient();
 
         var day = await ReadAvailabilityAsync(anonymous, venue.Id, closedDay);
@@ -94,7 +104,7 @@ public sealed class PublicVenueTests(ApiTestFixture api)
     {
         var (owner, venue) = await BookableVenueAsync();
         var court = Assert.Single(await CourtsAsync(owner, venue.Id));
-        var friday = Today.AddDays(5);
+        var friday = VenueScenario.Today.AddDays(5);
 
         var status = await owner.PutAsJsonAsync(
             $"/api/venues/{venue.Id}/courts/{court.Id}/status",
@@ -118,7 +128,7 @@ public sealed class PublicVenueTests(ApiTestFixture api)
         await owner.PutAsJsonAsync(
             $"/api/venues/{venue.Id}/courts/{court.Id}/status", new ChangeCourtStatusRequest(false));
 
-        var day = await ReadAvailabilityAsync(api.CreateClient(), venue.Id, Today);
+        var day = await ReadAvailabilityAsync(api.CreateClient(), venue.Id, VenueScenario.Today);
 
         Assert.All(Assert.Single(day.Courts).Hours, hour => Assert.Null(hour.BahtPerHour));
     }
@@ -127,13 +137,13 @@ public sealed class PublicVenueTests(ApiTestFixture api)
     public async Task The_grid_reads_the_week_in_force_on_the_day_asked_about()
     {
         var (owner, venue) = await BookableVenueAsync();
-        var fromNextWeek = Today.AddDays(7);
+        var fromNextWeek = VenueScenario.Today.AddDays(7);
         // Longer days from next week, and the prices that cover them.
-        await SetPricesAsync(owner, venue.Id, 6, 24, 200m);
-        await PublishWeekAsync(owner, venue.Id, fromNextWeek, opens: 6, closes: 24);
+        await VenueScenario.SetPricesAsync(owner, venue.Id, VenueScenario.AllWeek(6, 24, 200m));
+        await VenueScenario.SetHoursAsync(owner, venue.Id, fromNextWeek, opens: 6, closes: 24);
 
         var anonymous = api.CreateClient();
-        Assert.Equal(22, (await ReadAvailabilityAsync(anonymous, venue.Id, Today)).ClosesHour);
+        Assert.Equal(22, (await ReadAvailabilityAsync(anonymous, venue.Id, VenueScenario.Today)).ClosesHour);
         Assert.Equal(24, (await ReadAvailabilityAsync(anonymous, venue.Id, fromNextWeek)).ClosesHour);
     }
 
@@ -146,7 +156,7 @@ public sealed class PublicVenueTests(ApiTestFixture api)
         var anonymous = api.CreateClient();
 
         var response = await anonymous.GetAsync(
-            $"/api/venues/{venue.Id}/availability?date={Today.AddDays(daysFromToday):yyyy-MM-dd}");
+            $"/api/venues/{venue.Id}/availability?date={VenueScenario.Today.AddDays(daysFromToday):yyyy-MM-dd}");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(expected, await response.ErrorCodeAsync());
@@ -158,9 +168,9 @@ public sealed class PublicVenueTests(ApiTestFixture api)
         var (_, venue) = await BookableVenueAsync();
         var anonymous = api.CreateClient();
 
-        var day = await ReadAvailabilityAsync(anonymous, venue.Id, Today.AddDays(30));
+        var day = await ReadAvailabilityAsync(anonymous, venue.Id, VenueScenario.Today.AddDays(30));
 
-        Assert.Equal(Today.AddDays(Availability.BookableDaysAhead), day.Date);
+        Assert.Equal(VenueScenario.Today.AddDays(Availability.BookableDaysAhead), day.Date);
     }
 
     /// <summary>A venue a booker could actually use: approved, with a court, hours and prices.</summary>
@@ -168,8 +178,8 @@ public sealed class PublicVenueTests(ApiTestFixture api)
     {
         var owner = await scenario.SignedInClientAsync();
         var venue = await scenario.CreateVenueAsync(owner);
-        await PublishWeekAsync(owner, venue.Id, Today);
-        await SetPricesAsync(owner, venue.Id, 6, 22, 200m);
+        await VenueScenario.SetHoursAsync(owner, venue.Id, VenueScenario.Today);
+        await VenueScenario.SetPricesAsync(owner, venue.Id, VenueScenario.AllWeek(6, 22, 200m));
 
         var court = await owner.PostAsJsonAsync(
             $"/api/venues/{venue.Id}/courts", new CreateCourtRequest("Court 1"));
@@ -182,40 +192,7 @@ public sealed class PublicVenueTests(ApiTestFixture api)
             venue.Id, venue.Code, venue.Name, venue.AddressLine, venue.District, venue.Province));
     }
 
-    private static async Task PublishWeekAsync(
-        HttpClient owner,
-        Guid venueId,
-        DateOnly from,
-        int opens = 6,
-        int closes = 22,
-        DayOfWeek? closedOn = null)
-    {
-        var week = Enum.GetValues<DayOfWeek>()
-            .Select(day => day == closedOn
-                ? new OpeningHoursDayRequest(day.ToString(), null, null)
-                : new OpeningHoursDayRequest(day.ToString(), opens, closes))
-            .ToArray();
 
-        var response = await owner.PutAsJsonAsync(
-            $"/api/venues/{venueId}/opening-hours", new SetOpeningHoursRequest(from, week));
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
-    private static async Task SetPricesAsync(
-        HttpClient owner,
-        Guid venueId,
-        int from,
-        int to,
-        decimal baht)
-    {
-        var bands = Enum.GetValues<DayOfWeek>()
-            .Select(day => new PriceBandRequest(day.ToString(), from, to, baht))
-            .ToArray();
-
-        var response = await owner.PutAsJsonAsync(
-            $"/api/venues/{venueId}/prices", new SetPricesRequest(bands));
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
 
     private static async Task<CourtResponse[]> CourtsAsync(HttpClient client, Guid venueId) =>
         await VenueScenario.ReadAsync<CourtResponse[]>(

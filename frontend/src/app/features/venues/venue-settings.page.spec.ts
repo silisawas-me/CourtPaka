@@ -1,7 +1,9 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNativeDateAdapter } from '@angular/material/core';
-import { TRANSLATIONS } from '../../core/i18n/locales';
+import { plainDate, venueToday } from '../../core/i18n/plain-date';
+import { AppDatePipe } from '../../core/i18n/app-date.pipe';
+import { DATE_LOCALES, TRANSLATIONS } from '../../core/i18n/locales';
 import {
   check,
   isDisabled,
@@ -292,14 +294,18 @@ describe('VenueSettingsPage', () => {
   it('shows the week it just published for today instead of the one it replaced', () => {
     render({}, [], [{ id: 's1', effectiveFrom: '2026-09-01', inForce: true, days: week(6, 22) }]);
 
-    setDate('2026-09-19');
+    // A week starting today. The picker refuses a past date, so this cannot be a fixed one.
+    const today = plainDate(venueToday());
+    setDate(today);
     submitForm(fixture, 'form:has(#effective-from)');
     httpMock
       .expectOne('/api/venues/v1/opening-hours')
-      .flush({ id: 's2', effectiveFrom: '2026-09-19', inForce: true, days: week(9, 21) });
+      .flush({ id: 's2', effectiveFrom: today, inForce: true, days: week(9, 21) });
     fixture.detectChanges();
 
-    expect(textOf(fixture, 'hours-in-force')).toContain('19 ก.ย. 2569');
+    expect(textOf(fixture, 'hours-in-force')).toContain(
+      new AppDatePipe().transform(today, DATE_LOCALES.th),
+    );
     expect(textOf(fixture, 'hours-Monday')).toContain('9:00');
     expect(elementOf(fixture, 'hours-upcoming')).toBeNull();
   });

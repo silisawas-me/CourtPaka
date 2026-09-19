@@ -28,7 +28,7 @@ public static class VenueEndpoints
 
         var venue = venues.MapGroup("/{venueId:guid}");
         venue.MapGet("/", Get).RequireAuthorization(VenuePolicies.Member);
-        venue.MapPut("/", RenameAsync).RequireAuthorization(VenuePolicies.Settings);
+        venue.MapPut("/", UpdateDetailsAsync).RequireAuthorization(VenuePolicies.Settings);
         venue.MapGet("/members", ListMembersAsync).RequireAuthorization(VenuePolicies.Member);
         venue.MapGet("/invitations", ListInvitationsAsync).RequireAuthorization(VenuePolicies.OwnerOnly);
         venue.MapPost("/invitations", InviteAsync).RequireAuthorization(VenuePolicies.OwnerOnly);
@@ -121,9 +121,9 @@ public static class VenueEndpoints
         return TypedResults.Ok(ToResponse(membership.Venue!, membership.Role, membership.Permissions));
     }
 
-    private static async Task<Results<NoContent, NotFound, ProblemHttpResult>> RenameAsync(
+    private static async Task<Results<NoContent, NotFound, ProblemHttpResult>> UpdateDetailsAsync(
         Guid venueId,
-        RenameVenueRequest request,
+        UpdateVenueRequest request,
         AppDbContext database,
         CancellationToken cancellationToken)
     {

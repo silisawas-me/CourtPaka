@@ -17,7 +17,7 @@
         {{ current.code }} · {{ i18n.t('venues.status.' + current.status) }}
       </mat-card-subtitle>
       <mat-card-subtitle data-testid="venue-address">
-        {{ current.addressLine }} · {{ current.district }} · {{ current.province }}
+        {{ current | venueAddress }}
       </mat-card-subtitle>
     </mat-card-header>
 

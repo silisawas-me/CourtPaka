@@ -51,7 +51,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             venue.Property(v => v.AddressLine).HasMaxLength(200);
             venue.Property(v => v.District).HasMaxLength(100);
             venue.Property(v => v.Province).HasMaxLength(100);
-            // A booker looks for a court in their province, then reads down the list.
+            // Orders the default listing, which is what a booker sees before typing anything. A
+            // typed search is ILIKE '%term%', which no b-tree can serve — it is a scan bounded by
+            // PublicVenueEndpoints.MaxResults, and wants a trigram index if it ever gets slow.
             venue.HasIndex(v => new { v.Province, v.District });
             // The code prefixes document numbers, so two venues may never share one (PRD 7.4).
             venue.HasIndex(v => v.Code).IsUnique();

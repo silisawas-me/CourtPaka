@@ -29,7 +29,7 @@ public sealed class PricingTests(ApiTestFixture api)
     {
         var (owner, venue) = await OpenVenueAsync();
 
-        await SetPricesAsync(owner, venue.Id, AllWeek(6, 18, 200m).Concat(AllWeek(18, 22, 300m)));
+        await VenueScenario.SetPricesAsync(owner, venue.Id, VenueScenario.AllWeek(6, 18, 200m).Concat(VenueScenario.AllWeek(18, 22, 300m)));
 
         var prices = await ReadPricesAsync(owner, venue.Id);
         var monday = prices.Bands.Where(band => band.Day == nameof(DayOfWeek.Monday)).ToArray();
@@ -41,9 +41,9 @@ public sealed class PricingTests(ApiTestFixture api)
     public async Task Publishing_again_replaces_what_a_new_booking_would_pay_and_keeps_the_old_list()
     {
         var (owner, venue) = await OpenVenueAsync();
-        var first = await SetPricesAsync(owner, venue.Id, AllWeek(6, 22, 200m));
+        var first = await VenueScenario.SetPricesAsync(owner, venue.Id, VenueScenario.AllWeek(6, 22, 200m));
 
-        var second = await SetPricesAsync(owner, venue.Id, AllWeek(6, 22, 250m));
+        var second = await VenueScenario.SetPricesAsync(owner, venue.Id, VenueScenario.AllWeek(6, 22, 250m));
 
         var inForce = await ReadPricesAsync(owner, venue.Id);
         Assert.Equal(second.Id, inForce.Id);
@@ -73,7 +73,7 @@ public sealed class PricingTests(ApiTestFixture api)
 
         var response = await owner.PutAsJsonAsync(
             $"/api/venues/{venue.Id}/prices",
-            new SetPricesRequest([.. AllWeek(6, 22, 200m), .. AllWeek(20, 24, 300m)]));
+            new SetPricesRequest([.. VenueScenario.AllWeek(6, 22, 200m), .. VenueScenario.AllWeek(20, 24, 300m)]));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(PricingErrorCodes.OverlappingBands, await response.ErrorCodeAsync());
@@ -86,7 +86,7 @@ public sealed class PricingTests(ApiTestFixture api)
 
         // The venue is open 6–22; these bands stop at 20.
         var response = await owner.PutAsJsonAsync(
-            $"/api/venues/{venue.Id}/prices", new SetPricesRequest([.. AllWeek(6, 20, 200m)]));
+            $"/api/venues/{venue.Id}/prices", new SetPricesRequest([.. VenueScenario.AllWeek(6, 20, 200m)]));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(PricingErrorCodes.HourWithoutPrice, await response.ErrorCodeAsync());
@@ -98,8 +98,8 @@ public sealed class PricingTests(ApiTestFixture api)
         var (owner, venue) = await OpenVenueAsync(closedOn: DayOfWeek.Monday);
 
         // Every open hour is priced although Monday has no band at all, because Monday is closed.
-        var prices = await SetPricesAsync(
-            owner, venue.Id, AllWeek(6, 22, 200m).Where(band => band.Day != nameof(DayOfWeek.Monday)));
+        var prices = await VenueScenario.SetPricesAsync(
+            owner, venue.Id, VenueScenario.AllWeek(6, 22, 200m).Where(band => band.Day != nameof(DayOfWeek.Monday)));
 
         Assert.Equal(6, prices.Bands.Select(band => band.Day).Distinct().Count());
     }
@@ -109,10 +109,10 @@ public sealed class PricingTests(ApiTestFixture api)
     {
         var (owner, venue) = await OpenVenueAsync();
         // From next month the venue stays open until midnight.
-        await SetHoursAsync(owner, venue.Id, PlatformToday.AddDays(30), 6, 24);
+        await VenueScenario.SetHoursAsync(owner, venue.Id, VenueScenario.Today.AddDays(30), 6, 24);
 
         var response = await owner.PutAsJsonAsync(
-            $"/api/venues/{venue.Id}/prices", new SetPricesRequest([.. AllWeek(6, 22, 200m)]));
+            $"/api/venues/{venue.Id}/prices", new SetPricesRequest([.. VenueScenario.AllWeek(6, 22, 200m)]));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(PricingErrorCodes.HourWithoutPrice, await response.ErrorCodeAsync());
@@ -123,9 +123,9 @@ public sealed class PricingTests(ApiTestFixture api)
     {
         var owner = await scenario.SignedInClientAsync();
         var venue = await scenario.CreateVenueAsync(owner);
-        await SetHoursAsync(owner, venue.Id, PlatformToday.AddDays(1), 6, 22);
+        await VenueScenario.SetHoursAsync(owner, venue.Id, VenueScenario.Today.AddDays(1), 6, 22);
 
-        var prices = await SetPricesAsync(owner, venue.Id, AllWeek(6, 22, 200m));
+        var prices = await VenueScenario.SetPricesAsync(owner, venue.Id, VenueScenario.AllWeek(6, 22, 200m));
 
         Assert.NotEmpty(prices.Bands);
     }
@@ -134,12 +134,12 @@ public sealed class PricingTests(ApiTestFixture api)
     public async Task Opening_an_hour_no_band_covers_is_refused_from_the_hours_side_too()
     {
         var (owner, venue) = await OpenVenueAsync();
-        await SetPricesAsync(owner, venue.Id, AllWeek(6, 22, 200m));
+        await VenueScenario.SetPricesAsync(owner, venue.Id, VenueScenario.AllWeek(6, 22, 200m));
 
         // The rule belongs to the pair, so it has to hold whichever half is edited.
         var response = await owner.PutAsJsonAsync(
             $"/api/venues/{venue.Id}/opening-hours",
-            new SetOpeningHoursRequest(PlatformToday, Week(6, 24)));
+            new SetOpeningHoursRequest(VenueScenario.Today, VenueScenario.Week(6, 24)));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(PricingErrorCodes.HourWithoutPrice, await response.ErrorCodeAsync());
@@ -152,7 +152,7 @@ public sealed class PricingTests(ApiTestFixture api)
         var venue = await scenario.CreateVenueAsync(owner);
 
         var response = await owner.PutAsJsonAsync(
-            $"/api/venues/{venue.Id}/prices", new SetPricesRequest([.. AllWeek(6, 22, 200m)]));
+            $"/api/venues/{venue.Id}/prices", new SetPricesRequest([.. VenueScenario.AllWeek(6, 22, 200m)]));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(PricingErrorCodes.NoOpeningHours, await response.ErrorCodeAsync());
@@ -168,7 +168,7 @@ public sealed class PricingTests(ApiTestFixture api)
         var (owner, venue) = await OpenVenueAsync();
 
         var response = await owner.PutAsJsonAsync(
-            $"/api/venues/{venue.Id}/prices", new SetPricesRequest([.. AllWeek(6, 22, baht)]));
+            $"/api/venues/{venue.Id}/prices", new SetPricesRequest([.. VenueScenario.AllWeek(6, 22, baht)]));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(PricingErrorCodes.InvalidPrice, await response.ErrorCodeAsync());
@@ -179,7 +179,7 @@ public sealed class PricingTests(ApiTestFixture api)
     {
         var (owner, venue) = await OpenVenueAsync();
 
-        await SetPricesAsync(owner, venue.Id, AllWeek(6, 22, 249.50m));
+        await VenueScenario.SetPricesAsync(owner, venue.Id, VenueScenario.AllWeek(6, 22, 249.50m));
 
         Assert.All((await ReadPricesAsync(owner, venue.Id)).Bands,
             band => Assert.Equal(249.50m, band.BahtPerHour));
@@ -189,13 +189,13 @@ public sealed class PricingTests(ApiTestFixture api)
     public async Task Staff_read_the_prices_but_only_ManageSettings_publishes_them()
     {
         var (owner, venue) = await OpenVenueAsync();
-        await SetPricesAsync(owner, venue.Id, AllWeek(6, 22, 200m));
+        await VenueScenario.SetPricesAsync(owner, venue.Id, VenueScenario.AllWeek(6, 22, 200m));
         var staff = await scenario.StaffClientAsync(owner, venue.Id, nameof(VenuePermissions.VerifySlip));
 
         Assert.NotEmpty((await ReadPricesAsync(staff, venue.Id)).Bands);
 
         var refused = await staff.PutAsJsonAsync(
-            $"/api/venues/{venue.Id}/prices", new SetPricesRequest([.. AllWeek(6, 22, 100m)]));
+            $"/api/venues/{venue.Id}/prices", new SetPricesRequest([.. VenueScenario.AllWeek(6, 22, 100m)]));
         Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
     }
 
@@ -365,11 +365,6 @@ public sealed class PricingTests(ApiTestFixture api)
             Guid.NewGuid(),
             DateTimeOffset.UtcNow);
 
-    private static PriceBandRequest[] AllWeek(int from, int to, decimal baht) =>
-        Enum.GetValues<DayOfWeek>()
-            .Select(day => new PriceBandRequest(day.ToString(), from, to, baht))
-            .ToArray();
-
     /// <summary>A venue that is open, because prices are checked against the hours it sells.</summary>
     private async Task<(HttpClient Owner, VenueResponse Venue)> OpenVenueAsync(DayOfWeek? closedOn = null)
     {
@@ -378,40 +373,11 @@ public sealed class PricingTests(ApiTestFixture api)
 
         var response = await owner.PutAsJsonAsync(
             $"/api/venues/{venue.Id}/opening-hours",
-            new SetOpeningHoursRequest(PlatformToday, Week(6, 22, closedOn)));
+            new SetOpeningHoursRequest(VenueScenario.Today, VenueScenario.Week(6, 22, closedOn)));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         return (owner, venue);
     }
-
-    private static OpeningHoursDayRequest[] Week(int opens, int closes, DayOfWeek? closedOn = null) =>
-        Enum.GetValues<DayOfWeek>()
-            .Select(day => day == closedOn
-                ? new OpeningHoursDayRequest(day.ToString(), null, null)
-                : new OpeningHoursDayRequest(day.ToString(), opens, closes))
-            .ToArray();
-
-    private static async Task SetHoursAsync(
-        HttpClient client,
-        Guid venueId,
-        DateOnly from,
-        int opens,
-        int closes)
-    {
-        var response = await client.PutAsJsonAsync(
-            $"/api/venues/{venueId}/opening-hours", new SetOpeningHoursRequest(from, Week(opens, closes)));
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
-    private static DateOnly PlatformToday =>
-        CourtBooking.Api.Localization.PlatformRequirements.BangkokToday(TimeProvider.System);
-
-    private static async Task<PriceListResponse> SetPricesAsync(
-        HttpClient client,
-        Guid venueId,
-        IEnumerable<PriceBandRequest> bands) =>
-        await VenueScenario.ReadAsync<PriceListResponse>(
-            await client.PutAsJsonAsync($"/api/venues/{venueId}/prices", new SetPricesRequest(bands.ToArray())));
 
     private static async Task<PriceListResponse> ReadPricesAsync(HttpClient client, Guid venueId) =>
         await VenueScenario.ReadAsync<PriceListResponse>(

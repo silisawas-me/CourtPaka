@@ -1,6 +1,6 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideNativeDateAdapter } from '@angular/material/core';
+import { Router } from '@angular/router';
 import { TRANSLATIONS } from '../../core/i18n/locales';
 import { elementOf, pageProviders, signInAs, textOf } from '../../testing/dom';
 import { AvailabilityPage } from './availability.page';
@@ -16,7 +16,9 @@ const VENUE = {
 
 function day(overrides: Record<string, unknown> = {}) {
   return {
+    venue: VENUE,
     date: '2026-09-19',
+    lastBookableDate: '2026-10-19',
     opensHour: 18,
     closesHour: 20,
     courts: [
@@ -41,30 +43,34 @@ describe('AvailabilityPage', () => {
     localStorage.clear();
     await TestBed.configureTestingModule({
       imports: [AvailabilityPage],
-      providers: [...pageProviders([{ path: 'login', children: [] }]), provideNativeDateAdapter()],
+      providers: pageProviders([{ path: 'login', children: [] }]),
     }).compileComponents();
 
     httpMock = TestBed.inject(HttpTestingController);
   });
 
   afterEach(() => {
-    fixture.destroy(); // Stops the ten-second refresh before the test ends.
     httpMock.verify();
   });
 
-  function render(availability: object = day()): void {
+  /** The one request the page makes, and what it asked for. */
+  function expectRead() {
+    return httpMock.expectOne((request) => request.url === '/api/venues/v1/availability');
+  }
+
+  function render(availability: object = day(), date?: string): void {
     fixture = TestBed.createComponent(AvailabilityPage);
     fixture.componentRef.setInput('venueId', 'v1');
+    if (date) {
+      fixture.componentRef.setInput('date', date);
+    }
     fixture.detectChanges();
 
-    httpMock.expectOne('/api/venues/v1/public').flush(VENUE);
-    httpMock
-      .expectOne((request) => request.url === '/api/venues/v1/availability')
-      .flush(availability);
+    expectRead().flush(availability);
     fixture.detectChanges();
   }
 
-  it('draws a cell for every court and hour, with the price', () => {
+  it('draws a cell for every court and hour, with the price, from one request', () => {
     render();
 
     expect(textOf(fixture, 'venue-name')).toBe('Smash Court');
@@ -90,6 +96,7 @@ describe('AvailabilityPage', () => {
     );
 
     expect(elementOf(fixture, 'cell-c1-18')?.classList.contains('closed')).toBe(true);
+    expect(textOf(fixture, 'cell-c1-18')).toContain('—');
     expect(elementOf(fixture, 'cell-c1-19')?.classList.contains('free')).toBe(true);
   });
 
@@ -120,13 +127,10 @@ describe('AvailabilityPage', () => {
     fixture.componentRef.setInput('venueId', 'v1');
     fixture.detectChanges();
 
-    httpMock.expectOne('/api/venues/v1/public').flush(VENUE);
-    httpMock
-      .expectOne((request) => request.url === '/api/venues/v1/availability')
-      .flush(
-        { code: 'availability.date_too_far_ahead' },
-        { status: 400, statusText: 'Bad Request' },
-      );
+    expectRead().flush(
+      { code: 'availability.date_too_far_ahead' },
+      { status: 400, statusText: 'Bad Request' },
+    );
     fixture.detectChanges();
 
     expect(textOf(fixture, 'page-error')).toBe(
@@ -134,17 +138,23 @@ describe('AvailabilityPage', () => {
     );
   });
 
-  it('reads another day when the picker moves', () => {
+  it('reads the day named in the URL', () => {
+    render(day({ date: '2026-09-25' }), '2026-09-25');
+
+    expect(textOf(fixture, 'grid-date')).toContain('25');
+  });
+
+  it('navigates when the picker moves, so the day on screen is the day in the URL', () => {
     render();
 
-    fixture.componentInstance['pick'](new Date(2026, 8, 25));
-    fixture.detectChanges();
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
 
-    const request = httpMock.expectOne(
-      (candidate) => candidate.url === '/api/venues/v1/availability',
-    );
-    expect(request.request.params.get('date')).toBe('2026-09-25');
-    request.flush(day({ date: '2026-09-25' }));
-    fixture.detectChanges();
+    fixture.componentInstance['pick'](new Date(2026, 8, 25));
+
+    expect(navigate).toHaveBeenCalledWith([], {
+      queryParams: { date: '2026-09-25' },
+      queryParamsHandling: 'merge',
+    });
   });
 });

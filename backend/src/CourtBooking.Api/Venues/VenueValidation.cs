@@ -40,11 +40,12 @@ public static class VenueValidation
 
     /// <summary>
     /// Where the venue is, in the three parts a booker reads and searches by (PRD US-10, US-02).
+    /// Each part refuses under its own code, so the form can point at the field that is wrong.
     /// </summary>
     public static string? ValidateAddress(string? line, string? district, string? province) =>
-        ValidateText(line, AddressLineMaxLength, VenueErrorCodes.InvalidAddress)
-        ?? ValidateText(district, DistrictMaxLength, VenueErrorCodes.InvalidAddress)
-        ?? ValidateText(province, ProvinceMaxLength, VenueErrorCodes.InvalidAddress);
+        ValidateText(line, AddressLineMaxLength, VenueErrorCodes.InvalidAddressLine)
+        ?? ValidateText(district, DistrictMaxLength, VenueErrorCodes.InvalidDistrict)
+        ?? ValidateText(province, ProvinceMaxLength, VenueErrorCodes.InvalidProvince);
 
     public static string? ValidateEmail(string? email)
     {

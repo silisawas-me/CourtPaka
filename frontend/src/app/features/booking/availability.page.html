@@ -16,7 +16,7 @@
     <mat-card-header>
       <mat-card-title data-testid="venue-name">{{ current.name }}</mat-card-title>
       <mat-card-subtitle>
-        {{ current.addressLine }} · {{ current.district }} · {{ current.province }}
+        {{ current | venueAddress }}
       </mat-card-subtitle>
     </mat-card-header>
 
@@ -27,9 +27,9 @@
           id="day"
           matInput
           readonly
-          [formControl]="date"
+          [formControl]="picked"
           [matDatepicker]="picker"
-          [min]="today()"
+          [min]="today"
           [max]="lastBookableDay()"
           (dateChange)="pick($event.value)"
           (click)="picker.open()"
@@ -42,10 +42,12 @@
   </mat-card>
 }
 
-@if (availability(); as day) {
+@if (day(); as grid) {
   <mat-card>
     <mat-card-header>
-      <mat-card-title>{{ day.date | appDate: i18n.locale() }}</mat-card-title>
+      <mat-card-title data-testid="grid-date">{{
+        grid.date | appDate: i18n.locale()
+      }}</mat-card-title>
     </mat-card-header>
 
     <mat-card-content>
@@ -63,7 +65,7 @@
               </tr>
             </thead>
             <tbody>
-              @for (court of day.courts; track court.courtId) {
+              @for (court of grid.courts; track court.courtId) {
                 <tr [attr.data-testid]="'court-' + court.courtId">
                   <th scope="row">{{ court.name }}</th>
                   @for (cell of court.hours; track cell.hour) {
@@ -79,11 +81,7 @@
                         i18n.t('availability.status.' + cell.status)
                       "
                     >
-                      @if (cell.bahtPerHour !== null) {
-                        <span class="price">{{ cell.bahtPerHour }}</span>
-                      } @else {
-                        <span class="price">—</span>
-                      }
+                      <span class="price">{{ cell.bahtPerHour ?? '—' }}</span>
                     </td>
                   }
                 </tr>
@@ -91,8 +89,6 @@
             </tbody>
           </table>
         </div>
-
-        <p class="muted" data-testid="refresh-note">{{ i18n.t('availability.refreshes') }}</p>
       }
     </mat-card-content>
 

@@ -32,11 +32,14 @@ public static class Availability
                 : null;
 
     /// <summary>
-    /// One row per court, one cell per hour of the venue's longest day. Hours outside the day are
-    /// closed rather than missing, so every row is the same length and the grid lines up.
+    /// One row per court in the order the venue lists them, one cell per hour the venue is open
+    /// that day. A day the venue is closed has no cells at all, which is what lets a page say so
+    /// rather than draw an empty grid.
     /// </summary>
     public static AvailabilityResponse Build(
+        PublicVenueResponse venue,
         DateOnly date,
+        DateOnly today,
         IReadOnlyCollection<Court> courts,
         IReadOnlyCollection<CourtStatusChange> statusChanges,
         OpeningHoursSchedule? week,
@@ -50,25 +53,32 @@ public static class Availability
             ? Enumerable.Range(from, until - from).ToArray()
             : [];
 
+        // What an hour costs is the venue's, not the court's, so it is read once for the row above.
+        var priceByHour = hours.Select(hour => PriceFor(bands, date.DayOfWeek, hour)).ToArray();
+        var free = HourStatus.Free.ToString();
+        var closed = HourStatus.Closed.ToString();
+        var statusByCourt = statusChanges.ToLookup(change => change.CourtId);
+
         var rows = courts
             .OrderBy(court => court.Position)
             .ThenBy(court => court.Name)
             .Select(court =>
             {
-                var inUse = VenueTimeline.CourtIsActiveOn(statusChanges, court.Id, date);
+                var inUse = VenueTimeline.CourtIsActiveOn(statusByCourt[court.Id], court.Id, date);
                 return new CourtAvailabilityResponse(
                     court.Id,
                     court.Name,
                     hours
-                        .Select(hour => new HourResponse(
+                        .Select((hour, index) => new HourResponse(
                             hour,
-                            inUse ? HourStatus.Free.ToString() : HourStatus.Closed.ToString(),
-                            inUse ? PriceFor(bands, date.DayOfWeek, hour) : null))
+                            inUse ? free : closed,
+                            inUse ? priceByHour[index] : null))
                         .ToArray());
             })
             .ToArray();
 
-        return new AvailabilityResponse(date, opens, closes, rows);
+        return new AvailabilityResponse(
+            venue, date, today.AddDays(BookableDaysAhead), opens, closes, rows);
     }
 
     /// <summary>

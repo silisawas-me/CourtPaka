@@ -9,7 +9,6 @@ import {
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { DateAdapter, provideNativeDateAdapter } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -35,6 +34,7 @@ import {
 import { Venue, VenueService } from '../../core/venues/venue.service';
 import { FieldError } from '../../shared/field-error';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
+import { provideLocalizedDateAdapter } from '../../shared/localized-date-adapter';
 import { CancellationPolicyEditor } from './cancellation-policy';
 import { PriceBands } from './price-bands';
 
@@ -67,14 +67,12 @@ type DayForm = FormGroup<{
     CancellationPolicyEditor,
   ],
   templateUrl: './venue-settings.page.html',
-  // This is the only page with a datepicker, so its adapter stays out of the initial bundle.
-  providers: [FORM_FIELD_DEFAULTS, provideNativeDateAdapter()],
+  providers: [FORM_FIELD_DEFAULTS, provideLocalizedDateAdapter()],
 })
 export class VenueSettingsPage {
   private readonly courts = inject(CourtService);
   private readonly venues = inject(VenueService);
   private readonly formBuilder = inject(FormBuilder);
-  private readonly dates = inject(DateAdapter);
 
   protected readonly i18n = inject(TranslationService);
   protected readonly weekdays = WEEKDAYS;
@@ -152,8 +150,6 @@ export class VenueSettingsPage {
 
   constructor() {
     effect(() => this.load(this.venueId()));
-    // The picker formats through Intl, so this is what puts the calendar in the reader's language.
-    effect(() => this.dates.setLocale(this.i18n.locale()));
   }
 
   protected addCourt(): void {
