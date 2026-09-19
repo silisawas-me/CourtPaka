@@ -22,5 +22,19 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/auth/resend-verification.page').then((m) => m.ResendVerificationPage),
   },
+  {
+    path: 'venues',
+    loadComponent: () => import('./features/venues/venues.page').then((m) => m.VenuesPage),
+  },
+  {
+    path: 'venues/:venueId',
+    loadComponent: () =>
+      import('./features/venues/venue-detail.page').then((m) => m.VenueDetailPage),
+  },
+  {
+    path: 'venue-invitation',
+    loadComponent: () =>
+      import('./features/venues/accept-invitation.page').then((m) => m.AcceptInvitationPage),
+  },
   { path: '**', redirectTo: '' },
 ];

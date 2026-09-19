@@ -2,15 +2,18 @@ import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { EnvironmentProviders, Provider } from '@angular/core';
 import { ComponentFixture } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Routes } from '@angular/router';
 import { apiErrorInterceptor } from '../core/http/api-error';
 
-/** The same HTTP + router wiring the app uses, so specs exercise the real interceptor. */
-export function pageProviders(): (Provider | EnvironmentProviders)[] {
+/**
+ * The same HTTP + router wiring the app uses, so specs exercise the real interceptor.
+ * Pass the routes a page navigates to; without them the navigation rejects in the background.
+ */
+export function pageProviders(routes: Routes = []): (Provider | EnvironmentProviders)[] {
   return [
     provideHttpClient(withInterceptors([apiErrorInterceptor])),
     provideHttpClientTesting(),
-    provideRouter([]),
+    provideRouter(routes),
   ];
 }
 

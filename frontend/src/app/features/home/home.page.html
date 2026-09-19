@@ -12,6 +12,9 @@
         <a routerLink="/resend-verification">{{ i18n.t('login.resendVerification') }}</a>
       </p>
     }
+    <p>
+      <a routerLink="/venues" data-testid="home-venues">{{ i18n.t('nav.venues') }}</a>
+    </p>
   } @else {
     <p>
       <a routerLink="/login">{{ i18n.t('nav.signIn') }}</a>
