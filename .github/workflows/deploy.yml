@@ -100,11 +100,27 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment || 'uat' }}
     steps:
+      # The UAT host does not exist yet. Without it there is nothing to deploy to, and a red run on
+      # every merge to main would teach us to ignore this workflow.
+      - name: Check this environment has a server
+        id: target
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          if [ -z "$SSH_HOST" ]; then
+            echo "::notice::No SSH_HOST is set for this environment yet, so nothing was deployed."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/download-artifact@v8
+        if: steps.target.outputs.ready == 'true'
         with:
           name: migration-bundles
 
       - name: Copy the migration bundle to the server
+        if: steps.target.outputs.ready == 'true'
         # Pinned to a commit: a tag can be moved, and this step is handed the deploy key.
         uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
         with:
@@ -118,6 +134,7 @@ jobs:
 
       # Schema first, then the new images: the running version must tolerate the new schema.
       - name: Migrate, deploy and check
+        if: steps.target.outputs.ready == 'true'
         uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         with:
           host: ${{ secrets.SSH_HOST }}

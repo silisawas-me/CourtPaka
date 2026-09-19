@@ -43,6 +43,8 @@ ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub | awk '{print $2}'
 
 ## ขั้นตอนที่ workflow ทำ
 
+ถ้า environment นั้นยังไม่มี `SSH_HOST` (เช่นตอนนี้ที่ยังไม่มีเครื่อง UAT) ขั้นตอน deploy จะข้ามไปเฉย ๆ พร้อมขึ้น notice — build กับ push image ยังทำตามปกติ
+
 1. build image ของ API และ web แล้ว push ขึ้น GitHub Container Registry โดยติด tag เป็น commit SHA
 2. สร้าง **migration bundle** (ไฟล์ executable ที่รัน migration ได้โดยไม่ต้องมี .NET SDK บนเครื่อง)
 3. ssh เข้าเครื่อง: ดึง image ใหม่ → รัน migration bundle → `docker compose up -d --wait`
