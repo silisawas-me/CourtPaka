@@ -212,6 +212,20 @@ public sealed class BookingTests(ApiTestFixture api) : IClassFixture<ApiTestFixt
     }
 
     [Fact]
+    public async Task A_lapsed_hold_does_not_lock_its_booker_out_of_another_court()
+    {
+        var (_, venue, courts) = await scenario.BookableVenueAsync(courts: 2);
+        var booker = await scenario.SignedInClientAsync();
+        var abandoned = await HoldAsync(booker, venue.Id, (courts[0], Tomorrow, 18));
+        await scenario.LapseHoldAsync(abandoned.Id);
+
+        // A different court, so nothing releases the lapsed hold on its way past.
+        var again = await HoldAsync(booker, venue.Id, (courts[1], Tomorrow, 18));
+
+        Assert.Equal(nameof(BookingStatus.Held), again.Status);
+    }
+
+    [Fact]
     public async Task A_booker_holds_one_booking_at_a_time()
     {
         var (_, venue, courtId) = await BookableVenueAsync();

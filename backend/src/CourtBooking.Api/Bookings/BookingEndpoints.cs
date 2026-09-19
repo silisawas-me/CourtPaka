@@ -93,6 +93,10 @@ public static class BookingEndpoints
                 loggers, StatusCodes.Status404NotFound, VenueErrorCodes.NotFound, bookerId);
         }
 
+        // This booker's own hold, if they left one to lapse. It has to end before the check below
+        // and before the index behind it, neither of which can tell the time (PRD S-22).
+        await BookedSlots.ReleaseOwnLapsedAsync(database, bookerId, now, cancellationToken);
+
         // One hold at a time, so an abandoned pick cannot sit on hours nobody is paying for
         // (PRD S-22).
         if (await BookedSlots.LiveHolds(database, now)

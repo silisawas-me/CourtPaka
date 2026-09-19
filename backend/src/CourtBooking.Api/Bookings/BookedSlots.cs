@@ -102,6 +102,31 @@ public static class BookedSlots
     }
 
     /// <summary>
+    /// Ends this booker's own holds whose time is up, and lets go of the hours they claimed.
+    ///
+    /// The one-hold-per-booker index counts any row still marked <c>Held</c>, and it cannot ask
+    /// what the time is, so a hold left to lapse would keep its booker locked out until someone
+    /// happened to book those exact hours. This is what stops that (PRD S-22, BR-02).
+    /// </summary>
+    public static async Task ReleaseOwnLapsedAsync(
+        AppDbContext database,
+        Guid bookerUserId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var mine = Lapsed(database, now).Where(booking => booking.BookerUserId == bookerUserId);
+
+        await database.BookingSlots
+            .Where(slot => slot.IsActive && mine.Any(over => over.Id == slot.BookingId))
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(slot => slot.IsActive, false), cancellationToken);
+
+        await mine.ExecuteUpdateAsync(
+            setters => setters.SetProperty(booking => booking.Status, BookingStatus.Expired),
+            cancellationToken);
+    }
+
+    /// <summary>
     /// The court-hours of one Bangkok day that a booker cannot take, as an hour per court. It asks
     /// by court rather than by venue so the query reads the (CourtId, StartsAt) index and never
     /// walks a venue's whole booking history to answer a question about one day.
