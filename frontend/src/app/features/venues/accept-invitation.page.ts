@@ -1,11 +1,11 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { Component, inject, input, OnInit, signal } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { errorKey } from '../../core/http/api-error';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { Venue, VenueService } from '../../core/venues/venue.service';
 
-type AcceptState = 'working' | 'done' | 'failed' | 'signInRequired';
+type AcceptState = 'working' | 'done' | 'failed';
 
 @Component({
   selector: 'app-accept-invitation-page',
@@ -15,27 +15,23 @@ type AcceptState = 'working' | 'done' | 'failed' | 'signInRequired';
 export class AcceptInvitationPage implements OnInit {
   private readonly venues = inject(VenueService);
   private readonly auth = inject(AuthService);
-  private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
   protected readonly i18n = inject(TranslationService);
   protected readonly state = signal<AcceptState>('working');
-  protected readonly errorKey = signal('venues.accept.invalid');
+  protected readonly pageError = signal('venues.accept.invalid');
   protected readonly venue = signal<Venue | null>(null);
 
+  /** The guard sends anonymous visitors to sign in and back again, so a session exists here. */
+  readonly invitationId = input<string>();
+  readonly token = input<string>();
+
   ngOnInit(): void {
-    const parameters = this.route.snapshot.queryParamMap;
-    const invitationId = parameters.get('invitationId');
-    const token = parameters.get('token');
+    const invitationId = this.invitationId();
+    const token = this.token();
 
     if (!invitationId || !token) {
       this.state.set('failed');
-      return;
-    }
-
-    // The invitation belongs to an address, so the API needs to know who is accepting.
-    if (!this.auth.currentUser()) {
-      this.state.set('signInRequired');
       return;
     }
 
@@ -45,9 +41,11 @@ export class AcceptInvitationPage implements OnInit {
         this.state.set('done');
         // The link is single use; keep the token out of the browser history.
         void this.router.navigate([], { replaceUrl: true, queryParams: {} });
+        // The account now belongs to one more venue.
+        this.auth.loadCurrentUser().subscribe({ error: () => undefined });
       },
       error: (error: unknown) => {
-        this.errorKey.set(errorKey(error));
+        this.pageError.set(errorKey(error));
         this.state.set('failed');
       },
     });

@@ -1,68 +1,59 @@
 import { HttpTestingController } from '@angular/common/http/testing';
-import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { AuthService } from '../../core/auth/auth.service';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TRANSLATIONS } from '../../core/i18n/locales';
-import { pageProviders, textOf } from '../../testing/dom';
+import { pageProviders, signInAs, textOf } from '../../testing/dom';
 import { AcceptInvitationPage } from './accept-invitation.page';
 
-function configure(queryParams: Record<string, string>) {
-  TestBed.configureTestingModule({
-    imports: [AcceptInvitationPage],
-    providers: [
-      ...pageProviders(),
-      {
-        provide: ActivatedRoute,
-        useValue: { snapshot: { queryParamMap: convertToParamMap(queryParams) } },
-      },
-    ],
-  });
-}
-
-function signIn(): void {
-  const httpMock = TestBed.inject(HttpTestingController);
-  TestBed.inject(AuthService).loadCurrentUser().subscribe();
-  httpMock
-    .expectOne('/api/auth/me')
-    .flush({ id: 'u1', email: 'staff@example.com', emailConfirmed: true, language: 'th' });
-}
-
 describe('AcceptInvitationPage', () => {
-  afterEach(() => TestBed.resetTestingModule());
+  let httpMock: HttpTestingController;
 
-  it('asks anonymous visitors to sign in first', () => {
-    configure({ invitationId: 'i1', token: 't' });
-    const httpMock = TestBed.inject(HttpTestingController);
-    const fixture = TestBed.createComponent(AcceptInvitationPage);
-    fixture.detectChanges();
+  beforeEach(async () => {
+    localStorage.clear();
+    await TestBed.configureTestingModule({
+      imports: [AcceptInvitationPage],
+      providers: pageProviders([{ path: 'venues/:venueId', children: [] }]),
+    }).compileComponents();
 
-    expect(textOf(fixture, 'accept-sign-in')).toBe(TRANSLATIONS.th['venues.accept.signInFirst']);
-    httpMock.expectNone('/api/venues/invitations/accept');
-    httpMock.verify();
+    httpMock = TestBed.inject(HttpTestingController);
   });
+
+  afterEach(() => httpMock.verify());
+
+  function render(inputs: {
+    invitationId?: string;
+    token?: string;
+  }): ComponentFixture<AcceptInvitationPage> {
+    const fixture = TestBed.createComponent(AcceptInvitationPage);
+    fixture.componentRef.setInput('invitationId', inputs.invitationId);
+    fixture.componentRef.setInput('token', inputs.token);
+    fixture.detectChanges();
+    return fixture;
+  }
 
   it('joins the venue with the values from the link', () => {
-    configure({ invitationId: 'i1', token: 'token-from-email' });
-    const httpMock = TestBed.inject(HttpTestingController);
-    signIn();
-    const fixture = TestBed.createComponent(AcceptInvitationPage);
-    fixture.detectChanges();
+    signInAs('staff@example.com');
+    const fixture = render({ invitationId: 'i1', token: 'token-from-email' });
 
     const request = httpMock.expectOne('/api/venues/invitations/accept');
     expect(request.request.body).toEqual({ invitationId: 'i1', token: 'token-from-email' });
-    request.flush({ id: 'v1', code: 'SBC', name: 'Smash Court', status: 'Approved' });
+    request.flush({
+      id: 'v1',
+      code: 'SBC',
+      name: 'Smash Court',
+      status: 'Approved',
+      role: 'Staff',
+      permissions: ['VerifySlip'],
+    });
     fixture.detectChanges();
 
     expect(textOf(fixture, 'accept-success')).toContain('Smash Court');
-    httpMock.verify();
+    // The account gained a venue, so the session is re-read.
+    httpMock.expectOne('/api/auth/me').flush(null, { status: 401, statusText: 'Unauthorized' });
   });
 
   it('explains an invitation that belongs to another address', () => {
-    configure({ invitationId: 'i1', token: 'token-from-email' });
-    const httpMock = TestBed.inject(HttpTestingController);
-    signIn();
-    const fixture = TestBed.createComponent(AcceptInvitationPage);
-    fixture.detectChanges();
+    signInAs('someone-else@example.com');
+    const fixture = render({ invitationId: 'i1', token: 'token-from-email' });
 
     httpMock
       .expectOne('/api/venues/invitations/accept')
@@ -75,17 +66,13 @@ describe('AcceptInvitationPage', () => {
     expect(textOf(fixture, 'accept-error')).toBe(
       TRANSLATIONS.th['error.venue.invitation_for_another_address'],
     );
-    httpMock.verify();
   });
 
   it('does not call the API when the link is incomplete', () => {
-    configure({});
-    const httpMock = TestBed.inject(HttpTestingController);
-    const fixture = TestBed.createComponent(AcceptInvitationPage);
-    fixture.detectChanges();
+    signInAs('staff@example.com');
+    const fixture = render({});
 
     httpMock.expectNone('/api/venues/invitations/accept');
     expect(textOf(fixture, 'accept-error')).toBe(TRANSLATIONS.th['venues.accept.invalid']);
-    httpMock.verify();
   });
 });

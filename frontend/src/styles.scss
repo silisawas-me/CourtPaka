@@ -88,7 +88,8 @@ label {
 
 input[type='email'],
 input[type='password'],
-input[type='tel'] {
+input[type='tel'],
+input[type='text'] {
   width: 100%;
   padding: 0.6rem 0.75rem;
   border: 1px solid var(--line);
@@ -164,7 +165,8 @@ input[type='checkbox'] {
   }
 }
 
-.card .ghost {
+/** Secondary button: quiet next to the filled primary one. */
+.ghost {
   padding: 0.3rem 0.7rem;
   border: 1px solid var(--line);
   border-radius: 0.5rem;

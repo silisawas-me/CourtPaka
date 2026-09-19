@@ -5,12 +5,6 @@
     @case ('working') {
       <p data-testid="accept-working">{{ i18n.t('common.loading') }}</p>
     }
-    @case ('signInRequired') {
-      <p data-testid="accept-sign-in">{{ i18n.t('venues.accept.signInFirst') }}</p>
-      <p>
-        <a routerLink="/login">{{ i18n.t('login.title') }}</a>
-      </p>
-    }
     @case ('done') {
       <p class="success" data-testid="accept-success">
         {{ i18n.t('venues.accept.joined') }} {{ venue()?.name }}
@@ -20,7 +14,7 @@
       </p>
     }
     @case ('failed') {
-      <p class="form-error" data-testid="accept-error">{{ i18n.t(errorKey()) }}</p>
+      <p class="form-error" data-testid="accept-error">{{ i18n.t(pageError()) }}</p>
       <p>
         <a routerLink="/venues">{{ i18n.t('venues.title') }}</a>
       </p>

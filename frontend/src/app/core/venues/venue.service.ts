@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 
 export type VenueStatus = 'Pending' | 'Approved' | 'Rejected' | 'Suspended';
 
-/** Mirrors VenuePermissions on the API; the owner holds all of them implicitly. */
+/** Mirrors VenuePermissionSet.Grantable on the API, which speaks these names in both directions. */
 export const VENUE_PERMISSIONS = [
   'VerifySlip',
   'ManageBookings',
@@ -15,24 +15,21 @@ export const VENUE_PERMISSIONS = [
 
 export type VenuePermission = (typeof VENUE_PERMISSIONS)[number];
 
-/** Flag values must match the API's [Flags] enum, which is what the endpoints accept. */
-const PERMISSION_FLAGS: Record<VenuePermission, number> = {
-  VerifySlip: 1,
-  ManageBookings: 2,
-  CloseCourt: 4,
-  ViewReports: 8,
-  ManageSettings: 16,
-};
-
-export function toPermissionFlags(permissions: readonly VenuePermission[]): number {
-  return permissions.reduce((flags, permission) => flags | PERMISSION_FLAGS[permission], 0);
-}
+/** What a newly invited staff member gets unless the owner changes it (VenuePermissions.StaffDefault). */
+export const STAFF_DEFAULT_PERMISSIONS: readonly VenuePermission[] = [
+  'VerifySlip',
+  'ManageBookings',
+  'CloseCourt',
+];
 
 export interface Venue {
   id: string;
   code: string;
   name: string;
   status: VenueStatus;
+  /** The caller's own role and permissions at this venue, so screens never infer them. */
+  role: 'Owner' | 'Staff';
+  permissions: VenuePermission[];
 }
 
 export interface VenueMember {
@@ -80,7 +77,7 @@ export class VenueService {
   ): Observable<VenueInvitation> {
     return this.http.post<VenueInvitation>(`/api/venues/${venueId}/invitations`, {
       email,
-      permissions: toPermissionFlags(permissions),
+      permissions,
     });
   }
 
@@ -90,7 +87,7 @@ export class VenueService {
     permissions: readonly VenuePermission[],
   ): Observable<void> {
     return this.http.put<void>(`/api/venues/${venueId}/members/${userId}/permissions`, {
-      permissions: toPermissionFlags(permissions),
+      permissions,
     });
   }
 

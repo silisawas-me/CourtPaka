@@ -4,13 +4,23 @@ public sealed record CreateVenueRequest(string Code, string Name);
 
 public sealed record RenameVenueRequest(string Name);
 
-public sealed record InviteMemberRequest(string Email, VenuePermissions? Permissions);
+public sealed record InviteMemberRequest(string Email, string[]? Permissions);
 
 public sealed record AcceptInvitationRequest(Guid InvitationId, string Token);
 
-public sealed record ChangePermissionsRequest(VenuePermissions Permissions);
+public sealed record ChangePermissionsRequest(string[] Permissions);
 
-public sealed record VenueResponse(Guid Id, string Code, string Name, string Status);
+/// <summary>
+/// A venue always arrives with what the caller may do there, so screens and guards never have to
+/// work it out from the member list (PRD US-14).
+/// </summary>
+public sealed record VenueResponse(
+    Guid Id,
+    string Code,
+    string Name,
+    string Status,
+    string Role,
+    string[] Permissions);
 
 public sealed record VenueMemberResponse(Guid UserId, string Email, string Role, string[] Permissions);
 

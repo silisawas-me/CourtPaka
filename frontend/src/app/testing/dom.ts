@@ -1,7 +1,8 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { EnvironmentProviders, Provider } from '@angular/core';
-import { ComponentFixture } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { AuthService } from '../core/auth/auth.service';
 import { provideRouter, Routes } from '@angular/router';
 import { apiErrorInterceptor } from '../core/http/api-error';
 
@@ -15,6 +16,14 @@ export function pageProviders(routes: Routes = []): (Provider | EnvironmentProvi
     provideHttpClientTesting(),
     provideRouter(routes),
   ];
+}
+
+/** Puts a signed-in account behind the pages under test, the way the app initializer does. */
+export function signInAs(email = 'user@example.com'): void {
+  TestBed.inject(AuthService).loadCurrentUser().subscribe();
+  TestBed.inject(HttpTestingController)
+    .expectOne('/api/auth/me')
+    .flush({ id: 'u0', email, emailConfirmed: true, language: 'th' });
 }
 
 export function textOf(fixture: ComponentFixture<unknown>, testId: string): string | undefined {

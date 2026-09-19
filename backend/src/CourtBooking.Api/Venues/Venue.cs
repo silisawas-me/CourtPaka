@@ -131,5 +131,30 @@ public static class VenuePermissionSet
         VenuePermissions.ManageSettings,
     ];
 
-    public static bool IsValid(VenuePermissions permissions) => (permissions & ~VenuePermissions.All) == 0;
+    /// <summary>
+    /// Permissions travel as names in both directions, so a client never has to know the bit values
+    /// and cannot grant the wrong right by getting them wrong.
+    /// </summary>
+    public static string[] Describe(VenuePermissions permissions) =>
+        Grantable.Where(permission => permissions.HasFlag(permission))
+            .Select(permission => permission.ToString())
+            .ToArray();
+
+    public static bool TryParse(IEnumerable<string>? names, out VenuePermissions permissions)
+    {
+        permissions = VenuePermissions.None;
+        foreach (var name in names ?? [])
+        {
+            var match = Grantable.FirstOrDefault(
+                permission => string.Equals(permission.ToString(), name, StringComparison.OrdinalIgnoreCase));
+            if (match == VenuePermissions.None)
+            {
+                return false;
+            }
+
+            permissions |= match;
+        }
+
+        return true;
+    }
 }

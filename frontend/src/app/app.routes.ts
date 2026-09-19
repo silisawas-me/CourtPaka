@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { authGuard } from './core/auth/auth.guard';
 
 export const routes: Routes = [
   {
@@ -24,15 +25,18 @@ export const routes: Routes = [
   },
   {
     path: 'venues',
+    canActivate: [authGuard],
     loadComponent: () => import('./features/venues/venues.page').then((m) => m.VenuesPage),
   },
   {
     path: 'venues/:venueId',
+    canActivate: [authGuard],
     loadComponent: () =>
       import('./features/venues/venue-detail.page').then((m) => m.VenueDetailPage),
   },
   {
     path: 'venue-invitation',
+    canActivate: [authGuard],
     loadComponent: () =>
       import('./features/venues/accept-invitation.page').then((m) => m.AcceptInvitationPage),
   },

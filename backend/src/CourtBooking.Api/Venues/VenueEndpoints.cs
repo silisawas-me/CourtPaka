@@ -89,7 +89,8 @@ public static class VenueEndpoints
             return ApiProblem.Of(StatusCodes.Status409Conflict, VenueErrorCodes.CodeAlreadyUsed);
         }
 
-        return TypedResults.Created($"/api/venues/{venue.Id}", ToResponse(venue));
+        return TypedResults.Created(
+            $"/api/venues/{venue.Id}", ToResponse(venue, VenueRole.Owner, VenuePermissions.None));
     }
 
     private static async Task<Ok<VenueResponse[]>> ListMineAsync(
@@ -98,20 +99,24 @@ public static class VenueEndpoints
         CancellationToken cancellationToken)
     {
         var userId = UserId(principal);
-        var venues = await database.VenueMemberships
+        var memberships = await database.VenueMemberships
             .AsNoTracking()
             .Where(member => member.UserId == userId)
+            .Include(member => member.Venue)
             .OrderBy(member => member.Venue!.Name)
-            .Select(member => new VenueResponse(
-                member.Venue!.Id, member.Venue.Code, member.Venue.Name, member.Venue.Status.ToString()))
-            .ToArrayAsync(cancellationToken);
+            .ToListAsync(cancellationToken);
 
-        return TypedResults.Ok(venues);
+        return TypedResults.Ok(memberships
+            .Select(member => ToResponse(member.Venue!, member.Role, member.Permissions))
+            .ToArray());
     }
 
-    private static Ok<VenueResponse> Get(CurrentVenue currentVenue) =>
-        // Authorization already loaded the venue this request runs against.
-        TypedResults.Ok(ToResponse(currentVenue.Require().Venue!));
+    private static Ok<VenueResponse> Get(CurrentVenue currentVenue)
+    {
+        // Authorization already loaded the venue and the caller's membership for this request.
+        var membership = currentVenue.Require();
+        return TypedResults.Ok(ToResponse(membership.Venue!, membership.Role, membership.Permissions));
+    }
 
     private static async Task<Results<NoContent, NotFound, ProblemHttpResult>> RenameAsync(
         Guid venueId,
@@ -165,7 +170,7 @@ public static class VenueEndpoints
 
         return TypedResults.Ok(invitations
             .Select(invitation => new VenueInvitationResponse(
-                invitation.Id, invitation.Email, Describe(invitation.Permissions), invitation.ExpiresAt))
+                invitation.Id, invitation.Email, VenuePermissionSet.Describe(invitation.Permissions), invitation.ExpiresAt))
             .ToArray());
     }
 
@@ -184,8 +189,12 @@ public static class VenueEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var permissions = request.Permissions ?? VenuePermissions.StaffDefault;
-        if (!VenuePermissionSet.IsValid(permissions))
+        VenuePermissions permissions;
+        if (request.Permissions is null)
+        {
+            permissions = VenuePermissions.StaffDefault;
+        }
+        else if (!VenuePermissionSet.TryParse(request.Permissions, out permissions))
         {
             return ApiProblem.Of(StatusCodes.Status400BadRequest, VenueErrorCodes.InvalidPermissions);
         }
@@ -245,7 +254,8 @@ public static class VenueEndpoints
 
         return TypedResults.Created(
             $"/api/venues/{venueId}/invitations",
-            new VenueInvitationResponse(invitation.Id, email, Describe(permissions), invitation.ExpiresAt));
+            new VenueInvitationResponse(
+                invitation.Id, email, VenuePermissionSet.Describe(permissions), invitation.ExpiresAt));
     }
 
     private static async Task<Results<Ok<VenueResponse>, ProblemHttpResult>> AcceptInvitationAsync(
@@ -318,7 +328,7 @@ public static class VenueEndpoints
             return ApiProblem.Of(StatusCodes.Status409Conflict, VenueErrorCodes.AlreadyMember);
         }
 
-        return TypedResults.Ok(ToResponse(invitation.Venue!));
+        return TypedResults.Ok(ToResponse(invitation.Venue!, VenueRole.Staff, invitation.Permissions));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult, NotFound>> ChangePermissionsAsync(
@@ -328,7 +338,7 @@ public static class VenueEndpoints
         AppDbContext database,
         CancellationToken cancellationToken)
     {
-        if (!VenuePermissionSet.IsValid(request.Permissions))
+        if (!VenuePermissionSet.TryParse(request.Permissions, out var permissions))
         {
             return ApiProblem.Of(StatusCodes.Status400BadRequest, VenueErrorCodes.InvalidPermissions);
         }
@@ -347,7 +357,7 @@ public static class VenueEndpoints
             return ApiProblem.Of(StatusCodes.Status409Conflict, VenueErrorCodes.OwnerCannotBeChanged);
         }
 
-        membership.Permissions = request.Permissions;
+        membership.Permissions = permissions;
         await database.SaveChangesAsync(cancellationToken);
         return TypedResults.NoContent();
     }
@@ -386,22 +396,21 @@ public static class VenueEndpoints
     private static Guid UserId(ClaimsPrincipal principal) =>
         Guid.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    private static VenueResponse ToResponse(Venue venue) =>
-        new(venue.Id, venue.Code, venue.Name, venue.Status.ToString());
+    private static VenueResponse ToResponse(Venue venue, VenueRole role, VenuePermissions permissions) =>
+        new(
+            venue.Id,
+            venue.Code,
+            venue.Name,
+            venue.Status.ToString(),
+            role.ToString(),
+            VenuePermissionSet.Describe(role == VenueRole.Owner ? VenuePermissions.All : permissions));
 
     private static VenueMemberResponse ToResponse(VenueMembership membership) =>
         new(
             membership.UserId,
             membership.User?.Email ?? string.Empty,
             membership.Role.ToString(),
-            VenuePermissionSet.Grantable
-                .Where(membership.Allows)
-                .Select(permission => permission.ToString())
-                .ToArray());
+            VenuePermissionSet.Describe(
+                membership.Role == VenueRole.Owner ? VenuePermissions.All : membership.Permissions));
 
-    private static string[] Describe(VenuePermissions permissions) =>
-        VenuePermissionSet.Grantable
-            .Where(permission => permissions.HasFlag(permission))
-            .Select(permission => permission.ToString())
-            .ToArray();
 }

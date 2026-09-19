@@ -2,7 +2,7 @@
   <section class="card">
     <p>{{ i18n.t('common.loading') }}</p>
   </section>
-} @else if (errorKey(); as key) {
+} @else if (pageError(); as key) {
   <section class="card">
     <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
     <p>
@@ -22,12 +22,12 @@
     <h2>{{ i18n.t('venues.members.title') }}</h2>
 
     <ul class="list" data-testid="member-list">
-      @for (member of members(); track member.userId) {
+      @for (row of rows(); track row.member.userId) {
         <li>
-          <strong>{{ member.email }}</strong>
-          <span class="muted">{{ i18n.t('venues.role.' + member.role) }}</span>
+          <strong>{{ row.member.email }}</strong>
+          <span class="muted">{{ i18n.t('venues.role.' + row.member.role) }}</span>
 
-          @if (member.role === 'Owner') {
+          @if (row.member.role === 'Owner') {
             <span class="muted">{{ i18n.t('venues.members.ownerHasAll') }}</span>
           } @else {
             <span class="permissions">
@@ -35,10 +35,10 @@
                 <label class="checkbox">
                   <input
                     type="checkbox"
-                    [checked]="has(member, permission)"
+                    [checked]="row.granted.has(permission)"
                     [disabled]="!isOwner()"
-                    [attr.data-testid]="'permission-' + member.userId + '-' + permission"
-                    (change)="togglePermission(member, permission, $any($event.target).checked)"
+                    [attr.data-testid]="'permission-' + row.member.userId + '-' + permission"
+                    (change)="togglePermission(row.member, permission, $any($event.target).checked)"
                   />
                   {{ i18n.t('venues.permission.' + permission) }}
                 </label>
@@ -49,8 +49,8 @@
               <button
                 type="button"
                 class="ghost"
-                [attr.data-testid]="'remove-' + member.userId"
-                (click)="remove(member)"
+                [attr.data-testid]="'remove-' + row.member.userId"
+                (click)="remove(row.member)"
               >
                 {{ i18n.t('venues.members.remove') }}
               </button>
@@ -70,7 +70,7 @@
         <input id="invite-email" type="email" formControlName="email" autocomplete="off" />
         <app-field-error [control]="inviteForm.controls.email" testId="invite-email-error" />
 
-        <span class="permissions">
+        <span class="permissions" formGroupName="permissions">
           @for (permission of permissions; track permission) {
             <label class="checkbox">
               <input type="checkbox" [formControlName]="permission" />
@@ -79,7 +79,7 @@
           }
         </span>
 
-        @if (inviteErrorKey(); as key) {
+        @if (inviteError(); as key) {
           <p class="form-error" data-testid="invite-error">{{ i18n.t(key) }}</p>
         }
 
@@ -95,7 +95,8 @@
             <li>
               <strong>{{ invitation.email }}</strong>
               <span class="muted"
-                >{{ i18n.t('venues.invite.expires') }} {{ expiryDate(invitation) }}</span
+                >{{ i18n.t('venues.invite.expires') }}
+                {{ invitation.expiresAt | date: 'mediumDate' }}</span
               >
             </li>
           }

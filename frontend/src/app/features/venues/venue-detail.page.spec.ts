@@ -1,12 +1,9 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { AuthService } from '../../core/auth/auth.service';
 import { TRANSLATIONS } from '../../core/i18n/locales';
-import { pageProviders, textOf } from '../../testing/dom';
+import { pageProviders, signInAs, textOf } from '../../testing/dom';
 import { VenueDetailPage } from './venue-detail.page';
 
-const VENUE = { id: 'v1', code: 'SBC', name: 'Smash Court', status: 'Approved' };
 const OWNER = {
   userId: 'u1',
   email: 'owner@example.com',
@@ -20,13 +17,15 @@ const STAFF = {
   permissions: ['VerifySlip', 'ManageBookings', 'CloseCourt'],
 };
 
-function signedInAs(email: string): void {
-  const auth = TestBed.inject(AuthService);
-  const httpMock = TestBed.inject(HttpTestingController);
-  auth.loadCurrentUser().subscribe();
-  httpMock
-    .expectOne('/api/auth/me')
-    .flush({ id: 'x', email, emailConfirmed: true, language: 'th' });
+function venueAs(role: 'Owner' | 'Staff') {
+  return {
+    id: 'v1',
+    code: 'SBC',
+    name: 'Smash Court',
+    status: 'Approved',
+    role,
+    permissions: role === 'Owner' ? OWNER.permissions : STAFF.permissions,
+  };
 }
 
 describe('VenueDetailPage', () => {
@@ -37,13 +36,7 @@ describe('VenueDetailPage', () => {
     localStorage.clear();
     await TestBed.configureTestingModule({
       imports: [VenueDetailPage],
-      providers: [
-        ...pageProviders(),
-        {
-          provide: ActivatedRoute,
-          useValue: { snapshot: { paramMap: convertToParamMap({ venueId: 'v1' }) } },
-        },
-      ],
+      providers: pageProviders(),
     }).compileComponents();
 
     httpMock = TestBed.inject(HttpTestingController);
@@ -51,17 +44,22 @@ describe('VenueDetailPage', () => {
 
   afterEach(() => httpMock.verify());
 
-  function render(members: unknown[]): void {
+  function render(role: 'Owner' | 'Staff', members: unknown[]): void {
+    signInAs(role === 'Owner' ? OWNER.email : STAFF.email);
     fixture = TestBed.createComponent(VenueDetailPage);
+    fixture.componentRef.setInput('venueId', 'v1');
     fixture.detectChanges();
-    httpMock.expectOne('/api/venues/v1').flush(VENUE);
+    httpMock.expectOne('/api/venues/v1').flush(venueAs(role));
     httpMock.expectOne('/api/venues/v1/members').flush(members);
     fixture.detectChanges();
+    if (role === 'Owner') {
+      httpMock.expectOne('/api/venues/v1/invitations').flush([]);
+      fixture.detectChanges();
+    }
   }
 
   it('shows the venue and its team', () => {
-    signedInAs(STAFF.email);
-    render([OWNER, STAFF]);
+    render('Staff', [OWNER, STAFF]);
 
     expect(textOf(fixture, 'venue-name')).toBe('Smash Court');
     expect(textOf(fixture, 'member-list')).toContain(OWNER.email);
@@ -69,8 +67,7 @@ describe('VenueDetailPage', () => {
   });
 
   it('hides member management from staff', () => {
-    signedInAs(STAFF.email);
-    render([OWNER, STAFF]);
+    render('Staff', [OWNER, STAFF]);
 
     const element = fixture.nativeElement as HTMLElement;
     expect(element.querySelector('[data-testid="remove-u2"]')).toBeNull();
@@ -78,35 +75,51 @@ describe('VenueDetailPage', () => {
       element.querySelector<HTMLInputElement>('[data-testid="permission-u2-ViewReports"]')
         ?.disabled,
     ).toBe(true);
+    // The invitation list is owner-only, so a staff member never asks for it.
     httpMock.expectNone('/api/venues/v1/invitations');
   });
 
-  it('lets the owner grant a permission', () => {
-    signedInAs(OWNER.email);
-    render([OWNER, STAFF]);
-    httpMock.expectOne('/api/venues/v1/invitations').flush([]);
-    fixture.detectChanges();
+  it('grants a permission by name and keeps the page as it is', () => {
+    render('Owner', [OWNER, STAFF]);
 
     const element = fixture.nativeElement as HTMLElement;
     element.querySelector<HTMLInputElement>('[data-testid="permission-u2-ViewReports"]')!.click();
     fixture.detectChanges();
 
     const request = httpMock.expectOne('/api/venues/v1/members/u2/permissions');
-    // VerifySlip + ManageBookings + CloseCourt + ViewReports = 1 + 2 + 4 + 8
-    expect(request.request.body).toEqual({ permissions: 15 });
+    expect(request.request.body).toEqual({
+      permissions: ['VerifySlip', 'ManageBookings', 'CloseCourt', 'ViewReports'],
+    });
     request.flush(null, { status: 204, statusText: 'No Content' });
-
-    httpMock.expectOne('/api/venues/v1').flush(VENUE);
-    httpMock.expectOne('/api/venues/v1/members').flush([OWNER, STAFF]);
     fixture.detectChanges();
-    httpMock.expectOne('/api/venues/v1/invitations').flush([]);
+
+    // The change is applied locally; nothing is refetched.
+    httpMock.expectNone('/api/venues/v1');
+    httpMock.expectNone('/api/venues/v1/members');
+    expect(
+      element.querySelector<HTMLInputElement>('[data-testid="permission-u2-ViewReports"]')?.checked,
+    ).toBe(true);
+  });
+
+  it('removes a member from the list without refetching', () => {
+    render('Owner', [OWNER, STAFF]);
+
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('[data-testid="remove-u2"]')!
+      .click();
+    fixture.detectChanges();
+
+    httpMock
+      .expectOne('/api/venues/v1/members/u2')
+      .flush(null, { status: 204, statusText: 'No Content' });
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'member-list')).not.toContain(STAFF.email);
+    httpMock.expectNone('/api/venues/v1/members');
   });
 
   it('invites a staff member with the permissions ticked', () => {
-    signedInAs(OWNER.email);
-    render([OWNER]);
-    httpMock.expectOne('/api/venues/v1/invitations').flush([]);
-    fixture.detectChanges();
+    render('Owner', [OWNER]);
 
     const element = fixture.nativeElement as HTMLElement;
     const email = element.querySelector<HTMLInputElement>('#invite-email')!;
@@ -117,12 +130,14 @@ describe('VenueDetailPage', () => {
     fixture.detectChanges();
 
     const request = httpMock.expectOne('/api/venues/v1/invitations');
-    // The default ticks are VerifySlip + ManageBookings + CloseCourt = 1 + 2 + 4
-    expect(request.request.body).toEqual({ email: 'new@example.com', permissions: 7 });
+    expect(request.request.body).toEqual({
+      email: 'new@example.com',
+      permissions: ['VerifySlip', 'ManageBookings', 'CloseCourt'],
+    });
     request.flush({
       id: 'i1',
       email: 'new@example.com',
-      permissions: [],
+      permissions: ['VerifySlip'],
       expiresAt: '2026-10-01T00:00:00Z',
     });
     fixture.detectChanges();
@@ -131,10 +146,7 @@ describe('VenueDetailPage', () => {
   });
 
   it('translates an API refusal', () => {
-    signedInAs(OWNER.email);
-    render([OWNER]);
-    httpMock.expectOne('/api/venues/v1/invitations').flush([]);
-    fixture.detectChanges();
+    render('Owner', [OWNER]);
 
     const element = fixture.nativeElement as HTMLElement;
     const email = element.querySelector<HTMLInputElement>('#invite-email')!;

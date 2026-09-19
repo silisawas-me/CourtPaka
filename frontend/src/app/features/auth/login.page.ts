@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, input, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
@@ -22,8 +22,11 @@ export class LoginPage {
     password: ['', Validators.required],
   });
 
+  /** Set by the auth guard when it interrupts a page that needs an account. */
+  readonly returnUrl = input<string>();
+
   protected readonly submitting = signal(false);
-  protected readonly errorKey = signal<string | null>(null);
+  protected readonly formError = signal<string | null>(null);
 
   protected submit(): void {
     this.form.markAllAsTouched();
@@ -32,17 +35,18 @@ export class LoginPage {
     }
 
     this.submitting.set(true);
-    this.errorKey.set(null);
+    this.formError.set(null);
     const { email, password } = this.form.getRawValue();
 
     this.auth.login(email, password).subscribe({
       next: () => {
         this.submitting.set(false);
-        void this.router.navigate(['/']);
+        // Come back to whatever the guard interrupted, or home when the user came here directly.
+        void this.router.navigateByUrl(this.returnUrl() ?? '/');
       },
       error: (error: unknown) => {
         this.submitting.set(false);
-        this.errorKey.set(errorKey(error));
+        this.formError.set(errorKey(error));
       },
     });
   }

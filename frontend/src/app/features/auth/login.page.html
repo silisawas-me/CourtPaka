@@ -15,7 +15,7 @@
     />
     <app-field-error [control]="form.controls.password" testId="password-error" />
 
-    @if (errorKey(); as key) {
+    @if (formError(); as key) {
       <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
     }
 
