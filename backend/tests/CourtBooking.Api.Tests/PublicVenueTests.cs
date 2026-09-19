@@ -97,7 +97,7 @@ public sealed class PublicVenueTests(ApiTestFixture api)
         Assert.Equal(
             HttpStatusCode.NotFound,
             (await anonymous.GetAsync($"/api/venues/{venue.Id}/availability")).StatusCode);
-        Assert.DoesNotContain(await SearchAsync(anonymous, venue.Code), found => found.Id == venue.Id);
+        Assert.DoesNotContain(await SearchAsync(anonymous, venue.Name), found => found.Id == venue.Id);
 
         // Its own people still reach it; it is read-only, not hidden from them (PRD US-20).
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync($"/api/venues/{venue.Id}")).StatusCode);
@@ -232,7 +232,7 @@ public sealed class PublicVenueTests(ApiTestFixture api)
         await scenario.SetStatusAsync(venue.Id, VenueStatus.Approved);
 
         return (owner, new PublicVenueResponse(
-            venue.Id, venue.Code, venue.Name, venue.AddressLine, venue.District, venue.Province));
+            venue.Id, venue.Name, venue.AddressLine, venue.District, venue.Province));
     }
 
 

@@ -7,7 +7,6 @@ import { AvailabilityPage } from './availability.page';
 
 const VENUE = {
   id: 'v1',
-  code: 'SBC',
   name: 'Smash Court',
   addressLine: '1 ถนนทดสอบ',
   district: 'บางรัก',

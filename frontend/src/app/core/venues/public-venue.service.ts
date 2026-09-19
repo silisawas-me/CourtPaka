@@ -5,7 +5,6 @@ import { VenueAddress } from './venue.service';
 
 export interface PublicVenue extends VenueAddress {
   id: string;
-  code: string;
   name: string;
 }
 

@@ -58,9 +58,12 @@ public static class VenueErrorCodes
 }
 
 /// <summary>What a booker sees about a venue before signing in (PRD US-02).</summary>
+/// <summary>
+/// A venue as someone with no account sees it. Deliberately not the venue's code: that prefixes
+/// every document number (PRD 7.4), and a booker has no use for it.
+/// </summary>
 public sealed record PublicVenueResponse(
     Guid Id,
-    string Code,
     string Name,
     string AddressLine,
     string District,

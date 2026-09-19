@@ -53,7 +53,7 @@ public static class PublicVenueEndpoints
             .ThenBy(venue => venue.Name)
             .Take(MaxResults)
             .Select(venue => new PublicVenueResponse(
-                venue.Id, venue.Code, venue.Name, venue.AddressLine, venue.District, venue.Province))
+                venue.Id, venue.Name, venue.AddressLine, venue.District, venue.Province))
             .ToArrayAsync(cancellationToken);
 
         return TypedResults.Ok(found);
@@ -114,7 +114,7 @@ public static class PublicVenueEndpoints
                 venue => venue.Id == venueId && venue.Status == VenueStatus.Approved, cancellationToken);
 
     private static PublicVenueResponse Public(Venue venue) => new(
-        venue.Id, venue.Code, venue.Name, venue.AddressLine, venue.District, venue.Province);
+        venue.Id, venue.Name, venue.AddressLine, venue.District, venue.Province);
 
     /// <summary>
     /// Postgres reads %, _ and \ in a LIKE pattern, so a booker typing one would otherwise match
