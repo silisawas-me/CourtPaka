@@ -115,7 +115,8 @@ public static class PricingEndpoints
             .Include(list => list.Bands)
             .FirstOrDefaultAsync(cancellationToken);
 
-    private static Task<CancellationPolicy?> InForcePolicyAsync(
+    /// <summary>The terms a booking made now would be cancellable under (PRD BR-05).</summary>
+    internal static Task<CancellationPolicy?> InForcePolicyAsync(
         AppDbContext database,
         Guid venueId,
         CancellationToken cancellationToken) =>

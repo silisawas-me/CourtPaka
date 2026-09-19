@@ -87,6 +87,19 @@ export function submitForm(fixture: ComponentFixture<unknown>, selector = 'form'
   fixture.detectChanges();
 }
 
+/**
+ * Presses what a data-testid names. Material puts the test id on the host and the button inside
+ * it, and so does the availability grid, so the inner selector says which one to press.
+ */
+export function clickOn(fixture: ComponentFixture<unknown>, testId: string, within?: string): void {
+  const host = elementOf<HTMLElement>(fixture, testId);
+  if (host === null) {
+    throw new Error(`No element carries data-testid="${testId}".`);
+  }
+  (within === undefined ? host : host.querySelector<HTMLElement>(within)!).click();
+  fixture.detectChanges();
+}
+
 /** The element a data-testid names, typed as whatever the caller needs to read off it. */
 export function elementOf<T extends Element>(
   fixture: ComponentFixture<unknown>,

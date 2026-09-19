@@ -1,3 +1,4 @@
+using CourtBooking.Api.Bookings;
 using CourtBooking.Api.Identity;
 using CourtBooking.Api.Venues;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -31,6 +32,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<CancellationPolicy> CancellationPolicies => Set<CancellationPolicy>();
 
     public DbSet<CancellationTier> CancellationTiers => Set<CancellationTier>();
+
+    public DbSet<Booking> Bookings => Set<Booking>();
+
+    public DbSet<BookingSlot> BookingSlots => Set<BookingSlot>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -126,6 +131,45 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .WithMany(s => s.Days)
                 .HasForeignKey(d => d.ScheduleId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<Booking>(booking =>
+        {
+            booking.Property(b => b.TotalBaht).HasPrecision(10, 2);
+            // The booker's own history (US-05), and the check that they hold only one (PRD S-22).
+            booking.HasIndex(b => new { b.BookerUserId, b.Status });
+            booking.HasIndex(b => new { b.VenueId, b.CreatedAt });
+            booking.HasOne(b => b.Venue)
+                .WithMany()
+                .HasForeignKey(b => b.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+            booking.HasOne(b => b.Booker)
+                .WithMany()
+                .HasForeignKey(b => b.BookerUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // The policy this booking is refunded under stays readable for as long as the booking
+            // does, so a venue publishing a new one cannot delete the terms someone booked under.
+            booking.HasOne(b => b.CancellationPolicy)
+                .WithMany()
+                .HasForeignKey(b => b.CancellationPolicyId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<BookingSlot>(slot =>
+        {
+            slot.Property(s => s.BahtPerHour).HasPrecision(10, 2);
+            slot.HasIndex(s => new { s.CourtId, s.StartsAt });
+            slot.HasOne(s => s.Booking)
+                .WithMany(b => b.Slots)
+                .HasForeignKey(s => s.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            slot.HasOne(s => s.Court)
+                .WithMany()
+                .HasForeignKey(s => s.CourtId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // Two people may not hold the same court at the same time. The rule is the database's,
+            // not the application's, so simultaneous writes cannot both pass a check (PRD BR-04,
+            // 9.2). The constraint itself is written in the migration: EF has no model for one.
         });
 
         builder.Entity<PriceList>(list =>

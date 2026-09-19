@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using CourtBooking.Api.Data;
+using CourtBooking.Api.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 
@@ -79,7 +80,7 @@ public sealed class VenuePermissionHandler(AppDbContext database, CurrentVenue c
             return;
         }
 
-        if (!Guid.TryParse(context.User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)
+        if (CallerId.TryOf(context.User) is not { } userId
             || !Guid.TryParse(httpContext.Request.RouteValues[VenueRouteValue]?.ToString(), out var venueId))
         {
             return;

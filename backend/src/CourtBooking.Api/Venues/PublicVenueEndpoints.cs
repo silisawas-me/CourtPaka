@@ -1,5 +1,6 @@
 using CourtBooking.Api.Data;
 using CourtBooking.Api.Http;
+using CourtBooking.Api.Bookings;
 using CourtBooking.Api.Localization;
 using CourtBooking.Api.Observability;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -101,7 +102,14 @@ public static class PublicVenueEndpoints
         AppEvents.For(loggers).LogInformation("venue_page_viewed {VenueId} {Date}", venueId, asked);
 
         return TypedResults.Ok(Availability.Build(
-            Public(venue), asked, today, courts, statusChanges, week, prices?.Bands ?? []));
+            Public(venue),
+            asked,
+            today,
+            courts,
+            statusChanges,
+            week,
+            prices?.Bands ?? [],
+            await BookedSlots.OnAsync(database, venueId, asked, timeProvider.GetUtcNow(), cancellationToken)));
     }
 
     private static Task<Venue?> ApprovedAsync(

@@ -58,10 +58,10 @@ with sync_playwright() as p:
     )
 
     check(
-        "a signed-out visitor is asked to sign in before booking",
-        page.locator("[data-testid=sign-in-to-book]").count() == 1,
+        "a free hour offers itself to be picked",
+        page.locator("td.free button").count() > 0,
     )
-    check("and is not offered a booking button", page.locator("[data-testid=book]").count() == 0)
+    # What happens once an hour is picked, signed out and signed in, is booking.py.
 
     # 2. The day can be moved within the booking window, and not outside it.
     page.click("mat-datepicker-toggle button")
@@ -111,10 +111,11 @@ with sync_playwright() as p:
     page.wait_for_url(f"{BASE}/")
     page.goto(grid_url)
     page.wait_for_selector("[data-testid=availability-grid]")
-    check("a signed-in booker is offered the booking button", page.locator("[data-testid=book]").count() == 1, page)
     check(
         "a shared link opens on the day it names",
-        page.locator("[data-testid=grid-date]").inner_text() != "",
+        calendar_label(tomorrow).split()[0]
+        in page.locator("[data-testid=grid-date]").inner_text(),
+        page,
     )
 
     # 4. A venue that is not approved is invisible, whoever asks.

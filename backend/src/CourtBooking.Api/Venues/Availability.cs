@@ -10,6 +10,9 @@ public enum HourStatus
 
     /// <summary>Outside the venue's opening hours for that day, or the court is out of use.</summary>
     Closed = 2,
+
+    /// <summary>Someone else holds it. Who, and for how much, is never said (PRD US-02).</summary>
+    Booked = 3,
 }
 
 /// <summary>
@@ -43,7 +46,8 @@ public static class Availability
         IReadOnlyCollection<Court> courts,
         IReadOnlyCollection<CourtStatusChange> statusChanges,
         OpeningHoursSchedule? week,
-        IReadOnlyCollection<PriceBand> bands)
+        IReadOnlyCollection<PriceBand> bands,
+        IReadOnlySet<(Guid CourtId, int Hour)> taken)
     {
         var day = week?.Days.SingleOrDefault(entry => entry.Day == date.DayOfWeek);
         var opens = day?.OpensHour;
@@ -57,6 +61,7 @@ public static class Availability
         var priceByHour = hours.Select(hour => PriceFor(bands, date.DayOfWeek, hour)).ToArray();
         var free = HourStatus.Free.ToString();
         var closed = HourStatus.Closed.ToString();
+        var booked = HourStatus.Booked.ToString();
         var statusByCourt = statusChanges.ToLookup(change => change.CourtId);
 
         var rows = courts
@@ -74,7 +79,14 @@ public static class Availability
                             // An hour with nothing to charge for it is not for sale, whatever the
                             // court is doing: a venue may publish its hours before its prices.
                             var baht = inUse ? priceByHour[index] : null;
-                            return new HourResponse(hour, baht is null ? closed : free, baht);
+                            var status = baht is null
+                                ? closed
+                                : taken.Contains((court.Id, hour))
+                                    ? booked
+                                    : free;
+                            // A booked hour still shows its price: it is what the hour costs, not
+                            // what anyone paid, and the grid reads as a price list either way.
+                            return new HourResponse(hour, status, baht);
                         })
                         .ToArray());
             })

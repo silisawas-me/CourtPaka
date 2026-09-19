@@ -16,7 +16,9 @@ script exits non-zero if anything failed.
 
 Five rules worth keeping.
 
-1. Set up the state the script needs through the API before driving the UI. The scripts share one
+1. Set up the state the script needs through the API before driving the UI, and make it state the
+   script can create again — `harness.new_booker()` registers a fresh booker rather than reusing a
+   seeded one, because a booker may hold only one booking and the previous run left one. The scripts share one
    venue, so one that closes a weekday will break another that prices one, and the failure will
    look like an app bug.
 2. Wait for the response before reloading. The pages apply a change straight away and reconcile
@@ -36,3 +38,4 @@ Five rules worth keeping.
 | `venue_settings.py` | Courts and opening hours (US-11) |
 | `venue_pricing.py` | Prices and the cancellation policy (US-11) |
 | `booking_grid.py` | Venue search and the court-by-hour grid (US-02) |
+| `booking.py` | Picking hours, the summary, and holding them (US-03) |

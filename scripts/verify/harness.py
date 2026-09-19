@@ -3,11 +3,15 @@
 import datetime
 import pathlib
 import sys
+import uuid
 
 BASE = "http://localhost:8080"
 OWNER = "owner@courtpaka.local"
 STAFF = "staff@courtpaka.local"
 PASSWORD = "DevPassword1"
+
+# The version the local stack is configured with; registering has to accept the current one.
+PRIVACY_POLICY_VERSION = "2026-09-01"
 
 
 class Checks:
@@ -31,6 +35,25 @@ class Checks:
         for name in self.failed:
             print("  FAILED: " + name)
         sys.exit(1 if self.failed else 0)
+
+
+def new_booker(page) -> str:
+    """A booker with no venue of their own and no history, made through the API so the script can
+    be run again without tripping the one-hold-at-a-time rule (PRD S-22)."""
+    email = f"booker-{uuid.uuid4().hex[:12]}@example.com"
+    registered = page.request.post(
+        f"{BASE}/api/auth/register",
+        data={
+            "email": email,
+            "password": PASSWORD,
+            "privacyPolicyVersion": PRIVACY_POLICY_VERSION,
+            "language": "th",
+            "phoneNumber": None,
+        },
+    )
+    if registered.status != 201:
+        raise RuntimeError(f"Could not register a booker: {registered.status} {registered.text()}")
+    return email
 
 
 def login(page, email: str, password: str = PASSWORD) -> None:

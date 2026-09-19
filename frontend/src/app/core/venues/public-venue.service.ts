@@ -8,8 +8,8 @@ export interface PublicVenue extends VenueAddress {
   name: string;
 }
 
-/** Free to take, or outside the venue's hours. Booked arrives with US-03. */
-export type HourStatus = 'Free' | 'Closed';
+/** Free to take, outside the venue's hours, or already someone else's. */
+export type HourStatus = 'Free' | 'Closed' | 'Booked';
 
 export interface AvailabilityHour {
   hour: number;
