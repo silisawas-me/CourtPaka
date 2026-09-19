@@ -2,24 +2,34 @@ using CourtBooking.Api.Email;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Testcontainers.PostgreSql;
 
 namespace CourtBooking.Api.Tests.Infrastructure;
 
 /// <summary>
-/// One API host and one migrated schema for the whole auth test class; tests keep to their own
-/// email addresses so they cannot see each other's data.
+/// One PostgreSQL container, one migrated schema and one API host for the whole test run.
+/// Tests keep to their own email addresses and venue codes, so they cannot see each other's data.
 /// </summary>
-public sealed class AuthApiFixture(PostgresFixture postgres) : IAsyncLifetime
+public sealed class ApiTestFixture : IAsyncLifetime
 {
+    // Keep in sync with the image used by docker-compose.yml.
+    private const string Image = "postgres:17-alpine";
+
+    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder(Image).Build();
+
     private ApiFactory _root = null!;
 
     public FakeEmailSender Emails { get; } = new();
 
     public WebApplicationFactory<Program> Api { get; private set; } = null!;
 
+    public string ConnectionString => _container.GetConnectionString();
+
     public async Task InitializeAsync()
     {
-        _root = new ApiFactory(postgres.ConnectionString);
+        await _container.StartAsync();
+
+        _root = new ApiFactory(ConnectionString);
         await _root.MigrateAsync();
 
         Api = _root.WithWebHostBuilder(builder =>
@@ -27,12 +37,12 @@ public sealed class AuthApiFixture(PostgresFixture postgres) : IAsyncLifetime
                 services.Replace(ServiceDescriptor.Singleton<ITransactionalEmailSender>(Emails))));
     }
 
-    public Task DisposeAsync()
+    public async Task DisposeAsync()
     {
         // Disposing the derived factory does not dispose the one it was derived from.
         Api.Dispose();
         _root.Dispose();
-        return Task.CompletedTask;
+        await _container.DisposeAsync();
     }
 
     public HttpClient CreateClient() => Api.CreateClient();
@@ -40,4 +50,10 @@ public sealed class AuthApiFixture(PostgresFixture postgres) : IAsyncLifetime
     public IServiceScope CreateScope() => Api.Services.CreateScope();
 
     public T GetService<T>() where T : notnull => Api.Services.GetRequiredService<T>();
+}
+
+[CollectionDefinition(Name)]
+public sealed class ApiCollection : ICollectionFixture<ApiTestFixture>
+{
+    public const string Name = "api";
 }

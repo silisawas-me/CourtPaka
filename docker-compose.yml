@@ -28,6 +28,8 @@ services:
     profiles: [full]
     build: ./backend
     environment:
+      # This stack is a development one; deployed environments run as Production (PRD 9.3, 9.4).
+      ASPNETCORE_ENVIRONMENT: "Development"
       ConnectionStrings__Default: "Host=db;Port=5432;Database=courtbooking;Username=courtbooking;Password=courtbooking_dev"
       App__BaseUrl: "http://localhost:8080"
       App__PrivacyPolicyVersion: "2026-09-01"
@@ -35,6 +37,8 @@ services:
       App__RequireSecureCookies: "false"
       # Local convenience: deployments run the migration bundle from the deploy job instead (PRD 9.4).
       App__ApplyMigrationsOnStartup: "true"
+      # Local stack starts with a venue, an owner and a staff account (see DevelopmentSeeder).
+      App__SeedDevelopmentData: "true"
       # Keeps auth cookies valid across restarts.
       App__DataProtectionKeysPath: "/keys"
       # End-to-end runs come from one IP; the deployed default of 10/minute is for real users.

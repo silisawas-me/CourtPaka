@@ -29,6 +29,12 @@ public sealed class AppOptions
     public bool ApplyMigrationsOnStartup { get; init; }
 
     /// <summary>
+    /// Creates a development venue with an owner and a staff account, so a local stack is usable
+    /// straight away. No deployed environment turns this on.
+    /// </summary>
+    public bool SeedDevelopmentData { get; init; }
+
+    /// <summary>
     /// Where the data protection key ring lives. Without it every restart signs users out,
     /// because the keys that encrypt the auth cookie are regenerated in memory.
     /// </summary>

@@ -15,7 +15,9 @@
 - Endpoint ของ API ทุกตัวขึ้นต้นด้วย `/api` (Caddy และ proxy ของ `ng serve` ส่งต่อตาม prefix นี้)
 - **Auth:** ASP.NET Core Identity + cookie · ผู้ใช้คือ `AppUser` · การยอมรับนโยบายเก็บเป็นแถวใหม่ใน `UserConsent` (ห้ามแก้ทับ) และเวอร์ชันนโยบายมาจาก config ฝั่ง server
 - **Error ของ API:** ส่งเป็น `code` ใน ProblemDetails ผ่าน `ApiProblem.Of(...)` แล้วให้ frontend แปลเป็นข้อความ (US-23) ห้ามส่งข้อความภาษาคนให้ผู้ใช้จาก backend
-- **Config ที่ทุก environment ต้องมี:** `App:BaseUrl`, `App:PrivacyPolicyVersion` (ตรวจตอนเริ่มระบบ ถ้าไม่มีจะไม่ยอมเริ่ม) · `App:RequireSecureCookies` ปิดได้เฉพาะ dev/test
+- **สิทธิ์:** ผูกกับสนาม ไม่ใช่ role ระดับระบบ · `VenueMembership` เก็บ role + permission flags · endpoint ใต้ `/api/venues/{venueId}` ประกาศสิทธิ์ที่ต้องใช้ตอน map ด้วย `Member`, `OwnerOnly` หรือ `Needs(VenuePermissions.X)` ใน `VenueEndpoints` ซึ่งสร้าง `VenuePermissionRequirement` ให้ · Owner มีทุกสิทธิ์เสมอและถอนไม่ได้ · สนามที่ถูกระงับหรือถูกปฏิเสธจะอ่านได้อย่างเดียว · membership ของ request ปัจจุบันอยู่ใน `CurrentVenue` (handler โหลดให้แล้ว ไม่ต้อง query ซ้ำ)
+- **Config ที่ทุก environment ต้องมี:** `App:BaseUrl`, `App:PrivacyPolicyVersion` (ตรวจตอนเริ่มระบบ ถ้าไม่มีจะไม่ยอมเริ่ม) · `App:RequireSecureCookies` ปิดได้เฉพาะ dev/test · `App:ApplyMigrationsOnStartup` และ `App:SeedDevelopmentData` เปิดเฉพาะ local
+- **บัญชีสำหรับ dev** (seed จะทำงานเฉพาะเมื่อเปิด flag **และ** environment เป็น Development): `owner@courtpaka.local` และ `staff@courtpaka.local` รหัสผ่าน `DevPassword1` สนาม `DEV01`
 
 ## คำสั่ง
 ต้องมี: .NET SDK 10, Node 24 LTS, Docker Desktop ที่เปิดอยู่ (integration test ใช้ Testcontainers)

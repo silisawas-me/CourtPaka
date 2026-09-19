@@ -11,16 +11,12 @@ using Microsoft.Extensions.Options;
 
 namespace CourtBooking.Api.Tests;
 
-[Collection(DatabaseCollection.Name)]
-public sealed class AuthEndpointTests(PostgresFixture postgres) : IAsyncLifetime
+[Collection(ApiCollection.Name)]
+public sealed class AuthEndpointTests(ApiTestFixture api)
 {
     private const string DefaultPassword = "CorrectHorse1";
 
-    private readonly AuthApiFixture _api = new(postgres);
-
-    public Task InitializeAsync() => _api.InitializeAsync();
-
-    public Task DisposeAsync() => _api.DisposeAsync();
+    private readonly ApiTestFixture _api = api;
 
     [Fact]
     public async Task The_privacy_policy_version_comes_from_the_server()

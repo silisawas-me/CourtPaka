@@ -4,7 +4,9 @@ using CourtBooking.Api.Email;
 using CourtBooking.Api.Health;
 using CourtBooking.Api.Identity;
 using CourtBooking.Api.Localization;
+using CourtBooking.Api.Venues;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using System.Threading.RateLimiting;
@@ -117,6 +119,9 @@ builder.Services.ConfigureApplicationCookie(options =>
     });
 
 builder.Services.AddAuthorization();
+// Venue endpoints declare the permission they need inline; the handler answers it per venue (PRD US-14).
+builder.Services.AddScoped<CurrentVenue>();
+builder.Services.AddScoped<IAuthorizationHandler, VenuePermissionHandler>();
 
 // Registration and password endpoints send email and check credentials, so they are capped per client IP.
 builder.Services.AddRateLimiter(options =>
@@ -158,11 +163,19 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 var app = builder.Build();
 
+var startupOptions = app.Services.GetRequiredService<IOptions<AppOptions>>().Value;
+
 // Local stacks bring their own schema up; deployments run the migration bundle before the swap (PRD 9.4).
-if (app.Services.GetRequiredService<IOptions<AppOptions>>().Value.ApplyMigrationsOnStartup)
+if (startupOptions.ApplyMigrationsOnStartup)
 {
     using var migrationScope = app.Services.CreateScope();
     await migrationScope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
+}
+
+// Two locks, because these accounts have a published password: the flag AND a development host.
+if (startupOptions.SeedDevelopmentData && app.Environment.IsDevelopment())
+{
+    await DevelopmentSeeder.SeedAsync(app.Services);
 }
 
 app.UseForwardedHeaders();
@@ -181,6 +194,7 @@ if (app.Environment.IsDevelopment())
 var api = app.MapGroup("/api");
 
 api.MapAuthEndpoints();
+api.MapVenueEndpoints();
 
 // Liveness: the process is running. Readiness: dependencies such as the database are reachable.
 api.MapHealthChecks("/health/live", new HealthCheckOptions
