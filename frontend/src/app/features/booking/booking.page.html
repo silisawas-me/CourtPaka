@@ -1,0 +1,79 @@
+@if (loading()) {
+  <mat-progress-bar mode="indeterminate" />
+} @else if (pageError(); as key) {
+  <mat-card>
+    <mat-card-content>
+      <p class="form-error" data-testid="page-error">{{ i18n.t(key) }}</p>
+    </mat-card-content>
+    <mat-card-actions>
+      <a matButton routerLink="/book">{{ i18n.t('search.title') }}</a>
+    </mat-card-actions>
+  </mat-card>
+}
+
+@if (booking(); as held) {
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title data-testid="venue-name">{{ held.venueName }}</mat-card-title>
+      <mat-card-subtitle data-testid="booking-status">
+        {{ i18n.t('booking.status.' + held.status) }}
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <ul class="stack">
+        @for (slot of held.slots; track slot.courtId + slot.hour) {
+          <li data-testid="booking-slot">
+            {{ slot.date | appDate: i18n.locale() }} · {{ slot.courtName }} · {{ slot.hour }}:00 ·
+            {{ slot.bahtPerHour }}
+          </li>
+        }
+      </ul>
+      <p data-testid="booking-total">{{ i18n.t('booking.total') }}: {{ held.totalBaht }}</p>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('booking.pay.title') }}</mat-card-title>
+      @if (countdown(); as left) {
+        <mat-card-subtitle data-testid="countdown">{{ left }}</mat-card-subtitle>
+      }
+    </mat-card-header>
+
+    <mat-card-content>
+      <!--
+        The QR needs the venue's own PromptPay account, which no screen collects yet, so this says
+        what to do instead of showing a code that would not work.
+      -->
+      <p class="muted" data-testid="qr-pending">{{ i18n.t('booking.pay.qrPending') }}</p>
+
+      @if (held.slipUploadedAt) {
+        <p data-testid="slip-sent">{{ i18n.t('booking.pay.slipSent') }}</p>
+      }
+
+      @if (uploading()) {
+        <mat-progress-bar mode="indeterminate" />
+      }
+
+      @if (uploadError(); as key) {
+        <p class="form-error" data-testid="upload-error">{{ i18n.t(key) }}</p>
+      }
+    </mat-card-content>
+
+    @if (canSend()) {
+      <mat-card-actions>
+        <!--
+          A plain file input, styled as a button: the label is what a tap lands on, so nothing has
+          to forward a click into a hidden control.
+        -->
+        <label class="file-button" data-testid="send-slip">
+          <input type="file" [accept]="accept" [disabled]="uploading()" (change)="send($event)" />
+          <span>
+            {{ i18n.t(held.slipUploadedAt ? 'booking.pay.replaceSlip' : 'booking.pay.sendSlip') }}
+          </span>
+        </label>
+      </mat-card-actions>
+    }
+  </mat-card>
+}

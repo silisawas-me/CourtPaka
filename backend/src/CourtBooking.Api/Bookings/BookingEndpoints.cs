@@ -51,6 +51,64 @@ public static class BookingEndpoints
         var bookings = routes.MapGroup("/bookings").WithTags("Bookings").RequireAuthorization();
 
         bookings.MapPost("/", CreateAsync);
+        bookings.MapGet("/{bookingId:guid}", GetAsync);
+        bookings.MapSlipEndpoints();
+    }
+
+    /// <summary>The booker's own booking. Someone else's answers the same as one that is not there.</summary>
+    private static async Task<Results<Ok<BookingResponse>, ProblemHttpResult>> GetAsync(
+        Guid bookingId,
+        ClaimsPrincipal principal,
+        AppDbContext database,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        var bookerId = CallerId.Of(principal);
+        var mine = await database.Bookings.AnyAsync(
+            booking => booking.Id == bookingId && booking.BookerUserId == bookerId,
+            cancellationToken);
+
+        return mine
+            ? TypedResults.Ok(await ReadBookingAsync(
+                database, bookingId, timeProvider.GetUtcNow(), cancellationToken))
+            : ApiProblem.Of(StatusCodes.Status404NotFound, BookingErrorCodes.NotFound);
+    }
+
+    /// <summary>
+    /// A booking as its booker sees it, read back from the database so it says what was stored
+    /// rather than what was asked for.
+    /// </summary>
+    internal static async Task<BookingResponse> ReadBookingAsync(
+        AppDbContext database,
+        Guid bookingId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var booking = await database.Bookings
+            .AsNoTracking()
+            .Include(candidate => candidate.Slots)
+            .SingleAsync(candidate => candidate.Id == bookingId, cancellationToken);
+
+        var venueName = await database.Venues
+            .Where(venue => venue.Id == booking.VenueId)
+            .Select(venue => venue.Name)
+            .SingleAsync(cancellationToken);
+
+        var courtNames = await database.Courts
+            .Where(court => court.VenueId == booking.VenueId)
+            .ToDictionaryAsync(court => court.Id, court => court.Name, cancellationToken);
+
+        var slipUploadedAt = await database.PaymentSlips
+            .Where(slip => slip.BookingId == booking.Id)
+            .OrderByDescending(slip => slip.UploadedAt)
+            .Select(slip => (DateTimeOffset?)slip.UploadedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        // A hold whose time is up reads as Expired whether or not anything has written that yet,
+        // the same way every other query treats one (PRD 9.2).
+        var status = BookedSlots.HasLapsed(booking, now) ? BookingStatus.Expired : booking.Status;
+
+        return ToResponse(booking, venueName, courtNames, status, slipUploadedAt);
     }
 
     /// <summary>
@@ -293,12 +351,14 @@ public static class BookingEndpoints
     private static BookingResponse ToResponse(
         Booking booking,
         string venueName,
-        IReadOnlyDictionary<Guid, string> courtNames) =>
+        IReadOnlyDictionary<Guid, string> courtNames,
+        BookingStatus? status = null,
+        DateTimeOffset? slipUploadedAt = null) =>
         new(
             booking.Id,
             booking.VenueId,
             venueName,
-            booking.Status.ToString(),
+            (status ?? booking.Status).ToString(),
             booking.CreatedAt,
             booking.HoldExpiresAt,
             booking.TotalBaht,
@@ -315,7 +375,8 @@ public static class BookingEndpoints
                         hour,
                         slot.BahtPerHour);
                 })
-                .ToArray());
+                .ToArray(),
+            slipUploadedAt);
 
     /// <summary>The hours as priced, or the reason none of them can be had.</summary>
     private readonly record struct PricedSlots(

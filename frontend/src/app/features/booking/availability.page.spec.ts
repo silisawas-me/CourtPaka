@@ -158,12 +158,15 @@ describe('AvailabilityPage', () => {
     expect(elementOf(fixture, 'book')).toBeNull();
   });
 
-  it('holds the hours it was given, and shows what is held', () => {
+  it('holds the hours it was given, and hands over to the page that pays for it', () => {
     signInAs('player@example.com');
     // The day is named in the URL, and that is the day the booking is for.
     render(day(), '2026-09-19');
     pickHour('c1', 18);
     pickHour('c1', 19);
+
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
 
     clickOn(fixture, 'book');
 
@@ -188,30 +191,11 @@ describe('AvailabilityPage', () => {
         { courtId: 'c1', courtName: 'Court 1', date: '2026-09-19', hour: 18, bahtPerHour: 300 },
         { courtId: 'c1', courtName: 'Court 1', date: '2026-09-19', hour: 19, bahtPerHour: 300 },
       ],
+      slipUploadedAt: null,
     });
     fixture.detectChanges();
 
-    // The hours it just took are read again, so the grid stops offering them.
-    expectRead().flush(
-      day({
-        courts: [
-          {
-            courtId: 'c1',
-            name: 'Court 1',
-            hours: [
-              { hour: 18, status: 'Booked', bahtPerHour: 300 },
-              { hour: 19, status: 'Booked', bahtPerHour: 300 },
-            ],
-          },
-        ],
-      }),
-    );
-    fixture.detectChanges();
-
-    expect(textOf(fixture, 'held-total')).toContain('600');
-    // The picks are spent, so the summary is gone and nothing can be booked twice.
-    expect(elementOf(fixture, 'booking-summary')).toBeNull();
-    expect(elementOf(fixture, 'cell-c1-18')?.querySelector('button')).toBeNull();
+    expect(navigate).toHaveBeenCalledWith(['/bookings', 'b1']);
   });
 
   it('explains a refusal and re-reads the day, because the grid has moved on', () => {

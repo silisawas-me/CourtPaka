@@ -12,6 +12,10 @@ public sealed class ApiFactory(string connectionString) : WebApplicationFactory<
 {
     public const string PrivacyPolicyVersion = "2026-09-01";
 
+    /// <summary>A directory per test run, so nothing survives into the next one.</summary>
+    public string SlipStoragePath { get; } =
+        Path.Combine(Path.GetTempPath(), $"courtpaka-slips-{Guid.CreateVersion7():N}");
+
     /// <summary>What the API logged at Error, so a 500 in a test can name its cause.</summary>
     public CapturedLogs Errors { get; } = new();
 
@@ -28,6 +32,10 @@ public sealed class ApiFactory(string connectionString) : WebApplicationFactory<
         builder.UseSetting("App:AuthRequestsPerMinute", "10000");
         // Re-check the session against the user row on every request so revocation is testable.
         builder.UseSetting("App:SessionRevalidationSeconds", "0");
+        // Slips go to a directory of this run's own, thrown away with it.
+        builder.UseSetting("App:SlipStoragePath", SlipStoragePath);
+        // Low enough that a test can reach the limit; see SlipTests.UploadsPerHourInTests.
+        builder.UseSetting("App:UploadsPerHour", "4");
 
         // The suite registers a user per test; at the production hashing cost that alone would take
         // longer than everything else it does. Nothing here tests the hash itself.

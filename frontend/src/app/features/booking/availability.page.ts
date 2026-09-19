@@ -10,7 +10,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Router, RouterLink } from '@angular/router';
 import { catchError, EMPTY, switchMap, tap } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
-import { Booking, BookingService } from '../../core/bookings/booking.service';
+import { BookingService } from '../../core/bookings/booking.service';
 import { errorKey } from '../../core/http/api-error';
 import { AppDatePipe } from '../../core/i18n/app-date.pipe';
 import { fromPlainDate, plainDate, venueToday } from '../../core/i18n/plain-date';
@@ -118,12 +118,6 @@ export class AvailabilityPage {
     this.picked().reduce((sum, slot) => sum + slot.bahtPerHour, 0),
   );
 
-  /**
-   * A held booking, once one has been made. It stays on screen while the booker looks at other
-   * days, because it is on a fifteen-minute clock and there is nowhere else yet to see it; each
-   * row names its own date. Its own page arrives with US-04.
-   */
-  protected readonly held = signal<Booking | null>(null);
   protected readonly holding = signal(false);
   protected readonly bookingError = signal<string | null>(null);
 
@@ -173,12 +167,6 @@ export class AvailabilityPage {
     effect(() => {
       this.chosen();
       untracked(() => this.clearPicks());
-    });
-
-    // A hold belongs to the venue it was made at; another venue's page must not show it.
-    effect(() => {
-      this.venueId();
-      untracked(() => this.held.set(null));
     });
   }
 
@@ -238,11 +226,10 @@ export class AvailabilityPage {
       )
       .subscribe({
         next: (booking) => {
-          this.held.set(booking);
           this.picks.set([]);
           this.holding.set(false);
-          // The hours it just took are no longer free, and the grid on screen still says they are.
-          this.refresh.update((attempt) => attempt + 1);
+          // Paying for it is the next thing to do, and it is on a fifteen-minute clock.
+          void this.router.navigate(['/bookings', booking.id]);
         },
         error: (failure: unknown) => {
           this.bookingError.set(errorKey(failure));

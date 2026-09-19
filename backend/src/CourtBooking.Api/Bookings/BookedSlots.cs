@@ -23,9 +23,14 @@ public static class BookedSlots
     ];
 
     /// <summary>
-    /// Holds whose fifteen minutes are up. Everything else here is defined against this, so "the
-    /// hold is over" is stated once (PRD BR-02).
+    /// Whether this hold's fifteen minutes are up. The one statement of the rule (PRD BR-02); the
+    /// query below says the same thing in the form the database can read, and everything else here
+    /// and in the endpoints is defined against one of the two.
     /// </summary>
+    public static bool HasLapsed(Booking booking, DateTimeOffset now) =>
+        booking.Status == BookingStatus.Held && booking.HoldExpiresAt <= now;
+
+    /// <summary>Holds whose fifteen minutes are up, as a query.</summary>
     public static IQueryable<Booking> Lapsed(AppDbContext database, DateTimeOffset now) =>
         database.Bookings.Where(booking =>
             booking.Status == BookingStatus.Held && booking.HoldExpiresAt <= now);
@@ -94,11 +99,8 @@ public static class BookedSlots
         }
 
         // Only the holds that just lost a slot, and only once there is something to say about them.
-        await lapsed
-            .Where(booking => !booking.Slots.Any(slot => slot.IsActive))
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(booking => booking.Status, BookingStatus.Expired),
-                cancellationToken);
+        await ExpireAsync(
+            lapsed.Where(booking => !booking.Slots.Any(slot => slot.IsActive)), cancellationToken);
     }
 
     /// <summary>
@@ -121,7 +123,21 @@ public static class BookedSlots
             .ExecuteUpdateAsync(
                 setters => setters.SetProperty(slot => slot.IsActive, false), cancellationToken);
 
-        await mine.ExecuteUpdateAsync(
+        await ExpireAsync(mine, cancellationToken);
+    }
+
+    /// <summary>
+    /// Held → Expired, in bulk. It is a move the state machine allows (PRD 6.1), asserted here
+    /// once because a set-based update cannot ask the entity.
+    /// </summary>
+    private static Task ExpireAsync(IQueryable<Booking> lapsed, CancellationToken cancellationToken)
+    {
+        if (!BookingTransitions.CanMove(BookingStatus.Held, BookingStatus.Expired))
+        {
+            throw new InvalidOperationException("Held may no longer expire; PRD 6.1 has changed.");
+        }
+
+        return lapsed.ExecuteUpdateAsync(
             setters => setters.SetProperty(booking => booking.Status, BookingStatus.Expired),
             cancellationToken);
     }

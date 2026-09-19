@@ -37,6 +37,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<BookingSlot> BookingSlots => Set<BookingSlot>();
 
+    public DbSet<PaymentSlip> PaymentSlips => Set<PaymentSlip>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -170,6 +172,24 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             // Two people may not hold the same court at the same time. The rule is the database's,
             // not the application's, so simultaneous writes cannot both pass a check (PRD BR-04,
             // 9.2). The constraint itself is written in the migration: EF has no model for one.
+        });
+
+        builder.Entity<PaymentSlip>(slip =>
+        {
+            slip.Property(s => s.StoredName).HasMaxLength(128);
+            slip.Property(s => s.ContentType).HasMaxLength(100);
+            slip.Property(s => s.Sha256).HasMaxLength(64);
+            // The newest slip of a booking, and the duplicate check across a venue's slips.
+            slip.HasIndex(s => new { s.BookingId, s.UploadedAt });
+            slip.HasIndex(s => s.Sha256);
+            slip.HasOne(s => s.Booking)
+                .WithMany()
+                .HasForeignKey(s => s.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            slip.HasOne(s => s.UploadedBy)
+                .WithMany()
+                .HasForeignKey(s => s.UploadedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<PriceList>(list =>

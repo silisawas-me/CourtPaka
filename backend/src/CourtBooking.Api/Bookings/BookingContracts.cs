@@ -24,7 +24,9 @@ public sealed record BookingResponse(
     DateTimeOffset CreatedAt,
     DateTimeOffset HoldExpiresAt,
     decimal TotalBaht,
-    BookingSlotResponse[] Slots);
+    BookingSlotResponse[] Slots,
+    /// <summary>When the booker last sent a slip, if they have (PRD US-04).</summary>
+    DateTimeOffset? SlipUploadedAt);
 
 public static class BookingErrorCodes
 {
@@ -40,4 +42,22 @@ public static class BookingErrorCodes
 
     /// <summary>One held booking at a time, per booker (PRD S-22).</summary>
     public const string AlreadyHolding = "booking.already_holding";
+
+    public const string NotFound = "booking.not_found";
+}
+
+public static class SlipErrorCodes
+{
+    public const string NoFile = "slip.no_file";
+    public const string TooLarge = "slip.too_large";
+    public const string UnsupportedFile = "slip.unsupported_file";
+
+    /// <summary>
+    /// The hold ran out before the slip arrived. The booker may well have transferred the money,
+    /// so what they are told has to point them at the venue (PRD US-04, 6.1).
+    /// </summary>
+    public const string HoldExpired = "slip.hold_expired";
+
+    public const string NotAwaitingPayment = "slip.not_awaiting_payment";
+    public const string NoSlip = "slip.none_uploaded";
 }

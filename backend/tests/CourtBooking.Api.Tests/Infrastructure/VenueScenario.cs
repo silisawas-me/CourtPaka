@@ -168,6 +168,20 @@ public sealed class VenueScenario(ApiTestFixture api)
         await ReadAsync<AvailabilityResponse>(
             await client.GetAsync($"/api/venues/{venueId}/availability?date={date:yyyy-MM-dd}"));
 
+    /// <summary>Takes court-hours the way a booker does, and answers what they now hold.</summary>
+    public static async Task<BookingResponse> HoldAsync(
+        HttpClient client,
+        Guid venueId,
+        DateOnly date,
+        params (Guid CourtId, int Hour)[] slots) =>
+        await ReadAsync<BookingResponse>(
+            await client.PostAsJsonAsync(
+                "/api/bookings",
+                new CreateBookingRequest(
+                    venueId,
+                    [.. slots.Select(slot => new BookingSlotRequest(slot.CourtId, date, slot.Hour))])),
+            HttpStatusCode.Created);
+
     /// <summary>
     /// Winds a held booking's clock back so the test can see what happens once it lapses, which is
     /// otherwise fifteen minutes away.
@@ -180,6 +194,24 @@ public sealed class VenueScenario(ApiTestFixture api)
             .Where(booking => booking.Id == bookingId)
             .ExecuteUpdateAsync(setters => setters.SetProperty(
                 booking => booking.HoldExpiresAt, DateTimeOffset.UtcNow.AddMinutes(-1)));
+    }
+
+    /// <summary>
+    /// Writes off every hold whose time is up, the way a booking at those hours would. Lets a test
+    /// see what a booker meets once something has recorded the expiry, not only implied it.
+    /// </summary>
+    public async Task ExpireLapsedHoldsAsync()
+    {
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await BookedSlots.ReleaseOwnLapsedAsync(
+            database,
+            await database.Bookings
+                .Where(booking => booking.Status == BookingStatus.Held)
+                .Select(booking => booking.BookerUserId)
+                .FirstAsync(),
+            DateTimeOffset.UtcNow,
+            CancellationToken.None);
     }
 
     public async Task<VenueMemberResponse[]> GetMembersAsync(HttpClient client, Guid venueId) =>

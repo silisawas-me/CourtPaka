@@ -39,4 +39,7 @@ public static class AuthErrorCodes
 public static class RateLimitPolicies
 {
     public const string Auth = "auth";
+
+    /// <summary>Ten uploads an hour per person (PRD 8, Security).</summary>
+    public const string Upload = "upload";
 }

@@ -43,8 +43,13 @@ services:
       App__DataProtectionKeysPath: "/keys"
       # End-to-end runs come from one IP; the deployed default of 10/minute is for real users.
       App__AuthRequestsPerMinute: "200"
+      # Payment slips. A volume, because a rebuilt container must not lose them.
+      App__SlipStoragePath: "/slips"
+      # The browser checks upload more than a person would.
+      App__UploadsPerHour: "200"
     volumes:
       - api-keys:/keys
+      - api-slips:/slips
     depends_on:
       db:
         condition: service_healthy
@@ -71,3 +76,4 @@ services:
 volumes:
   db-data:
   api-keys:
+  api-slips:
