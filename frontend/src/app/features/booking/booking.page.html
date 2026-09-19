@@ -36,14 +36,8 @@
   <mat-card>
     <mat-card-header>
       <mat-card-title>{{ i18n.t('booking.pay.title') }}</mat-card-title>
-      @if (secondsLeft() !== null) {
-        <mat-card-subtitle data-testid="countdown">
-          @if (secondsLeft() === 0) {
-            {{ i18n.t('booking.pay.timeUp') }}
-          } @else {
-            {{ i18n.t('booking.pay.timeLeft') }} {{ countdown() }}
-          }
-        </mat-card-subtitle>
+      @if (countdown(); as left) {
+        <mat-card-subtitle data-testid="countdown">{{ left }}</mat-card-subtitle>
       }
     </mat-card-header>
 
@@ -54,7 +48,7 @@
       -->
       <p class="muted" data-testid="qr-pending">{{ i18n.t('booking.pay.qrPending') }}</p>
 
-      @if (held.slipUploadedAt; as sent) {
+      @if (held.slipUploadedAt) {
         <p data-testid="slip-sent">{{ i18n.t('booking.pay.slipSent') }}</p>
       }
 

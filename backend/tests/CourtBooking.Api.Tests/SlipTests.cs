@@ -127,6 +127,22 @@ public sealed class SlipTests(ApiTestFixture api) : IClassFixture<ApiTestFixture
     }
 
     [Fact]
+    public async Task A_file_big_enough_to_spill_to_disk_is_stored_whole()
+    {
+        var (booker, booking) = await HeldBookingAsync();
+        // ASP.NET buffers a small form in memory and a larger one in a temp file; the upload path
+        // reads the first bytes and then rewinds, so both shapes have to end up byte for byte.
+        var big = new byte[256 * 1024];
+        Random.Shared.NextBytes(big);
+        Jpeg().CopyTo(big, 0);
+
+        await UploadAsync(booker, booking.Id, big);
+
+        var served = await booker.GetAsync($"/api/bookings/{booking.Id}/slip");
+        Assert.Equal(big, await served.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
     public async Task A_file_over_five_megabytes_is_refused()
     {
         var (booker, booking) = await HeldBookingAsync();
@@ -252,16 +268,10 @@ public sealed class SlipTests(ApiTestFixture api) : IClassFixture<ApiTestFixture
         return (booker, await HoldAsync(booker, venue.Id, courts[0], 18));
     }
 
-    private static async Task<BookingResponse> HoldAsync(
+    private static Task<BookingResponse> HoldAsync(
         HttpClient client,
         Guid venueId,
         Guid courtId,
         int hour) =>
-        await VenueScenario.ReadAsync<BookingResponse>(
-            await client.PostAsJsonAsync(
-                "/api/bookings",
-                new CreateBookingRequest(
-                    venueId,
-                    [new BookingSlotRequest(courtId, VenueScenario.Today.AddDays(1), hour)])),
-            HttpStatusCode.Created);
+        VenueScenario.HoldAsync(client, venueId, VenueScenario.Today.AddDays(1), (courtId, hour));
 }

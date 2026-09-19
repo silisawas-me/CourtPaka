@@ -34,7 +34,7 @@ public sealed class LocalSlipStore(string root) : ISlipStore
     {
         Directory.CreateDirectory(root);
 
-        var name = $"{Guid.CreateVersion7():N}{Extension(contentType)}";
+        var name = $"{Guid.CreateVersion7():N}{SlipValidation.ExtensionOf(contentType)}";
         var path = Path.Combine(root, name);
 
         // Hashed while it is written, so the bytes are read once and the hash is of what landed.
@@ -60,12 +60,4 @@ public sealed class LocalSlipStore(string root) : ISlipStore
         var path = Path.Combine(root, storedName);
         return Task.FromResult<Stream?>(File.Exists(path) ? File.OpenRead(path) : null);
     }
-
-    private static string Extension(string contentType) => contentType switch
-    {
-        "image/jpeg" => ".jpg",
-        "image/png" => ".png",
-        "application/pdf" => ".pdf",
-        _ => ".bin",
-    };
 }

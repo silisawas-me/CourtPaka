@@ -11,9 +11,6 @@ namespace CourtBooking.Api.Bookings;
 /// </summary>
 public sealed class PaymentSlip
 {
-    /// <summary>What a booker may send. Anything else is refused before it is read (PRD US-04).</summary>
-    public static readonly string[] AllowedContentTypes = ["image/jpeg", "image/png", "application/pdf"];
-
     /// <summary>Five megabytes, which is a generous phone photograph (PRD US-04).</summary>
     public const long MaxBytes = 5 * 1024 * 1024;
 

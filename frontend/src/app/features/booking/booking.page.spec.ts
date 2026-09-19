@@ -1,7 +1,7 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TRANSLATIONS } from '../../core/i18n/locales';
-import { elementOf, pageProviders, textOf } from '../../testing/dom';
+import { controlOf, elementOf, pageProviders, textOf } from '../../testing/dom';
 import { BookingPage } from './booking.page';
 
 function booking(overrides: Record<string, unknown> = {}) {
@@ -61,7 +61,7 @@ describe('BookingPage', () => {
   }
 
   function choose(chosen: File): void {
-    const input = elementOf<HTMLInputElement>(fixture, 'send-slip')!.querySelector('input')!;
+    const input = controlOf(fixture, '[data-testid="send-slip"]') as HTMLInputElement;
     Object.defineProperty(input, 'files', { value: [chosen], configurable: true });
     input.dispatchEvent(new Event('change'));
     fixture.detectChanges();
@@ -137,6 +137,8 @@ describe('BookingPage', () => {
     fixture.detectChanges();
 
     expect(textOf(fixture, 'upload-error')).toBe(TRANSLATIONS.th['error.slip.hold_expired']);
+    // The booking stays on screen while it is re-read, so the reason stays readable with it.
+    expect(elementOf(fixture, 'booking-total')).not.toBeNull();
 
     httpMock.expectOne('/api/bookings/b1').flush(booking({ status: 'Expired' }));
     fixture.detectChanges();

@@ -53,7 +53,6 @@ public static class SlipEndpoints
         }
 
         var booking = await database.Bookings
-            .Include(candidate => candidate.Slots)
             .SingleOrDefaultAsync(
                 candidate => candidate.Id == bookingId && candidate.BookerUserId == bookerId,
                 cancellationToken);
@@ -65,7 +64,7 @@ public static class SlipEndpoints
 
         // The server's clock decides, not the page's countdown (PRD US-04). A booker who has
         // already transferred is told to talk to the venue rather than left with nothing to do.
-        if (booking.Status == BookingStatus.Held && booking.HoldExpiresAt <= now)
+        if (BookedSlots.HasLapsed(booking, now))
         {
             return ApiProblem.Of(StatusCodes.Status409Conflict, SlipErrorCodes.HoldExpired);
         }
@@ -85,9 +84,10 @@ public static class SlipEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, SlipErrorCodes.UnsupportedFile);
         }
 
-        await using var whole = new MemoryStream(start, 0, read);
-        var stored = await slips.SaveAsync(
-            new ConcatenatedStream(whole, content), contentType, cancellationToken);
+        // The form is buffered before the handler runs, so reading the first bytes costs the
+        // rewind and nothing more.
+        content.Position = 0;
+        var stored = await slips.SaveAsync(content, contentType, cancellationToken);
 
         // The same picture sent for two bookings at one venue is worth a second look by the venue,
         // and the booker is deliberately not told (PRD BR-07).
@@ -110,15 +110,29 @@ public static class SlipEndpoints
             SameBytesAsSlipId = sameBytes,
         });
 
-        booking.Status = BookingStatus.PendingVerification;
+        var wasWaiting = booking.Status == BookingStatus.PendingVerification;
+        booking.MoveTo(BookingStatus.PendingVerification);
         await database.SaveChangesAsync(cancellationToken);
 
-        AppEvents.For(loggers).LogInformation(
-            "slip_uploaded {BookingId} {VenueId} {Bytes} {SameBytes}",
+        // Two facts, because they answer different questions: how long a booker took to pay
+        // (PRD 1.3), and whether the booking moved (PRD 8).
+        var events = AppEvents.For(loggers);
+        events.LogInformation(
+            "{Event} {BookingId} {VenueId} {Bytes} {SameBytes}",
+            wasWaiting ? "slip_replaced" : "slip_uploaded",
             booking.Id,
             booking.VenueId,
             stored.ByteSize,
             sameBytes is not null);
+
+        if (!wasWaiting)
+        {
+            events.LogInformation(
+                "{Event} {BookingId} {VenueId}",
+                BookingTransitions.EventName(booking.Status),
+                booking.Id,
+                booking.VenueId);
+        }
 
         return TypedResults.Ok(
             await BookingEndpoints.ReadBookingAsync(database, booking.Id, now, cancellationToken));
@@ -165,58 +179,4 @@ public static class SlipEndpoints
         return TypedResults.File(
             content, slip.ContentType, fileDownloadName: slip.StoredName);
     }
-}
-
-/// <summary>
-/// Reads one stream then the next, so the bytes taken to recognise the file can be handed to the
-/// store ahead of the rest without buffering the whole upload in memory.
-/// </summary>
-internal sealed class ConcatenatedStream(Stream first, Stream second) : Stream
-{
-    private bool firstDone;
-
-    public override bool CanRead => true;
-
-    public override bool CanSeek => false;
-
-    public override bool CanWrite => false;
-
-    public override long Length => throw new NotSupportedException();
-
-    public override long Position
-    {
-        get => throw new NotSupportedException();
-        set => throw new NotSupportedException();
-    }
-
-    public override async ValueTask<int> ReadAsync(
-        Memory<byte> buffer,
-        CancellationToken cancellationToken = default)
-    {
-        if (!firstDone)
-        {
-            var read = await first.ReadAsync(buffer, cancellationToken);
-            if (read > 0)
-            {
-                return read;
-            }
-            firstDone = true;
-        }
-
-        return await second.ReadAsync(buffer, cancellationToken);
-    }
-
-    public override int Read(byte[] buffer, int offset, int count) =>
-        ReadAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult();
-
-    public override void Flush()
-    {
-    }
-
-    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-
-    public override void SetLength(long value) => throw new NotSupportedException();
-
-    public override void Write(byte[] buffer, int offset, int count) =>
-        throw new NotSupportedException();
 }

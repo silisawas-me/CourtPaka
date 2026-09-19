@@ -30,7 +30,7 @@ export const routes: Routes = [
   },
   {
     path: 'bookings/:bookingId',
-    loadComponent: () => import('./features/bookings/booking.page').then((m) => m.BookingPage),
+    loadComponent: () => import('./features/booking/booking.page').then((m) => m.BookingPage),
     canActivate: [authGuard],
   },
   {

@@ -4,23 +4,43 @@ namespace CourtBooking.Api.Bookings;
 /// What a slip has to be before the server keeps it. The declared content type is what the
 /// uploader says it is, so the first bytes are read instead: a file named .jpg carrying something
 /// else is refused rather than stored and served back later.
+///
+/// One table carries all three facts about a shape — how to recognise it, what to call it, and
+/// what to name the file — so adding a format is one line rather than three files.
 /// </summary>
 public static class SlipValidation
 {
-    /// <summary>Enough to recognise every shape we accept.</summary>
-    public const int SniffBytes = 8;
+    private static readonly (byte[] Magic, string ContentType, string Extension)[] Shapes =
+    [
+        ([0xFF, 0xD8, 0xFF], "image/jpeg", ".jpg"),
+        ([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], "image/png", ".png"),
+        ([0x25, 0x50, 0x44, 0x46], "application/pdf", ".pdf"),
+    ];
 
-    private static readonly byte[] Jpeg = [0xFF, 0xD8, 0xFF];
-    private static readonly byte[] Png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
-    private static readonly byte[] Pdf = [0x25, 0x50, 0x44, 0x46];
+    /// <summary>Enough to recognise every shape we accept.</summary>
+    public static readonly int SniffBytes = Shapes.Max(shape => shape.Magic.Length);
+
+    /// <summary>What a booker's file picker should offer, which the server checks again anyway.</summary>
+    public static string Accept => string.Join(',', Shapes.Select(shape => shape.ContentType));
 
     /// <summary>
     /// The content type these bytes actually are, or null for anything we do not take. The answer
     /// is what gets stored and served, not the header the uploader sent.
     /// </summary>
-    public static string? ContentTypeOf(ReadOnlySpan<byte> start) =>
-        start.StartsWith(Jpeg) ? "image/jpeg"
-        : start.StartsWith(Png) ? "image/png"
-        : start.StartsWith(Pdf) ? "application/pdf"
-        : null;
+    public static string? ContentTypeOf(ReadOnlySpan<byte> start)
+    {
+        foreach (var (magic, contentType, _) in Shapes)
+        {
+            if (start.StartsWith(magic))
+            {
+                return contentType;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The file extension for a content type this module recognised.</summary>
+    public static string ExtensionOf(string contentType) =>
+        Shapes.Single(shape => shape.ContentType == contentType).Extension;
 }

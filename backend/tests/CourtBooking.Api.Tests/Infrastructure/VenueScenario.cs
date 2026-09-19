@@ -168,6 +168,20 @@ public sealed class VenueScenario(ApiTestFixture api)
         await ReadAsync<AvailabilityResponse>(
             await client.GetAsync($"/api/venues/{venueId}/availability?date={date:yyyy-MM-dd}"));
 
+    /// <summary>Takes court-hours the way a booker does, and answers what they now hold.</summary>
+    public static async Task<BookingResponse> HoldAsync(
+        HttpClient client,
+        Guid venueId,
+        DateOnly date,
+        params (Guid CourtId, int Hour)[] slots) =>
+        await ReadAsync<BookingResponse>(
+            await client.PostAsJsonAsync(
+                "/api/bookings",
+                new CreateBookingRequest(
+                    venueId,
+                    [.. slots.Select(slot => new BookingSlotRequest(slot.CourtId, date, slot.Hour))])),
+            HttpStatusCode.Created);
+
     /// <summary>
     /// Winds a held booking's clock back so the test can see what happens once it lapses, which is
     /// otherwise fifteen minutes away.

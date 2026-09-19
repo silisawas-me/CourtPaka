@@ -207,6 +207,21 @@ def thai_month_year(date) -> str:
     return f"{THAI_MONTHS[date.month - 1]} {date.year + 543}"
 
 
+def take_first_free_hour(page, venue_id, date, skip=0):
+    """Picks an hour off the grid and confirms it, the way a booker does. Answers the booking the
+    server made, and leaves the page wherever confirming led."""
+    page.goto(f"{BASE}/book/{venue_id}?date={date.isoformat()}")
+    page.wait_for_selector("[data-testid=availability-grid]")
+
+    cell = page.locator("td.free").nth(skip).get_attribute("data-testid")
+    page.click(f"[data-testid={cell}] button")
+    page.wait_for_selector("[data-testid=booking-summary]")
+
+    with page.expect_response(lambda response: response.url.endswith("/api/bookings")) as answer:
+        page.click("[data-testid=book]")
+    return answer.value
+
+
 # The seeded venue is the only approved one, and only an approved venue can be edited, so every
 # script drives that one rather than whichever link happens to come first.
 SEEDED_VENUE = "Development Court"

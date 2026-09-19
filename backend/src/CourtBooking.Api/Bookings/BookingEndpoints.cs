@@ -106,9 +106,7 @@ public static class BookingEndpoints
 
         // A hold whose time is up reads as Expired whether or not anything has written that yet,
         // the same way every other query treats one (PRD 9.2).
-        var status = booking.Status == BookingStatus.Held && booking.HoldExpiresAt <= now
-            ? BookingStatus.Expired
-            : booking.Status;
+        var status = BookedSlots.HasLapsed(booking, now) ? BookingStatus.Expired : booking.Status;
 
         return ToResponse(booking, venueName, courtNames, status, slipUploadedAt);
     }
