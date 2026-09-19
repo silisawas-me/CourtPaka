@@ -1,37 +1,43 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { DEFAULT_LANGUAGE, isLanguage, Language, TRANSLATIONS } from './locales';
 
-const STORAGE_KEY = 'courtpaka.language';
+export const LANGUAGE_STORAGE_KEY = 'courtpaka.language';
 
 /**
- * Runtime translations so the language can change without reloading the app, and so the language
- * stored on the account (US-01) can be applied as soon as the user signs in.
+ * Owns the whole language rule: the browser's choice for anonymous visitors, the account's choice
+ * once someone signs in, and the switch in the header. Runtime dictionaries keep the switch instant
+ * and let the account language apply without a reload (PRD US-01, US-23).
  */
 @Injectable({ providedIn: 'root' })
 export class TranslationService {
   private readonly current = signal<Language>(readStoredLanguage());
 
   readonly language = this.current.asReadonly();
-  readonly dictionary = computed(() => TRANSLATIONS[this.current()]);
+
+  /** Reading the signal inside makes every template binding that calls this refresh on a switch. */
+  t = (key: string): string => TRANSLATIONS[this.current()][key] ?? key;
 
   use(language: Language): void {
     this.current.set(language);
     document.documentElement.lang = language;
     try {
-      localStorage.setItem(STORAGE_KEY, language);
+      localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
     } catch {
       // Private windows and blocked storage are fine; the choice just does not outlive the tab.
     }
   }
 
-  translate(key: string): string {
-    return this.dictionary()[key] ?? key;
+  /** The account's language wins over whatever this browser had selected. */
+  useAccountLanguage(language: string): void {
+    if (isLanguage(language)) {
+      this.use(language);
+    }
   }
 }
 
 function readStoredLanguage(): Language {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY);
     if (isLanguage(stored)) {
       return stored;
     }

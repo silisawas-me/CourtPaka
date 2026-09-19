@@ -1,17 +1,21 @@
 <section class="card">
-  <h1>{{ 'verify.title' | translate }}</h1>
+  <h1>{{ i18n.t('verify.title') }}</h1>
 
   @switch (state()) {
     @case ('working') {
-      <p data-testid="verify-working">{{ 'verify.working' | translate }}</p>
+      <p data-testid="verify-working">{{ i18n.t('verify.working') }}</p>
     }
     @case ('done') {
-      <p class="success" data-testid="verify-success">{{ 'verify.success' | translate }}</p>
-      <a routerLink="/">{{ 'app.name' | translate }}</a>
+      <p class="success" data-testid="verify-success">{{ i18n.t('verify.success') }}</p>
+      <p>
+        <a routerLink="/">{{ i18n.t('app.name') }}</a>
+      </p>
     }
     @case ('failed') {
-      <p class="form-error" data-testid="verify-error">{{ errorKey() | translate }}</p>
-      <a routerLink="/resend-verification">{{ 'login.resendVerification' | translate }}</a>
+      <p class="form-error" data-testid="verify-error">{{ i18n.t(errorKey()) }}</p>
+      <p>
+        <a routerLink="/resend-verification">{{ i18n.t('login.resendVerification') }}</a>
+      </p>
     }
   }
 </section>

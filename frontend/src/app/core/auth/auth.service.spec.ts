@@ -1,13 +1,15 @@
-import { provideHttpClient } from '@angular/common/http';
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { ApiError, AuthService, CurrentUser } from './auth.service';
+import { ApiError } from '../http/api-error';
+import { TranslationService } from '../i18n/translation.service';
+import { pageProviders } from '../../testing/dom';
+import { AuthService, CurrentUser } from './auth.service';
 
 const account: CurrentUser = {
   id: '11111111-1111-1111-1111-111111111111',
   email: 'player@example.com',
   emailConfirmed: false,
-  language: 'th',
+  language: 'en',
 };
 
 describe('AuthService', () => {
@@ -15,16 +17,15 @@ describe('AuthService', () => {
   let httpMock: HttpTestingController;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting()],
-    });
+    localStorage.clear();
+    TestBed.configureTestingModule({ providers: pageProviders() });
     service = TestBed.inject(AuthService);
     httpMock = TestBed.inject(HttpTestingController);
   });
 
   afterEach(() => httpMock.verify());
 
-  it('signs in and then loads the account behind the session cookie', () => {
+  it('signs in, loads the account and applies its language', () => {
     let result: CurrentUser | null = null;
     service.login(account.email, 'CorrectHorse1').subscribe((user) => (result = user));
 
@@ -33,6 +34,7 @@ describe('AuthService', () => {
 
     expect(result).toEqual(account);
     expect(service.currentUser()).toEqual(account);
+    expect(TestBed.inject(TranslationService).language()).toBe('en');
   });
 
   it('turns an API error code into an ApiError', () => {
@@ -70,5 +72,29 @@ describe('AuthService', () => {
 
     expect(result).toBeNull();
     expect(service.currentUser()).toBeNull();
+    expect(service.ready()).toBe(true);
+  });
+
+  it('fetches the privacy policy version once and shares it', () => {
+    const versions: string[] = [];
+    service.privacyPolicyVersion().subscribe((version) => versions.push(version));
+    httpMock.expectOne('/api/auth/privacy-policy').flush({ version: '2026-09-01' });
+
+    service.privacyPolicyVersion().subscribe((version) => versions.push(version));
+
+    expect(versions).toEqual(['2026-09-01', '2026-09-01']);
+    httpMock.expectNone('/api/auth/privacy-policy');
+  });
+
+  it('keeps the account language in step when it is changed', () => {
+    service.loadCurrentUser().subscribe();
+    httpMock.expectOne('/api/auth/me').flush(account);
+
+    service.changeLanguage('th').subscribe();
+    httpMock
+      .expectOne('/api/auth/me/language')
+      .flush(null, { status: 204, statusText: 'No Content' });
+
+    expect(service.currentUser()?.language).toBe('th');
   });
 });

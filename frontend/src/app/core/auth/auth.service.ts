@@ -1,13 +1,15 @@
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, signal } from '@angular/core';
-import { catchError, map, Observable, of, switchMap, tap, throwError } from 'rxjs';
+import { catchError, map, Observable, of, shareReplay, switchMap, tap } from 'rxjs';
+import { ApiError } from '../http/api-error';
 import { Language } from '../i18n/locales';
+import { TranslationService } from '../i18n/translation.service';
 
 export interface CurrentUser {
   id: string;
   email: string;
   emailConfirmed: boolean;
-  language: Language;
+  language: string;
 }
 
 export interface RegisterInput {
@@ -18,34 +20,36 @@ export interface RegisterInput {
   phoneNumber: string | null;
 }
 
-/** Error codes come from the API (PRD US-23); the UI turns them into text. */
-export class ApiError extends Error {
-  constructor(readonly code: string) {
-    super(code);
-  }
-}
-
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
+  private readonly translations = inject(TranslationService);
 
   private readonly user = signal<CurrentUser | null>(null);
+  private readonly loaded = signal(false);
 
+  /** The signed-in account, or null. Guards should wait for {@link ready} before trusting it. */
   readonly currentUser = this.user.asReadonly();
+  readonly ready = this.loaded.asReadonly();
+
+  /** Static server config; fetched once per app load and shared by every caller. */
+  private readonly policyVersion$ = this.http
+    .get<{ version: string }>('/api/auth/privacy-policy')
+    .pipe(
+      map((response) => response.version),
+      shareReplay({ bufferSize: 1, refCount: false }),
+    );
 
   privacyPolicyVersion(): Observable<string> {
-    return this.http
-      .get<{ version: string }>('/api/auth/privacy-policy')
-      .pipe(map((response) => response.version));
+    return this.policyVersion$;
   }
 
   register(input: RegisterInput): Observable<void> {
-    return this.http.post<void>('/api/auth/register', input).pipe(catchError(toApiError));
+    return this.http.post<void>('/api/auth/register', input);
   }
 
   login(email: string, password: string): Observable<CurrentUser | null> {
     return this.http.post<void>('/api/auth/login', { email, password }).pipe(
-      catchError(toApiError),
       // The session cookie arrives with the login response; read the account it belongs to.
       switchMap(() => this.loadCurrentUser()),
     );
@@ -53,43 +57,45 @@ export class AuthService {
 
   loadCurrentUser(): Observable<CurrentUser | null> {
     return this.http.get<CurrentUser>('/api/auth/me').pipe(
-      tap((user) => this.user.set(user)),
-      catchError((error: HttpErrorResponse) => {
-        if (error.status === 401) {
-          this.user.set(null);
+      tap((user) => this.adopt(user)),
+      catchError((error: unknown) => {
+        if (error instanceof ApiError && error.status === 401) {
+          this.adopt(null);
           return of(null);
         }
-        return toApiError(error);
+        throw error;
       }),
     );
   }
 
   logout(): Observable<void> {
-    return this.http.post<void>('/api/auth/logout', {}).pipe(tap(() => this.user.set(null)));
+    return this.http.post<void>('/api/auth/logout', {}).pipe(tap(() => this.adopt(null)));
   }
 
   verifyEmail(userId: string, token: string): Observable<void> {
-    return this.http
-      .post<void>('/api/auth/verify-email', { userId, token })
-      .pipe(catchError(toApiError));
+    return this.http.post<void>('/api/auth/verify-email', { userId, token });
   }
 
   resendVerification(email: string): Observable<void> {
-    return this.http
-      .post<void>('/api/auth/resend-verification', { email })
-      .pipe(catchError(toApiError));
+    return this.http.post<void>('/api/auth/resend-verification', { email });
   }
 
   changeLanguage(language: Language): Observable<void> {
-    return this.http.put<void>('/api/auth/me/language', { language }).pipe(catchError(toApiError));
+    return this.http.put<void>('/api/auth/me/language', { language }).pipe(
+      tap(() => {
+        const user = this.user();
+        if (user) {
+          this.user.set({ ...user, language });
+        }
+      }),
+    );
   }
-}
 
-function toApiError(error: HttpErrorResponse): Observable<never> {
-  if (error.status === 429) {
-    return throwError(() => new ApiError('tooManyRequests'));
+  private adopt(user: CurrentUser | null): void {
+    this.user.set(user);
+    this.loaded.set(true);
+    if (user) {
+      this.translations.useAccountLanguage(user.language);
+    }
   }
-
-  const code = (error.error as { code?: string } | null)?.code;
-  return throwError(() => new ApiError(code ?? 'unknown'));
 }

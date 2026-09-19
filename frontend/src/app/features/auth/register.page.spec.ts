@@ -1,8 +1,7 @@
-import { provideHttpClient } from '@angular/common/http';
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
 import { TRANSLATIONS } from '../../core/i18n/locales';
+import { check, pageProviders, setInput, submitForm, textOf } from '../../testing/dom';
 import { RegisterPage } from './register.page';
 
 describe('RegisterPage', () => {
@@ -13,7 +12,7 @@ describe('RegisterPage', () => {
     localStorage.clear();
     await TestBed.configureTestingModule({
       imports: [RegisterPage],
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+      providers: pageProviders(),
     }).compileComponents();
 
     httpMock = TestBed.inject(HttpTestingController);
@@ -23,52 +22,34 @@ describe('RegisterPage', () => {
 
   afterEach(() => httpMock.verify());
 
+  /** The page prefetches the policy version on init, so every test answers that request first. */
+  function answerPolicyVersion(version = '2026-09-01'): void {
+    httpMock.expectOne('/api/auth/privacy-policy').flush({ version });
+  }
+
   function fillValidForm(password = 'CorrectHorse1'): void {
-    const element = fixture.nativeElement as HTMLElement;
-    const email = element.querySelector<HTMLInputElement>('#email')!;
-    const passwordInput = element.querySelector<HTMLInputElement>('#password')!;
-    const accept = element.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
-    email.value = 'player@example.com';
-    email.dispatchEvent(new Event('input'));
-    passwordInput.value = password;
-    passwordInput.dispatchEvent(new Event('input'));
-    accept.click();
-    fixture.detectChanges();
-  }
-
-  function submit(): void {
-    (fixture.nativeElement as HTMLElement)
-      .querySelector('form')!
-      .dispatchEvent(new Event('submit'));
-    fixture.detectChanges();
-  }
-
-  function textOf(testId: string): string | undefined {
-    const element = fixture.nativeElement as HTMLElement;
-    return element.querySelector(`[data-testid="${testId}"]`)?.textContent?.trim();
+    setInput(fixture, '#email', 'player@example.com');
+    setInput(fixture, '#password', password);
+    check(fixture, 'input[type="checkbox"]');
   }
 
   it('requires accepting the privacy policy', () => {
-    const element = fixture.nativeElement as HTMLElement;
-    const email = element.querySelector<HTMLInputElement>('#email')!;
-    const password = element.querySelector<HTMLInputElement>('#password')!;
-    email.value = 'player@example.com';
-    email.dispatchEvent(new Event('input'));
-    password.value = 'CorrectHorse1';
-    password.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
+    answerPolicyVersion();
+    setInput(fixture, '#email', 'player@example.com');
+    setInput(fixture, '#password', 'CorrectHorse1');
 
-    submit();
+    submitForm(fixture);
 
-    expect(textOf('policy-error')).toBe(TRANSLATIONS.th['register.policyRequired']);
+    expect(textOf(fixture, 'policy-error')).toBe(TRANSLATIONS.th['register.policyRequired']);
     httpMock.expectNone('/api/auth/register');
   });
 
   it('sends the policy version the server reports, not one from the page', () => {
+    answerPolicyVersion();
     fillValidForm();
-    submit();
 
-    httpMock.expectOne('/api/auth/privacy-policy').flush({ version: '2026-09-01' });
+    submitForm(fixture);
+
     const registration = httpMock.expectOne('/api/auth/register');
     expect(registration.request.body).toEqual({
       email: 'player@example.com',
@@ -81,15 +62,29 @@ describe('RegisterPage', () => {
     registration.flush(null, { status: 201, statusText: 'Created' });
     fixture.detectChanges();
 
-    expect(textOf('register-done')).toContain(TRANSLATIONS.th['register.done.title']);
+    expect(textOf(fixture, 'register-done')).toContain(TRANSLATIONS.th['register.done.title']);
   });
 
-  it('shows the translated message when the API rejects the password', () => {
-    fillValidForm('short1');
-    submit();
+  it('translates an API rejection', () => {
+    answerPolicyVersion();
+    fillValidForm();
+    submitForm(fixture);
 
-    // The client-side rule rejects it first, so nothing is sent.
-    expect(textOf('password-error')).toBe(TRANSLATIONS.th['common.passwordTooShort']);
-    httpMock.expectNone('/api/auth/privacy-policy');
+    httpMock
+      .expectOne('/api/auth/register')
+      .flush({ code: 'auth.weak_password' }, { status: 400, statusText: 'Bad Request' });
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'form-error')).toBe(TRANSLATIONS.th['error.auth.weak_password']);
+  });
+
+  it('rejects a short password before calling the API', () => {
+    answerPolicyVersion();
+    fillValidForm('short1');
+
+    submitForm(fixture);
+
+    expect(textOf(fixture, 'password-error')).toBe(TRANSLATIONS.th['common.passwordTooShort']);
+    httpMock.expectNone('/api/auth/register');
   });
 });

@@ -1,19 +1,21 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { ApiError, AuthService } from '../../core/auth/auth.service';
-import { TranslatePipe } from '../../core/i18n/translate.pipe';
+import { AuthService } from '../../core/auth/auth.service';
+import { errorKey } from '../../core/http/api-error';
+import { TranslationService } from '../../core/i18n/translation.service';
 
 type VerifyState = 'working' | 'done' | 'failed';
 
 @Component({
   selector: 'app-verify-email-page',
-  imports: [RouterLink, TranslatePipe],
+  imports: [RouterLink],
   templateUrl: './verify-email.page.html',
 })
 export class VerifyEmailPage implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
 
+  protected readonly i18n = inject(TranslationService);
   protected readonly state = signal<VerifyState>('working');
   protected readonly errorKey = signal('verify.linkInvalid');
 
@@ -28,11 +30,13 @@ export class VerifyEmailPage implements OnInit {
     }
 
     this.auth.verifyEmail(userId, token).subscribe({
-      next: () => this.state.set('done'),
+      next: () => {
+        this.state.set('done');
+        // The account may be signed in here; refresh it so the verified state shows at once.
+        this.auth.loadCurrentUser().subscribe({ error: () => undefined });
+      },
       error: (error: unknown) => {
-        if (error instanceof ApiError) {
-          this.errorKey.set(`error.${error.code}`);
-        }
+        this.errorKey.set(errorKey(error));
         this.state.set('failed');
       },
     });

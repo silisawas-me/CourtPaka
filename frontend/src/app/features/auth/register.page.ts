@@ -1,19 +1,21 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
-import { ApiError, AuthService } from '../../core/auth/auth.service';
+import { RouterLink } from '@angular/router';
+import { switchMap } from 'rxjs';
+import { AuthService } from '../../core/auth/auth.service';
+import { errorKey } from '../../core/http/api-error';
 import { TranslationService } from '../../core/i18n/translation.service';
-import { TranslatePipe } from '../../core/i18n/translate.pipe';
+import { FieldError } from '../../shared/field-error';
 
 @Component({
   selector: 'app-register-page',
-  imports: [ReactiveFormsModule, RouterLink, TranslatePipe],
+  imports: [ReactiveFormsModule, RouterLink, FieldError],
   templateUrl: './register.page.html',
 })
-export class RegisterPage {
+export class RegisterPage implements OnInit {
   private readonly auth = inject(AuthService);
-  private readonly translations = inject(TranslationService);
-  private readonly router = inject(Router);
+
+  protected readonly i18n = inject(TranslationService);
 
   protected readonly form = inject(FormBuilder).nonNullable.group({
     email: ['', [Validators.required, Validators.email]],
@@ -26,6 +28,11 @@ export class RegisterPage {
   protected readonly errorKey = signal<string | null>(null);
   protected readonly done = signal(false);
 
+  ngOnInit(): void {
+    // Fetch the policy version while the form is being filled in, so submitting costs one request.
+    this.auth.privacyPolicyVersion().subscribe({ error: () => undefined });
+  }
+
   protected submit(): void {
     this.form.markAllAsTouched();
     if (this.form.invalid || this.submitting()) {
@@ -36,34 +43,29 @@ export class RegisterPage {
     this.errorKey.set(null);
     const { email, password, phoneNumber } = this.form.getRawValue();
 
-    // The server owns the policy version, so read it at submit time instead of trusting the page.
-    this.auth.privacyPolicyVersion().subscribe({
-      next: (privacyPolicyVersion) =>
-        this.auth
-          .register({
+    this.auth
+      .privacyPolicyVersion()
+      .pipe(
+        // The server owns the policy version; the page never decides what the user accepted.
+        switchMap((privacyPolicyVersion) =>
+          this.auth.register({
             email,
             password,
             privacyPolicyVersion,
-            language: this.translations.language(),
+            language: this.i18n.language(),
             phoneNumber: phoneNumber || null,
-          })
-          .subscribe({
-            next: () => {
-              this.submitting.set(false);
-              this.done.set(true);
-            },
-            error: (error: unknown) => this.fail(error),
           }),
-      error: (error: unknown) => this.fail(error),
-    });
-  }
-
-  protected goToLogin(): void {
-    void this.router.navigate(['/login']);
-  }
-
-  private fail(error: unknown): void {
-    this.submitting.set(false);
-    this.errorKey.set(`error.${error instanceof ApiError ? error.code : 'unknown'}`);
+        ),
+      )
+      .subscribe({
+        next: () => {
+          this.submitting.set(false);
+          this.done.set(true);
+        },
+        error: (error: unknown) => {
+          this.submitting.set(false);
+          this.errorKey.set(errorKey(error));
+        },
+      });
   }
 }

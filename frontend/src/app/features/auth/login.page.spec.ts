@@ -1,8 +1,7 @@
-import { provideHttpClient } from '@angular/common/http';
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
 import { TRANSLATIONS } from '../../core/i18n/locales';
+import { pageProviders, setInput, submitForm, textOf } from '../../testing/dom';
 import { LoginPage } from './login.page';
 
 describe('LoginPage', () => {
@@ -13,7 +12,7 @@ describe('LoginPage', () => {
     localStorage.clear();
     await TestBed.configureTestingModule({
       imports: [LoginPage],
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+      providers: pageProviders(),
     }).compileComponents();
 
     httpMock = TestBed.inject(HttpTestingController);
@@ -24,49 +23,32 @@ describe('LoginPage', () => {
   afterEach(() => httpMock.verify());
 
   function fill(email: string, password: string): void {
-    const element = fixture.nativeElement as HTMLElement;
-    const emailInput = element.querySelector<HTMLInputElement>('#email')!;
-    const passwordInput = element.querySelector<HTMLInputElement>('#password')!;
-    emailInput.value = email;
-    emailInput.dispatchEvent(new Event('input'));
-    passwordInput.value = password;
-    passwordInput.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-  }
-
-  function submit(): void {
-    const element = fixture.nativeElement as HTMLElement;
-    element.querySelector('form')!.dispatchEvent(new Event('submit'));
-    fixture.detectChanges();
-  }
-
-  function textOf(testId: string): string | undefined {
-    const element = fixture.nativeElement as HTMLElement;
-    return element.querySelector(`[data-testid="${testId}"]`)?.textContent?.trim();
+    setInput(fixture, '#email', email);
+    setInput(fixture, '#password', password);
   }
 
   it('does not call the API until the form is valid', () => {
-    submit();
+    submitForm(fixture);
 
-    expect(textOf('email-error')).toBe(TRANSLATIONS.th['common.required']);
+    expect(textOf(fixture, 'email-error')).toBe(TRANSLATIONS.th['common.required']);
     httpMock.expectNone('/api/auth/login');
   });
 
   it('shows the Thai message for the API error code', () => {
     fill('player@example.com', 'wrong-password');
-    submit();
+    submitForm(fixture);
 
     httpMock
       .expectOne('/api/auth/login')
       .flush({ code: 'auth.account_locked' }, { status: 423, statusText: 'Locked' });
     fixture.detectChanges();
 
-    expect(textOf('form-error')).toBe(TRANSLATIONS.th['error.auth.account_locked']);
+    expect(textOf(fixture, 'form-error')).toBe(TRANSLATIONS.th['error.auth.account_locked']);
   });
 
   it('adopts the language stored on the account after signing in', async () => {
     fill('player@example.com', 'CorrectHorse1');
-    submit();
+    submitForm(fixture);
 
     httpMock.expectOne('/api/auth/login').flush(null, { status: 204, statusText: 'No Content' });
     httpMock.expectOne('/api/auth/me').flush({

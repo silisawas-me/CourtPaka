@@ -1,17 +1,15 @@
-import { provideHttpClient } from '@angular/common/http';
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TRANSLATIONS } from '../../core/i18n/locales';
+import { pageProviders, textOf } from '../../testing/dom';
 import { VerifyEmailPage } from './verify-email.page';
 
 function configure(queryParams: Record<string, string>) {
   TestBed.configureTestingModule({
     imports: [VerifyEmailPage],
     providers: [
-      provideHttpClient(),
-      provideHttpClientTesting(),
-      provideRouter([]),
+      ...pageProviders(),
       {
         provide: ActivatedRoute,
         useValue: { snapshot: { queryParamMap: convertToParamMap(queryParams) } },
@@ -22,10 +20,6 @@ function configure(queryParams: Record<string, string>) {
 
 describe('VerifyEmailPage', () => {
   afterEach(() => TestBed.resetTestingModule());
-
-  function textOf(element: HTMLElement, testId: string): string | undefined {
-    return element.querySelector(`[data-testid="${testId}"]`)?.textContent?.trim();
-  }
 
   it('confirms the account with the values from the link', () => {
     configure({ userId: '11111111-1111-1111-1111-111111111111', token: 'token-from-email' });
@@ -41,9 +35,10 @@ describe('VerifyEmailPage', () => {
     request.flush(null, { status: 204, statusText: 'No Content' });
     fixture.detectChanges();
 
-    expect(textOf(fixture.nativeElement as HTMLElement, 'verify-success')).toBe(
-      TRANSLATIONS.th['verify.success'],
-    );
+    // A signed-in visitor should see the new state at once, so the account is re-read.
+    httpMock.expectOne('/api/auth/me').flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    expect(textOf(fixture, 'verify-success')).toBe(TRANSLATIONS.th['verify.success']);
     httpMock.verify();
   });
 
@@ -61,7 +56,7 @@ describe('VerifyEmailPage', () => {
       );
     fixture.detectChanges();
 
-    expect(textOf(fixture.nativeElement as HTMLElement, 'verify-error')).toBe(
+    expect(textOf(fixture, 'verify-error')).toBe(
       TRANSLATIONS.th['error.auth.invalid_verification_token'],
     );
     httpMock.verify();
@@ -74,9 +69,7 @@ describe('VerifyEmailPage', () => {
     fixture.detectChanges();
 
     httpMock.expectNone('/api/auth/verify-email');
-    expect(textOf(fixture.nativeElement as HTMLElement, 'verify-error')).toBe(
-      TRANSLATIONS.th['verify.linkInvalid'],
-    );
+    expect(textOf(fixture, 'verify-error')).toBe(TRANSLATIONS.th['verify.linkInvalid']);
     httpMock.verify();
   });
 });

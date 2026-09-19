@@ -1,27 +1,27 @@
 <header class="bar">
-  <a class="brand" routerLink="/">{{ 'app.name' | translate }}</a>
+  <a class="brand" routerLink="/">{{ i18n.t('app.name') }}</a>
 
   <nav>
     @if (user()) {
-      <button type="button" data-testid="sign-out" (click)="signOut()">
-        {{ 'nav.signOut' | translate }}
+      <button type="button" class="ghost" data-testid="sign-out" (click)="signOut()">
+        {{ i18n.t('nav.signOut') }}
       </button>
     } @else {
-      <a routerLink="/login">{{ 'nav.signIn' | translate }}</a>
-      <a routerLink="/register">{{ 'nav.signUp' | translate }}</a>
+      <a routerLink="/login">{{ i18n.t('nav.signIn') }}</a>
+      <a routerLink="/register">{{ i18n.t('nav.signUp') }}</a>
     }
 
-    <span class="languages" aria-label="{{ 'app.language' | translate }}">
+    <span class="languages" [attr.aria-label]="i18n.t('app.language')">
       @for (option of languages; track option) {
         <button
           type="button"
           class="language"
-          [class.active]="language() === option"
-          [attr.aria-pressed]="language() === option"
+          [class.active]="i18n.language() === option"
+          [attr.aria-pressed]="i18n.language() === option"
           [attr.data-testid]="'language-' + option"
           (click)="switchLanguage(option)"
         >
-          {{ 'app.language.' + option | translate }}
+          {{ i18n.t('app.language.' + option) }}
         </button>
       }
     </span>
