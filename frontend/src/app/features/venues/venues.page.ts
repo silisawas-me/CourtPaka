@@ -1,14 +1,30 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Router, RouterLink } from '@angular/router';
 import { errorKey } from '../../core/http/api-error';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { Venue, VenueService } from '../../core/venues/venue.service';
 import { FieldError } from '../../shared/field-error';
+import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 
 @Component({
   selector: 'app-venues-page',
-  imports: [ReactiveFormsModule, RouterLink, FieldError],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    FieldError,
+    MatButtonModule,
+    MatCardModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatProgressBarModule,
+  ],
+  providers: [FORM_FIELD_DEFAULTS],
   templateUrl: './venues.page.html',
 })
 export class VenuesPage implements OnInit {

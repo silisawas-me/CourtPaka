@@ -1,7 +1,7 @@
 """Checks the code-review fixes against the running Docker stack (http://localhost:8080)."""
 import time
 
-from harness import BASE, OWNER, STAFF, Checks, login
+from harness import BASE, OWNER, STAFF, Checks, control, login
 from playwright.sync_api import expect, sync_playwright
 
 check = Checks(__file__)
@@ -39,8 +39,11 @@ with sync_playwright() as p:
     links = page.locator("[data-testid=venue-list] a")
     approved = links.filter(has_not_text="Second Court").first
     created = page.locator("[data-testid=venue-list] a", has_text=f"Second Court {code}").first
-    first_url, first_name = approved.get_attribute("href"), approved.inner_text()
-    second_url, second_name = created.get_attribute("href"), created.inner_text()
+    # A row carries the code and the status beside the name, so read the name itself.
+    first_url = approved.get_attribute("href")
+    first_name = approved.locator(".entry-name").inner_text()
+    second_url = created.get_attribute("href")
+    second_name = created.locator(".entry-name").inner_text()
 
     # 4. Moving between two venue pages must load the new venue, not keep the old one.
     page.goto(BASE + first_url)
@@ -67,25 +70,29 @@ with sync_playwright() as p:
     page.wait_for_selector("#invite-email")
     check("approved venue offers the invite form", page.locator("#invite-email").count() == 1)
 
-    staff_box = page.locator("[data-testid^=permission-][data-testid$=-ViewReports]").first
-    before = staff_box.is_checked()
-    staff_box.click()
-    expect(staff_box).to_be_checked(checked=not before)
+    staff_permission = (
+        page.locator("[data-testid^=permission-][data-testid$=-ViewReports]").first
+        .get_attribute("data-testid")
+    )
+    box = control(page, staff_permission)
+    before = box.is_checked()
+    box.click()
+    expect(box).to_be_checked(checked=not before)
     check("owner can change a staff permission", True, page)
 
     # A refused change shows next to the roster and leaves the rest of the page standing.
     page.route("**/members/*/permissions", lambda route: route.fulfill(
         status=403, content_type="application/problem+json", body='{"code":"venue.not_approved"}'))
-    staff_box.click()
+    box.click()
     page.wait_for_selector("[data-testid=member-error]")
     check("a refused change shows a member-level error", page.locator("[data-testid=member-error]").count() == 1)
-    check("the roster survives a refused change", page.locator("[data-testid=member-list] li").count() >= 2)
+    check("the roster survives a refused change", page.locator("[data-testid=member-list] .entry").count() >= 2)
     check("the invite form survives a refused change", page.locator("#invite-email").count() == 1, page)
-    expect(staff_box).to_be_checked(checked=not before)
+    expect(box).to_be_checked(checked=not before)
     check("a refused change puts the checkbox back", True)
     page.unroute("**/members/*/permissions")
-    staff_box.click()  # put the permission back the way it was found
-    expect(staff_box).to_be_checked(checked=before)
+    box.click()  # put the permission back the way it was found
+    expect(box).to_be_checked(checked=before)
 
     # 7. A staff member sees the roster read-only.
     page.goto(f"{BASE}/")
@@ -96,7 +103,7 @@ with sync_playwright() as p:
     page.wait_for_selector("[data-testid=venue-name]")
     check("staff sees no remove button", page.locator("[data-testid^=remove-]").count() == 0)
     check("staff checkboxes are read-only",
-          page.locator("[data-testid^=permission-]:not([disabled])").count() == 0, page)
+          page.locator("[data-testid^=permission-] input:not([disabled])").count() == 0, page)
 
     browser.close()
 

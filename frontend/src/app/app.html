@@ -1,33 +1,34 @@
-<header class="bar">
+<mat-toolbar class="bar">
   <a class="brand" routerLink="/">{{ i18n.t('app.name') }}</a>
 
-  <nav>
-    @if (user()) {
-      <a routerLink="/venues" data-testid="nav-venues">{{ i18n.t('nav.venues') }}</a>
-      <button type="button" class="ghost" data-testid="sign-out" (click)="signOut()">
-        {{ i18n.t('nav.signOut') }}
-      </button>
-    } @else {
-      <a routerLink="/login">{{ i18n.t('nav.signIn') }}</a>
-      <a routerLink="/register">{{ i18n.t('nav.signUp') }}</a>
-    }
+  <span class="spacer"></span>
 
-    <span class="languages" [attr.aria-label]="i18n.t('app.language')">
-      @for (option of languages; track option) {
-        <button
-          type="button"
-          class="language"
-          [class.active]="i18n.language() === option"
-          [attr.aria-pressed]="i18n.language() === option"
-          [attr.data-testid]="'language-' + option"
-          (click)="switchLanguage(option)"
-        >
-          {{ i18n.t('app.language.' + option) }}
-        </button>
-      }
-    </span>
-  </nav>
-</header>
+  @if (user()) {
+    <a matButton routerLink="/venues" data-testid="nav-venues">{{ i18n.t('nav.venues') }}</a>
+    <button matButton type="button" data-testid="sign-out" (click)="signOut()">
+      {{ i18n.t('nav.signOut') }}
+    </button>
+  } @else {
+    <a matButton routerLink="/login">{{ i18n.t('nav.signIn') }}</a>
+    <a matButton="filled" routerLink="/register">{{ i18n.t('nav.signUp') }}</a>
+  }
+
+  <span class="languages" role="group" [attr.aria-label]="i18n.t('app.language')">
+    @for (option of languages; track option) {
+      <button
+        matButton
+        type="button"
+        class="language"
+        [class.chosen]="i18n.language() === option"
+        [attr.aria-pressed]="i18n.language() === option"
+        [attr.data-testid]="'language-' + option"
+        (click)="switchLanguage(option)"
+      >
+        {{ i18n.t('app.language.short.' + option) }}
+      </button>
+    }
+  </span>
+</mat-toolbar>
 
 <main class="shell">
   @if (languageNotSaved()) {

@@ -16,11 +16,21 @@
 	handle {
 		root * /srv
 
-		# Angular builds hashed asset filenames, so their content never changes; everything
-		# else (index.html, and any deep link rewritten to it) must be revalidated.
-		@hashed path_regexp hashedasset \-[A-Z0-9]{8,}\.(js|css|woff2?|png|jpg|svg|ico)$
-		header @hashed Cache-Control "public, max-age=31536000, immutable"
-		@dynamic not path_regexp dynamicasset \-[A-Z0-9]{8,}\.(js|css|woff2?|png|jpg|svg|ico)$
+		# Angular builds hashed asset filenames, so their content never changes. The fonts are
+		# not hashed, because index.html preloads them by name, so they get a long cache but not
+		# an immutable one: replacing a font file keeps its name, and a year would be a year of
+		# stale glyphs. Everything else (index.html, and any deep link rewritten to it) must be
+		# revalidated.
+		@immutable {
+			path_regexp hashedasset \-[A-Z0-9]{8,}\.(js|css|woff2?|png|jpg|svg|ico)$
+		}
+		@fonts path_regexp fontfile ^/fonts/[^/]+\.woff2?$
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+		header @fonts Cache-Control "public, max-age=2592000"
+		@dynamic {
+			not path_regexp dynamicasset \-[A-Z0-9]{8,}\.(js|css|woff2?|png|jpg|svg|ico)$
+			not path_regexp fontfilecheck ^/fonts/[^/]+\.woff2?$
+		}
 		header @dynamic Cache-Control "no-cache"
 
 		try_files {path} /index.html

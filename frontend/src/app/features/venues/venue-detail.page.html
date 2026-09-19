@@ -1,117 +1,148 @@
 @if (loading()) {
-  <section class="card">
-    <p>{{ i18n.t('common.loading') }}</p>
-  </section>
+  <mat-progress-bar mode="indeterminate" />
 } @else if (pageError(); as key) {
-  <section class="card">
-    <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
-    <p>
-      <a routerLink="/venues">{{ i18n.t('venues.title') }}</a>
-    </p>
-  </section>
+  <mat-card>
+    <mat-card-content>
+      <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
+    </mat-card-content>
+    <mat-card-actions>
+      <a matButton routerLink="/venues">{{ i18n.t('venues.title') }}</a>
+    </mat-card-actions>
+  </mat-card>
 } @else if (venue(); as current) {
-  <section class="card">
-    <h1 data-testid="venue-name">{{ current.name }}</h1>
-    <p class="muted">{{ current.code }} · {{ i18n.t('venues.status.' + current.status) }}</p>
-    @if (current.status !== 'Approved') {
-      <p class="muted" data-testid="venue-not-approved">{{ i18n.t('venues.notApprovedYet') }}</p>
-    }
-    <p>
-      <a [routerLink]="['/venues', current.id, 'settings']" data-testid="settings-link">{{
-        i18n.t('settings.title')
-      }}</a>
-    </p>
-  </section>
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title data-testid="venue-name">{{ current.name }}</mat-card-title>
+      <mat-card-subtitle>
+        {{ current.code }} · {{ i18n.t('venues.status.' + current.status) }}
+      </mat-card-subtitle>
+    </mat-card-header>
 
-  <section class="card">
-    <h2>{{ i18n.t('venues.members.title') }}</h2>
+    <mat-card-content>
+      @if (current.status !== 'Approved') {
+        <p class="muted" data-testid="venue-not-approved">{{ i18n.t('venues.notApprovedYet') }}</p>
+      }
+    </mat-card-content>
 
-    @if (memberError(); as key) {
-      <p class="form-error" data-testid="member-error">{{ i18n.t(key) }}</p>
-    }
+    <mat-card-actions>
+      <a
+        matButton="filled"
+        [routerLink]="['/venues', current.id, 'settings']"
+        data-testid="settings-link"
+      >
+        {{ i18n.t('settings.title') }}
+      </a>
+    </mat-card-actions>
+  </mat-card>
 
-    <ul class="list" data-testid="member-list">
-      @for (row of rows(); track row.member.userId) {
-        <li>
-          <strong>{{ row.member.email }}</strong>
-          <span class="muted">{{ i18n.t('venues.role.' + row.member.role) }}</span>
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('venues.members.title') }}</mat-card-title>
+    </mat-card-header>
 
-          @if (row.member.role === 'Owner') {
-            <span class="muted">{{ i18n.t('venues.members.ownerHasAll') }}</span>
-          } @else {
-            <span class="permissions">
-              @for (permission of permissions; track permission) {
-                <label class="checkbox">
-                  <input
-                    type="checkbox"
+    <mat-card-content>
+      @if (memberError(); as key) {
+        <p class="form-error" data-testid="member-error">{{ i18n.t(key) }}</p>
+      }
+
+      <div class="stack" data-testid="member-list">
+        @for (row of rows(); track row.member.userId) {
+          <div class="entry">
+            <div class="stack">
+              <span class="entry-name">{{ row.member.email }}</span>
+              <span class="muted">{{ i18n.t('venues.role.' + row.member.role) }}</span>
+            </div>
+
+            @if (row.member.role === 'Owner') {
+              <span class="muted">{{ i18n.t('venues.members.ownerHasAll') }}</span>
+            } @else {
+              <span class="row">
+                @for (permission of permissions; track permission) {
+                  <mat-checkbox
                     [checked]="row.granted.has(permission)"
                     [disabled]="!canManage() || savingMember() !== null"
                     [attr.data-testid]="'permission-' + row.member.userId + '-' + permission"
-                    (change)="togglePermission(row.member, permission, $any($event.target).checked)"
-                  />
-                  {{ i18n.t('venues.permission.' + permission) }}
-                </label>
-              }
-            </span>
+                    (change)="togglePermission(row.member, permission, $event.checked)"
+                  >
+                    {{ i18n.t('venues.permission.' + permission) }}
+                  </mat-checkbox>
+                }
+              </span>
 
-            @if (canManage()) {
-              <button
-                type="button"
-                class="ghost"
-                [disabled]="savingMember() !== null"
-                [attr.data-testid]="'remove-' + row.member.userId"
-                (click)="remove(row.member)"
-              >
-                {{ i18n.t('venues.members.remove') }}
-              </button>
+              @if (canManage()) {
+                <button
+                  matButton
+                  type="button"
+                  [disabled]="savingMember() !== null"
+                  [attr.data-testid]="'remove-' + row.member.userId"
+                  (click)="remove(row.member)"
+                >
+                  {{ i18n.t('venues.members.remove') }}
+                </button>
+              }
             }
-          }
-        </li>
-      }
-    </ul>
-  </section>
+          </div>
+        }
+      </div>
+    </mat-card-content>
+  </mat-card>
 
   @if (canManage()) {
-    <section class="card">
-      <h2>{{ i18n.t('venues.invite.title') }}</h2>
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>{{ i18n.t('venues.invite.title') }}</mat-card-title>
+      </mat-card-header>
 
-      <form [formGroup]="inviteForm" (ngSubmit)="invite()" novalidate>
-        <label for="invite-email">{{ i18n.t('common.email') }}</label>
-        <input id="invite-email" type="email" formControlName="email" autocomplete="off" />
-        <app-field-error [control]="inviteForm.controls.email" testId="invite-email-error" />
+      <mat-card-content>
+        <form class="stack" [formGroup]="inviteForm" (ngSubmit)="invite()" novalidate>
+          <mat-form-field class="field">
+            <mat-label>{{ i18n.t('common.email') }}</mat-label>
+            <input
+              id="invite-email"
+              matInput
+              type="email"
+              formControlName="email"
+              autocomplete="off"
+            />
+            <mat-error
+              [appFieldError]="inviteForm.controls.email"
+              testId="invite-email-error"
+            ></mat-error>
+          </mat-form-field>
 
-        <span class="permissions" formGroupName="permissions">
-          @for (permission of permissions; track permission) {
-            <label class="checkbox">
-              <input type="checkbox" [formControlName]="permission" />
-              {{ i18n.t('venues.permission.' + permission) }}
-            </label>
+          <span class="row" formGroupName="permissions">
+            @for (permission of permissions; track permission) {
+              <mat-checkbox [formControlName]="permission">
+                {{ i18n.t('venues.permission.' + permission) }}
+              </mat-checkbox>
+            }
+          </span>
+
+          @if (inviteError(); as key) {
+            <p class="form-error" data-testid="invite-error">{{ i18n.t(key) }}</p>
           }
-        </span>
 
-        @if (inviteError(); as key) {
-          <p class="form-error" data-testid="invite-error">{{ i18n.t(key) }}</p>
+          <button matButton="filled" type="submit" [disabled]="inviting()">
+            {{ i18n.t(inviting() ? 'common.loading' : 'venues.invite.submit') }}
+          </button>
+        </form>
+
+        @if (invitations().length > 0) {
+          <h3>{{ i18n.t('venues.invite.pending') }}</h3>
+          <div class="stack" data-testid="invitation-list">
+            @for (invitation of invitations(); track invitation.id) {
+              <div class="entry" data-testid="invitation-row">
+                <span class="entry-name">{{ invitation.email }}</span>
+                <span class="spacer"></span>
+                <span class="muted">
+                  {{ i18n.t('venues.invite.expires') }}
+                  {{ invitation.expiresAt | appDate: i18n.locale() }}
+                </span>
+              </div>
+            }
+          </div>
         }
-
-        <button type="submit" [disabled]="inviting()">
-          {{ i18n.t(inviting() ? 'common.loading' : 'venues.invite.submit') }}
-        </button>
-      </form>
-
-      @if (invitations().length > 0) {
-        <h3>{{ i18n.t('venues.invite.pending') }}</h3>
-        <ul class="list" data-testid="invitation-list">
-          @for (invitation of invitations(); track invitation.id) {
-            <li>
-              <strong>{{ invitation.email }}</strong>
-              <span class="muted"
-                >{{ i18n.t('venues.invite.expires') }}
-                {{ invitation.expiresAt | date: 'mediumDate' }}</span
-              >
-            </li>
-          }
-        </ul>
-      }
-    </section>
+      </mat-card-content>
+    </mat-card>
   }
 }

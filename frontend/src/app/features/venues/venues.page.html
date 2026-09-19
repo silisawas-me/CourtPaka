@@ -1,43 +1,66 @@
-<section class="card">
-  <h1>{{ i18n.t('venues.title') }}</h1>
+<div class="columns">
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('venues.title') }}</mat-card-title>
+    </mat-card-header>
 
-  @if (loading()) {
-    <p>{{ i18n.t('common.loading') }}</p>
-  } @else if (mine().length === 0) {
-    <p data-testid="no-venues">{{ i18n.t('venues.none') }}</p>
-  } @else {
-    <ul class="list" data-testid="venue-list">
-      @for (venue of mine(); track venue.id) {
-        <li>
-          <a [routerLink]="['/venues', venue.id]">{{ venue.name }}</a>
-          <span class="muted"
-            >{{ venue.code }} · {{ i18n.t('venues.status.' + venue.status) }}</span
-          >
-        </li>
+    <mat-card-content>
+      @if (loading()) {
+        <mat-progress-bar mode="indeterminate" />
+      } @else if (mine().length === 0) {
+        <p class="muted" data-testid="no-venues">{{ i18n.t('venues.none') }}</p>
+      } @else {
+        <div class="stack" data-testid="venue-list">
+          @for (venue of mine(); track venue.id) {
+            <a class="entry" [routerLink]="['/venues', venue.id]">
+              <span class="entry-name">{{ venue.name }}</span>
+              <span class="spacer"></span>
+              <span class="muted">{{ venue.code }}</span>
+              <span class="badge" [class.badge-on]="venue.status === 'Approved'">
+                {{ i18n.t('venues.status.' + venue.status) }}
+              </span>
+            </a>
+          }
+        </div>
       }
-    </ul>
-  }
-</section>
+    </mat-card-content>
+  </mat-card>
 
-<section class="card">
-  <h2>{{ i18n.t('venues.create.title') }}</h2>
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('venues.create.title') }}</mat-card-title>
+    </mat-card-header>
 
-  <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
-    <label for="code">{{ i18n.t('venues.create.code') }}</label>
-    <input id="code" type="text" formControlName="code" maxlength="6" autocomplete="off" />
-    <p class="muted">{{ i18n.t('venues.create.codeHint') }}</p>
-    <app-field-error [control]="form.controls.code" testId="code-error" />
+    <mat-card-content>
+      <form class="stack" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('venues.create.code') }}</mat-label>
+          <input
+            id="code"
+            matInput
+            type="text"
+            formControlName="code"
+            maxlength="6"
+            autocomplete="off"
+          />
+          <mat-hint>{{ i18n.t('venues.create.codeHint') }}</mat-hint>
+          <mat-error [appFieldError]="form.controls.code" testId="code-error"></mat-error>
+        </mat-form-field>
 
-    <label for="name">{{ i18n.t('venues.create.name') }}</label>
-    <input id="name" type="text" formControlName="name" autocomplete="off" />
-    <app-field-error [control]="form.controls.name" testId="name-error" />
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('venues.create.name') }}</mat-label>
+          <input id="name" matInput type="text" formControlName="name" autocomplete="off" />
+          <mat-error [appFieldError]="form.controls.name" testId="name-error"></mat-error>
+        </mat-form-field>
 
-    @if (errorKey(); as key) {
-      <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
-    }
+        @if (errorKey(); as key) {
+          <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
+        }
 
-    <button type="submit" [disabled]="submitting()">
-      {{ i18n.t(submitting() ? 'common.loading' : 'venues.create.submit') }}
-    </button>
-  </form>
-</section>
+        <button matButton="filled" type="submit" [disabled]="submitting()">
+          {{ i18n.t(submitting() ? 'common.loading' : 'venues.create.submit') }}
+        </button>
+      </form>
+    </mat-card-content>
+  </mat-card>
+</div>

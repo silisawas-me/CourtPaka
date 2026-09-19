@@ -1,18 +1,58 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700&display=swap');
+@use '@angular/material' as mat;
+@use './theme-colors' as brand;
 
 /**
- * Shared page furniture lives here on purpose: routed page components render their own markup,
- * and Angular scopes component styles to their own template, so card/form rules must be global.
+ * The font is served from this origin, not from Google's. Loading it through an @import chained a
+ * third-party stylesheet in front of the first paint, which cost about a second of LCP on mobile;
+ * Only the two weights the theme asks for are shipped — mat.theme() writes 400 for body text and
+ * 500 for titles and buttons — and the 400s are preloaded in index.html so the swap happens before
+ * anyone reads a word.
  */
-:root {
-  --ink: #16241c;
-  --muted: #5c6b63;
-  --line: #d8e2db;
-  --accent: #1d7a4c;
-  --accent-dark: #145c39;
-  --danger: #b3261e;
+@each $weight in (400, 500) {
+  @font-face {
+    font-family: 'Noto Sans Thai';
+    font-style: normal;
+    font-display: swap;
+    font-weight: $weight;
+    src: url('/fonts/noto-sans-thai-thai-#{$weight}-normal.woff2') format('woff2');
+    unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+  }
 
+  @font-face {
+    font-family: 'Noto Sans Thai';
+    font-style: normal;
+    font-display: swap;
+    font-weight: $weight;
+    src: url('/fonts/noto-sans-thai-latin-#{$weight}-normal.woff2') format('woff2');
+    unicode-range:
+      U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+      U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
+}
+
+html {
   color-scheme: light;
+
+  // The palettes are generated from the CourtPaka green by the Material theme-color schematic.
+  @include mat.theme(
+    (
+      color: (
+        primary: brand.$primary-palette,
+        tertiary: brand.$tertiary-palette,
+      ),
+      typography: (
+        plain-family: 'Noto Sans Thai',
+        brand-family: 'Noto Sans Thai',
+      ),
+      density: 0,
+    )
+  );
+}
+
+:root {
+  --page-gutter: 1rem;
+  --page-width: 64rem;
+  --stack: 1rem;
 }
 
 * {
@@ -22,193 +62,132 @@
 html,
 body {
   margin: 0;
-  background: #f7faf8;
-  color: var(--ink);
-  font-family:
-    'Noto Sans Thai',
-    system-ui,
-    -apple-system,
-    sans-serif;
-  line-height: 1.55;
+  min-height: 100%;
+  background: var(--mat-sys-surface-container-low);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-large);
 }
 
+/** One column on a phone, a wider measure once there is room for it. */
 .shell {
-  max-width: 30rem;
-  margin: 2rem auto;
-  padding: 0 1rem;
-}
-
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 1.5rem;
-  border: 1px solid var(--line);
-  border-radius: 0.875rem;
-  background: #fff;
-  box-shadow: 0 1px 2px rgb(22 36 28 / 6%);
-
-  h1 {
-    margin: 0;
-    font-size: 1.5rem;
-  }
-
-  p {
-    margin: 0;
-  }
-
-  a {
-    color: var(--accent-dark);
-  }
-}
-
-form {
+  max-width: var(--page-width);
+  margin: 0 auto;
+  padding: var(--stack) var(--page-gutter) 3rem;
   display: grid;
-  gap: 0.35rem;
-  margin: 0;
+  gap: var(--stack);
 }
 
-label {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--muted);
+/** Sections that sit side by side on a desktop and stack on a phone. */
+.columns {
+  display: grid;
+  gap: var(--stack);
+  align-items: start;
 
-  &:not(:first-of-type) {
-    margin-top: 0.75rem;
-  }
-
-  &.checkbox {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-    font-weight: 400;
-    color: var(--ink);
+  @media (min-width: 60rem) {
+    grid-template-columns: 1fr 1fr;
   }
 }
 
-input[type='email'],
-input[type='password'],
-input[type='tel'],
-input[type='text'] {
-  width: 100%;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid var(--line);
-  border-radius: 0.5rem;
-  font: inherit;
-  background: #fff;
-
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-  }
-}
-
-input[type='checkbox'] {
-  width: 1.1rem;
-  height: 1.1rem;
-  accent-color: var(--accent);
-}
-
-.card button[type='submit'],
-.card button[type='button'] {
-  margin-top: 1rem;
-  padding: 0.7rem 1rem;
-  border: 0;
-  border-radius: 0.5rem;
-  background: var(--accent);
-  color: #fff;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    background: var(--accent-dark);
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: progress;
-  }
-}
-
-.list {
-  display: flex;
-  flex-direction: column;
+.stack {
+  display: grid;
   gap: 0.75rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-
-  li {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem 0.75rem;
-    align-items: baseline;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid var(--line);
-
-    &:last-child {
-      padding-bottom: 0;
-      border-bottom: 0;
-    }
-  }
 }
 
-.permissions {
+.row {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem 0.9rem;
-  width: 100%;
-
-  .checkbox {
-    font-size: 0.875rem;
-  }
+  align-items: center;
+  gap: 0.5rem;
 }
 
-/** Secondary button: quiet next to the filled primary one. */
-.ghost {
-  padding: 0.3rem 0.7rem;
-  border: 1px solid var(--line);
-  border-radius: 0.5rem;
-  background: #fff;
-  color: var(--ink);
-  font: inherit;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.field-error,
-.form-error {
-  margin: 0;
-  color: var(--danger);
-  font-size: 0.875rem;
-}
-
-.form-error {
-  margin-top: 0.75rem;
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #fdecea;
-}
-
-.success {
-  color: var(--accent-dark);
-  font-weight: 600;
+.spacer {
+  flex: 1 1 auto;
 }
 
 .muted {
-  color: var(--muted);
-  font-size: 0.875rem;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-medium);
 }
 
-/* One weekday of the opening-hours form: the checkbox and both hour pickers on one line. */
+.success {
+  color: var(--mat-sys-primary);
+  font-weight: 500;
+  margin: 0;
+}
+
+.form-error {
+  color: var(--mat-sys-error);
+  font: var(--mat-sys-body-medium);
+  margin: 0;
+}
+
+/** Form fields fill the card they are in; a phone has no room for anything else. */
+.field {
+  width: 100%;
+}
+
+h3 {
+  font: var(--mat-sys-title-medium);
+  margin: 0.5rem 0 0;
+}
+
+a {
+  color: var(--mat-sys-primary);
+}
+
+/** One weekday of the opening-hours form: the day, then its two hour pickers. */
 .day-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+
+  @media (max-width: 30rem) {
+    grid-template-columns: 1fr;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--mat-sys-outline-variant);
+  }
+}
+
+.hour-pickers {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.35rem;
 
-  .checkbox {
-    min-width: 9rem;
+  // The element selector is Material's public name for this node; .mat-mdc-* is generated.
+  mat-form-field {
+    width: 6.5rem;
   }
+}
+
+/** A word about a thing's state. A chip would bring focus and ripple machinery it never uses. */
+.badge {
+  padding: 0.15rem 0.6rem;
+  border-radius: 1rem;
+  font: var(--mat-sys-label-large);
+  background: var(--mat-sys-surface-container-highest);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.badge-on {
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
+/** A row in a list of things, with its actions pushed to the end on a wide screen. */
+.entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.entry-name {
+  font: var(--mat-sys-title-medium);
 }

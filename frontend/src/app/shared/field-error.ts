@@ -4,19 +4,20 @@ import { AbstractControl } from '@angular/forms';
 import { switchMap } from 'rxjs';
 import { TranslationService } from '../core/i18n/translation.service';
 
-/** One place that decides when a field complains and which message it shows. */
+/**
+ * One place that decides which message a field shows. It sits on a `mat-error`, which is what the
+ * form field looks for when it decides where to put the message and when to show it: written as
+ * anything else, the message is projected next to the input instead of under the field.
+ */
 @Component({
-  selector: 'app-field-error',
-  template: `
-    @if (message(); as key) {
-      <p class="field-error" [attr.data-testid]="testId()">{{ i18n.t(key) }}</p>
-    }
-  `,
+  selector: 'mat-error[appFieldError]',
+  host: { '[attr.data-testid]': 'testId()' },
+  template: `{{ i18n.t(message()) }}`,
 })
 export class FieldError {
   protected readonly i18n = inject(TranslationService);
 
-  readonly control = input.required<AbstractControl>();
+  readonly control = input.required<AbstractControl>({ alias: 'appFieldError' });
   readonly testId = input.required<string>();
 
   /** Control state is not a signal, so follow its event stream to stay in step with the form. */
@@ -24,17 +25,25 @@ export class FieldError {
     toObservable(this.control).pipe(switchMap((control) => control.events)),
   );
 
+  /**
+   * Which rule the field broke. The form field decides whether this is on screen at all — it shows
+   * errors once the control is invalid and the user has touched it or submitted the form.
+   */
   protected readonly message = computed(() => {
     this.state();
     const control = this.control();
-    if (!control.touched || control.valid) {
-      return null;
-    }
     if (control.hasError('email')) {
       return 'common.emailInvalid';
     }
     if (control.hasError('minlength')) {
       return 'common.passwordTooShort';
+    }
+    // The datepicker's own errors; without these a filled-in field reads "this is required".
+    if (control.hasError('matDatepickerMin')) {
+      return 'common.dateTooEarly';
+    }
+    if (control.hasError('matDatepickerParse')) {
+      return 'common.dateNotUnderstood';
     }
     return 'common.required';
   });

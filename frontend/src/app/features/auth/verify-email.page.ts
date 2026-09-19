@@ -1,4 +1,6 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { errorKey } from '../../core/http/api-error';
@@ -8,7 +10,7 @@ type VerifyState = 'working' | 'done' | 'failed';
 
 @Component({
   selector: 'app-verify-email-page',
-  imports: [RouterLink],
+  imports: [RouterLink, MatButtonModule, MatCardModule],
   templateUrl: './verify-email.page.html',
 })
 export class VerifyEmailPage implements OnInit {

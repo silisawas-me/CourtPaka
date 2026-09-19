@@ -1,23 +1,33 @@
-<section class="card">
-  <h1>{{ i18n.t('venues.accept.title') }}</h1>
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>{{ i18n.t('venues.accept.title') }}</mat-card-title>
+  </mat-card-header>
 
   @switch (state()) {
     @case ('working') {
-      <p data-testid="accept-working">{{ i18n.t('common.loading') }}</p>
+      <mat-card-content>
+        <p data-testid="accept-working">{{ i18n.t('common.loading') }}</p>
+      </mat-card-content>
     }
     @case ('done') {
-      <p class="success" data-testid="accept-success">
-        {{ i18n.t('venues.accept.joined') }} {{ venue()?.name }}
-      </p>
-      <p>
-        <a [routerLink]="['/venues', venue()?.id]">{{ i18n.t('venues.members.title') }}</a>
-      </p>
+      <mat-card-content>
+        <p class="success" data-testid="accept-success">
+          {{ i18n.t('venues.accept.joined') }} {{ venue()?.name }}
+        </p>
+      </mat-card-content>
+      <mat-card-actions>
+        <a matButton="filled" [routerLink]="['/venues', venue()?.id]">
+          {{ i18n.t('venues.members.title') }}
+        </a>
+      </mat-card-actions>
     }
     @case ('failed') {
-      <p class="form-error" data-testid="accept-error">{{ i18n.t(pageError()) }}</p>
-      <p>
-        <a routerLink="/venues">{{ i18n.t('venues.title') }}</a>
-      </p>
+      <mat-card-content>
+        <p class="form-error" data-testid="accept-error">{{ i18n.t(pageError()) }}</p>
+      </mat-card-content>
+      <mat-card-actions>
+        <a matButton routerLink="/venues">{{ i18n.t('venues.title') }}</a>
+      </mat-card-actions>
     }
   }
-</section>
+</mat-card>

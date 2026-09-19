@@ -6,8 +6,55 @@
     <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <meta name="theme-color" content="#1d7a4c" />
+    <!-- The two weights the first screen is written in, fetched with the page instead of after it. -->
+    <link
+      rel="preload"
+      href="/fonts/noto-sans-thai-thai-400-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/noto-sans-thai-latin-400-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
   </head>
   <body>
-    <app-root></app-root>
+    <!--
+      The bar the app renders anyway, painted while the bundle is still parsing: the browser has
+      the font by then, and the app replaces this the moment it boots. Only the bar, and at the
+      height Material gives it, so nothing moves when the real one arrives.
+    -->
+    <style>
+      body {
+        margin: 0;
+        background: #f1f5ee;
+      }
+      .boot-bar {
+        display: flex;
+        align-items: center;
+        height: 64px;
+        padding-inline: 1rem;
+        background: #f6fbf4;
+        color: #181d19;
+        font:
+          500 1rem / 1.5rem 'Noto Sans Thai',
+          system-ui,
+          sans-serif;
+      }
+      @media (max-width: 34rem) {
+        .boot-bar {
+          height: 56px;
+          padding-inline: 0.5rem;
+        }
+      }
+    </style>
+    <app-root>
+      <div class="boot-bar">CourtPaka</div>
+    </app-root>
   </body>
 </html>

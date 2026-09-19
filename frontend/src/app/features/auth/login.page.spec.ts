@@ -60,7 +60,6 @@ describe('LoginPage', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const element = fixture.nativeElement as HTMLElement;
-    expect(element.querySelector('h1')?.textContent?.trim()).toBe(TRANSLATIONS.en['login.title']);
+    expect(textOf(fixture, 'page-title')).toBe(TRANSLATIONS.en['login.title']);
   });
 });

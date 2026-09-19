@@ -1,194 +1,269 @@
 @if (loading()) {
-  <section class="card">
-    <p>{{ i18n.t('common.loading') }}</p>
-  </section>
+  <mat-progress-bar mode="indeterminate" />
 } @else if (pageError(); as key) {
-  <section class="card">
-    <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
-    <p>
-      <a routerLink="/venues">{{ i18n.t('venues.title') }}</a>
-    </p>
-  </section>
+  <mat-card>
+    <mat-card-content>
+      <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
+    </mat-card-content>
+    <mat-card-actions>
+      <a matButton routerLink="/venues">{{ i18n.t('venues.title') }}</a>
+    </mat-card-actions>
+  </mat-card>
 } @else if (venue(); as current) {
-  <section class="card">
-    <h1 data-testid="venue-name">{{ current.name }}</h1>
-    <p class="muted">
-      <a [routerLink]="['/venues', current.id]">{{ i18n.t('settings.backToVenue') }}</a>
-    </p>
-    @if (!canManage()) {
-      <p class="muted" data-testid="read-only">{{ i18n.t('settings.readOnly') }}</p>
-    }
-  </section>
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title data-testid="venue-name">{{ current.name }}</mat-card-title>
+      <mat-card-subtitle>{{ i18n.t('settings.title') }}</mat-card-subtitle>
+    </mat-card-header>
 
-  <section class="card">
-    <h2>{{ i18n.t('settings.courts.title') }}</h2>
+    <mat-card-content>
+      @if (!canManage()) {
+        <p class="muted" data-testid="read-only">{{ i18n.t('settings.readOnly') }}</p>
+      }
+    </mat-card-content>
 
-    @if (courtError(); as key) {
-      <p class="form-error" data-testid="court-error">{{ i18n.t(key) }}</p>
-    }
+    <mat-card-actions>
+      <a matButton [routerLink]="['/venues', current.id]">{{ i18n.t('settings.backToVenue') }}</a>
+    </mat-card-actions>
+  </mat-card>
 
-    @if (courtList().length === 0) {
-      <p data-testid="no-courts">{{ i18n.t('settings.courts.none') }}</p>
-    } @else {
-      <ul class="list" data-testid="court-list">
-        @for (court of courtList(); track court.id) {
-          <li>
-            @if (renaming() === court.id) {
-              <form [formGroup]="renameForm" (ngSubmit)="saveRename(court)" novalidate>
-                <input
-                  type="text"
-                  formControlName="name"
-                  autocomplete="off"
-                  [attr.data-testid]="'rename-input-' + court.id"
-                />
-                <app-field-error [control]="renameForm.controls.name" testId="rename-error" />
-                <button type="submit" [disabled]="isSaving(court)">
-                  {{ i18n.t('settings.courts.saveName') }}
-                </button>
-                <button type="button" class="ghost" (click)="cancelRename()">
-                  {{ i18n.t('common.cancel') }}
-                </button>
-              </form>
-            } @else {
-              <strong>{{ court.name }}</strong>
+  <div class="columns">
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>{{ i18n.t('settings.courts.title') }}</mat-card-title>
+      </mat-card-header>
 
-              <label class="checkbox">
-                <input
-                  type="checkbox"
-                  [checked]="court.isActive"
-                  [disabled]="!canManage() || isSaving(court)"
-                  [attr.data-testid]="'court-active-' + court.id"
-                  (change)="toggleCourt(court, $any($event.target).checked)"
-                />
-                {{ i18n.t('settings.courts.inUse') }}
-              </label>
+      <mat-card-content>
+        @if (courtError(); as key) {
+          <p class="form-error" data-testid="court-error">{{ i18n.t(key) }}</p>
+        }
 
-              @if (canManage()) {
-                <button
-                  type="button"
-                  class="ghost"
-                  [attr.data-testid]="'rename-' + court.id"
-                  (click)="startRename(court)"
-                >
-                  {{ i18n.t('settings.courts.rename') }}
-                </button>
-              }
+        @if (courtList().length === 0) {
+          <p class="muted" data-testid="no-courts">{{ i18n.t('settings.courts.none') }}</p>
+        } @else {
+          <div class="stack" data-testid="court-list">
+            @for (row of courtRows(); track row.court.id) {
+              @let court = row.court;
+              <div class="entry" data-testid="court-row">
+                @if (renaming() === court.id) {
+                  <form
+                    class="row"
+                    [formGroup]="renameForm"
+                    (ngSubmit)="saveRename(court)"
+                    novalidate
+                  >
+                    <mat-form-field class="field">
+                      <mat-label>{{ i18n.t('settings.courts.name') }}</mat-label>
+                      <input
+                        matInput
+                        type="text"
+                        formControlName="name"
+                        autocomplete="off"
+                        [attr.data-testid]="'rename-input-' + court.id"
+                      />
+                      <mat-error
+                        [appFieldError]="renameForm.controls.name"
+                        testId="rename-error"
+                      ></mat-error>
+                    </mat-form-field>
+                    <button matButton="filled" type="submit" [disabled]="isSaving(court)">
+                      {{ i18n.t('settings.courts.saveName') }}
+                    </button>
+                    <button matButton type="button" (click)="cancelRename()">
+                      {{ i18n.t('common.cancel') }}
+                    </button>
+                  </form>
+                } @else {
+                  <span class="entry-name">{{ court.name }}</span>
 
-              @for (change of scheduledFor(court); track change.effectiveFrom) {
-                <span class="muted" [attr.data-testid]="'scheduled-' + court.id">
+                  @for (change of row.scheduled; track change.effectiveFrom) {
+                    <span class="muted" [attr.data-testid]="'scheduled-' + court.id">
+                      {{
+                        i18n.t(
+                          change.active
+                            ? 'settings.courts.backFrom'
+                            : 'settings.courts.outOfUseFrom'
+                        )
+                      }}
+                      {{ change.effectiveFrom | appDate: i18n.locale() }}
+                    </span>
+                  }
+
+                  <span class="spacer"></span>
+
+                  <mat-slide-toggle
+                    [checked]="court.isActive"
+                    [disabled]="!canManage() || isSaving(court)"
+                    [attr.data-testid]="'court-active-' + court.id"
+                    (change)="toggleCourt(court, $event.checked)"
+                  >
+                    {{ i18n.t('settings.courts.inUse') }}
+                  </mat-slide-toggle>
+
+                  @if (canManage()) {
+                    <button
+                      matButton
+                      type="button"
+                      [attr.data-testid]="'rename-' + court.id"
+                      (click)="startRename(court)"
+                    >
+                      {{ i18n.t('settings.courts.rename') }}
+                    </button>
+                  }
+                }
+              </div>
+            }
+          </div>
+        }
+
+        @if (canManage()) {
+          <form class="stack" [formGroup]="newCourtForm" (ngSubmit)="addCourt()" novalidate>
+            <mat-form-field class="field">
+              <mat-label>{{ i18n.t('settings.courts.name') }}</mat-label>
+              <input
+                id="court-name"
+                matInput
+                type="text"
+                formControlName="name"
+                autocomplete="off"
+              />
+              <mat-error
+                [appFieldError]="newCourtForm.controls.name"
+                testId="court-name-error"
+              ></mat-error>
+            </mat-form-field>
+
+            <button matButton="filled" type="submit" [disabled]="addingCourt()">
+              {{ i18n.t(addingCourt() ? 'common.loading' : 'settings.courts.add') }}
+            </button>
+          </form>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>{{ i18n.t('settings.hours.title') }}</mat-card-title>
+      </mat-card-header>
+
+      <mat-card-content>
+        @if (inForce(); as week) {
+          <p class="muted" data-testid="hours-in-force">
+            {{ i18n.t('settings.hours.inForce') }}
+            {{ week.effectiveFrom | appDate: i18n.locale() }}
+          </p>
+          <div class="stack" data-testid="hours-current">
+            @for (day of inForceWeek(); track day.day) {
+              <div class="entry">
+                <span class="entry-name">{{ i18n.t('settings.day.' + day.day) }}</span>
+                <span class="spacer"></span>
+                <span [attr.data-testid]="'hours-' + day.day">
                   {{
-                    i18n.t(
-                      change.active ? 'settings.courts.backFrom' : 'settings.courts.outOfUseFrom'
-                    )
+                    day.opensHour === null
+                      ? i18n.t('settings.hours.closed')
+                      : day.opensHour + ':00 – ' + day.closesHour + ':00'
                   }}
-                  {{ change.effectiveFrom }}
                 </span>
+              </div>
+            }
+          </div>
+        } @else {
+          <p class="muted" data-testid="no-hours">{{ i18n.t('settings.hours.none') }}</p>
+        }
+
+        @if (upcoming().length > 0) {
+          <h3>{{ i18n.t('settings.hours.upcoming') }}</h3>
+          <div class="stack" data-testid="hours-upcoming">
+            @for (week of upcoming(); track week.id) {
+              <div class="entry">
+                <span class="entry-name">{{ week.effectiveFrom | appDate: i18n.locale() }}</span>
+                <span class="spacer"></span>
+                @if (canManage()) {
+                  <button
+                    matButton
+                    type="button"
+                    [attr.data-testid]="'edit-week-' + week.effectiveFrom"
+                    (click)="editWeek(week)"
+                  >
+                    {{ i18n.t('settings.hours.copyIntoForm') }}
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        @if (canManage()) {
+          <form class="stack" [formGroup]="hoursForm" (ngSubmit)="saveHours()" novalidate>
+            <mat-form-field class="field">
+              <mat-label>{{ i18n.t('settings.hours.effectiveFrom') }}</mat-label>
+              <!--
+                Read-only on purpose: the adapter formats Thai dates through Intl but cannot read
+                one back, so a typed "19 ก.ย. 2569" would be thrown away. The calendar is the way in.
+              -->
+              <input
+                id="effective-from"
+                matInput
+                readonly
+                formControlName="effectiveFrom"
+                [matDatepicker]="picker"
+                [min]="today()"
+                (click)="picker.open()"
+              />
+              <mat-datepicker-toggle matIconSuffix [for]="picker" />
+              <mat-datepicker #picker />
+              <mat-error
+                [appFieldError]="hoursForm.controls.effectiveFrom"
+                testId="effective-from-error"
+              ></mat-error>
+            </mat-form-field>
+
+            <div class="stack" formGroupName="days">
+              @for (day of weekdays; track day) {
+                <div class="day-row" [formGroupName]="day">
+                  <mat-checkbox formControlName="open" [attr.data-testid]="'open-' + day">
+                    {{ i18n.t('settings.day.' + day) }}
+                  </mat-checkbox>
+
+                  <span class="hour-pickers">
+                    <mat-form-field>
+                      <select
+                        matNativeControl
+                        formControlName="opensHour"
+                        [attr.data-testid]="'opens-' + day"
+                      >
+                        @for (hour of openingHours; track hour) {
+                          <option [ngValue]="hour">{{ hour }}:00</option>
+                        }
+                      </select>
+                    </mat-form-field>
+                    <span>–</span>
+                    <mat-form-field>
+                      <select
+                        matNativeControl
+                        formControlName="closesHour"
+                        [attr.data-testid]="'closes-' + day"
+                      >
+                        @for (hour of closingHours; track hour) {
+                          <option [ngValue]="hour">{{ hour }}:00</option>
+                        }
+                      </select>
+                    </mat-form-field>
+                  </span>
+                </div>
               }
-            }
-          </li>
-        }
-      </ul>
-    }
-
-    @if (canManage()) {
-      <form [formGroup]="newCourtForm" (ngSubmit)="addCourt()" novalidate>
-        <label for="court-name">{{ i18n.t('settings.courts.name') }}</label>
-        <input id="court-name" type="text" formControlName="name" autocomplete="off" />
-        <app-field-error [control]="newCourtForm.controls.name" testId="court-name-error" />
-
-        <button type="submit" [disabled]="addingCourt()">
-          {{ i18n.t(addingCourt() ? 'common.loading' : 'settings.courts.add') }}
-        </button>
-      </form>
-    }
-  </section>
-
-  <section class="card">
-    <h2>{{ i18n.t('settings.hours.title') }}</h2>
-
-    @if (inForce(); as week) {
-      <p class="muted" data-testid="hours-in-force">
-        {{ i18n.t('settings.hours.inForce') }} {{ week.effectiveFrom }}
-      </p>
-      <ul class="list" data-testid="hours-current">
-        @for (day of inForceWeek(); track day.day) {
-          <li>
-            <strong>{{ i18n.t('settings.day.' + day.day) }}</strong>
-            <span [attr.data-testid]="'hours-' + day.day">
-              {{
-                day.opensHour === null
-                  ? i18n.t('settings.hours.closed')
-                  : day.opensHour + ':00 – ' + day.closesHour + ':00'
-              }}
-            </span>
-          </li>
-        }
-      </ul>
-    } @else {
-      <p data-testid="no-hours">{{ i18n.t('settings.hours.none') }}</p>
-    }
-
-    @if (upcoming().length > 0) {
-      <h3>{{ i18n.t('settings.hours.upcoming') }}</h3>
-      <ul class="list" data-testid="hours-upcoming">
-        @for (week of upcoming(); track week.id) {
-          <li>
-            <strong>{{ week.effectiveFrom }}</strong>
-            @if (canManage()) {
-              <button
-                type="button"
-                class="ghost"
-                [attr.data-testid]="'edit-week-' + week.effectiveFrom"
-                (click)="editWeek(week)"
-              >
-                {{ i18n.t('settings.hours.copyIntoForm') }}
-              </button>
-            }
-          </li>
-        }
-      </ul>
-    }
-
-    @if (canManage()) {
-      <form [formGroup]="hoursForm" (ngSubmit)="saveHours()" novalidate>
-        <label for="effective-from">{{ i18n.t('settings.hours.effectiveFrom') }}</label>
-        <input id="effective-from" type="date" formControlName="effectiveFrom" />
-        <app-field-error
-          [control]="hoursForm.controls.effectiveFrom"
-          testId="effective-from-error"
-        />
-
-        <div formGroupName="days">
-          @for (day of weekdays; track day) {
-            <div class="day-row" [formGroupName]="day">
-              <label class="checkbox">
-                <input type="checkbox" formControlName="open" [attr.data-testid]="'open-' + day" />
-                {{ i18n.t('settings.day.' + day) }}
-              </label>
-
-              <select formControlName="opensHour" [attr.data-testid]="'opens-' + day">
-                @for (hour of openingHours; track hour) {
-                  <option [ngValue]="hour">{{ hour }}:00</option>
-                }
-              </select>
-              <span>–</span>
-              <select formControlName="closesHour" [attr.data-testid]="'closes-' + day">
-                @for (hour of closingHours; track hour) {
-                  <option [ngValue]="hour">{{ hour }}:00</option>
-                }
-              </select>
             </div>
-          }
-        </div>
 
-        @if (hoursError(); as key) {
-          <p class="form-error" data-testid="hours-error">{{ i18n.t(key) }}</p>
+            @if (hoursError(); as key) {
+              <p class="form-error" data-testid="hours-error">{{ i18n.t(key) }}</p>
+            }
+
+            <button matButton="filled" type="submit" [disabled]="savingHours()">
+              {{ i18n.t(savingHours() ? 'common.loading' : 'settings.hours.publish') }}
+            </button>
+          </form>
         }
-
-        <button type="submit" [disabled]="savingHours()">
-          {{ i18n.t(savingHours() ? 'common.loading' : 'settings.hours.publish') }}
-        </button>
-      </form>
-    }
-  </section>
+      </mat-card-content>
+    </mat-card>
+  </div>
 }

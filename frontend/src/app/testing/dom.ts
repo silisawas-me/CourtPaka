@@ -42,9 +42,41 @@ export function setInput(
   fixture.detectChanges();
 }
 
+/** Clicks whatever the selector names: a button, or the control inside a Material checkbox. */
 export function check(fixture: ComponentFixture<unknown>, selector: string): void {
-  (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(selector)!.click();
+  controlOf(fixture, selector).click();
   fixture.detectChanges();
+}
+
+/**
+ * A Material control carries the test id on its host and keeps the thing you actually click
+ * inside it: a checkbox has an <input>, a slide toggle and a button toggle have a <button>.
+ * Anything with neither — a plain button or link — is returned as it is.
+ */
+export function controlOf(fixture: ComponentFixture<unknown>, selector: string): HTMLElement {
+  const element = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(selector)!;
+  // An input has no children, so it falls through to itself; a button or link does too.
+  return element.querySelector<HTMLElement>('input, button') ?? element;
+}
+
+/**
+ * Whether a control a test id names is on, read the same way whichever shape Material gave it: a
+ * checkbox reports `checked` on its input, a slide toggle reports `aria-checked` on its button.
+ */
+export function isOn(fixture: ComponentFixture<unknown>, testId: string): boolean {
+  const element = controlOf(fixture, `[data-testid="${testId}"]`);
+  return element instanceof HTMLInputElement
+    ? element.checked
+    : element.getAttribute('aria-checked') === 'true';
+}
+
+/** Whether it refuses to be used. Anything that is neither an input nor a button cannot say. */
+export function isDisabled(fixture: ComponentFixture<unknown>, testId: string): boolean {
+  const element = controlOf(fixture, `[data-testid="${testId}"]`);
+  if (element instanceof HTMLInputElement || element instanceof HTMLButtonElement) {
+    return element.disabled;
+  }
+  throw new Error(`[data-testid="${testId}"] holds no control that can be disabled`);
 }
 
 /** Submits the page's only form, or the one the selector names when a page has several. */
