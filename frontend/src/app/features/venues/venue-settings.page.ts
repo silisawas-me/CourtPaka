@@ -33,6 +33,8 @@ import {
 import { Venue, VenueService } from '../../core/venues/venue.service';
 import { FieldError } from '../../shared/field-error';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
+import { CancellationPolicyEditor } from './cancellation-policy';
+import { PriceBands } from './price-bands';
 
 /** A venue opens on the hour: 0 is the start of the day, 24 is midnight at the end of it. */
 const OPENING_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
@@ -63,6 +65,8 @@ type DayForm = FormGroup<{
     MatProgressBarModule,
     MatSlideToggleModule,
     AppDatePipe,
+    PriceBands,
+    CancellationPolicyEditor,
   ],
   templateUrl: './venue-settings.page.html',
   // This is the only page with a datepicker, so its adapter stays out of the initial bundle.

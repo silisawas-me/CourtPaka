@@ -43,13 +43,13 @@ with sync_playwright() as p:
     stamp = datetime.datetime.now().strftime("%H%M%S")
     for name in (f"Court {stamp}A", f"Court {stamp}B"):
         page.fill("#court-name", name)
-        page.locator("form").first.locator("button[type=submit]").click()
+        page.locator("form:has(#court-name)").locator("button[type=submit]").click()
         page.wait_for_selector(f"text={name}")
     check("courts are added and listed", page.locator("[data-testid=court-row]").count() == existing + 2, page)
 
     # 2. A duplicate name is refused, and the page survives it.
     page.fill("#court-name", f"Court {stamp}A")
-    page.locator("form").first.locator("button[type=submit]").click()
+    page.locator("form:has(#court-name)").locator("button[type=submit]").click()
     page.wait_for_selector("[data-testid=court-error]")
     check("a duplicate court name is refused", page.locator("[data-testid=court-error]").count() == 1)
     check("the page survives the refusal", page.locator("#court-name").count() == 1, page)
@@ -93,7 +93,7 @@ with sync_playwright() as p:
     page.select_option('[data-testid="opens-Tuesday"]', label="7:00")
     page.select_option('[data-testid="closes-Tuesday"]', label="24:00")
     with page.expect_response(lambda response: "/opening-hours" in response.url) as published:
-        page.locator("form").last.locator("button[type=submit]").click()
+        page.locator("form:has(#effective-from)").locator("button[type=submit]").click()
     check("the week was accepted", published.value.status == 200)
     page.reload()
     page.wait_for_selector("[data-testid=hours-current]")
@@ -108,7 +108,7 @@ with sync_playwright() as p:
     # 5. A week dated ahead is listed separately.
     pick_date(page, today + datetime.timedelta(days=30))
     with page.expect_response(lambda response: "/opening-hours" in response.url):
-        page.locator("form").last.locator("button[type=submit]").click()
+        page.locator("form:has(#effective-from)").locator("button[type=submit]").click()
     page.wait_for_selector("[data-testid=hours-upcoming]")
     check(
         "a week dated ahead is listed as upcoming",

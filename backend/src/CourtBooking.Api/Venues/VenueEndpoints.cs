@@ -36,6 +36,7 @@ public static class VenueEndpoints
         venue.MapDelete("/members/{userId:guid}", RemoveMemberAsync).RequireAuthorization(VenuePolicies.OwnerOnly);
 
         venue.MapCourtEndpoints();
+        venue.MapPricingEndpoints();
 
         return venues;
     }

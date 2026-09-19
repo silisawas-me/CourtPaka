@@ -19,6 +19,7 @@ public static class DevelopmentSeeder
     public const int CourtCount = 4;
     public const int OpensHour = 6;
     public const int ClosesHour = 22;
+    public const int PeakFromHour = 18;
 
     public static async Task SeedAsync(IServiceProvider services, CancellationToken cancellationToken = default)
     {
@@ -51,6 +52,7 @@ public static class DevelopmentSeeder
         // without anyone setting a venue up by hand first.
         await EnsureCourtsAsync(database, venue.Id, owner.Id, time, cancellationToken);
         await EnsureOpeningHoursAsync(database, venue.Id, owner.Id, time, cancellationToken);
+        await EnsurePricesAsync(database, venue.Id, owner.Id, time, cancellationToken);
 
         await database.SaveChangesAsync(cancellationToken);
     }
@@ -101,6 +103,29 @@ public static class DevelopmentSeeder
             week,
             ownerId,
             time.GetUtcNow()));
+    }
+
+    private static async Task EnsurePricesAsync(
+        AppDbContext database,
+        Guid venueId,
+        Guid ownerId,
+        TimeProvider time,
+        CancellationToken cancellationToken)
+    {
+        if (await database.PriceLists.AnyAsync(list => list.VenueId == venueId, cancellationToken))
+        {
+            return;
+        }
+
+        // Cheaper before the evening rush, the way a Thai venue usually prices its courts.
+        var bands = Enum.GetValues<DayOfWeek>()
+            .SelectMany(day => new[]
+            {
+                new BandHours(day, OpensHour, PeakFromHour, 200m),
+                new BandHours(day, PeakFromHour, ClosesHour, 300m),
+            });
+
+        database.PriceLists.Add(PriceList.Create(venueId, bands, ownerId, time.GetUtcNow()));
     }
 
     private static async Task<AppUser> EnsureUserAsync(UserManager<AppUser> users, string email)

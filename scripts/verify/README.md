@@ -14,7 +14,10 @@ They sign in as the seeded accounts (`owner@courtpaka.local` / `staff@courtpaka.
 `DevPassword1`) and write screenshots next to themselves. Each check prints PASS or FAIL and the
 script exits non-zero if anything failed.
 
-Two rules worth keeping. Wait for the section to render before counting what is in it — a count
+Three rules worth keeping. A script sets up the state it needs through the API before it drives
+the UI — the scripts share one venue, so one that closes a weekday will break another that prices
+one, and the failure will look like an app bug. And name a form by something inside it rather than
+counting on where it sits: the settings page has four now. Wait for the section to render before counting what is in it — a count
 taken mid-load reads zero, and a check written against an empty database never notices. And wait
 for the response before reloading. The pages apply a change straight
 away and reconcile with the server, so reloading right after a click cancels the request in flight
@@ -27,3 +30,4 @@ tally and the screenshots.
 |---|---|
 | `venue_ui.py` | Sign-in redirects, venue detail, members and permissions (US-14) |
 | `venue_settings.py` | Courts and opening hours (US-11) |
+| `venue_pricing.py` | Prices and the cancellation policy (US-11) |
