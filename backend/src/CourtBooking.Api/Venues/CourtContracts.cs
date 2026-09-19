@@ -5,10 +5,10 @@ public sealed record CreateCourtRequest(string Name);
 public sealed record UpdateCourtRequest(string Name, int Position);
 
 /// <summary>
-/// Taking a court out of use, or putting it back. It applies from today in Thai time; closing a
-/// court for a stretch of dates is a closure instead (PRD US-11).
+/// Taking a court out of use, or putting it back, from a date. Without one it applies from today
+/// in Thai time. Closing a court for a stretch of dates is a closure instead (PRD US-11).
 /// </summary>
-public sealed record ChangeCourtStatusRequest(bool Active);
+public sealed record ChangeCourtStatusRequest(bool Active, DateOnly? EffectiveFrom = null);
 
 public sealed record CourtResponse(Guid Id, string Name, int Position, bool IsActive);
 

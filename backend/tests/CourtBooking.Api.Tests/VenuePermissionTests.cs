@@ -1,13 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text.Json;
-using System.Web;
-using CourtBooking.Api.Data;
-using CourtBooking.Api.Identity;
 using CourtBooking.Api.Tests.Infrastructure;
 using CourtBooking.Api.Venues;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace CourtBooking.Api.Tests;
 
@@ -269,7 +263,7 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
         var response = await owner.PostAsJsonAsync("/api/venues", new { code, name });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(expected, await scenario.ReadErrorCodeAsync(response));
+        Assert.Equal(expected, await response.ErrorCodeAsync());
     }
 
     [Theory]
@@ -284,7 +278,7 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
         var response = await owner.PostAsJsonAsync($"/api/venues/{venue.Id}/invitations", new { email });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(VenueErrorCodes.InvalidEmail, await scenario.ReadErrorCodeAsync(response));
+        Assert.Equal(VenueErrorCodes.InvalidEmail, await response.ErrorCodeAsync());
     }
 
     [Fact]
@@ -296,7 +290,7 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
         var response = await owner.PutAsJsonAsync($"/api/venues/{venue.Id}", new { name = "  " });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(VenueErrorCodes.InvalidName, await scenario.ReadErrorCodeAsync(response));
+        Assert.Equal(VenueErrorCodes.InvalidName, await response.ErrorCodeAsync());
     }
 
     [Fact]
@@ -352,7 +346,7 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
             "/api/venues/invitations/accept", new AcceptInvitationRequest(invitation.Id, token));
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        Assert.Equal(VenueErrorCodes.NotApproved, await scenario.ReadErrorCodeAsync(response));
+        Assert.Equal(VenueErrorCodes.NotApproved, await response.ErrorCodeAsync());
         Assert.Equal(HttpStatusCode.Forbidden, (await staff.GetAsync($"/api/venues/{venue.Id}")).StatusCode);
     }
 

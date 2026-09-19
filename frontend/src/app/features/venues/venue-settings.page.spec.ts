@@ -1,10 +1,19 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TRANSLATIONS } from '../../core/i18n/locales';
-import { pageProviders, signInAs, textOf } from '../../testing/dom';
+import {
+  check,
+  elementOf,
+  pageProviders,
+  setInput,
+  signInAs,
+  submitForm,
+  textOf,
+} from '../../testing/dom';
 import { VenueSettingsPage } from './venue-settings.page';
 
 const OWNER_EMAIL = 'owner@example.com';
+const COURT = { id: 'c1', name: 'Court 1', position: 0, isActive: true };
 
 function venue(overrides: Record<string, unknown> = {}) {
   return {
@@ -56,23 +65,15 @@ describe('VenueSettingsPage', () => {
     fixture.detectChanges();
   }
 
-  function element(): HTMLElement {
-    return fixture.nativeElement as HTMLElement;
-  }
-
   it('adds a court and keeps it in the list without refetching', () => {
     render();
 
-    const name = element().querySelector<HTMLInputElement>('#court-name')!;
-    name.value = 'Court 1';
-    name.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-    element().querySelector('form')!.dispatchEvent(new Event('submit'));
-    fixture.detectChanges();
+    setInput(fixture, '#court-name', 'Court 1');
+    submitForm(fixture);
 
     const request = httpMock.expectOne('/api/venues/v1/courts');
     expect(request.request.body).toEqual({ name: 'Court 1' });
-    request.flush({ id: 'c1', name: 'Court 1', position: 0, isActive: true });
+    request.flush(COURT);
     fixture.detectChanges();
 
     expect(textOf(fixture, 'court-list')).toContain('Court 1');
@@ -82,12 +83,8 @@ describe('VenueSettingsPage', () => {
   it('reports a duplicate court name without losing the page', () => {
     render();
 
-    const name = element().querySelector<HTMLInputElement>('#court-name')!;
-    name.value = 'Court 1';
-    name.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-    element().querySelector('form')!.dispatchEvent(new Event('submit'));
-    fixture.detectChanges();
+    setInput(fixture, '#court-name', 'Court 1');
+    submitForm(fixture);
 
     httpMock
       .expectOne('/api/venues/v1/courts')
@@ -95,25 +92,68 @@ describe('VenueSettingsPage', () => {
     fixture.detectChanges();
 
     expect(textOf(fixture, 'court-error')).toBe(TRANSLATIONS.th['error.court.name_already_used']);
-    expect(element().querySelector('#court-name')).not.toBeNull();
+    expect(elementOf(fixture, 'court-error')).not.toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('#court-name')).not.toBeNull();
+  });
+
+  it('renames a court, keeping the position it already had', () => {
+    render({}, [{ ...COURT, position: 3 }]);
+
+    check(fixture, '[data-testid="rename-c1"]');
+    setInput(fixture, '[data-testid="rename-input-c1"]', 'Centre court');
+    submitForm(fixture);
+
+    const request = httpMock.expectOne('/api/venues/v1/courts/c1');
+    expect(request.request.body).toEqual({ name: 'Centre court', position: 3 });
+    request.flush({ ...COURT, name: 'Centre court', position: 3 });
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'court-list')).toContain('Centre court');
+    expect(elementOf(fixture, 'rename-input-c1')).toBeNull();
+  });
+
+  it('keeps the rename open when the new name is taken', () => {
+    render({}, [COURT]);
+
+    check(fixture, '[data-testid="rename-c1"]');
+    setInput(fixture, '[data-testid="rename-input-c1"]', 'Court 2');
+    submitForm(fixture);
+
+    httpMock
+      .expectOne('/api/venues/v1/courts/c1')
+      .flush({ code: 'court.name_already_used' }, { status: 409, statusText: 'Conflict' });
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'court-error')).toBe(TRANSLATIONS.th['error.court.name_already_used']);
+    expect(elementOf(fixture, 'rename-input-c1')).not.toBeNull();
   });
 
   it('puts the in-use box back when the change is refused', () => {
-    render({}, [{ id: 'c1', name: 'Court 1', position: 0, isActive: true }]);
+    render({}, [COURT]);
 
-    const box = element().querySelector<HTMLInputElement>('[data-testid="court-active-c1"]')!;
-    box.click();
-    fixture.detectChanges();
+    check(fixture, '[data-testid="court-active-c1"]');
 
     httpMock
       .expectOne('/api/venues/v1/courts/c1/status')
       .flush({ code: 'venue.not_approved' }, { status: 403, statusText: 'Forbidden' });
     fixture.detectChanges();
 
-    expect(
-      element().querySelector<HTMLInputElement>('[data-testid="court-active-c1"]')?.checked,
-    ).toBe(true);
+    expect(elementOf<HTMLInputElement>(fixture, 'court-active-c1')?.checked).toBe(true);
     expect(textOf(fixture, 'court-error')).toBe(TRANSLATIONS.th['error.venue.not_approved']);
+  });
+
+  it('disables only the court being saved', () => {
+    render({}, [COURT, { id: 'c2', name: 'Court 2', position: 1, isActive: true }]);
+
+    check(fixture, '[data-testid="court-active-c1"]');
+    const request = httpMock.expectOne('/api/venues/v1/courts/c1/status');
+
+    expect(elementOf<HTMLInputElement>(fixture, 'court-active-c1')?.disabled).toBe(true);
+    expect(elementOf<HTMLInputElement>(fixture, 'court-active-c2')?.disabled).toBe(false);
+
+    request.flush({ ...COURT, isActive: false });
+    fixture.detectChanges();
+    expect(elementOf<HTMLInputElement>(fixture, 'court-active-c1')?.disabled).toBe(false);
   });
 
   it('shows the week in force and fills the form from it', () => {
@@ -121,26 +161,16 @@ describe('VenueSettingsPage', () => {
 
     expect(textOf(fixture, 'hours-in-force')).toContain('2026-09-01');
     expect(textOf(fixture, 'hours-Monday')).toContain('7:00');
-    expect(element().querySelector<HTMLSelectElement>('[data-testid="opens-Monday"]')?.value).toBe(
-      '7',
-    );
-    expect(element().querySelector<HTMLSelectElement>('[data-testid="closes-Monday"]')?.value).toBe(
-      '23',
-    );
+    expect(elementOf<HTMLSelectElement>(fixture, 'opens-Monday')?.value).toBe('7');
+    expect(elementOf<HTMLSelectElement>(fixture, 'closes-Monday')?.value).toBe('23');
   });
 
   it('sends every weekday, with a closed day as nulls', () => {
     render({}, [], [{ id: 's1', effectiveFrom: '2026-09-01', inForce: true, days: week() }]);
 
-    const date = element().querySelector<HTMLInputElement>('#effective-from')!;
-    date.value = '2026-10-01';
-    date.dispatchEvent(new Event('input'));
-    element().querySelector<HTMLInputElement>('[data-testid="open-Monday"]')!.click();
-    fixture.detectChanges();
-
-    const forms = element().querySelectorAll('form');
-    forms[forms.length - 1].dispatchEvent(new Event('submit'));
-    fixture.detectChanges();
+    setInput(fixture, '#effective-from', '2026-10-01');
+    check(fixture, '[data-testid="open-Monday"]');
+    submitForm(fixture, 'form:has(#effective-from)');
 
     const request = httpMock.expectOne('/api/venues/v1/opening-hours');
     const body = request.request.body as { effectiveFrom: string; days: unknown[] };
@@ -155,17 +185,34 @@ describe('VenueSettingsPage', () => {
     expect(textOf(fixture, 'hours-upcoming')).toContain('2026-10-01');
   });
 
+  it('shows the newer week for a date it already had', () => {
+    render(
+      {},
+      [],
+      [
+        { id: 's1', effectiveFrom: '2026-09-01', inForce: true, days: week() },
+        { id: 's2', effectiveFrom: '2026-10-01', inForce: false, days: week() },
+      ],
+    );
+
+    setInput(fixture, '#effective-from', '2026-10-01');
+    submitForm(fixture, 'form:has(#effective-from)');
+    httpMock
+      .expectOne('/api/venues/v1/opening-hours')
+      .flush({ id: 's3', effectiveFrom: '2026-10-01', inForce: false, days: week(9, 21) });
+    fixture.detectChanges();
+
+    const upcoming = (fixture.nativeElement as HTMLElement).querySelectorAll(
+      '[data-testid="hours-upcoming"] li',
+    );
+    expect(upcoming.length).toBe(1);
+  });
+
   it('translates a refused week', () => {
     render({}, [], []);
 
-    const date = element().querySelector<HTMLInputElement>('#effective-from')!;
-    date.value = '2020-01-01';
-    date.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-
-    const forms = element().querySelectorAll('form');
-    forms[forms.length - 1].dispatchEvent(new Event('submit'));
-    fixture.detectChanges();
+    setInput(fixture, '#effective-from', '2020-01-01');
+    submitForm(fixture, 'form:has(#effective-from)');
 
     httpMock
       .expectOne('/api/venues/v1/opening-hours')
@@ -181,27 +228,26 @@ describe('VenueSettingsPage', () => {
   });
 
   it('offers no controls to someone without the permission', () => {
-    render({ role: 'Staff', permissions: ['VerifySlip'] }, [
-      { id: 'c1', name: 'Court 1', position: 0, isActive: true },
-    ]);
+    render({ role: 'Staff', permissions: ['VerifySlip'] }, [COURT]);
 
-    expect(element().querySelector('#court-name')).toBeNull();
-    expect(element().querySelector('#effective-from')).toBeNull();
-    expect(
-      element().querySelector<HTMLInputElement>('[data-testid="court-active-c1"]')?.disabled,
-    ).toBe(true);
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('#court-name')).toBeNull();
+    expect(element.querySelector('#effective-from')).toBeNull();
+    expect(elementOf(fixture, 'rename-c1')).toBeNull();
+    expect(elementOf<HTMLInputElement>(fixture, 'court-active-c1')?.disabled).toBe(true);
     expect(textOf(fixture, 'read-only')).toBe(TRANSLATIONS.th['settings.readOnly']);
   });
 
   it('offers no controls on a venue that is not approved', () => {
-    render({ status: 'Suspended' }, [{ id: 'c1', name: 'Court 1', position: 0, isActive: true }]);
+    render({ status: 'Suspended' }, [COURT]);
 
-    expect(element().querySelector('#court-name')).toBeNull();
-    expect(element().querySelector('#effective-from')).toBeNull();
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('#court-name')).toBeNull();
+    expect(element.querySelector('#effective-from')).toBeNull();
   });
 
   it('reloads when the route moves to another venue', () => {
-    render({}, [{ id: 'c1', name: 'Court 1', position: 0, isActive: true }]);
+    render({}, [COURT]);
 
     fixture.componentRef.setInput('venueId', 'v2');
     fixture.detectChanges();

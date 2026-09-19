@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using CourtBooking.Api.Data;
 using CourtBooking.Api.Http;
 using CourtBooking.Api.Localization;
@@ -13,10 +12,8 @@ namespace CourtBooking.Api.Venues;
 /// </summary>
 public static class CourtEndpoints
 {
-    public static void MapCourtEndpoints(this RouteGroupBuilder venues)
+    public static void MapCourtEndpoints(this RouteGroupBuilder venue)
     {
-        var venue = venues.MapGroup("/{venueId:guid}");
-
         venue.MapGet("/courts", ListCourtsAsync).RequireAuthorization(VenuePolicies.Member);
         venue.MapPost("/courts", AddCourtAsync).RequireAuthorization(VenuePolicies.Settings);
         venue.MapPut("/courts/{courtId:guid}", UpdateCourtAsync).RequireAuthorization(VenuePolicies.Settings);
@@ -29,11 +26,19 @@ public static class CourtEndpoints
         venue.MapPut("/opening-hours", SetOpeningHoursAsync).RequireAuthorization(VenuePolicies.Settings);
     }
 
+    /// <summary>
+    /// The courts as they stand on a date, today unless asked otherwise: the availability grid shows
+    /// days ahead, and a court taken out of use from next week is still in use until then.
+    /// </summary>
     private static async Task<Ok<CourtResponse[]>> ListCourtsAsync(
         Guid venueId,
+        DateOnly? on,
         AppDbContext database,
+        TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
+        var date = on ?? PlatformRequirements.BangkokToday(timeProvider);
+
         var courts = await database.Courts
             .AsNoTracking()
             .Where(court => court.VenueId == venueId)
@@ -41,14 +46,22 @@ public static class CourtEndpoints
             .ThenBy(court => court.Name)
             .ToListAsync(cancellationToken);
 
-        return TypedResults.Ok(courts.Select(ToResponse).ToArray());
+        var changes = await StatusChangesAsync(database, venueId, date, cancellationToken);
+
+        return TypedResults.Ok(courts
+            .Select(court => new CourtResponse(
+                court.Id,
+                court.Name,
+                court.Position,
+                VenueTimeline.CourtIsActiveOn(changes, court.Id, date)))
+            .ToArray());
     }
 
     private static async Task<Results<Created<CourtResponse>, ProblemHttpResult>> AddCourtAsync(
         Guid venueId,
         CreateCourtRequest request,
-        ClaimsPrincipal principal,
         AppDbContext database,
+        CurrentVenue currentVenue,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
@@ -58,37 +71,30 @@ public static class CourtEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, invalid);
         }
 
-        var now = timeProvider.GetUtcNow();
         // New courts land at the end of the grid, where a venue expects to find the one just added.
         var lastPosition = await database.Courts
             .Where(court => court.VenueId == venueId)
             .MaxAsync(court => (int?)court.Position, cancellationToken) ?? -1;
 
-        var court = new Court
-        {
-            VenueId = venueId,
-            Name = request.Name.Trim(),
-            Position = lastPosition + 1,
-            IsActive = true,
-            CreatedAt = now,
-        };
+        var (court, status) = Court.Open(
+            venueId,
+            request.Name.Trim(),
+            lastPosition + 1,
+            currentVenue.Require().UserId,
+            PlatformRequirements.BangkokToday(timeProvider),
+            timeProvider.GetUtcNow());
 
         database.Courts.Add(court);
-        database.CourtStatusChanges.Add(new CourtStatusChange
-        {
-            CourtId = court.Id,
-            Active = true,
-            EffectiveFrom = PlatformRequirements.BangkokToday(timeProvider),
-            ChangedByUserId = UserId(principal),
-            ChangedAt = now,
-        });
+        database.CourtStatusChanges.Add(status);
 
         if (!await SaveAsync(database, cancellationToken))
         {
             return ApiProblem.Of(StatusCodes.Status409Conflict, CourtErrorCodes.NameAlreadyUsed);
         }
 
-        return TypedResults.Created($"/api/venues/{venueId}/courts/{court.Id}", ToResponse(court));
+        return TypedResults.Created(
+            $"/api/venues/{venueId}/courts/{court.Id}",
+            new CourtResponse(court.Id, court.Name, court.Position, status.Active));
     }
 
     private static async Task<Results<Ok<CourtResponse>, NotFound, ProblemHttpResult>> UpdateCourtAsync(
@@ -96,6 +102,7 @@ public static class CourtEndpoints
         Guid courtId,
         UpdateCourtRequest request,
         AppDbContext database,
+        TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
         var invalid = CourtValidation.ValidateName(request.Name) ?? CourtValidation.ValidatePosition(request.Position);
@@ -118,46 +125,48 @@ public static class CourtEndpoints
             return ApiProblem.Of(StatusCodes.Status409Conflict, CourtErrorCodes.NameAlreadyUsed);
         }
 
-        return TypedResults.Ok(ToResponse(court));
+        var today = PlatformRequirements.BangkokToday(timeProvider);
+        return TypedResults.Ok(await ToResponseAsync(database, court, today, cancellationToken));
     }
 
     /// <summary>
-    /// Takes a court out of use or puts it back, from today. The date is recorded, so a report about
-    /// a past month still knows how many courts the venue had then (PRD US-11, US-15).
+    /// Takes a court out of use or puts it back, from today or a date ahead. The change is a row on
+    /// the court's timeline rather than a flag, so a report about a past month still knows how many
+    /// courts the venue had then (PRD US-11, US-15).
     /// </summary>
-    private static async Task<Results<Ok<CourtResponse>, NotFound>> ChangeCourtStatusAsync(
+    private static async Task<Results<Ok<CourtResponse>, NotFound, ProblemHttpResult>> ChangeCourtStatusAsync(
         Guid venueId,
         Guid courtId,
         ChangeCourtStatusRequest request,
-        ClaimsPrincipal principal,
         AppDbContext database,
+        CurrentVenue currentVenue,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
+        var today = PlatformRequirements.BangkokToday(timeProvider);
+        var effectiveFrom = request.EffectiveFrom ?? today;
+
+        var invalid = CourtValidation.ValidateEffectiveFrom(effectiveFrom, today);
+        if (invalid is not null)
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, invalid);
+        }
+
         var court = await FindCourtAsync(database, venueId, courtId, cancellationToken);
         if (court is null)
         {
             return TypedResults.NotFound();
         }
 
-        if (court.IsActive == request.Active)
+        var changes = await StatusChangesAsync(database, venueId, effectiveFrom, cancellationToken);
+        if (VenueTimeline.CourtIsActiveOn(changes, courtId, effectiveFrom) != request.Active)
         {
-            // Nothing changed, so the history gains nothing either.
-            return TypedResults.Ok(ToResponse(court));
+            database.CourtStatusChanges.Add(
+                court.ChangeStatus(request.Active, effectiveFrom, currentVenue.Require().UserId, timeProvider.GetUtcNow()));
+            await database.SaveChangesAsync(cancellationToken);
         }
 
-        court.IsActive = request.Active;
-        database.CourtStatusChanges.Add(new CourtStatusChange
-        {
-            CourtId = court.Id,
-            Active = request.Active,
-            EffectiveFrom = PlatformRequirements.BangkokToday(timeProvider),
-            ChangedByUserId = UserId(principal),
-            ChangedAt = timeProvider.GetUtcNow(),
-        });
-
-        await database.SaveChangesAsync(cancellationToken);
-        return TypedResults.Ok(ToResponse(court));
+        return TypedResults.Ok(await ToResponseAsync(database, court, today, cancellationToken));
     }
 
     private static async Task<Results<Ok<CourtStatusChangeResponse[]>, NotFound>> CourtHistoryAsync(
@@ -166,24 +175,20 @@ public static class CourtEndpoints
         AppDbContext database,
         CancellationToken cancellationToken)
     {
-        if (!await database.Courts.AnyAsync(
-                court => court.Id == courtId && court.VenueId == venueId, cancellationToken))
-        {
-            return TypedResults.NotFound();
-        }
-
+        // A court always has at least the row written when it was added, so an empty history means
+        // there is no such court at this venue.
         var history = await database.CourtStatusChanges
             .AsNoTracking()
-            .Where(change => change.CourtId == courtId)
+            .Where(change => change.CourtId == courtId && change.Court!.VenueId == venueId)
             .OrderByDescending(change => change.EffectiveFrom)
             .ThenByDescending(change => change.ChangedAt)
             .Select(change => new CourtStatusChangeResponse(change.Active, change.EffectiveFrom, change.ChangedAt))
-            .ToListAsync(cancellationToken);
+            .ToArrayAsync(cancellationToken);
 
-        return TypedResults.Ok(history.ToArray());
+        return history.Length == 0 ? TypedResults.NotFound() : TypedResults.Ok(history);
     }
 
-    /// <summary>The week in force today, plus any version dated ahead of it.</summary>
+    /// <summary>The week in force today, plus the newest version for each date ahead of it.</summary>
     private static async Task<Ok<OpeningHoursResponse[]>> ListOpeningHoursAsync(
         Guid venueId,
         AppDbContext database,
@@ -191,70 +196,67 @@ public static class CourtEndpoints
         CancellationToken cancellationToken)
     {
         var today = PlatformRequirements.BangkokToday(timeProvider);
-        var schedules = await database.OpeningHoursSchedules
-            .AsNoTracking()
-            .Where(schedule => schedule.VenueId == venueId)
-            .Include(schedule => schedule.Days)
-            .OrderBy(schedule => schedule.EffectiveFrom)
-            .ToListAsync(cancellationToken);
+        var schedules = await SchedulesAsync(database, venueId, cancellationToken);
+        var inForce = VenueTimeline.OpeningHoursOn(schedules, today);
 
-        var inForce = schedules.LastOrDefault(schedule => schedule.EffectiveFrom <= today);
-        var current = schedules
-            .Where(schedule => schedule == inForce || schedule.EffectiveFrom > today)
+        return TypedResults.Ok(VenueTimeline.CurrentAndUpcoming(schedules, today)
             .Select(schedule => ToResponse(schedule, schedule == inForce))
-            .ToArray();
-
-        return TypedResults.Ok(current);
+            .ToArray());
     }
 
     /// <summary>
-    /// Publishes a week from a date. An existing version for that same date is replaced, so an owner
-    /// correcting a mistake before it starts does not leave two versions behind (PRD US-11).
+    /// Publishes a week from a date. Versions are only added: correcting one before it starts leaves
+    /// the old version in the database, where the report can still see what was in force when the
+    /// venue sold its hours (PRD US-11).
     /// </summary>
     private static async Task<Results<Ok<OpeningHoursResponse>, ProblemHttpResult>> SetOpeningHoursAsync(
         Guid venueId,
         SetOpeningHoursRequest request,
-        ClaimsPrincipal principal,
         AppDbContext database,
+        CurrentVenue currentVenue,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var invalid = CourtValidation.TryReadWeek(request.Days, out var week);
+        var today = PlatformRequirements.BangkokToday(timeProvider);
+        var invalid = CourtValidation.TryReadWeek(request.Days, out var week)
+                      ?? CourtValidation.ValidateEffectiveFrom(request.EffectiveFrom, today);
         if (invalid is not null)
         {
             return ApiProblem.Of(StatusCodes.Status400BadRequest, invalid);
         }
 
-        var today = PlatformRequirements.BangkokToday(timeProvider);
-        if (request.EffectiveFrom < today)
-        {
-            return ApiProblem.Of(StatusCodes.Status400BadRequest, CourtErrorCodes.EffectiveDateInThePast);
-        }
-
-        await database.OpeningHoursSchedules
-            .Where(schedule => schedule.VenueId == venueId && schedule.EffectiveFrom == request.EffectiveFrom)
-            .ExecuteDeleteAsync(cancellationToken);
-
-        var created = new OpeningHoursSchedule
-        {
-            VenueId = venueId,
-            EffectiveFrom = request.EffectiveFrom,
-            CreatedByUserId = UserId(principal),
-            CreatedAt = timeProvider.GetUtcNow(),
-        };
-        created.Days.AddRange(week.Select(day => new OpeningHoursDay
-        {
-            ScheduleId = created.Id,
-            Day = day.Day,
-            OpensHour = day.OpensHour,
-            ClosesHour = day.ClosesHour,
-        }));
+        var created = OpeningHoursSchedule.Create(
+            venueId,
+            request.EffectiveFrom,
+            week,
+            currentVenue.Require().UserId,
+            timeProvider.GetUtcNow());
 
         database.OpeningHoursSchedules.Add(created);
         await database.SaveChangesAsync(cancellationToken);
 
         return TypedResults.Ok(ToResponse(created, created.EffectiveFrom <= today));
     }
+
+    private static Task<List<CourtStatusChange>> StatusChangesAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateOnly on,
+        CancellationToken cancellationToken) =>
+        database.CourtStatusChanges
+            .AsNoTracking()
+            .Where(change => change.Court!.VenueId == venueId && change.EffectiveFrom <= on)
+            .ToListAsync(cancellationToken);
+
+    private static Task<List<OpeningHoursSchedule>> SchedulesAsync(
+        AppDbContext database,
+        Guid venueId,
+        CancellationToken cancellationToken) =>
+        database.OpeningHoursSchedules
+            .AsNoTracking()
+            .Where(schedule => schedule.VenueId == venueId)
+            .Include(schedule => schedule.Days)
+            .ToListAsync(cancellationToken);
 
     private static Task<Court?> FindCourtAsync(
         AppDbContext database,
@@ -281,11 +283,16 @@ public static class CourtEndpoints
         }
     }
 
-    private static Guid UserId(ClaimsPrincipal principal) =>
-        Guid.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!);
-
-    private static CourtResponse ToResponse(Court court) =>
-        new(court.Id, court.Name, court.Position, court.IsActive);
+    private static async Task<CourtResponse> ToResponseAsync(
+        AppDbContext database,
+        Court court,
+        DateOnly on,
+        CancellationToken cancellationToken)
+    {
+        var changes = await StatusChangesAsync(database, court.VenueId, on, cancellationToken);
+        return new CourtResponse(
+            court.Id, court.Name, court.Position, VenueTimeline.CourtIsActiveOn(changes, court.Id, on));
+    }
 
     private static OpeningHoursResponse ToResponse(OpeningHoursSchedule schedule, bool inForce) =>
         new(

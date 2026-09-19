@@ -72,24 +72,11 @@ public static class DevelopmentSeeder
 
         for (var index = 0; index < CourtCount; index++)
         {
-            var court = new Court
-            {
-                VenueId = venueId,
-                Name = $"Court {index + 1}",
-                Position = index,
-                IsActive = true,
-                CreatedAt = now,
-            };
-
+            // Through the same factory the endpoint uses, so the court and its first status row are
+            // always written together.
+            var (court, status) = Court.Open(venueId, $"Court {index + 1}", index, ownerId, today, now);
             database.Courts.Add(court);
-            database.CourtStatusChanges.Add(new CourtStatusChange
-            {
-                CourtId = court.Id,
-                Active = true,
-                EffectiveFrom = today,
-                ChangedByUserId = ownerId,
-                ChangedAt = now,
-            });
+            database.CourtStatusChanges.Add(status);
         }
     }
 
@@ -106,24 +93,14 @@ public static class DevelopmentSeeder
             return;
         }
 
-        var schedule = new OpeningHoursSchedule
-        {
-            VenueId = venueId,
-            // Dated well back, so the seeded week is in force however long the database has existed.
-            EffectiveFrom = PlatformRequirements.BangkokToday(time).AddYears(-1),
-            CreatedByUserId = ownerId,
-            CreatedAt = time.GetUtcNow(),
-        };
+        var week = Enum.GetValues<DayOfWeek>().Select(day => new WeekdayHours(day, OpensHour, ClosesHour));
 
-        schedule.Days.AddRange(Enum.GetValues<DayOfWeek>().Select(day => new OpeningHoursDay
-        {
-            ScheduleId = schedule.Id,
-            Day = day,
-            OpensHour = OpensHour,
-            ClosesHour = ClosesHour,
-        }));
-
-        database.OpeningHoursSchedules.Add(schedule);
+        database.OpeningHoursSchedules.Add(OpeningHoursSchedule.Create(
+            venueId,
+            PlatformRequirements.BangkokToday(time),
+            week,
+            ownerId,
+            time.GetUtcNow()));
     }
 
     private static async Task<AppUser> EnsureUserAsync(UserManager<AppUser> users, string email)

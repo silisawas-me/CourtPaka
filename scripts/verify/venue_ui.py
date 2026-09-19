@@ -1,32 +1,10 @@
 """Checks the code-review fixes against the running Docker stack (http://localhost:8080)."""
-import pathlib
-import sys
 import time
 
+from harness import BASE, OWNER, STAFF, Checks, login
 from playwright.sync_api import expect, sync_playwright
 
-BASE = "http://localhost:8080"
-OWNER = "owner@courtpaka.local"
-STAFF = "staff@courtpaka.local"
-PASSWORD = "DevPassword1"
-SHOTS = pathlib.Path(__file__).parent / "shots"
-SHOTS.mkdir(exist_ok=True)
-
-passed, failed = [], []
-
-
-def check(name, condition, page=None):
-    (passed if condition else failed).append(name)
-    print(("PASS  " if condition else "FAIL  ") + name)
-    if page is not None:
-        page.screenshot(path=str(SHOTS / (name.replace(" ", "_").replace("/", "-") + ".png")), full_page=True)
-
-
-def login(page, email):
-    page.fill("#email", email)
-    page.fill("#password", PASSWORD)
-    page.click("button[type=submit]")
-
+check = Checks(__file__)
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
@@ -122,7 +100,4 @@ with sync_playwright() as p:
 
     browser.close()
 
-print(f"\n{len(passed)} passed, {len(failed)} failed")
-for name in failed:
-    print("  FAILED: " + name)
-sys.exit(1 if failed else 0)
+check.summarise()

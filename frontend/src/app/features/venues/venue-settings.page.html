@@ -33,17 +33,47 @@
       <ul class="list" data-testid="court-list">
         @for (court of courtList(); track court.id) {
           <li>
-            <strong>{{ court.name }}</strong>
-            <label class="checkbox">
-              <input
-                type="checkbox"
-                [checked]="court.isActive"
-                [disabled]="!canManage() || savingCourt() !== null"
-                [attr.data-testid]="'court-active-' + court.id"
-                (change)="toggleCourt(court, $any($event.target).checked)"
-              />
-              {{ i18n.t('settings.courts.inUse') }}
-            </label>
+            @if (renaming() === court.id) {
+              <form [formGroup]="renameForm" (ngSubmit)="saveRename(court)" novalidate>
+                <input
+                  type="text"
+                  formControlName="name"
+                  autocomplete="off"
+                  [attr.data-testid]="'rename-input-' + court.id"
+                />
+                <app-field-error [control]="renameForm.controls.name" testId="rename-error" />
+                <button type="submit" [disabled]="savingCourt() === court.id">
+                  {{ i18n.t('settings.courts.saveName') }}
+                </button>
+                <button type="button" class="ghost" (click)="cancelRename()">
+                  {{ i18n.t('common.cancel') }}
+                </button>
+              </form>
+            } @else {
+              <strong>{{ court.name }}</strong>
+
+              <label class="checkbox">
+                <input
+                  type="checkbox"
+                  [checked]="court.isActive"
+                  [disabled]="!canManage() || savingCourt() === court.id"
+                  [attr.data-testid]="'court-active-' + court.id"
+                  (change)="toggleCourt(court, $any($event.target).checked)"
+                />
+                {{ i18n.t('settings.courts.inUse') }}
+              </label>
+
+              @if (canManage()) {
+                <button
+                  type="button"
+                  class="ghost"
+                  [attr.data-testid]="'rename-' + court.id"
+                  (click)="startRename(court)"
+                >
+                  {{ i18n.t('settings.courts.rename') }}
+                </button>
+              }
+            }
           </li>
         }
       </ul>
@@ -70,18 +100,16 @@
         {{ i18n.t('settings.hours.inForce') }} {{ week.effectiveFrom }}
       </p>
       <ul class="list" data-testid="hours-current">
-        @for (day of weekdays; track day) {
+        @for (day of inForceWeek(); track day.day) {
           <li>
-            <strong>{{ i18n.t('settings.day.' + day) }}</strong>
-            @if (hoursOf(week, day); as entry) {
-              <span [attr.data-testid]="'hours-' + day">
-                {{
-                  entry.opensHour === null
-                    ? i18n.t('settings.hours.closed')
-                    : entry.opensHour + ':00 – ' + entry.closesHour + ':00'
-                }}
-              </span>
-            }
+            <strong>{{ i18n.t('settings.day.' + day.day) }}</strong>
+            <span [attr.data-testid]="'hours-' + day.day">
+              {{
+                day.opensHour === null
+                  ? i18n.t('settings.hours.closed')
+                  : day.opensHour + ':00 – ' + day.closesHour + ':00'
+              }}
+            </span>
           </li>
         }
       </ul>
@@ -128,13 +156,13 @@
               </label>
 
               <select formControlName="opensHour" [attr.data-testid]="'opens-' + day">
-                @for (hour of hours.slice(0, 24); track hour) {
+                @for (hour of openingHours; track hour) {
                   <option [value]="hour">{{ hour }}:00</option>
                 }
               </select>
               <span>–</span>
               <select formControlName="closesHour" [attr.data-testid]="'closes-' + day">
-                @for (hour of hours.slice(1); track hour) {
+                @for (hour of closingHours; track hour) {
                   <option [value]="hour">{{ hour }}:00</option>
                 }
               </select>

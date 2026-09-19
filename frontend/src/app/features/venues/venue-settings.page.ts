@@ -1,7 +1,15 @@
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  FormBuilder,
+  FormControl,
+  FormGroup,
+  ReactiveFormsModule,
+  Validators,
+} from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
+import { errorKey } from '../../core/http/api-error';
+import { TranslationService } from '../../core/i18n/translation.service';
 import {
   Court,
   CourtService,
@@ -10,13 +18,22 @@ import {
   WEEKDAYS,
   Weekday,
 } from '../../core/venues/court.service';
-import { errorKey } from '../../core/http/api-error';
-import { TranslationService } from '../../core/i18n/translation.service';
 import { Venue, VenueService } from '../../core/venues/venue.service';
 import { FieldError } from '../../shared/field-error';
 
-/** The hours a venue can pick between: 0 opens the day, 24 closes it at midnight. */
-const HOURS = Array.from({ length: 25 }, (_, hour) => hour);
+/** A venue opens on the hour: 0 is the start of the day, 24 is midnight at the end of it. */
+const OPENING_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
+const CLOSING_HOURS = Array.from({ length: 24 }, (_, hour) => hour + 1);
+
+/** What the form offers before a venue says otherwise: a common Thai badminton day. */
+const DEFAULT_OPENS_HOUR = 6;
+const DEFAULT_CLOSES_HOUR = 22;
+
+type DayForm = FormGroup<{
+  open: FormControl<boolean>;
+  opensHour: FormControl<number>;
+  closesHour: FormControl<number>;
+}>;
 
 @Component({
   selector: 'app-venue-settings-page',
@@ -30,7 +47,8 @@ export class VenueSettingsPage {
 
   protected readonly i18n = inject(TranslationService);
   protected readonly weekdays = WEEKDAYS;
-  protected readonly hours = HOURS;
+  protected readonly openingHours = OPENING_HOURS;
+  protected readonly closingHours = CLOSING_HOURS;
 
   readonly venueId = input.required<string>();
 
@@ -42,6 +60,7 @@ export class VenueSettingsPage {
   protected readonly courtError = signal<string | null>(null);
   protected readonly hoursError = signal<string | null>(null);
   protected readonly savingCourt = signal<string | null>(null);
+  protected readonly renaming = signal<string | null>(null);
   protected readonly addingCourt = signal(false);
   protected readonly savingHours = signal(false);
 
@@ -59,24 +78,27 @@ export class VenueSettingsPage {
 
   protected readonly upcoming = computed(() => this.schedules().filter((week) => !week.inForce));
 
+  /** The week in force, one row per weekday in reading order, recomputed only when it changes. */
+  protected readonly inForceWeek = computed(() => {
+    const week = this.inForce();
+    return week === null
+      ? []
+      : WEEKDAYS.map((day) => week.days.find((entry) => entry.day === day)).filter(
+          (entry): entry is OpeningHoursDay => entry !== undefined,
+        );
+  });
+
   protected readonly newCourtForm = this.formBuilder.nonNullable.group({
+    name: ['', [Validators.required, Validators.maxLength(50)]],
+  });
+
+  protected readonly renameForm = this.formBuilder.nonNullable.group({
     name: ['', [Validators.required, Validators.maxLength(50)]],
   });
 
   protected readonly hoursForm = this.formBuilder.nonNullable.group({
     effectiveFrom: ['', Validators.required],
-    days: this.formBuilder.nonNullable.group(
-      Object.fromEntries(
-        WEEKDAYS.map((day) => [
-          day,
-          this.formBuilder.nonNullable.group({
-            open: [true],
-            opensHour: [6],
-            closesHour: [22],
-          }),
-        ]),
-      ),
-    ),
+    days: this.formBuilder.nonNullable.group(this.emptyWeek()),
   });
 
   constructor() {
@@ -105,8 +127,42 @@ export class VenueSettingsPage {
     });
   }
 
+  protected startRename(court: Court): void {
+    this.renaming.set(court.id);
+    this.courtError.set(null);
+    this.renameForm.reset({ name: court.name });
+  }
+
+  protected cancelRename(): void {
+    this.renaming.set(null);
+  }
+
+  protected saveRename(court: Court): void {
+    this.renameForm.markAllAsTouched();
+    if (this.renameForm.invalid || this.savingCourt() !== null) {
+      return;
+    }
+
+    this.savingCourt.set(court.id);
+    this.courtError.set(null);
+
+    this.courts
+      .updateCourt(this.venueId(), court.id, this.renameForm.controls.name.value, court.position)
+      .subscribe({
+        next: (updated) => {
+          this.savingCourt.set(null);
+          this.renaming.set(null);
+          this.patchCourt(court.id, updated);
+        },
+        error: (error: unknown) => {
+          this.savingCourt.set(null);
+          this.courtError.set(errorKey(error));
+        },
+      });
+  }
+
   protected toggleCourt(court: Court, active: boolean): void {
-    if (this.savingCourt() !== null) {
+    if (this.savingCourt() === court.id) {
       return;
     }
 
@@ -141,7 +197,8 @@ export class VenueSettingsPage {
     this.courts.setOpeningHours(this.venueId(), effectiveFrom, this.week()).subscribe({
       next: (saved) => {
         this.savingHours.set(false);
-        // One version per start date, the way the server stores it.
+        // The server keeps every version but only ever runs on the newest for a date, so the page
+        // shows one row per date, like the list endpoint does.
         this.schedules.update((list) => [
           ...list.filter((week) => week.effectiveFrom !== saved.effectiveFrom),
           saved,
@@ -157,17 +214,12 @@ export class VenueSettingsPage {
   /** Puts a published week back into the form, so a small change does not mean retyping seven days. */
   protected editWeek(week: OpeningHours): void {
     for (const day of week.days) {
-      const control = this.hoursForm.controls.days.controls[day.day];
-      control?.setValue({
+      this.hoursForm.controls.days.controls[day.day].setValue({
         open: day.opensHour !== null,
-        opensHour: day.opensHour ?? 6,
-        closesHour: day.closesHour ?? 22,
+        opensHour: day.opensHour ?? DEFAULT_OPENS_HOUR,
+        closesHour: day.closesHour ?? DEFAULT_CLOSES_HOUR,
       });
     }
-  }
-
-  protected hoursOf(week: OpeningHours, day: Weekday): OpeningHoursDay | undefined {
-    return week.days.find((entry) => entry.day === day);
   }
 
   private week(): OpeningHoursDay[] {
@@ -177,6 +229,19 @@ export class VenueSettingsPage {
       opensHour: days[day].open ? days[day].opensHour : null,
       closesHour: days[day].open ? days[day].closesHour : null,
     }));
+  }
+
+  /** Typed per weekday, so the template and editWeek address the days by name, not by index. */
+  private emptyWeek(): Record<Weekday, DayForm> {
+    const week = {} as Record<Weekday, DayForm>;
+    for (const day of WEEKDAYS) {
+      week[day] = this.formBuilder.nonNullable.group({
+        open: this.formBuilder.nonNullable.control(true),
+        opensHour: this.formBuilder.nonNullable.control(DEFAULT_OPENS_HOUR),
+        closesHour: this.formBuilder.nonNullable.control(DEFAULT_CLOSES_HOUR),
+      });
+    }
+    return week;
   }
 
   private patchCourt(courtId: string, change: Partial<Court>): void {
@@ -193,6 +258,7 @@ export class VenueSettingsPage {
     this.pageError.set(null);
     this.courtError.set(null);
     this.hoursError.set(null);
+    this.renaming.set(null);
 
     forkJoin({
       venue: this.venues.get(venueId),
@@ -205,7 +271,7 @@ export class VenueSettingsPage {
         this.schedules.set(schedules);
         this.loading.set(false);
 
-        const current = schedules.find((week) => week.inForce);
+        const current = this.inForce();
         if (current) {
           this.editWeek(current);
         }

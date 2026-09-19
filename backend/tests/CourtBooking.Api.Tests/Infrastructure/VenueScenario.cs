@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text.Json;
 using System.Web;
 using CourtBooking.Api.Data;
 using CourtBooking.Api.Identity;
@@ -39,24 +38,32 @@ public sealed class VenueScenario(ApiTestFixture api)
         return (client, email);
     }
 
-    public async Task<VenueResponse> CreateVenueAsync(HttpClient client)
+    public async Task<VenueResponse> CreateVenueAsync(HttpClient client) =>
+        await ReadAsync<VenueResponse>(
+            await client.PostAsJsonAsync("/api/venues", new CreateVenueRequest(NewCode(), "Smash Court")),
+            HttpStatusCode.Created);
+
+    /// <summary>
+    /// Checks the status the endpoint promised and hands back the body, so a test that is about
+    /// something else does not spell out both every time.
+    /// </summary>
+    public static async Task<T> ReadAsync<T>(
+        HttpResponseMessage response,
+        HttpStatusCode expected = HttpStatusCode.OK)
     {
-        var response = await client.PostAsJsonAsync("/api/venues", new CreateVenueRequest(NewCode(), "Smash Court"));
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<VenueResponse>())!;
+        Assert.Equal(expected, response.StatusCode);
+        return (await response.Content.ReadFromJsonAsync<T>())!;
     }
 
     public async Task<VenueInvitationResponse> InviteAsync(
         HttpClient owner,
         Guid venueId,
         string email,
-        string[]? permissions = null)
-    {
-        var response = await owner.PostAsJsonAsync(
-            $"/api/venues/{venueId}/invitations", new InviteMemberRequest(email, permissions));
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<VenueInvitationResponse>())!;
-    }
+        string[]? permissions = null) =>
+        await ReadAsync<VenueInvitationResponse>(
+            await owner.PostAsJsonAsync(
+                $"/api/venues/{venueId}/invitations", new InviteMemberRequest(email, permissions)),
+            HttpStatusCode.Created);
 
     public async Task<VenueInvitationResponse> InviteAndAcceptAsync(
         HttpClient owner,
@@ -98,16 +105,6 @@ public sealed class VenueScenario(ApiTestFixture api)
             .ExecuteUpdateAsync(setters => setters.SetProperty(venue => venue.Status, status));
     }
 
-    public async Task<string?> ReadErrorCodeAsync(HttpResponseMessage response)
-    {
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        return document.RootElement.TryGetProperty("code", out var code) ? code.GetString() : null;
-    }
-
-    public async Task<VenueMemberResponse[]> GetMembersAsync(HttpClient client, Guid venueId)
-    {
-        var response = await client.GetAsync($"/api/venues/{venueId}/members");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<VenueMemberResponse[]>())!;
-    }
+    public async Task<VenueMemberResponse[]> GetMembersAsync(HttpClient client, Guid venueId) =>
+        await ReadAsync<VenueMemberResponse[]>(await client.GetAsync($"/api/venues/{venueId}/members"));
 }

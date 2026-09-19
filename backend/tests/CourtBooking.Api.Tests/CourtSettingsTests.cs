@@ -1,8 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
+using CourtBooking.Api.Data;
 using CourtBooking.Api.Localization;
 using CourtBooking.Api.Tests.Infrastructure;
 using CourtBooking.Api.Venues;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CourtBooking.Api.Tests;
 
@@ -40,7 +43,7 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
             $"/api/venues/{venue.Id}/courts", new CreateCourtRequest("Court 1"));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.Equal(CourtErrorCodes.NameAlreadyUsed, await scenario.ReadErrorCodeAsync(response));
+        Assert.Equal(CourtErrorCodes.NameAlreadyUsed, await response.ErrorCodeAsync());
     }
 
     [Fact]
@@ -64,7 +67,7 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
             $"/api/venues/{venue.Id}/courts", new CreateCourtRequest("   "));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(CourtErrorCodes.InvalidCourtName, await scenario.ReadErrorCodeAsync(response));
+        Assert.Equal(CourtErrorCodes.InvalidCourtName, await response.ErrorCodeAsync());
     }
 
     [Fact]
@@ -80,6 +83,22 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
         // Newest first: out of use today, in use from the day it was added.
         Assert.Equal([false, true], history.Select(entry => entry.Active));
         Assert.All(history, entry => Assert.Equal(Today, entry.EffectiveFrom));
+    }
+
+    [Fact]
+    public async Task A_court_taken_out_of_use_from_a_later_date_is_still_in_use_until_then()
+    {
+        var (owner, venue) = await OwnedVenueAsync();
+        var court = await AddCourtAsync(owner, venue.Id, "Court 1");
+        var friday = Today.AddDays(5);
+
+        var today = await ChangeStatusAsync(owner, venue.Id, court.Id, active: false, from: friday);
+
+        // The list answers for a date, because the availability grid shows days ahead (US-02).
+        Assert.True(today.IsActive);
+        Assert.True(Assert.Single(await ListCourtsAsync(owner, venue.Id)).IsActive);
+        Assert.True(Assert.Single(await ListCourtsAsync(owner, venue.Id, friday.AddDays(-1))).IsActive);
+        Assert.False(Assert.Single(await ListCourtsAsync(owner, venue.Id, friday)).IsActive);
     }
 
     [Fact]
@@ -105,6 +124,80 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
 
         Assert.True(unchanged.IsActive);
         Assert.Single(await HistoryAsync(owner, venue.Id, court.Id));
+    }
+
+    [Fact]
+    public async Task A_status_change_cannot_be_backdated()
+    {
+        var (owner, venue) = await OwnedVenueAsync();
+        var court = await AddCourtAsync(owner, venue.Id, "Court 1");
+
+        var response = await owner.PutAsJsonAsync(
+            $"/api/venues/{venue.Id}/courts/{court.Id}/status",
+            new ChangeCourtStatusRequest(false, Today.AddDays(-1)));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(CourtErrorCodes.EffectiveDateInThePast, await response.ErrorCodeAsync());
+    }
+
+    [Fact]
+    public async Task A_court_can_be_renamed_and_moved_in_the_grid()
+    {
+        var (owner, venue) = await OwnedVenueAsync();
+        var first = await AddCourtAsync(owner, venue.Id, "Court 1");
+        await AddCourtAsync(owner, venue.Id, "Court 2");
+
+        var renamed = await VenueScenario.ReadAsync<CourtResponse>(
+            await owner.PutAsJsonAsync(
+                $"/api/venues/{venue.Id}/courts/{first.Id}", new UpdateCourtRequest("Centre court", 5)));
+
+        Assert.Equal("Centre court", renamed.Name);
+        Assert.Equal(5, renamed.Position);
+        Assert.True(renamed.IsActive);
+        // Position decides the order of the grid, so the renamed court is now last.
+        Assert.Equal(["Court 2", "Centre court"], (await ListCourtsAsync(owner, venue.Id)).Select(c => c.Name));
+    }
+
+    [Fact]
+    public async Task A_court_cannot_be_renamed_onto_another_courts_name()
+    {
+        var (owner, venue) = await OwnedVenueAsync();
+        var first = await AddCourtAsync(owner, venue.Id, "Court 1");
+        await AddCourtAsync(owner, venue.Id, "Court 2");
+
+        var response = await owner.PutAsJsonAsync(
+            $"/api/venues/{venue.Id}/courts/{first.Id}", new UpdateCourtRequest("Court 2", 0));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(CourtErrorCodes.NameAlreadyUsed, await response.ErrorCodeAsync());
+    }
+
+    [Theory]
+    [InlineData("", 0, CourtErrorCodes.InvalidCourtName)]
+    [InlineData("Court 9", -1, CourtErrorCodes.InvalidPosition)]
+    [InlineData("Court 9", 501, CourtErrorCodes.InvalidPosition)]
+    public async Task A_court_update_that_makes_no_sense_is_refused(string name, int position, string expected)
+    {
+        var (owner, venue) = await OwnedVenueAsync();
+        var court = await AddCourtAsync(owner, venue.Id, "Court 1");
+
+        var response = await owner.PutAsJsonAsync(
+            $"/api/venues/{venue.Id}/courts/{court.Id}", new UpdateCourtRequest(name, position));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(expected, await response.ErrorCodeAsync());
+    }
+
+    [Fact]
+    public async Task The_history_of_a_court_at_another_venue_is_not_found_through_this_one()
+    {
+        var (owner, venue) = await OwnedVenueAsync();
+        var other = await scenario.CreateVenueAsync(owner);
+        var court = await AddCourtAsync(owner, other.Id, "Court 1");
+
+        var response = await owner.GetAsync($"/api/venues/{venue.Id}/courts/{court.Id}/status-history");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
@@ -214,17 +307,37 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
     }
 
     [Fact]
-    public async Task Publishing_the_same_start_date_twice_replaces_the_first_version()
+    public async Task Publishing_the_same_start_date_twice_shows_the_newer_week_and_keeps_the_older_one()
     {
         var (owner, venue) = await OwnedVenueAsync();
         var start = Today.AddDays(7);
 
-        await SetHoursAsync(owner, venue.Id, OpenEveryDay(start));
-        await SetHoursAsync(owner, venue.Id, OpenEveryDay(start, opens: 9, closes: 21));
+        var first = await SetHoursAsync(owner, venue.Id, OpenEveryDay(start));
+        var second = await SetHoursAsync(owner, venue.Id, OpenEveryDay(start, opens: 9, closes: 21));
 
         var schedules = await ListHoursAsync(owner, venue.Id);
-        var schedule = Assert.Single(schedules, item => item.EffectiveFrom == start);
-        Assert.Equal(9, schedule.Days.First().OpensHour);
+        var shown = Assert.Single(schedules, item => item.EffectiveFrom == start);
+        Assert.Equal(second.Id, shown.Id);
+        Assert.Equal(9, shown.Days.First().OpensHour);
+
+        // The superseded version is still there: a report about hours already sold needs it.
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.True(await database.OpeningHoursSchedules.AnyAsync(schedule => schedule.Id == first.Id));
+    }
+
+    [Fact]
+    public async Task The_week_in_force_is_the_newest_one_that_has_started()
+    {
+        var (owner, venue) = await OwnedVenueAsync();
+
+        await SetHoursAsync(owner, venue.Id, OpenEveryDay(Today, opens: 6, closes: 22));
+        await SetHoursAsync(owner, venue.Id, OpenEveryDay(Today.AddDays(3), opens: 8, closes: 20));
+
+        var schedules = await ListHoursAsync(owner, venue.Id);
+        var inForce = Assert.Single(schedules, schedule => schedule.InForce);
+        Assert.Equal(Today, inForce.EffectiveFrom);
+        Assert.Equal(6, inForce.Days.First().OpensHour);
     }
 
     [Fact]
@@ -257,7 +370,7 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
             $"/api/venues/{venue.Id}/opening-hours", OpenEveryDay(Today, opens, closes));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(expected, await scenario.ReadErrorCodeAsync(response));
+        Assert.Equal(expected, await response.ErrorCodeAsync());
     }
 
     [Fact]
@@ -270,7 +383,7 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
             $"/api/venues/{venue.Id}/opening-hours", new SetOpeningHoursRequest(Today, week));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(CourtErrorCodes.MissingDay, await scenario.ReadErrorCodeAsync(response));
+        Assert.Equal(CourtErrorCodes.MissingDay, await response.ErrorCodeAsync());
     }
 
     [Fact]
@@ -285,7 +398,7 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
             $"/api/venues/{venue.Id}/opening-hours", new SetOpeningHoursRequest(Today, week));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(CourtErrorCodes.DuplicateDay, await scenario.ReadErrorCodeAsync(response));
+        Assert.Equal(CourtErrorCodes.DuplicateDay, await response.ErrorCodeAsync());
     }
 
     [Fact]
@@ -300,7 +413,7 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
             $"/api/venues/{venue.Id}/opening-hours", new SetOpeningHoursRequest(Today, week));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(CourtErrorCodes.NeverOpen, await scenario.ReadErrorCodeAsync(response));
+        Assert.Equal(CourtErrorCodes.NeverOpen, await response.ErrorCodeAsync());
     }
 
     [Fact]
@@ -312,7 +425,7 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
             $"/api/venues/{venue.Id}/opening-hours", OpenEveryDay(Today.AddDays(-1)));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(CourtErrorCodes.EffectiveDateInThePast, await scenario.ReadErrorCodeAsync(response));
+        Assert.Equal(CourtErrorCodes.EffectiveDateInThePast, await response.ErrorCodeAsync());
     }
 
     [Fact]
@@ -327,7 +440,7 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
             $"/api/venues/{venue.Id}/opening-hours", new SetOpeningHoursRequest(Today, week));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(CourtErrorCodes.InvalidDay, await scenario.ReadErrorCodeAsync(response));
+        Assert.Equal(CourtErrorCodes.InvalidDay, await response.ErrorCodeAsync());
     }
 
     private static SetOpeningHoursRequest OpenEveryDay(DateOnly from, int? opens = 6, int? closes = 22) =>
@@ -343,52 +456,43 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
         return (owner, await scenario.CreateVenueAsync(owner));
     }
 
-    private static async Task<CourtResponse> AddCourtAsync(HttpClient client, Guid venueId, string name)
-    {
-        var response = await client.PostAsJsonAsync($"/api/venues/{venueId}/courts", new CreateCourtRequest(name));
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<CourtResponse>())!;
-    }
+    private static async Task<CourtResponse> AddCourtAsync(HttpClient client, Guid venueId, string name) =>
+        await VenueScenario.ReadAsync<CourtResponse>(
+            await client.PostAsJsonAsync($"/api/venues/{venueId}/courts", new CreateCourtRequest(name)),
+            HttpStatusCode.Created);
 
-    private static async Task<CourtResponse[]> ListCourtsAsync(HttpClient client, Guid venueId)
-    {
-        var response = await client.GetAsync($"/api/venues/{venueId}/courts");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<CourtResponse[]>())!;
-    }
+    private static async Task<CourtResponse[]> ListCourtsAsync(
+        HttpClient client,
+        Guid venueId,
+        DateOnly? on = null) =>
+        await VenueScenario.ReadAsync<CourtResponse[]>(
+            await client.GetAsync($"/api/venues/{venueId}/courts" + (on is null ? "" : $"?on={on:yyyy-MM-dd}")));
 
     private static async Task<CourtResponse> ChangeStatusAsync(
         HttpClient client,
         Guid venueId,
         Guid courtId,
-        bool active)
-    {
-        var response = await client.PutAsJsonAsync(
-            $"/api/venues/{venueId}/courts/{courtId}/status", new ChangeCourtStatusRequest(active));
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<CourtResponse>())!;
-    }
+        bool active,
+        DateOnly? from = null) =>
+        await VenueScenario.ReadAsync<CourtResponse>(
+            await client.PutAsJsonAsync(
+                $"/api/venues/{venueId}/courts/{courtId}/status", new ChangeCourtStatusRequest(active, from)));
 
     private static async Task<CourtStatusChangeResponse[]> HistoryAsync(
         HttpClient client,
         Guid venueId,
-        Guid courtId)
-    {
-        var response = await client.GetAsync($"/api/venues/{venueId}/courts/{courtId}/status-history");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<CourtStatusChangeResponse[]>())!;
-    }
+        Guid courtId) =>
+        await VenueScenario.ReadAsync<CourtStatusChangeResponse[]>(
+            await client.GetAsync($"/api/venues/{venueId}/courts/{courtId}/status-history"));
 
-    private static async Task SetHoursAsync(HttpClient client, Guid venueId, SetOpeningHoursRequest request)
-    {
-        var response = await client.PutAsJsonAsync($"/api/venues/{venueId}/opening-hours", request);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
+    private static async Task<OpeningHoursResponse> SetHoursAsync(
+        HttpClient client,
+        Guid venueId,
+        SetOpeningHoursRequest request) =>
+        await VenueScenario.ReadAsync<OpeningHoursResponse>(
+            await client.PutAsJsonAsync($"/api/venues/{venueId}/opening-hours", request));
 
-    private static async Task<OpeningHoursResponse[]> ListHoursAsync(HttpClient client, Guid venueId)
-    {
-        var response = await client.GetAsync($"/api/venues/{venueId}/opening-hours");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<OpeningHoursResponse[]>())!;
-    }
+    private static async Task<OpeningHoursResponse[]> ListHoursAsync(HttpClient client, Guid venueId) =>
+        await VenueScenario.ReadAsync<OpeningHoursResponse[]>(
+            await client.GetAsync($"/api/venues/{venueId}/opening-hours"));
 }

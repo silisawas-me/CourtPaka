@@ -35,7 +35,7 @@ public static class VenueEndpoints
         venue.MapPut("/members/{userId:guid}/permissions", ChangePermissionsAsync).RequireAuthorization(VenuePolicies.OwnerOnly);
         venue.MapDelete("/members/{userId:guid}", RemoveMemberAsync).RequireAuthorization(VenuePolicies.OwnerOnly);
 
-        venues.MapCourtEndpoints();
+        venue.MapCourtEndpoints();
 
         return venues;
     }

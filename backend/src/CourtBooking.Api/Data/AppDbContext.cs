@@ -96,8 +96,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<OpeningHoursSchedule>(schedule =>
         {
-            // One version per start date: publishing the same date again replaces it.
-            schedule.HasIndex(s => new { s.VenueId, s.EffectiveFrom }).IsUnique();
+            // Versions are only added, so a date may hold more than one; the newest wins.
+            schedule.HasIndex(s => new { s.VenueId, s.EffectiveFrom });
             schedule.HasOne(s => s.Venue)
                 .WithMany()
                 .HasForeignKey(s => s.VenueId)
@@ -106,7 +106,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<OpeningHoursDay>(day =>
         {
-            day.Ignore(d => d.IsClosed);
             day.HasIndex(d => new { d.ScheduleId, d.Day }).IsUnique();
             day.HasOne(d => d.Schedule)
                 .WithMany(s => s.Days)

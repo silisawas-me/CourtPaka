@@ -47,7 +47,18 @@ export function check(fixture: ComponentFixture<unknown>, selector: string): voi
   fixture.detectChanges();
 }
 
-export function submitForm(fixture: ComponentFixture<unknown>): void {
-  (fixture.nativeElement as HTMLElement).querySelector('form')!.dispatchEvent(new Event('submit'));
+/** Submits the page's only form, or the one the selector names when a page has several. */
+export function submitForm(fixture: ComponentFixture<unknown>, selector = 'form'): void {
+  (fixture.nativeElement as HTMLElement)
+    .querySelector(selector)!
+    .dispatchEvent(new Event('submit'));
   fixture.detectChanges();
+}
+
+/** The element a data-testid names, typed as whatever the caller needs to read off it. */
+export function elementOf<T extends Element>(
+  fixture: ComponentFixture<unknown>,
+  testId: string,
+): T | null {
+  return (fixture.nativeElement as HTMLElement).querySelector<T>(`[data-testid="${testId}"]`);
 }

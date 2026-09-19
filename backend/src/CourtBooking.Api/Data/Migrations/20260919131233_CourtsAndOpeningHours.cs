@@ -19,7 +19,6 @@ namespace CourtBooking.Api.Data.Migrations
                     VenueId = table.Column<Guid>(type: "uuid", nullable: false),
                     Name = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     Position = table.Column<int>(type: "integer", nullable: false),
-                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
@@ -117,8 +116,7 @@ namespace CourtBooking.Api.Data.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_OpeningHoursSchedules_VenueId_EffectiveFrom",
                 table: "OpeningHoursSchedules",
-                columns: new[] { "VenueId", "EffectiveFrom" },
-                unique: true);
+                columns: new[] { "VenueId", "EffectiveFrom" });
         }
 
         /// <inheritdoc />

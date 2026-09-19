@@ -18,6 +18,9 @@ One rule worth keeping: wait for the response before reloading. The pages apply 
 away and reconcile with the server, so reloading right after a click cancels the request in flight
 and the check reads the old state — which is a bug in the check, not in the page.
 
+`harness.py` holds what every script needs: where the stack is, the seeded accounts, the PASS/FAIL
+tally and the screenshots.
+
 | Script | Covers |
 |---|---|
 | `venue_ui.py` | Sign-in redirects, venue detail, members and permissions (US-14) |

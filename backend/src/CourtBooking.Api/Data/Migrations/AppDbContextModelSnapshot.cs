@@ -129,9 +129,6 @@ namespace CourtBooking.Api.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -225,8 +222,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("VenueId", "EffectiveFrom")
-                        .IsUnique();
+                    b.HasIndex("VenueId", "EffectiveFrom");
 
                     b.ToTable("OpeningHoursSchedules");
                 });

@@ -19,13 +19,8 @@ export interface Court {
   id: string;
   name: string;
   position: number;
+  /** Whether the court is in use on the date that was asked about, today unless given. */
   isActive: boolean;
-}
-
-export interface CourtStatusChange {
-  active: boolean;
-  effectiveFrom: string;
-  changedAt: string;
 }
 
 /** Both hours null means the venue does not open that day. */
@@ -47,8 +42,10 @@ export interface OpeningHours {
 export class CourtService {
   private readonly http = inject(HttpClient);
 
-  courts(venueId: string): Observable<Court[]> {
-    return this.http.get<Court[]>(`/api/venues/${venueId}/courts`);
+  courts(venueId: string, on?: string): Observable<Court[]> {
+    return this.http.get<Court[]>(`/api/venues/${venueId}/courts`, {
+      params: on ? { on } : {},
+    });
   }
 
   addCourt(venueId: string, name: string): Observable<Court> {
@@ -61,12 +58,6 @@ export class CourtService {
 
   changeCourtStatus(venueId: string, courtId: string, active: boolean): Observable<Court> {
     return this.http.put<Court>(`/api/venues/${venueId}/courts/${courtId}/status`, { active });
-  }
-
-  courtHistory(venueId: string, courtId: string): Observable<CourtStatusChange[]> {
-    return this.http.get<CourtStatusChange[]>(
-      `/api/venues/${venueId}/courts/${courtId}/status-history`,
-    );
   }
 
   openingHours(venueId: string): Observable<OpeningHours[]> {

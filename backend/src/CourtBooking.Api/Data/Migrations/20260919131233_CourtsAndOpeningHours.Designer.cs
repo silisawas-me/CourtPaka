@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CourtBooking.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260919124921_CourtsAndOpeningHours")]
+    [Migration("20260919131233_CourtsAndOpeningHours")]
     partial class CourtsAndOpeningHours
     {
         /// <inheritdoc />
@@ -132,9 +132,6 @@ namespace CourtBooking.Api.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -228,8 +225,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("VenueId", "EffectiveFrom")
-                        .IsUnique();
+                    b.HasIndex("VenueId", "EffectiveFrom");
 
                     b.ToTable("OpeningHoursSchedules");
                 });

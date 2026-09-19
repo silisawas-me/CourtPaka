@@ -1,32 +1,10 @@
 """Courts and opening hours (US-11) against the running stack at http://localhost:8080."""
 import datetime
-import pathlib
-import sys
 
+from harness import BASE, OWNER, STAFF, Checks, login
 from playwright.sync_api import expect, sync_playwright
 
-BASE = "http://localhost:8080"
-OWNER = "owner@courtpaka.local"
-STAFF = "staff@courtpaka.local"
-PASSWORD = "DevPassword1"
-SHOTS = pathlib.Path(__file__).parent / "shots-settings"
-SHOTS.mkdir(exist_ok=True)
-
-passed, failed = [], []
-
-
-def check(name, condition, page=None):
-    (passed if condition else failed).append(name)
-    print(("PASS  " if condition else "FAIL  ") + name)
-    if page is not None:
-        page.screenshot(path=str(SHOTS / (name.replace(" ", "_") + ".png")), full_page=True)
-
-
-def login(page, email):
-    page.fill("#email", email)
-    page.fill("#password", PASSWORD)
-    page.click("button[type=submit]")
-
+check = Checks(__file__)
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
@@ -77,6 +55,19 @@ with sync_playwright() as p:
     with page.expect_response(lambda response: "/status" in response.url):
         page.locator(f"[data-testid={court_id}]").check()  # put it back
 
+    # 3b. Renaming a court keeps its place in the grid.
+    row = page.locator("[data-testid=court-list] li").last
+    court_id = row.locator("[data-testid^=court-active-]").get_attribute("data-testid").removeprefix("court-active-")
+    renamed = f"Centre {stamp}"
+    page.click(f"[data-testid=rename-{court_id}]")
+    page.fill(f"[data-testid=rename-input-{court_id}]", renamed)
+    with page.expect_response(lambda response: response.request.method == "PUT") as saved:
+        page.locator(f"[data-testid=rename-input-{court_id}]").press("Enter")
+    check("a court can be renamed", saved.value.status == 200)
+    page.reload()
+    page.wait_for_selector("[data-testid=court-list]")
+    check("the new name survives a reload", renamed in page.locator("[data-testid=court-list]").inner_text(), page)
+
     # 4. Publish a week, with Monday closed, and read it back.
     today = datetime.date.today()
     page.fill("#effective-from", today.isoformat())
@@ -126,7 +117,4 @@ with sync_playwright() as p:
 
     browser.close()
 
-print(f"\n{len(passed)} passed, {len(failed)} failed")
-for name in failed:
-    print("  FAILED: " + name)
-sys.exit(1 if failed else 0)
+check.summarise()

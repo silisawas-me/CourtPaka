@@ -1,5 +1,6 @@
 using CourtBooking.Api.Data;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,6 +24,11 @@ public sealed class ApiFactory(string connectionString) : WebApplicationFactory<
         builder.UseSetting("App:AuthRequestsPerMinute", "10000");
         // Re-check the session against the user row on every request so revocation is testable.
         builder.UseSetting("App:SessionRevalidationSeconds", "0");
+
+        // The suite registers a user per test; at the production hashing cost that alone would take
+        // longer than everything else it does. Nothing here tests the hash itself.
+        builder.ConfigureServices(services =>
+            services.Configure<PasswordHasherOptions>(options => options.IterationCount = 1));
     }
 
     /// <summary>Creates the schema from the real migrations, the same way a deployment does.</summary>
