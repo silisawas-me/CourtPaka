@@ -32,6 +32,16 @@ describe('TranslationService', () => {
     expect(service.language()).toBe('en');
   });
 
+  it('declares the remembered language on the document as soon as it is created', () => {
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, 'en');
+    document.documentElement.lang = 'th';
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({});
+
+    expect(TestBed.inject(TranslationService).language()).toBe('en');
+    expect(document.documentElement.lang).toBe('en');
+  });
+
   it('returns the key itself when a translation is missing', () => {
     expect(service.t('does.not.exist')).toBe('does.not.exist');
   });

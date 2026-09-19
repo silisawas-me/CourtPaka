@@ -29,5 +29,8 @@
 </header>
 
 <main class="shell">
+  @if (languageNotSaved()) {
+    <p class="form-error" data-testid="language-not-saved">{{ i18n.t('app.languageNotSaved') }}</p>
+  }
   <router-outlet />
 </main>

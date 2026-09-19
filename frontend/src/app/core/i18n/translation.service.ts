@@ -14,6 +14,11 @@ export class TranslationService {
 
   readonly language = this.current.asReadonly();
 
+  constructor() {
+    // index.html ships with lang="th"; a returning visitor may have chosen otherwise.
+    document.documentElement.lang = this.current();
+  }
+
   /** Reading the signal inside makes every template binding that calls this refresh on a switch. */
   t = (key: string): string => TRANSLATIONS[this.current()][key] ?? key;
 

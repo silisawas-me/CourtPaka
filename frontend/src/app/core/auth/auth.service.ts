@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, signal } from '@angular/core';
 import { catchError, map, Observable, of, shareReplay, switchMap, tap } from 'rxjs';
-import { ApiError } from '../http/api-error';
+import { ApiError, SESSION_NOT_ESTABLISHED_CODE } from '../http/api-error';
 import { Language } from '../i18n/locales';
 import { TranslationService } from '../i18n/translation.service';
 
@@ -48,10 +48,18 @@ export class AuthService {
     return this.http.post<void>('/api/auth/register', input);
   }
 
-  login(email: string, password: string): Observable<CurrentUser | null> {
+  login(email: string, password: string): Observable<CurrentUser> {
     return this.http.post<void>('/api/auth/login', { email, password }).pipe(
       // The session cookie arrives with the login response; read the account it belongs to.
       switchMap(() => this.loadCurrentUser()),
+      map((user) => {
+        if (!user) {
+          // The password was right but the session did not survive the round trip (a rejected
+          // cookie, a revoked session). Reporting success here would look like a dead button.
+          throw new ApiError(SESSION_NOT_ESTABLISHED_CODE, 0);
+        }
+        return user;
+      }),
     );
   }
 
@@ -69,7 +77,12 @@ export class AuthService {
   }
 
   logout(): Observable<void> {
-    return this.http.post<void>('/api/auth/logout', {}).pipe(tap(() => this.adopt(null)));
+    // Whatever the server says, this browser is signed out: an expired or revoked session answers
+    // 401 here, and leaving the UI in a signed-in state would trap the user.
+    return this.http.post<void>('/api/auth/logout', {}).pipe(
+      catchError(() => of(undefined)),
+      tap(() => this.adopt(null)),
+    );
   }
 
   verifyEmail(userId: string, token: string): Observable<void> {

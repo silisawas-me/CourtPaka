@@ -37,6 +37,34 @@ describe('AuthService', () => {
     expect(TestBed.inject(TranslationService).language()).toBe('en');
   });
 
+  it('reports a sign-in that left the browser without a session as a failure', () => {
+    let error: unknown;
+    let emitted = false;
+    service.login(account.email, 'CorrectHorse1').subscribe({
+      next: () => (emitted = true),
+      error: (caught: unknown) => (error = caught),
+    });
+
+    httpMock.expectOne('/api/auth/login').flush(null, { status: 204, statusText: 'No Content' });
+    // The password was accepted but the session cookie did not survive the round trip.
+    httpMock.expectOne('/api/auth/me').flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    expect(emitted).toBe(false);
+    expect((error as ApiError).code).toBe('sessionNotEstablished');
+  });
+
+  it('signs the browser out even when the server rejects the request', () => {
+    service.loadCurrentUser().subscribe();
+    httpMock.expectOne('/api/auth/me').flush(account);
+
+    let completed = false;
+    service.logout().subscribe(() => (completed = true));
+    httpMock.expectOne('/api/auth/logout').flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    expect(completed).toBe(true);
+    expect(service.currentUser()).toBeNull();
+  });
+
   it('turns an API error code into an ApiError', () => {
     let error: unknown;
     service

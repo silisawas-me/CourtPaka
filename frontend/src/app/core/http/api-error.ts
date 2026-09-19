@@ -13,6 +13,8 @@ export class ApiError extends Error {
 
 export const UNKNOWN_ERROR_CODE = 'unknown';
 export const TOO_MANY_REQUESTS_CODE = 'tooManyRequests';
+/** Credentials were accepted but the browser ended up without a usable session. */
+export const SESSION_NOT_ESTABLISHED_CODE = 'sessionNotEstablished';
 
 /** Translation key for any failure, so no screen has to invent its own fallback. */
 export function errorKey(error: unknown): string {
