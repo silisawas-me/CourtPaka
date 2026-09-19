@@ -10,10 +10,29 @@ public sealed class AppUser : IdentityUser<Guid>
     /// <summary>UI and email language, "th" or "en" (PRD US-01, US-23).</summary>
     public string Language { get; set; } = SupportedLanguages.Default;
 
-    /// <summary>Privacy policy version the user accepted at registration (PRD US-01, PDPA).</summary>
-    public required string PrivacyPolicyVersion { get; set; }
+    public ICollection<UserConsent> Consents { get; } = [];
+}
 
-    public required DateTimeOffset PrivacyPolicyAcceptedAt { get; set; }
+/// <summary>
+/// Append-only record of what a user agreed to and when (PDPA, PRD 8). Never updated in place:
+/// a new policy version produces a new row, so past consent stays auditable.
+/// </summary>
+public sealed class UserConsent
+{
+    public Guid Id { get; init; } = Guid.CreateVersion7();
+
+    public required Guid UserId { get; init; }
+
+    public required ConsentType Type { get; init; }
+
+    public required string Version { get; init; }
+
+    public required DateTimeOffset AcceptedAt { get; init; }
+}
+
+public enum ConsentType
+{
+    PrivacyPolicy = 1,
 }
 
 public static class SupportedLanguages

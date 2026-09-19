@@ -1,22 +1,18 @@
 using System.Collections.Concurrent;
-using CourtBooking.Api.Identity;
+using CourtBooking.Api.Email;
 
 namespace CourtBooking.Api.Tests.Infrastructure;
 
-public sealed record SentEmail(string To, string Subject, string Body);
-
-public sealed class FakeEmailSender : IEmailSender
+public sealed class FakeEmailSender : ITransactionalEmailSender
 {
-    private readonly ConcurrentQueue<SentEmail> _sent = new();
+    private readonly ConcurrentQueue<EmailMessage> _sent = new();
 
-    public IReadOnlyCollection<SentEmail> Sent => _sent;
-
-    public SentEmail LastTo(string email) =>
+    public EmailMessage LastTo(string email) =>
         _sent.Last(message => string.Equals(message.To, email, StringComparison.OrdinalIgnoreCase));
 
-    public Task SendAsync(string toEmail, string subject, string body, CancellationToken cancellationToken = default)
+    public Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {
-        _sent.Enqueue(new SentEmail(toEmail, subject, body));
+        _sent.Enqueue(message);
         return Task.CompletedTask;
     }
 }

@@ -4,42 +4,42 @@ using System.Text.Json;
 using System.Web;
 using CourtBooking.Api.Identity;
 using CourtBooking.Api.Tests.Infrastructure;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace CourtBooking.Api.Tests;
 
-public sealed class AuthEndpointTests : IClassFixture<PostgresFixture>, IAsyncLifetime, IDisposable
+[Collection(DatabaseCollection.Name)]
+public sealed class AuthEndpointTests(PostgresFixture postgres) : IAsyncLifetime
 {
-    private const string PolicyVersion = "2026-09-01";
+    private const string DefaultPassword = "CorrectHorse1";
 
-    private readonly FakeEmailSender _emails = new();
-    private readonly ApiFactory _factory;
+    private readonly AuthApiFixture _api = new(postgres);
 
-    public AuthEndpointTests(PostgresFixture postgres)
+    public Task InitializeAsync() => _api.InitializeAsync();
+
+    public Task DisposeAsync() => _api.DisposeAsync();
+
+    [Fact]
+    public async Task The_privacy_policy_version_comes_from_the_server()
     {
-        _factory = new ApiFactory(
-            postgres.ConnectionString,
-            services => services.Replace(ServiceDescriptor.Singleton<IEmailSender>(_emails)));
+        using var client = _api.CreateClient();
+
+        var policy = await client.GetFromJsonAsync<PrivacyPolicyResponse>("/api/auth/privacy-policy");
+
+        Assert.Equal(ApiFactory.PrivacyPolicyVersion, policy!.Version);
     }
-
-    public Task InitializeAsync() => _factory.MigrateAsync();
-
-    public Task DisposeAsync() => Task.CompletedTask;
-
-    public void Dispose() => _factory.Dispose();
 
     [Fact]
     public async Task Registration_creates_an_unverified_account_and_emails_a_verification_link()
     {
-        using var client = _factory.CreateClient();
-        var email = NewEmail();
+        using var client = _api.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/api/auth/register", NewRegistration(email));
+        var email = await RegisterAsync(client);
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        Assert.Contains("verify", _emails.LastTo(email).Subject, StringComparison.OrdinalIgnoreCase);
-
+        Assert.Contains("verify", _api.Emails.LastTo(email).Subject, StringComparison.OrdinalIgnoreCase);
         await LoginAsync(client, email);
         var me = await GetCurrentUserAsync(client);
         Assert.False(me.EmailConfirmed);
@@ -47,12 +47,36 @@ public sealed class AuthEndpointTests : IClassFixture<PostgresFixture>, IAsyncLi
     }
 
     [Fact]
+    public async Task Registration_records_the_accepted_privacy_policy()
+    {
+        using var client = _api.CreateClient();
+        var email = await RegisterAsync(client);
+
+        var consents = await ReadConsentsAsync(email);
+
+        var consent = Assert.Single(consents);
+        Assert.Equal(ConsentType.PrivacyPolicy, consent.Type);
+        Assert.Equal(ApiFactory.PrivacyPolicyVersion, consent.Version);
+    }
+
+    [Fact]
+    public async Task Registration_is_refused_when_the_accepted_policy_is_not_the_current_one()
+    {
+        using var client = _api.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/api/auth/register", NewRegistration(NewEmail()) with { PrivacyPolicyVersion = "2020-01-01" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(AuthErrorCodes.PrivacyPolicyOutdated, await ReadErrorCodeAsync(response));
+    }
+
+    [Fact]
     public async Task Verifying_the_emailed_token_confirms_the_account()
     {
-        using var client = _factory.CreateClient();
-        var email = NewEmail();
-        await client.PostAsJsonAsync("/api/auth/register", NewRegistration(email));
-        var (userId, token) = ReadVerificationLink(_emails.LastTo(email).Body);
+        using var client = _api.CreateClient();
+        var email = await RegisterAsync(client);
+        var (userId, token) = ReadVerificationLink(_api.Emails.LastTo(email).Body);
 
         var response = await client.PostAsJsonAsync("/api/auth/verify-email", new VerifyEmailRequest(userId, token));
 
@@ -62,12 +86,25 @@ public sealed class AuthEndpointTests : IClassFixture<PostgresFixture>, IAsyncLi
     }
 
     [Fact]
+    public async Task A_session_started_before_verification_sees_the_account_as_verified_afterwards()
+    {
+        using var client = _api.CreateClient();
+        var email = await RegisterAsync(client);
+        await LoginAsync(client, email);
+        Assert.False((await GetCurrentUserAsync(client)).EmailConfirmed);
+
+        var (userId, token) = ReadVerificationLink(_api.Emails.LastTo(email).Body);
+        await client.PostAsJsonAsync("/api/auth/verify-email", new VerifyEmailRequest(userId, token));
+
+        Assert.True((await GetCurrentUserAsync(client)).EmailConfirmed);
+    }
+
+    [Fact]
     public async Task A_tampered_verification_token_is_rejected()
     {
-        using var client = _factory.CreateClient();
-        var email = NewEmail();
-        await client.PostAsJsonAsync("/api/auth/register", NewRegistration(email));
-        var (userId, token) = ReadVerificationLink(_emails.LastTo(email).Body);
+        using var client = _api.CreateClient();
+        var email = await RegisterAsync(client);
+        var (userId, token) = ReadVerificationLink(_api.Emails.LastTo(email).Body);
 
         var response = await client.PostAsJsonAsync(
             "/api/auth/verify-email", new VerifyEmailRequest(userId, token[..^4] + "AAAA"));
@@ -79,37 +116,48 @@ public sealed class AuthEndpointTests : IClassFixture<PostgresFixture>, IAsyncLi
     [Fact]
     public async Task Registering_an_address_that_already_exists_does_not_reveal_it()
     {
-        using var client = _factory.CreateClient();
-        var email = NewEmail();
-        await client.PostAsJsonAsync("/api/auth/register", NewRegistration(email));
+        using var client = _api.CreateClient();
+        var email = await RegisterAsync(client);
 
         var response = await client.PostAsJsonAsync("/api/auth/register", NewRegistration(email, "An0therPass!"));
 
         // Same status as a fresh registration; the address owner is told by email instead.
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        Assert.Contains("already exists", _emails.LastTo(email).Subject, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("already exists", _api.Emails.LastTo(email).Subject, StringComparison.OrdinalIgnoreCase);
 
         // The original password still works, so the second attempt did not touch the account.
         await LoginAsync(client, email);
+        Assert.Single(await ReadConsentsAsync(email));
     }
 
     [Theory]
-    [InlineData("short1", AuthErrorCodes.WeakPassword)]
-    [InlineData("12345678", AuthErrorCodes.WeakPassword)]
-    public async Task Weak_passwords_are_rejected(string password, string expectedCode)
+    [InlineData("short1")]
+    [InlineData("alllowercase")]
+    public async Task Passwords_that_break_the_configured_rules_are_rejected(string password)
     {
-        using var client = _factory.CreateClient();
+        using var client = _api.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/auth/register", NewRegistration(NewEmail(), password));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(expectedCode, await ReadErrorCodeAsync(response));
+        Assert.Equal(AuthErrorCodes.WeakPassword, await ReadErrorCodeAsync(response));
+    }
+
+    [Fact]
+    public async Task An_address_Identity_rejects_answers_with_the_email_code()
+    {
+        using var client = _api.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/auth/register", NewRegistration("not-an-email"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(AuthErrorCodes.InvalidEmail, await ReadErrorCodeAsync(response));
     }
 
     [Fact]
     public async Task An_unsupported_language_is_rejected()
     {
-        using var client = _factory.CreateClient();
+        using var client = _api.CreateClient();
 
         var response = await client.PostAsJsonAsync(
             "/api/auth/register", NewRegistration(NewEmail()) with { Language = "fr" });
@@ -119,47 +167,32 @@ public sealed class AuthEndpointTests : IClassFixture<PostgresFixture>, IAsyncLi
     }
 
     [Fact]
-    public async Task Registration_requires_accepting_the_privacy_policy()
+    public async Task The_configured_number_of_failed_sign_ins_locks_the_account()
     {
-        using var client = _factory.CreateClient();
+        var lockout = _api.GetService<IOptions<IdentityOptions>>().Value.Lockout;
+        using var client = _api.CreateClient();
+        var email = await RegisterAsync(client);
 
-        var response = await client.PostAsJsonAsync(
-            "/api/auth/register", NewRegistration(NewEmail()) with { PrivacyPolicyVersion = "" });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(AuthErrorCodes.PrivacyPolicyRequired, await ReadErrorCodeAsync(response));
-    }
-
-    [Fact]
-    public async Task Five_failed_sign_ins_lock_the_account_for_the_correct_password_too()
-    {
-        using var client = _factory.CreateClient();
-        var email = NewEmail();
-        await client.PostAsJsonAsync("/api/auth/register", NewRegistration(email));
-
-        for (var attempt = 1; attempt <= 4; attempt++)
+        for (var attempt = 1; attempt < lockout.MaxFailedAccessAttempts; attempt++)
         {
             var failure = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, "WrongPassword1"));
             Assert.Equal(HttpStatusCode.Unauthorized, failure.StatusCode);
         }
 
-        // The fifth failure is the one that locks the account.
-        var fifth = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, "WrongPassword1"));
-        Assert.Equal(HttpStatusCode.Locked, fifth.StatusCode);
+        // The last allowed failure is the one that locks the account.
+        var locking = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, "WrongPassword1"));
+        Assert.Equal(HttpStatusCode.Locked, locking.StatusCode);
 
-        var locked = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, DefaultPassword));
-
-        Assert.Equal(HttpStatusCode.Locked, locked.StatusCode);
-        Assert.Equal(AuthErrorCodes.AccountLocked, await ReadErrorCodeAsync(locked));
+        var lockedOut = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, DefaultPassword));
+        Assert.Equal(HttpStatusCode.Locked, lockedOut.StatusCode);
+        Assert.Equal(AuthErrorCodes.AccountLocked, await ReadErrorCodeAsync(lockedOut));
     }
 
     [Fact]
     public async Task The_chosen_language_is_stored_and_can_be_changed()
     {
-        using var client = _factory.CreateClient();
-        var email = NewEmail();
-        await client.PostAsJsonAsync(
-            "/api/auth/register", NewRegistration(email) with { Language = SupportedLanguages.English });
+        using var client = _api.CreateClient();
+        var email = await RegisterAsync(client, SupportedLanguages.English);
         await LoginAsync(client, email);
 
         Assert.Equal(SupportedLanguages.English, (await GetCurrentUserAsync(client)).Language);
@@ -174,11 +207,20 @@ public sealed class AuthEndpointTests : IClassFixture<PostgresFixture>, IAsyncLi
     }
 
     [Fact]
+    public async Task Verification_email_is_sent_in_the_language_chosen_at_registration()
+    {
+        using var client = _api.CreateClient();
+
+        var email = await RegisterAsync(client, SupportedLanguages.English);
+
+        Assert.Equal(SupportedLanguages.English, _api.Emails.LastTo(email).Language);
+    }
+
+    [Fact]
     public async Task Signing_out_ends_the_session()
     {
-        using var client = _factory.CreateClient();
-        var email = NewEmail();
-        await client.PostAsJsonAsync("/api/auth/register", NewRegistration(email));
+        using var client = _api.CreateClient();
+        var email = await RegisterAsync(client);
         await LoginAsync(client, email);
 
         var loggedOut = await client.PostAsync("/api/auth/logout", content: null);
@@ -190,17 +232,24 @@ public sealed class AuthEndpointTests : IClassFixture<PostgresFixture>, IAsyncLi
     [Fact]
     public async Task Anonymous_callers_cannot_read_the_current_user()
     {
-        using var client = _factory.CreateClient();
+        using var client = _api.CreateClient();
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode);
     }
 
-    private const string DefaultPassword = "CorrectHorse1";
-
     private static string NewEmail() => $"user-{Guid.NewGuid():N}@example.com";
 
     private static RegisterRequest NewRegistration(string email, string password = DefaultPassword) =>
-        new(email, password, PolicyVersion, SupportedLanguages.Thai, PhoneNumber: null);
+        new(email, password, ApiFactory.PrivacyPolicyVersion, SupportedLanguages.Thai, PhoneNumber: null);
+
+    private static async Task<string> RegisterAsync(HttpClient client, string? language = null)
+    {
+        var email = NewEmail();
+        var request = NewRegistration(email) with { Language = language ?? SupportedLanguages.Thai };
+        var response = await client.PostAsJsonAsync("/api/auth/register", request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return email;
+    }
 
     private static async Task LoginAsync(HttpClient client, string email, string password = DefaultPassword)
     {
@@ -213,6 +262,17 @@ public sealed class AuthEndpointTests : IClassFixture<PostgresFixture>, IAsyncLi
         var response = await client.GetAsync("/api/auth/me");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<CurrentUserResponse>())!;
+    }
+
+    private async Task<List<UserConsent>> ReadConsentsAsync(string email)
+    {
+        using var scope = _api.Api.Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+        var database = scope.ServiceProvider.GetRequiredService<Data.AppDbContext>();
+        var user = await users.FindByEmailAsync(email);
+        return await database.UserConsents
+            .Where(consent => consent.UserId == user!.Id)
+            .ToListAsync();
     }
 
     private static (Guid UserId, string Token) ReadVerificationLink(string body)

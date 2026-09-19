@@ -29,6 +29,10 @@ services:
     build: ./backend
     environment:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=courtbooking;Username=courtbooking;Password=courtbooking_dev"
+      App__BaseUrl: "http://localhost:8080"
+      App__PrivacyPolicyVersion: "2026-09-01"
+      # Local stack is plain HTTP; deployed environments leave this at its secure default.
+      App__RequireSecureCookies: "false"
     depends_on:
       db:
         condition: service_healthy

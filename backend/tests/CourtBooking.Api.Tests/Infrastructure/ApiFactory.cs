@@ -6,18 +6,17 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CourtBooking.Api.Tests.Infrastructure;
 
-public sealed class ApiFactory(string connectionString, Action<IServiceCollection>? configureServices = null)
-    : WebApplicationFactory<Program>
+public sealed class ApiFactory(string connectionString) : WebApplicationFactory<Program>
 {
+    public const string PrivacyPolicyVersion = "2026-09-01";
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
         builder.UseSetting("ConnectionStrings:Default", connectionString);
-
-        if (configureServices is not null)
-        {
-            builder.ConfigureServices(configureServices);
-        }
+        builder.UseSetting("App:BaseUrl", "http://localhost:8080");
+        builder.UseSetting("App:PrivacyPolicyVersion", PrivacyPolicyVersion);
+        builder.UseSetting("App:RequireSecureCookies", "false");
     }
 
     /// <summary>Creates the schema from the real migrations, the same way a deployment does.</summary>

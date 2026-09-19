@@ -1,9 +1,13 @@
-using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using System.Text;
+using CourtBooking.Api.Data;
+using CourtBooking.Api.Email;
+using CourtBooking.Api.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace CourtBooking.Api.Identity;
 
@@ -13,38 +17,39 @@ public static class AuthEndpoints
     {
         var auth = routes.MapGroup("/auth").WithTags("Auth");
 
+        auth.MapGet("/privacy-policy", GetPrivacyPolicy);
         auth.MapPost("/register", RegisterAsync);
         auth.MapPost("/verify-email", VerifyEmailAsync);
         auth.MapPost("/login", LoginAsync);
         auth.MapPost("/logout", LogoutAsync).RequireAuthorization();
-        auth.MapGet("/me", GetCurrentUser).RequireAuthorization();
+        auth.MapGet("/me", GetCurrentUserAsync).RequireAuthorization();
         auth.MapPut("/me/language", ChangeLanguageAsync).RequireAuthorization();
 
         return auth;
     }
 
+    /// <summary>The version the SPA must present when registering, so the server owns what "accepted" means.</summary>
+    private static Ok<PrivacyPolicyResponse> GetPrivacyPolicy(IOptions<AppOptions> options) =>
+        TypedResults.Ok(new PrivacyPolicyResponse(options.Value.PrivacyPolicyVersion));
+
     private static async Task<Results<Created, ProblemHttpResult>> RegisterAsync(
         RegisterRequest request,
         UserManager<AppUser> userManager,
-        IEmailSender emailSender,
-        IConfiguration configuration,
+        AppDbContext database,
+        ITransactionalEmailSender emailSender,
+        IOptions<AppOptions> options,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        if (!new EmailAddressAttribute().IsValid(request.Email))
-        {
-            return Failure(StatusCodes.Status400BadRequest, AuthErrorCodes.InvalidEmail);
-        }
-
-        if (string.IsNullOrWhiteSpace(request.PrivacyPolicyVersion))
-        {
-            return Failure(StatusCodes.Status400BadRequest, AuthErrorCodes.PrivacyPolicyRequired);
-        }
-
         var language = request.Language ?? SupportedLanguages.Default;
         if (!SupportedLanguages.IsSupported(language))
         {
-            return Failure(StatusCodes.Status400BadRequest, AuthErrorCodes.UnsupportedLanguage);
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.UnsupportedLanguage);
+        }
+
+        if (request.PrivacyPolicyVersion != options.Value.PrivacyPolicyVersion)
+        {
+            return ApiProblem.Of(StatusCodes.Status409Conflict, AuthErrorCodes.PrivacyPolicyOutdated);
         }
 
         var user = new AppUser
@@ -53,28 +58,44 @@ public static class AuthEndpoints
             Email = request.Email,
             PhoneNumber = request.PhoneNumber,
             Language = language,
-            PrivacyPolicyVersion = request.PrivacyPolicyVersion,
-            PrivacyPolicyAcceptedAt = timeProvider.GetUtcNow(),
         };
 
         var result = await userManager.CreateAsync(user, request.Password);
         if (result.Succeeded)
         {
-            await SendVerificationEmailAsync(user, userManager, emailSender, configuration, cancellationToken);
+            database.UserConsents.Add(new UserConsent
+            {
+                UserId = user.Id,
+                Type = ConsentType.PrivacyPolicy,
+                Version = options.Value.PrivacyPolicyVersion,
+                AcceptedAt = timeProvider.GetUtcNow(),
+            });
+            await database.SaveChangesAsync(cancellationToken);
+
+            await SendVerificationEmailAsync(user, userManager, emailSender, options.Value, cancellationToken);
             return TypedResults.Created("/api/auth/me");
         }
 
         // An address that is already registered answers exactly like a fresh one and gets an email instead,
         // so this endpoint cannot be used to find out who has an account (PDPA, PRD 8).
-        var alreadyRegistered = result.Errors.Any(error =>
-            error.Code is "DuplicateUserName" or "DuplicateEmail");
-        if (alreadyRegistered)
+        var codes = result.Errors.Select(error => error.Code).ToArray();
+        if (codes.Any(code => code is "DuplicateUserName" or "DuplicateEmail"))
         {
-            await SendAccountExistsEmailAsync(request.Email, emailSender, cancellationToken);
+            await emailSender.SendAsync(
+                new EmailMessage(
+                    request.Email,
+                    language,
+                    "CourtPaka: account already exists",
+                    "Someone tried to register with this address. If it was you, sign in or reset your password."),
+                cancellationToken);
             return TypedResults.Created("/api/auth/me");
         }
 
-        return Failure(StatusCodes.Status400BadRequest, AuthErrorCodes.WeakPassword);
+        // Identity owns the rules, so its error decides the code the frontend shows.
+        var failureCode = codes.Any(code => code is "InvalidEmail" or "InvalidUserName")
+            ? AuthErrorCodes.InvalidEmail
+            : AuthErrorCodes.WeakPassword;
+        return ApiProblem.Of(StatusCodes.Status400BadRequest, failureCode);
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> VerifyEmailAsync(
@@ -84,7 +105,7 @@ public static class AuthEndpoints
         var user = await userManager.FindByIdAsync(request.UserId.ToString());
         if (user is null)
         {
-            return Failure(StatusCodes.Status400BadRequest, AuthErrorCodes.InvalidVerificationToken);
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.InvalidVerificationToken);
         }
 
         string token;
@@ -94,13 +115,18 @@ public static class AuthEndpoints
         }
         catch (FormatException)
         {
-            return Failure(StatusCodes.Status400BadRequest, AuthErrorCodes.InvalidVerificationToken);
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.InvalidVerificationToken);
         }
 
         var result = await userManager.ConfirmEmailAsync(user, token);
-        return result.Succeeded
-            ? TypedResults.NoContent()
-            : Failure(StatusCodes.Status400BadRequest, AuthErrorCodes.InvalidVerificationToken);
+        if (!result.Succeeded)
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.InvalidVerificationToken);
+        }
+
+        // Sessions created before verification must stop claiming the account is unverified.
+        await userManager.UpdateSecurityStampAsync(user);
+        return TypedResults.NoContent();
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> LoginAsync(
@@ -112,12 +138,12 @@ public static class AuthEndpoints
 
         if (result.IsLockedOut)
         {
-            return Failure(StatusCodes.Status423Locked, AuthErrorCodes.AccountLocked);
+            return ApiProblem.Of(StatusCodes.Status423Locked, AuthErrorCodes.AccountLocked);
         }
 
         return result.Succeeded
             ? TypedResults.NoContent()
-            : Failure(StatusCodes.Status401Unauthorized, AuthErrorCodes.InvalidCredentials);
+            : ApiProblem.Of(StatusCodes.Status401Unauthorized, AuthErrorCodes.InvalidCredentials);
     }
 
     private static async Task<NoContent> LogoutAsync(SignInManager<AppUser> signInManager)
@@ -126,10 +152,11 @@ public static class AuthEndpoints
         return TypedResults.NoContent();
     }
 
-    private static async Task<Results<Ok<CurrentUserResponse>, NotFound>> GetCurrentUser(
+    private static async Task<Results<Ok<CurrentUserResponse>, NotFound>> GetCurrentUserAsync(
         ClaimsPrincipal principal,
         UserManager<AppUser> userManager)
     {
+        // Read through to the row: verification state gates booking, so a stale copy is not good enough.
         var user = await userManager.GetUserAsync(principal);
         return user is null
             ? TypedResults.NotFound()
@@ -139,53 +166,48 @@ public static class AuthEndpoints
     private static async Task<Results<NoContent, ProblemHttpResult, NotFound>> ChangeLanguageAsync(
         ChangeLanguageRequest request,
         ClaimsPrincipal principal,
-        UserManager<AppUser> userManager)
+        AppDbContext database,
+        CancellationToken cancellationToken)
     {
         if (!SupportedLanguages.IsSupported(request.Language))
         {
-            return Failure(StatusCodes.Status400BadRequest, AuthErrorCodes.UnsupportedLanguage);
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.UnsupportedLanguage);
         }
 
-        var user = await userManager.GetUserAsync(principal);
-        if (user is null)
+        if (!Guid.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
         {
             return TypedResults.NotFound();
         }
 
-        user.Language = request.Language;
-        await userManager.UpdateAsync(user);
-        return TypedResults.NoContent();
+        var updated = await database.Users
+            .Where(user => user.Id == userId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(user => user.Language, request.Language), cancellationToken);
+
+        return updated == 1 ? TypedResults.NoContent() : TypedResults.NotFound();
     }
 
     private static async Task SendVerificationEmailAsync(
         AppUser user,
         UserManager<AppUser> userManager,
-        IEmailSender emailSender,
-        IConfiguration configuration,
+        ITransactionalEmailSender emailSender,
+        AppOptions options,
         CancellationToken cancellationToken)
     {
         var rawToken = await userManager.GenerateEmailConfirmationTokenAsync(user);
-        var token = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(rawToken));
-        var baseUrl = configuration["App:BaseUrl"]?.TrimEnd('/') ?? "http://localhost:8080";
-        var link = $"{baseUrl}/verify-email?userId={user.Id}&token={token}";
+        var link = QueryHelpers.AddQueryString(
+            $"{options.BaseUrl.TrimEnd('/')}/verify-email",
+            new Dictionary<string, string?>
+            {
+                ["userId"] = user.Id.ToString(),
+                ["token"] = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(rawToken)),
+            });
 
         await emailSender.SendAsync(
-            user.Email!,
-            "CourtPaka: verify your email",
-            $"Confirm your address to finish signing up: {link}",
+            new EmailMessage(
+                user.Email!,
+                user.Language,
+                "CourtPaka: verify your email",
+                $"Confirm your address to finish signing up: {link}"),
             cancellationToken);
     }
-
-    private static Task SendAccountExistsEmailAsync(
-        string email,
-        IEmailSender emailSender,
-        CancellationToken cancellationToken) =>
-        emailSender.SendAsync(
-            email,
-            "CourtPaka: account already exists",
-            "Someone tried to register with this address. If it was you, sign in instead or reset your password.",
-            cancellationToken);
-
-    private static ProblemHttpResult Failure(int statusCode, string code) =>
-        TypedResults.Problem(statusCode: statusCode, extensions: new Dictionary<string, object?> { ["code"] = code });
 }

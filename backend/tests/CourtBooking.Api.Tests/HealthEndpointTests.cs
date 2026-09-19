@@ -5,7 +5,8 @@ using CourtBooking.Api.Tests.Infrastructure;
 
 namespace CourtBooking.Api.Tests;
 
-public sealed class HealthEndpointTests : IClassFixture<PostgresFixture>, IDisposable
+[Collection(DatabaseCollection.Name)]
+public sealed class HealthEndpointTests : IDisposable
 {
     // Port 1 on loopback refuses connections immediately, so the check fails fast.
     private const string UnreachableDatabase =

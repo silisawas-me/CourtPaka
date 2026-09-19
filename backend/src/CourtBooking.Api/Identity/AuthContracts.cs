@@ -15,6 +15,8 @@ public sealed record ChangeLanguageRequest(string Language);
 
 public sealed record CurrentUserResponse(Guid Id, string Email, bool EmailConfirmed, string Language);
 
+public sealed record PrivacyPolicyResponse(string Version);
+
 /// <summary>
 /// Stable codes the frontend translates (PRD US-23); messages are never shown to users directly.
 /// </summary>
@@ -26,5 +28,5 @@ public static class AuthErrorCodes
     public const string UnsupportedLanguage = "auth.unsupported_language";
     public const string WeakPassword = "auth.weak_password";
     public const string InvalidEmail = "auth.invalid_email";
-    public const string PrivacyPolicyRequired = "auth.privacy_policy_required";
+    public const string PrivacyPolicyOutdated = "auth.privacy_policy_outdated";
 }

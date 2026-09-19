@@ -1,4 +1,6 @@
+using CourtBooking.Api;
 using CourtBooking.Api.Data;
+using CourtBooking.Api.Email;
 using CourtBooking.Api.Health;
 using CourtBooking.Api.Identity;
 using CourtBooking.Api.Localization;
@@ -39,7 +41,14 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<AppDbContext>(name: "database", tags: [ReadyTag]);
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton<IEmailSender, LoggingEmailSender>();
+builder.Services.AddSingleton<ITransactionalEmailSender, LoggingEmailSender>();
+
+// Missing or malformed values fail the deployment at startup, not at first use.
+builder.Services.AddOptions<AppOptions>()
+    .BindConfiguration(AppOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+var appOptions = builder.Configuration.GetSection(AppOptions.SectionName).Get<AppOptions>();
 
 builder.Services
     .AddIdentityCore<AppUser>(options =>
@@ -53,10 +62,8 @@ builder.Services
         options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
         options.Lockout.AllowedForNewUsers = true;
     })
-    .AddRoles<IdentityRole<Guid>>()
     .AddEntityFrameworkStores<AppDbContext>()
     .AddSignInManager()
-    .AddClaimsPrincipalFactory<AppUserClaimsPrincipalFactory>()
     .AddDefaultTokenProviders();
 
 builder.Services
@@ -65,8 +72,8 @@ builder.Services
     {
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
-        // Caddy terminates TLS in every deployed environment; dev machines and tests run over plain HTTP.
-        options.Cookie.SecurePolicy = builder.Environment.IsProduction()
+        // Every deployed environment sits behind Caddy's TLS; only dev machines and tests turn this off.
+        options.Cookie.SecurePolicy = appOptions?.RequireSecureCookies ?? true
             ? CookieSecurePolicy.Always
             : CookieSecurePolicy.SameAsRequest;
         options.ExpireTimeSpan = TimeSpan.FromDays(14);
@@ -84,10 +91,7 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorizationBuilder()
-    // Actions that create real-world commitments (booking, payment) require a verified address.
-    .AddPolicy(AuthorizationPolicies.EmailConfirmed, policy =>
-        policy.RequireAuthenticatedUser().RequireClaim(AppClaimTypes.EmailConfirmed, "true"));
+builder.Services.AddAuthorization();
 
 if (builder.Environment.IsDevelopment())
 {
