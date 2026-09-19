@@ -16,6 +16,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<VenueInvitation> VenueInvitations => Set<VenueInvitation>();
 
+    public DbSet<Court> Courts => Set<Court>();
+
+    public DbSet<CourtStatusChange> CourtStatusChanges => Set<CourtStatusChange>();
+
+    public DbSet<OpeningHoursSchedule> OpeningHoursSchedules => Set<OpeningHoursSchedule>();
+
+    public DbSet<OpeningHoursDay> OpeningHoursDays => Set<OpeningHoursDay>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -62,6 +70,47 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             invitation.HasOne(i => i.Venue)
                 .WithMany()
                 .HasForeignKey(i => i.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<Court>(court =>
+        {
+            court.Property(c => c.Name).HasMaxLength(50);
+            // Two courts with the same name are indistinguishable on a booking; the database says no
+            // so that two simultaneous adds cannot both pass a check in application code.
+            court.HasIndex(c => new { c.VenueId, c.Name }).IsUnique();
+            court.HasOne(c => c.Venue)
+                .WithMany()
+                .HasForeignKey(c => c.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<CourtStatusChange>(change =>
+        {
+            change.HasIndex(c => new { c.CourtId, c.EffectiveFrom });
+            change.HasOne(c => c.Court)
+                .WithMany()
+                .HasForeignKey(c => c.CourtId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<OpeningHoursSchedule>(schedule =>
+        {
+            // One version per start date: publishing the same date again replaces it.
+            schedule.HasIndex(s => new { s.VenueId, s.EffectiveFrom }).IsUnique();
+            schedule.HasOne(s => s.Venue)
+                .WithMany()
+                .HasForeignKey(s => s.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<OpeningHoursDay>(day =>
+        {
+            day.Ignore(d => d.IsClosed);
+            day.HasIndex(d => new { d.ScheduleId, d.Day }).IsUnique();
+            day.HasOne(d => d.Schedule)
+                .WithMany(s => s.Days)
+                .HasForeignKey(d => d.ScheduleId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

@@ -5,7 +5,6 @@ using CourtBooking.Api.Data;
 using CourtBooking.Api.Email;
 using CourtBooking.Api.Http;
 using CourtBooking.Api.Identity;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
@@ -28,25 +27,18 @@ public static class VenueEndpoints
         venues.MapPost("/invitations/accept", AcceptInvitationAsync);
 
         var venue = venues.MapGroup("/{venueId:guid}");
-        venue.MapGet("/", Get).RequireAuthorization(Member);
-        venue.MapPut("/", RenameAsync).RequireAuthorization(Needs(VenuePermissions.ManageSettings));
-        venue.MapGet("/members", ListMembersAsync).RequireAuthorization(Member);
-        venue.MapGet("/invitations", ListInvitationsAsync).RequireAuthorization(OwnerOnly);
-        venue.MapPost("/invitations", InviteAsync).RequireAuthorization(OwnerOnly);
-        venue.MapPut("/members/{userId:guid}/permissions", ChangePermissionsAsync).RequireAuthorization(OwnerOnly);
-        venue.MapDelete("/members/{userId:guid}", RemoveMemberAsync).RequireAuthorization(OwnerOnly);
+        venue.MapGet("/", Get).RequireAuthorization(VenuePolicies.Member);
+        venue.MapPut("/", RenameAsync).RequireAuthorization(VenuePolicies.Settings);
+        venue.MapGet("/members", ListMembersAsync).RequireAuthorization(VenuePolicies.Member);
+        venue.MapGet("/invitations", ListInvitationsAsync).RequireAuthorization(VenuePolicies.OwnerOnly);
+        venue.MapPost("/invitations", InviteAsync).RequireAuthorization(VenuePolicies.OwnerOnly);
+        venue.MapPut("/members/{userId:guid}/permissions", ChangePermissionsAsync).RequireAuthorization(VenuePolicies.OwnerOnly);
+        venue.MapDelete("/members/{userId:guid}", RemoveMemberAsync).RequireAuthorization(VenuePolicies.OwnerOnly);
+
+        venues.MapCourtEndpoints();
 
         return venues;
     }
-
-    private static Action<AuthorizationPolicyBuilder> Member =>
-        policy => policy.RequireAuthenticatedUser().AddRequirements(VenuePermissionRequirement.Member);
-
-    private static Action<AuthorizationPolicyBuilder> OwnerOnly =>
-        policy => policy.RequireAuthenticatedUser().AddRequirements(VenuePermissionRequirement.Owner);
-
-    private static Action<AuthorizationPolicyBuilder> Needs(VenuePermissions permission) =>
-        policy => policy.RequireAuthenticatedUser().AddRequirements(VenuePermissionRequirement.Needs(permission));
 
     private static async Task<Results<Created<VenueResponse>, ProblemHttpResult>> CreateAsync(
         CreateVenueRequest request,
