@@ -22,7 +22,14 @@ export const STAFF_DEFAULT_PERMISSIONS: readonly VenuePermission[] = [
   'CloseCourt',
 ];
 
-export interface Venue {
+/** Where a venue is, which is how a booker finds it (PRD US-02). */
+export interface VenueAddress {
+  addressLine: string;
+  district: string;
+  province: string;
+}
+
+export interface Venue extends VenueAddress {
   id: string;
   code: string;
   name: string;
@@ -54,8 +61,8 @@ export class VenueService {
     return this.http.get<Venue[]>('/api/venues/mine');
   }
 
-  create(code: string, name: string): Observable<Venue> {
-    return this.http.post<Venue>('/api/venues', { code, name });
+  create(code: string, name: string, address: VenueAddress): Observable<Venue> {
+    return this.http.post<Venue>('/api/venues', { code, name, ...address });
   }
 
   get(venueId: string): Observable<Venue> {

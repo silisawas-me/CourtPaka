@@ -30,6 +30,9 @@ with sync_playwright() as p:
     code = f"S{int(time.time()) % 100000}"
     page.fill("#code", code)
     page.fill("#name", f"Second Court {code}")
+    page.fill("#address-line", "9 ถนนพระราม 4")
+    page.fill("#district", "ปทุมวัน")
+    page.fill("#province", "กรุงเทพมหานคร")
     page.click("form button[type=submit]")
     # Creating a venue drops the owner on its detail page; the list is one step back.
     page.wait_for_selector("[data-testid=venue-name]")

@@ -48,7 +48,10 @@ public static class VenueEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var invalid = VenueValidation.ValidateCode(request.Code) ?? VenueValidation.ValidateName(request.Name);
+        var invalid = VenueValidation.ValidateCode(request.Code)
+                      ?? VenueValidation.ValidateName(request.Name)
+                      ?? VenueValidation.ValidateAddress(
+                          request.AddressLine, request.District, request.Province);
         if (invalid is not null)
         {
             return ApiProblem.Of(StatusCodes.Status400BadRequest, invalid);
@@ -59,6 +62,9 @@ public static class VenueEndpoints
         {
             Code = request.Code.Trim().ToUpperInvariant(),
             Name = request.Name.Trim(),
+            AddressLine = request.AddressLine.Trim(),
+            District = request.District.Trim(),
+            Province = request.Province.Trim(),
             CreatedAt = now,
         };
 
@@ -121,7 +127,9 @@ public static class VenueEndpoints
         AppDbContext database,
         CancellationToken cancellationToken)
     {
-        var invalid = VenueValidation.ValidateName(request.Name);
+        var invalid = VenueValidation.ValidateName(request.Name)
+                      ?? VenueValidation.ValidateAddress(
+                          request.AddressLine, request.District, request.Province);
         if (invalid is not null)
         {
             return ApiProblem.Of(StatusCodes.Status400BadRequest, invalid);
@@ -130,7 +138,11 @@ public static class VenueEndpoints
         var updated = await database.Venues
             .Where(venue => venue.Id == venueId)
             .ExecuteUpdateAsync(
-                setters => setters.SetProperty(venue => venue.Name, request.Name.Trim()),
+                setters => setters
+                    .SetProperty(venue => venue.Name, request.Name.Trim())
+                    .SetProperty(venue => venue.AddressLine, request.AddressLine.Trim())
+                    .SetProperty(venue => venue.District, request.District.Trim())
+                    .SetProperty(venue => venue.Province, request.Province.Trim()),
                 cancellationToken);
 
         return updated == 1 ? TypedResults.NoContent() : TypedResults.NotFound();
@@ -398,6 +410,9 @@ public static class VenueEndpoints
             venue.Id,
             venue.Code,
             venue.Name,
+            venue.AddressLine,
+            venue.District,
+            venue.Province,
             venue.Status.ToString(),
             role.ToString(),
             VenuePermissionSet.Describe(role == VenueRole.Owner ? VenuePermissions.All : permissions));

@@ -38,6 +38,9 @@ public static class DevelopmentSeeder
             {
                 Code = VenueCode,
                 Name = "Development Court",
+                AddressLine = "123 ถนนสุขุมวิท",
+                District = "วัฒนา",
+                Province = "กรุงเทพมหานคร",
                 Status = VenueStatus.Approved,
                 CreatedAt = time.GetUtcNow(),
             };

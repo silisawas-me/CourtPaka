@@ -24,6 +24,7 @@
 - **Test กับ Material:** ตัว control จริงอยู่ข้างใน host ที่ติด `data-testid` — checkbox เป็น `<input>` ส่วน slide toggle เป็น `<button role="switch">` ใช้ `switchIn()` / `controlOf()` ใน `testing/dom.ts` และ `control()` / `is_on()` / `pick()` ใน `scripts/verify/harness.py` อย่าอ่าน `.checked` จาก host ตรง ๆ
 - **ราคาและนโยบายยกเลิก:** `PriceList` + `PriceBand` และ `CancellationPolicy` + `CancellationTier` เก็บเป็นเวอร์ชันที่เพิ่มอย่างเดียว ตัวใหม่สุดคือตัวที่ใช้ (ไม่มีวันที่เริ่มใช้ เพราะ BR-05 ให้การจอง snapshot ราคา/นโยบาย ณ ตอนจอง) · ราคาเก็บเป็น `decimal(10,2)` · ตอนบันทึกราคา ระบบตรวจว่าทุกชั่วโมงที่เปิดมีราคาและไม่มีช่วงซ้อนกัน
 - **คอร์ทและเวลาเปิด-ปิด:** `Court` + `CourtStatusChange` (ประวัติวันเปิด/ปิดใช้งาน ใช้ตอนคิด utilization ย้อนหลัง US-15) · `OpeningHoursSchedule` เก็บเป็นเวอร์ชันตามวันที่เริ่มใช้ ไม่ทับของเก่า · เวลาเป็นชั่วโมงเต็ม เปิด 0–23 ปิด 1–24 (24 = เที่ยงคืน) ยังไม่รองรับข้ามคืน · วันที่ทุกอย่างคิดเป็นเวลาไทยผ่าน `PlatformRequirements.BangkokToday()` ห้ามใช้ `DateTime.Today`
+- **ฝั่งผู้จอง (US-02):** endpoint สาธารณะอยู่ใน `PublicVenueEndpoints` ไม่ต้องล็อกอิน และเห็นเฉพาะสนามสถานะ Approved เท่านั้น · `GET /api/venues/search?q=` ค้นจากชื่อ/เขต/จังหวัด · `GET /api/venues/{id}/availability?date=` คืนตารางคอร์ท×ชั่วโมงของวันนั้น โดย `Availability.Build` อ่าน timeline ของคอร์ท เวลาเปิด-ปิด และราคา ณ วันนั้น · จองล่วงหน้าได้ `Availability.BookableDaysAhead` (30) วัน นับจากวันไทยวันนี้ · สนามต้องมีที่อยู่ (`AddressLine`/`District`/`Province`) เพราะเป็นสิ่งที่ผู้จองใช้ค้น
 - **บัญชีสำหรับ dev** (seed จะทำงานเฉพาะเมื่อเปิด flag **และ** environment เป็น Development): `owner@courtpaka.local` และ `staff@courtpaka.local` รหัสผ่าน `DevPassword1` สนาม `DEV01` พร้อมคอร์ท 4 คอร์ท เวลาเปิด-ปิด 06:00–22:00 ทุกวัน และราคา 200 บาท/ชม. (18:00 เป็นต้นไป 300)
 
 ## คำสั่ง
@@ -44,7 +45,7 @@
 | Build (เหมือน CI) | `dotnet build backend -c Release -warnaserror` · `cd frontend && npm run build` |
 | Build image arm64 (UAT) | `docker buildx build --platform linux/arm64 backend` |
 | ตรวจ health | `GET /api/health/live` (process) · `GET /api/health/ready` (รวม database) |
-| ตรวจ flow จริงบนเบราว์เซอร์ | `python scripts/verify/venue_settings.py` · `venue_pricing.py` · `venue_ui.py` (ต้องเปิด stack ด้วย `--profile full` ก่อน ดู `scripts/verify/README.md`) |
+| ตรวจ flow จริงบนเบราว์เซอร์ | `python scripts/verify/venue_settings.py` · `venue_pricing.py` · `venue_ui.py` · `booking_grid.py` (ต้องเปิด stack ด้วย `--profile full` ก่อน ดู `scripts/verify/README.md`) |
 
 ## วิธีทำงาน
 - **ทำงานจากเป้าหมาย:** งานแต่ละชิ้นผูกกับ user story / acceptance criteria ใน `docs/prd.md` ถ้า requirement ไม่ชัด ให้ถามก่อนลงมือ

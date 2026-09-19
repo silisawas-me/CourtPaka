@@ -16,6 +16,14 @@ public sealed class Venue
 
     public required string Name { get; set; }
 
+    /// <summary>Street and building, as the venue writes it for a booker to read (PRD US-10).</summary>
+    public required string AddressLine { get; set; }
+
+    /// <summary>District (เขต/อำเภอ), which is how people look for a court near them.</summary>
+    public required string District { get; set; }
+
+    public required string Province { get; set; }
+
     public VenueStatus Status { get; set; } = VenueStatus.Pending;
 
     public required DateTimeOffset CreatedAt { get; init; }

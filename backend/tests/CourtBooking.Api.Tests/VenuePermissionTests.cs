@@ -32,7 +32,7 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
         var venue = await scenario.CreateVenueAsync(first);
 
         var response = await second.PostAsJsonAsync(
-            "/api/venues", new CreateVenueRequest(venue.Code, "Another venue"));
+            "/api/venues", new CreateVenueRequest(venue.Code, "Another venue", "1 ถนนทดสอบ", "บางรัก", "กรุงเทพมหานคร"));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -50,7 +50,7 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
             HttpStatusCode.Forbidden, (await outsider.GetAsync($"/api/venues/{venue.Id}/members")).StatusCode);
         Assert.Equal(
             HttpStatusCode.Forbidden,
-            (await outsider.PutAsJsonAsync($"/api/venues/{venue.Id}", new RenameVenueRequest("Taken over"))).StatusCode);
+            (await outsider.PutAsJsonAsync($"/api/venues/{venue.Id}", new RenameVenueRequest("Taken over", "2 ถนนใหม่", "ปทุมวัน", "กรุงเทพมหานคร"))).StatusCode);
         Assert.Equal(
             HttpStatusCode.Forbidden,
             (await outsider.PostAsJsonAsync(
@@ -75,7 +75,7 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
         // Default staff may work the desk...
         Assert.Equal(HttpStatusCode.OK, (await staff.GetAsync($"/api/venues/{venue.Id}")).StatusCode);
         // ...but settings need a permission they were not given.
-        var rename = await staff.PutAsJsonAsync($"/api/venues/{venue.Id}", new RenameVenueRequest("New name"));
+        var rename = await staff.PutAsJsonAsync($"/api/venues/{venue.Id}", new RenameVenueRequest("New name", "2 ถนนใหม่", "ปทุมวัน", "กรุงเทพมหานคร"));
         Assert.Equal(HttpStatusCode.Forbidden, rename.StatusCode);
     }
 
@@ -155,14 +155,14 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
             new ChangePermissionsRequest(["VerifySlip", "ManageBookings", "CloseCourt", "ManageSettings"]));
         Assert.Equal(HttpStatusCode.NoContent, granted.StatusCode);
 
-        var allowed = await staff.PutAsJsonAsync($"/api/venues/{venue.Id}", new RenameVenueRequest("Renamed"));
+        var allowed = await staff.PutAsJsonAsync($"/api/venues/{venue.Id}", new RenameVenueRequest("Renamed", "2 ถนนใหม่", "ปทุมวัน", "กรุงเทพมหานคร"));
         Assert.Equal(HttpStatusCode.NoContent, allowed.StatusCode);
 
         await owner.PutAsJsonAsync(
             $"/api/venues/{venue.Id}/members/{staffId}/permissions",
             new ChangePermissionsRequest(["VerifySlip", "ManageBookings", "CloseCourt"]));
 
-        var refused = await staff.PutAsJsonAsync($"/api/venues/{venue.Id}", new RenameVenueRequest("Renamed again"));
+        var refused = await staff.PutAsJsonAsync($"/api/venues/{venue.Id}", new RenameVenueRequest("Renamed again", "2 ถนนใหม่", "ปทุมวัน", "กรุงเทพมหานคร"));
         Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
     }
 
@@ -360,7 +360,7 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync($"/api/venues/{venue.Id}")).StatusCode);
         Assert.Equal(
             HttpStatusCode.Forbidden,
-            (await owner.PutAsJsonAsync($"/api/venues/{venue.Id}", new RenameVenueRequest("New name"))).StatusCode);
+            (await owner.PutAsJsonAsync($"/api/venues/{venue.Id}", new RenameVenueRequest("New name", "2 ถนนใหม่", "ปทุมวัน", "กรุงเทพมหานคร"))).StatusCode);
         Assert.Equal(
             HttpStatusCode.Forbidden,
             (await owner.PostAsJsonAsync(

@@ -3,6 +3,8 @@
 
   <span class="spacer"></span>
 
+  <a matButton routerLink="/book" data-testid="nav-book">{{ i18n.t('nav.book') }}</a>
+
   @if (user()) {
     <a matButton routerLink="/venues" data-testid="nav-venues">{{ i18n.t('nav.venues') }}</a>
     <button matButton type="button" data-testid="sign-out" (click)="signOut()">

@@ -40,7 +40,7 @@ public sealed class VenueScenario(ApiTestFixture api)
 
     public async Task<VenueResponse> CreateVenueAsync(HttpClient client) =>
         await ReadAsync<VenueResponse>(
-            await client.PostAsJsonAsync("/api/venues", new CreateVenueRequest(NewCode(), "Smash Court")),
+            await client.PostAsJsonAsync("/api/venues", new CreateVenueRequest(NewCode(), "Smash Court", "1 ถนนทดสอบ", "บางรัก", "กรุงเทพมหานคร")),
             HttpStatusCode.Created);
 
     /// <summary>
