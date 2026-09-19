@@ -29,6 +29,15 @@ public enum VenueStatus
     Suspended = 4,
 }
 
+public static class VenueStatusRules
+{
+    /// <summary>
+    /// A suspended or rejected venue is frozen: it can be read by its people, but nothing about it
+    /// changes — including who belongs to it — until the platform lifts it (PRD US-20).
+    /// </summary>
+    public static bool IsFrozen(VenueStatus? status) => status is VenueStatus.Suspended or VenueStatus.Rejected;
+}
+
 /// <summary>
 /// What a person may do at one venue. Owners implicitly hold every permission, so the stored flags
 /// only ever describe staff (PRD US-14).
@@ -65,7 +74,14 @@ public sealed class VenueInvitation
 
     public required Guid VenueId { get; init; }
 
+    /// <summary>The address as the owner typed it; shown back to them.</summary>
     public required string Email { get; init; }
+
+    /// <summary>
+    /// Upper-cased address used for every comparison. Without it "Bob@x.com" and "bob@x.com" are two
+    /// live invitations for one mailbox, and replacing one would leave the other usable.
+    /// </summary>
+    public required string NormalizedEmail { get; init; }
 
     public required VenuePermissions Permissions { get; set; }
 

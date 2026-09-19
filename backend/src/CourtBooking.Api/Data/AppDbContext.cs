@@ -53,8 +53,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         builder.Entity<VenueInvitation>(invitation =>
         {
             invitation.Property(i => i.Email).HasMaxLength(256);
+            invitation.Property(i => i.NormalizedEmail).HasMaxLength(256);
             invitation.Property(i => i.TokenHash).HasMaxLength(64);
-            invitation.HasIndex(i => new { i.VenueId, i.Email });
+            // The database enforces "one live invitation per address", so a race cannot create two.
+            invitation.HasIndex(i => new { i.VenueId, i.NormalizedEmail })
+                .IsUnique()
+                .HasFilter("\"AcceptedAt\" IS NULL");
             invitation.HasOne(i => i.Venue)
                 .WithMany()
                 .HasForeignKey(i => i.VenueId)

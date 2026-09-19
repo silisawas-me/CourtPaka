@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CourtBooking.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260919102729_VenuesMembershipsAndInvitations")]
+    [Migration("20260919104500_VenuesMembershipsAndInvitations")]
     partial class VenuesMembershipsAndInvitations
     {
         /// <inheritdoc />
@@ -173,6 +173,11 @@ namespace CourtBooking.Api.Data.Migrations
                     b.Property<DateTimeOffset>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("NormalizedEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
                     b.Property<int>("Permissions")
                         .HasColumnType("integer");
 
@@ -186,7 +191,9 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("VenueId", "Email");
+                    b.HasIndex("VenueId", "NormalizedEmail")
+                        .IsUnique()
+                        .HasFilter("\"AcceptedAt\" IS NULL");
 
                     b.ToTable("VenueInvitations");
                 });

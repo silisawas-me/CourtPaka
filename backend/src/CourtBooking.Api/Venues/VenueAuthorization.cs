@@ -82,9 +82,7 @@ public sealed class VenuePermissionHandler(AppDbContext database, CurrentVenue c
             return;
         }
 
-        // A suspended or rejected venue may still be read by its people, but nothing about it changes
-        // until the platform lifts the suspension (PRD US-20).
-        var readOnlyVenue = currentVenue.Status is VenueStatus.Suspended or VenueStatus.Rejected;
+        var readOnlyVenue = VenueStatusRules.IsFrozen(currentVenue.Status);
 
         var allowed = requirement switch
         {

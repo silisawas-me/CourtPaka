@@ -321,6 +321,42 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
     }
 
     [Fact]
+    public async Task Re_inviting_the_same_address_in_different_case_still_replaces_the_invitation()
+    {
+        var owner = await SignedInClientAsync();
+        var venue = await CreateVenueAsync(owner);
+        var (staff, staffEmail) = await SignedInClientWithEmailAsync();
+        var permissive = await InviteAsync(owner, venue.Id, staffEmail.ToUpperInvariant(), VenuePermissions.All);
+        var permissiveToken = ReadInvitationToken(staffEmail.ToUpperInvariant());
+
+        // The owner changes their mind and re-invites the same mailbox, typed differently.
+        await InviteAsync(owner, venue.Id, staffEmail.ToLowerInvariant(), VenuePermissions.StaffDefault);
+
+        var replaced = await staff.PostAsJsonAsync(
+            "/api/venues/invitations/accept", new AcceptInvitationRequest(permissive.Id, permissiveToken));
+
+        Assert.Equal(HttpStatusCode.BadRequest, replaced.StatusCode);
+    }
+
+    [Fact]
+    public async Task An_invitation_cannot_be_accepted_into_a_suspended_venue()
+    {
+        var owner = await SignedInClientAsync();
+        var venue = await CreateVenueAsync(owner);
+        var (staff, staffEmail) = await SignedInClientWithEmailAsync();
+        var invitation = await InviteAsync(owner, venue.Id, staffEmail);
+        var token = ReadInvitationToken(staffEmail);
+        await SetStatusAsync(venue.Id, VenueStatus.Suspended);
+
+        var response = await staff.PostAsJsonAsync(
+            "/api/venues/invitations/accept", new AcceptInvitationRequest(invitation.Id, token));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(VenueErrorCodes.NotApproved, await ReadErrorCodeAsync(response));
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.GetAsync($"/api/venues/{venue.Id}")).StatusCode);
+    }
+
+    [Fact]
     public async Task A_suspended_venue_can_be_read_but_not_changed()
     {
         var owner = await SignedInClientAsync();

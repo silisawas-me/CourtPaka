@@ -33,6 +33,7 @@ namespace CourtBooking.Api.Data.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     VenueId = table.Column<Guid>(type: "uuid", nullable: false),
                     Email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    NormalizedEmail = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     Permissions = table.Column<int>(type: "integer", nullable: false),
                     TokenHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     ExpiresAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
@@ -79,9 +80,11 @@ namespace CourtBooking.Api.Data.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_VenueInvitations_VenueId_Email",
+                name: "IX_VenueInvitations_VenueId_NormalizedEmail",
                 table: "VenueInvitations",
-                columns: new[] { "VenueId", "Email" });
+                columns: new[] { "VenueId", "NormalizedEmail" },
+                unique: true,
+                filter: "\"AcceptedAt\" IS NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_VenueMemberships_UserId",

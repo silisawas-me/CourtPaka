@@ -197,6 +197,7 @@ public static class VenueEndpoints
         }
 
         var email = request.Email.Trim();
+        var normalizedEmail = Normalize(email);
         var existing = await userManager.FindByEmailAsync(email);
         if (existing is not null
             && await database.VenueMemberships.AnyAsync(
@@ -208,9 +209,11 @@ public static class VenueEndpoints
         var now = timeProvider.GetUtcNow();
 
         // One live invitation per address: re-inviting replaces the old link instead of leaving
-        // several valid tokens the owner cannot revoke.
+        // several valid tokens the owner cannot revoke. Matching is on the normalized address, so
+        // a difference in capitalisation cannot leave an older, more permissive link alive.
         await database.VenueInvitations
-            .Where(item => item.VenueId == venueId && item.Email == email && item.AcceptedAt == null)
+            .Where(item =>
+                item.VenueId == venueId && item.NormalizedEmail == normalizedEmail && item.AcceptedAt == null)
             .ExecuteDeleteAsync(cancellationToken);
 
         var token = GenerateToken();
@@ -218,6 +221,7 @@ public static class VenueEndpoints
         {
             VenueId = venueId,
             Email = email,
+            NormalizedEmail = normalizedEmail,
             Permissions = permissions,
             TokenHash = HashToken(token),
             ExpiresAt = now + InvitationLifetime,
@@ -273,9 +277,16 @@ public static class VenueEndpoints
         }
 
         // The invitation names an address; only that person may take it.
-        if (!string.Equals(user.Email, invitation.Email, StringComparison.OrdinalIgnoreCase))
+        if (Normalize(user.Email) != invitation.NormalizedEmail)
         {
             return ApiProblem.Of(StatusCodes.Status403Forbidden, VenueErrorCodes.InvitationForAnotherAddress);
+        }
+
+        // This endpoint has no venue in its route, so it never passes the venue policy: the freeze
+        // has to be checked here too, or a suspended venue could still take on new members.
+        if (VenueStatusRules.IsFrozen(invitation.Venue?.Status))
+        {
+            return ApiProblem.Of(StatusCodes.Status403Forbidden, VenueErrorCodes.NotApproved);
         }
 
         if (await database.VenueMemberships.AnyAsync(
@@ -364,6 +375,8 @@ public static class VenueEndpoints
         await database.SaveChangesAsync(cancellationToken);
         return TypedResults.NoContent();
     }
+
+    private static string Normalize(string? email) => email?.Trim().ToUpperInvariant() ?? string.Empty;
 
     private static string GenerateToken() => WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
 

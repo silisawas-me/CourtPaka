@@ -170,6 +170,11 @@ namespace CourtBooking.Api.Data.Migrations
                     b.Property<DateTimeOffset>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("NormalizedEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
                     b.Property<int>("Permissions")
                         .HasColumnType("integer");
 
@@ -183,7 +188,9 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("VenueId", "Email");
+                    b.HasIndex("VenueId", "NormalizedEmail")
+                        .IsUnique()
+                        .HasFilter("\"AcceptedAt\" IS NULL");
 
                     b.ToTable("VenueInvitations");
                 });
