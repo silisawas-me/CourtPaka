@@ -24,12 +24,12 @@
 		@immutable {
 			path_regexp hashedasset \-[A-Z0-9]{8,}\.(js|css|woff2?|png|jpg|svg|ico)$
 		}
-		@fonts path /fonts/*
+		@fonts path_regexp fontfile ^/fonts/[^/]+\.woff2?$
 		header @immutable Cache-Control "public, max-age=31536000, immutable"
 		header @fonts Cache-Control "public, max-age=2592000"
 		@dynamic {
 			not path_regexp dynamicasset \-[A-Z0-9]{8,}\.(js|css|woff2?|png|jpg|svg|ico)$
-			not path /fonts/*
+			not path_regexp fontfilecheck ^/fonts/[^/]+\.woff2?$
 		}
 		header @dynamic Cache-Control "no-cache"
 

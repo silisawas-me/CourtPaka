@@ -33,6 +33,7 @@ with sync_playwright() as p:
     page.goto(BASE + venue_url)
     page.click("[data-testid=settings-link]")
     page.wait_for_url("**/settings")
+    venue_id = page.url.split("/venues/")[1].split("/")[0]
     check("the venue page links to its settings", page.url.endswith("/settings"), page)
 
     # 1. Add two courts.
@@ -132,6 +133,26 @@ with sync_playwright() as p:
     ).count()
     page.keyboard.press("Escape")
     check("yesterday cannot be picked", disabled == 1, page)
+
+    # The calendar stopping it is convenience; the server refusing it is the rule. Ask the API
+    # directly, through the browser's own session, so the check does not only prove the UI.
+    refused = page.request.put(
+        f"{BASE}/api/venues/{venue_id}/opening-hours",
+        data={
+            "effectiveFrom": yesterday.isoformat(),
+            "days": [
+                {"day": day, "opensHour": 6, "closesHour": 22}
+                for day in (
+                    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
+                )
+            ],
+        },
+    )
+    check("the server refuses a backdated week", refused.status == 400)
+    check(
+        "and says which rule it broke",
+        refused.json().get("code") == "court.effective_date_in_the_past",
+    )
 
     # 7. Staff without ManageSettings read it and can change nothing.
     page.goto(f"{BASE}/")
