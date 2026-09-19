@@ -243,7 +243,7 @@ describe('VenueSettingsPage', () => {
     );
   });
 
-  it('will not send a date the server would refuse', () => {
+  it('will not send a date the server would refuse, and says why', () => {
     render({}, [], []);
 
     setDate('2020-01-01');
@@ -251,6 +251,8 @@ describe('VenueSettingsPage', () => {
 
     // Nothing leaves the page: the date is before the minimum the picker allows.
     httpMock.expectNone('/api/venues/v1/opening-hours');
+    // And the field says that, rather than claiming a filled-in field is empty.
+    expect(textOf(fixture, 'effective-from-error')).toBe(TRANSLATIONS.th['common.dateTooEarly']);
   });
 
   it('sends the hours as numbers after the user picks them', () => {

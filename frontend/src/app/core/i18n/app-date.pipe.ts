@@ -1,4 +1,5 @@
 import { Pipe, PipeTransform } from '@angular/core';
+import { fromPlainDate } from './plain-date';
 
 const FORMAT: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' };
 
@@ -25,7 +26,7 @@ function formatter(locale: string): Intl.DateTimeFormat {
 @Pipe({ name: 'appDate' })
 export class AppDatePipe implements PipeTransform {
   transform(value: string, locale: string): string {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? '' : formatter(locale).format(date);
+    const date = fromPlainDate(value);
+    return date === null ? '' : formatter(locale).format(date);
   }
 }

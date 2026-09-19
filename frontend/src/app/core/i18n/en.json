@@ -9,6 +9,8 @@
   "app.signOutIncomplete": "You are signed out on this device, but the server did not confirm it. On a shared computer, sign out again once you are back online.",
   "app.tagline": "Book a badminton court online",
   "common.cancel": "Cancel",
+  "common.dateNotUnderstood": "That date could not be read; pick one from the calendar.",
+  "common.dateTooEarly": "That date has passed; pick today or later.",
   "common.email": "Email",
   "common.emailInvalid": "Enter a valid email address",
   "common.loading": "Working...",

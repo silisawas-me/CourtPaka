@@ -197,12 +197,18 @@
           <form class="stack" [formGroup]="hoursForm" (ngSubmit)="saveHours()" novalidate>
             <mat-form-field class="field">
               <mat-label>{{ i18n.t('settings.hours.effectiveFrom') }}</mat-label>
+              <!--
+                Read-only on purpose: the adapter formats Thai dates through Intl but cannot read
+                one back, so a typed "19 ก.ย. 2569" would be thrown away. The calendar is the way in.
+              -->
               <input
                 id="effective-from"
                 matInput
+                readonly
                 formControlName="effectiveFrom"
                 [matDatepicker]="picker"
                 [min]="today()"
+                (click)="picker.open()"
               />
               <mat-datepicker-toggle matIconSuffix [for]="picker" />
               <mat-datepicker #picker />

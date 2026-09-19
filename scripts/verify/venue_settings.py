@@ -2,12 +2,17 @@
 import datetime
 
 
-def thai_date(date: datetime.date) -> str:
-    """The year as the page prints it: Thailand reads the Buddhist era."""
-    return str(date.year + 543)
-
-
-from harness import BASE, OWNER, STAFF, Checks, control, login
+from harness import (
+    BASE,
+    OWNER,
+    STAFF,
+    Checks,
+    control,
+    login,
+    pick_date,
+    thai_date,
+    thai_month_year,
+)
 from playwright.sync_api import expect, sync_playwright
 
 check = Checks(__file__)
@@ -53,6 +58,9 @@ with sync_playwright() as p:
     court_id = last_row.locator("[data-testid^=court-active-]").get_attribute("data-testid")
     # Wait for the server to answer: the box flips optimistically, and reloading before the
     # request lands would cancel it.
+    if not control(page, court_id).is_checked():
+        control(page, court_id).click()  # start from "in use", whatever the last run left behind
+        page.wait_for_timeout(500)
     with page.expect_response(lambda response: "/status" in response.url) as answered:
         control(page, court_id).click()
     check("the server accepted the change", answered.value.status == 200)
@@ -79,7 +87,7 @@ with sync_playwright() as p:
 
     # 4. Publish a week, with Monday closed, and read it back.
     today = datetime.date.today()
-    page.fill("#effective-from", today.isoformat())
+    pick_date(page, today)
     control(page, "open-Monday").uncheck()
     page.select_option('[data-testid="opens-Tuesday"]', label="7:00")
     page.select_option('[data-testid="closes-Tuesday"]', label="24:00")
@@ -97,7 +105,7 @@ with sync_playwright() as p:
     check("the published week is the one in force", thai_date(today) in in_force)
 
     # 5. A week dated ahead is listed separately.
-    page.fill("#effective-from", (today + datetime.timedelta(days=30)).isoformat())
+    pick_date(page, today + datetime.timedelta(days=30))
     with page.expect_response(lambda response: "/opening-hours" in response.url):
         page.locator("form").last.locator("button[type=submit]").click()
     page.wait_for_selector("[data-testid=hours-upcoming]")
@@ -109,11 +117,21 @@ with sync_playwright() as p:
     )
 
     # 6. A past date never leaves the page: the picker has a minimum, and the form stops there.
-    page.fill("#effective-from", (today - datetime.timedelta(days=1)).isoformat())
-    page.locator("#effective-from").blur()
-    page.locator("form").last.locator("button[type=submit]").click()
-    expect(page.locator("#effective-from")).to_have_attribute("aria-invalid", "true")
-    check("a past date is refused by the field itself", True, page)
+    # A past date cannot be picked at all: the calendar will not offer it.
+    page.click("mat-datepicker-toggle button")
+    page.wait_for_selector("mat-calendar")
+    # The field holds a date a month out, so the calendar opens there; walk back to this month.
+    for _ in range(3):
+        if page.locator("mat-calendar .mat-calendar-period-button").inner_text().strip() == thai_month_year(today):
+            break
+        page.click(".mat-calendar-previous-button")
+    yesterday = today - datetime.timedelta(days=1)
+    disabled = page.locator(
+        f'.mat-calendar-body-cell[aria-disabled="true"] '
+        f'.mat-calendar-body-cell-content:text-is("{yesterday.day}")'
+    ).count()
+    page.keyboard.press("Escape")
+    check("yesterday cannot be picked", disabled == 1, page)
 
     # 7. Staff without ManageSettings read it and can change nothing.
     page.goto(f"{BASE}/")

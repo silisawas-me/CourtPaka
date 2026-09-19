@@ -38,6 +38,13 @@ export class FieldError {
     if (control.hasError('minlength')) {
       return 'common.passwordTooShort';
     }
+    // The datepicker's own errors; without these a filled-in field reads "this is required".
+    if (control.hasError('matDatepickerMin')) {
+      return 'common.dateTooEarly';
+    }
+    if (control.hasError('matDatepickerParse')) {
+      return 'common.dateNotUnderstood';
+    }
     return 'common.required';
   });
 }

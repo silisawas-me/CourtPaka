@@ -16,7 +16,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { AppDatePipe } from '../../core/i18n/app-date.pipe';
-import { plainDate } from '../../core/i18n/plain-date';
+import { plainDate, venueToday } from '../../core/i18n/plain-date';
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { errorKey } from '../../core/http/api-error';
@@ -136,8 +136,12 @@ export class VenueSettingsPage {
     name: ['', [Validators.required, Validators.maxLength(50)]],
   });
 
-  /** The earliest date the server will take, so the picker cannot offer a refused one. */
-  protected readonly today = signal(new Date());
+  /**
+   * The earliest date the server will take. It is the Bangkok date, not the browser's: a laptop
+   * set to another zone must not be offered a date the server refuses, nor stopped from picking
+   * one it would accept.
+   */
+  protected readonly today = signal(venueToday());
 
   protected readonly hoursForm = this.formBuilder.group({
     effectiveFrom: this.formBuilder.control<Date | null>(null, Validators.required),
@@ -329,7 +333,7 @@ export class VenueSettingsPage {
     this.hoursError.set(null);
     this.renaming.set(null);
     this.savingCourts.set(new Set());
-    this.today.set(new Date());
+    this.today.set(venueToday());
     this.scheduled.set({});
 
     forkJoin({
