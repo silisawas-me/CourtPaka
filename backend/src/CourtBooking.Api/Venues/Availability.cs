@@ -69,10 +69,13 @@ public static class Availability
                     court.Id,
                     court.Name,
                     hours
-                        .Select((hour, index) => new HourResponse(
-                            hour,
-                            inUse ? free : closed,
-                            inUse ? priceByHour[index] : null))
+                        .Select((hour, index) =>
+                        {
+                            // An hour with nothing to charge for it is not for sale, whatever the
+                            // court is doing: a venue may publish its hours before its prices.
+                            var baht = inUse ? priceByHour[index] : null;
+                            return new HourResponse(hour, baht is null ? closed : free, baht);
+                        })
                         .ToArray());
             })
             .ToArray();
@@ -82,8 +85,8 @@ public static class Availability
     }
 
     /// <summary>
-    /// What this hour costs. The settings refuse to leave an open hour unpriced, so a null here
-    /// means the data was written before that rule held — and an hour with no price is not for sale.
+    /// What this hour costs, or null when nothing prices it — which a venue that published its
+    /// hours before its prices will have for every hour, and the caller reads as closed.
     /// </summary>
     private static decimal? PriceFor(IReadOnlyCollection<PriceBand> bands, DayOfWeek day, int hour) =>
         bands

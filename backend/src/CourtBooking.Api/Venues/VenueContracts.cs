@@ -54,6 +54,7 @@ public static class VenueErrorCodes
     public const string InvalidProvince = "venue.invalid_province";
     public const string InvalidEmail = "venue.invalid_email";
     public const string NotApproved = "venue.not_approved";
+    public const string NotFound = "venue.not_found";
 }
 
 /// <summary>What a booker sees about a venue before signing in (PRD US-02).</summary>

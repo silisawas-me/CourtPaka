@@ -144,6 +144,42 @@ describe('AvailabilityPage', () => {
     expect(textOf(fixture, 'grid-date')).toContain('25');
   });
 
+  it('keeps only the newest day when two reads overlap', () => {
+    render();
+
+    // Two moves in quick succession: the first answer must not win by arriving last.
+    fixture.componentRef.setInput('date', '2026-09-21');
+    fixture.detectChanges();
+    const first = expectRead();
+
+    fixture.componentRef.setInput('date', '2026-09-22');
+    fixture.detectChanges();
+    const second = expectRead();
+
+    // The superseded read is cancelled, so its answer can never arrive late and win.
+    expect(first.cancelled).toBe(true);
+
+    second.flush(day({ date: '2026-09-22' }));
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'grid-date')).toContain('22');
+  });
+
+  it('drops the grid it was showing when the next day cannot be read', () => {
+    render();
+
+    fixture.componentRef.setInput('date', '2030-01-01');
+    fixture.detectChanges();
+    expectRead().flush(
+      { code: 'availability.date_too_far_ahead' },
+      { status: 400, statusText: 'Bad Request' },
+    );
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, 'availability-grid')).toBeNull();
+    expect(elementOf(fixture, 'grid-date')).toBeNull();
+  });
+
   it('navigates when the picker moves, so the day on screen is the day in the URL', () => {
     render();
 

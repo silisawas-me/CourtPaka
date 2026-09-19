@@ -18,7 +18,7 @@
       <p class="form-error" data-testid="search-error">{{ i18n.t(key) }}</p>
     }
 
-    @if (found().length === 0 && !searching()) {
+    @if (found().length === 0 && !searching() && !error()) {
       <p class="muted" data-testid="no-venues">{{ i18n.t('search.none') }}</p>
     } @else {
       <div class="stack" data-testid="venue-results">

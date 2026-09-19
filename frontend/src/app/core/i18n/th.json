@@ -81,6 +81,7 @@
   "error.venue.invitation_for_another_address": "คำเชิญนี้ออกให้อีเมลอื่น กรุณาเข้าสู่ระบบด้วยอีเมลที่ได้รับคำเชิญ",
   "error.venue.invitation_invalid": "คำเชิญไม่ถูกต้องหรือหมดอายุแล้ว",
   "error.venue.not_approved": "สนามนี้ถูกระงับหรือยังไม่ได้รับอนุมัติ",
+  "error.venue.not_found": "ไม่พบสนามนี้ หรือสนามปิดรับจองอยู่",
   "error.venue.owner_cannot_be_changed": "เปลี่ยนสิทธิ์หรือนำเจ้าของสนามออกไม่ได้",
   "home.emailNotVerified": "ยังไม่ได้ยืนยันอีเมล",
   "home.emailVerified": "ยืนยันอีเมลแล้ว",

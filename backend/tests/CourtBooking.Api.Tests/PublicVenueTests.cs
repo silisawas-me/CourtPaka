@@ -45,6 +45,49 @@ public sealed class PublicVenueTests(ApiTestFixture api)
     }
 
     [Fact]
+    public async Task An_hour_with_no_price_is_not_offered()
+    {
+        // Publishing hours before prices is the normal order and the settings allow it, so a venue
+        // can be open with nothing to charge. Nothing in that grid is for sale (PRD BR-05).
+        var owner = await scenario.SignedInClientAsync();
+        var venue = await scenario.CreateVenueAsync(owner);
+        await VenueScenario.SetHoursAsync(owner, venue.Id, VenueScenario.Today);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            (await owner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/courts", new CreateCourtRequest("Court 1"))).StatusCode);
+        await scenario.SetStatusAsync(venue.Id, VenueStatus.Approved);
+
+        var day = await ReadAvailabilityAsync(api.CreateClient(), venue.Id, VenueScenario.Today);
+
+        var court = Assert.Single(day.Courts);
+        Assert.NotEmpty(court.Hours);
+        Assert.All(court.Hours, hour => Assert.Equal(nameof(HourStatus.Closed), hour.Status));
+        Assert.All(court.Hours, hour => Assert.Null(hour.BahtPerHour));
+    }
+
+    [Theory]
+    [InlineData("%")]
+    [InlineData("_")]
+    public async Task A_search_for_a_wildcard_looks_for_that_character(string term)
+    {
+        var (_, venue) = await BookableVenueAsync();
+        var anonymous = api.CreateClient();
+
+        // Passed through, "%" would match everything and "_" any single character.
+        Assert.DoesNotContain(await SearchAsync(anonymous, term), found => found.Id == venue.Id);
+    }
+
+    [Fact]
+    public async Task A_venue_a_booker_cannot_see_answers_with_a_code()
+    {
+        var response = await api.CreateClient().GetAsync($"/api/venues/{Guid.NewGuid()}/availability");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(VenueErrorCodes.NotFound, await response.ErrorCodeAsync());
+    }
+
+    [Fact]
     public async Task A_venue_that_is_not_approved_is_invisible_to_a_booker()
     {
         var (owner, venue) = await BookableVenueAsync();

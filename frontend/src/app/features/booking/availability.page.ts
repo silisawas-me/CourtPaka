@@ -1,4 +1,5 @@
-import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, computed, inject, input, signal } from '@angular/core';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -7,6 +8,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Router, RouterLink } from '@angular/router';
+import { catchError, EMPTY, switchMap, tap } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { errorKey } from '../../core/http/api-error';
 import { AppDatePipe } from '../../core/i18n/app-date.pipe';
@@ -80,10 +82,37 @@ export class AvailabilityPage {
   protected readonly picked: FormControl<Date> =
     inject(FormBuilder).nonNullable.control(venueToday());
 
+  /** What the page is showing: the two halves of it that come from the route. */
+  private readonly asked = computed(() => ({ venueId: this.venueId(), date: this.chosen() }));
+
   constructor() {
-    effect(() => this.load(this.venueId(), this.chosen()));
-    // The field follows the URL, never the other way round: picking a day navigates.
-    effect(() => this.picked.setValue(fromPlainDate(this.chosen()) ?? venueToday()));
+    // switchMap drops the answer to a day the booker has already moved off, so going back and
+    // forward through the history cannot leave an older day's grid on screen.
+    toObservable(this.asked)
+      .pipe(
+        tap(() => {
+          this.loading.set(true);
+          this.pageError.set(null);
+          // The field follows the URL, never the other way round: picking a day navigates.
+          this.picked.setValue(fromPlainDate(this.chosen()) ?? venueToday());
+        }),
+        switchMap(({ venueId, date }) =>
+          this.venues.availability(venueId, date).pipe(
+            catchError((failure: unknown) => {
+              // Nothing of the day survives a failure; the error is what the page shows.
+              this.day.set(null);
+              this.pageError.set(errorKey(failure));
+              this.loading.set(false);
+              return EMPTY;
+            }),
+          ),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe((day) => {
+        this.day.set(day);
+        this.loading.set(false);
+      });
   }
 
   protected pick(date: Date | null): void {
@@ -93,21 +122,5 @@ export class AvailabilityPage {
         queryParamsHandling: 'merge',
       });
     }
-  }
-
-  private load(venueId: string, date: string): void {
-    this.loading.set(true);
-    this.pageError.set(null);
-
-    this.venues.availability(venueId, date).subscribe({
-      next: (day) => {
-        this.day.set(day);
-        this.loading.set(false);
-      },
-      error: (failure: unknown) => {
-        this.pageError.set(errorKey(failure));
-        this.loading.set(false);
-      },
-    });
   }
 }

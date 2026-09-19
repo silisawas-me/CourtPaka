@@ -81,6 +81,7 @@
   "error.venue.invitation_for_another_address": "This invitation was sent to a different address",
   "error.venue.invitation_invalid": "This invitation is invalid or has expired",
   "error.venue.not_approved": "This venue is suspended or not approved",
+  "error.venue.not_found": "That venue is not available.",
   "error.venue.owner_cannot_be_changed": "The owner cannot be changed or removed",
   "home.emailNotVerified": "Email not verified",
   "home.emailVerified": "Email verified",

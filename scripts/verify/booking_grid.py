@@ -71,7 +71,12 @@ with sync_playwright() as p:
         not day_is_offered(page, today - datetime.timedelta(days=1)),
     )
     check(
-        "the day after the window is not offered",
+        "the last day of the window is offered",
+        day_is_offered(page, today + datetime.timedelta(days=30)),
+        page,
+    )
+    check(
+        "the day after it is not",
         not day_is_offered(page, today + datetime.timedelta(days=31)),
     )
     # The calendar is still open, which is where the day gets picked from.

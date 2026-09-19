@@ -40,11 +40,11 @@ public static class PublicVenueEndpoints
 
         if (!string.IsNullOrWhiteSpace(q))
         {
-            var term = q.Trim();
+            var term = $"%{Like(q.Trim())}%";
             query = query.Where(venue =>
-                EF.Functions.ILike(venue.Name, $"%{term}%")
-                || EF.Functions.ILike(venue.District, $"%{term}%")
-                || EF.Functions.ILike(venue.Province, $"%{term}%"));
+                EF.Functions.ILike(venue.Name, term, LikeEscape)
+                || EF.Functions.ILike(venue.District, term, LikeEscape)
+                || EF.Functions.ILike(venue.Province, term, LikeEscape));
         }
 
         var found = await query
@@ -64,7 +64,7 @@ public static class PublicVenueEndpoints
     /// grid wants both and one request is one round trip. This is where the booking flow starts, so
     /// it is also where <c>venue_page_viewed</c> is recorded (PRD 8).
     /// </summary>
-    private static async Task<Results<Ok<AvailabilityResponse>, NotFound, ProblemHttpResult>> AvailabilityAsync(
+    private static async Task<Results<Ok<AvailabilityResponse>, ProblemHttpResult>> AvailabilityAsync(
         Guid venueId,
         DateOnly? date,
         AppDbContext database,
@@ -83,7 +83,9 @@ public static class PublicVenueEndpoints
 
         if (await ApprovedAsync(database, venueId, cancellationToken) is not { } venue)
         {
-            return TypedResults.NotFound();
+            // A booker following a shared link to a venue that was suspended or never existed. It
+            // is the one 404 a booker meets, so it says which one it is (US-23).
+            return ApiProblem.Of(StatusCodes.Status404NotFound, VenueErrorCodes.NotFound);
         }
 
         var courts = await database.Courts
@@ -113,4 +115,15 @@ public static class PublicVenueEndpoints
 
     private static PublicVenueResponse Public(Venue venue) => new(
         venue.Id, venue.Code, venue.Name, venue.AddressLine, venue.District, venue.Province);
+
+    /// <summary>
+    /// Postgres reads %, _ and \ in a LIKE pattern, so a booker typing one would otherwise match
+    /// everything rather than look for the character they typed.
+    /// </summary>
+    private const string LikeEscape = @"\";
+
+    private static string Like(string term) => term
+        .Replace(@"\", @"\\", StringComparison.Ordinal)
+        .Replace("%", @"\%", StringComparison.Ordinal)
+        .Replace("_", @"\_", StringComparison.Ordinal);
 }
