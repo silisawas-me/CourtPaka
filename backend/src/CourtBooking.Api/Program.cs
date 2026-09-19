@@ -4,7 +4,9 @@ using CourtBooking.Api.Email;
 using CourtBooking.Api.Health;
 using CourtBooking.Api.Identity;
 using CourtBooking.Api.Localization;
+using CourtBooking.Api.Venues;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using System.Threading.RateLimiting;
@@ -116,7 +118,16 @@ builder.Services.ConfigureApplicationCookie(options =>
         options.Events.OnValidatePrincipal = SecurityStampValidator.ValidatePrincipalAsync;
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IAuthorizationHandler, VenuePermissionHandler>();
+
+// One policy per venue permission, so an endpoint states the rule it enforces (PRD US-14).
+var authorization = builder.Services.AddAuthorizationBuilder();
+foreach (var (name, permission) in VenuePolicies.All())
+{
+    authorization.AddPolicy(name, policy =>
+        policy.RequireAuthenticatedUser().AddRequirements(new VenuePermissionRequirement(permission)));
+}
 
 // Registration and password endpoints send email and check credentials, so they are capped per client IP.
 builder.Services.AddRateLimiter(options =>
@@ -158,11 +169,18 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 var app = builder.Build();
 
+var startupOptions = app.Services.GetRequiredService<IOptions<AppOptions>>().Value;
+
 // Local stacks bring their own schema up; deployments run the migration bundle before the swap (PRD 9.4).
-if (app.Services.GetRequiredService<IOptions<AppOptions>>().Value.ApplyMigrationsOnStartup)
+if (startupOptions.ApplyMigrationsOnStartup)
 {
     using var migrationScope = app.Services.CreateScope();
     await migrationScope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
+}
+
+if (startupOptions.SeedDevelopmentData)
+{
+    await DevelopmentSeeder.SeedAsync(app.Services);
 }
 
 app.UseForwardedHeaders();
@@ -181,6 +199,7 @@ if (app.Environment.IsDevelopment())
 var api = app.MapGroup("/api");
 
 api.MapAuthEndpoints();
+api.MapVenueEndpoints();
 
 // Liveness: the process is running. Readiness: dependencies such as the database are reachable.
 api.MapHealthChecks("/health/live", new HealthCheckOptions
