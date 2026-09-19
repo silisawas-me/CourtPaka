@@ -11,27 +11,33 @@ namespace CourtBooking.Api.Tests.Infrastructure;
 /// </summary>
 public sealed class AuthApiFixture(PostgresFixture postgres) : IAsyncLifetime
 {
+    private ApiFactory _root = null!;
+
     public FakeEmailSender Emails { get; } = new();
 
     public WebApplicationFactory<Program> Api { get; private set; } = null!;
 
     public async Task InitializeAsync()
     {
-        var factory = new ApiFactory(postgres.ConnectionString);
-        await factory.MigrateAsync();
+        _root = new ApiFactory(postgres.ConnectionString);
+        await _root.MigrateAsync();
 
-        Api = factory.WithWebHostBuilder(builder =>
+        Api = _root.WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
                 services.Replace(ServiceDescriptor.Singleton<ITransactionalEmailSender>(Emails))));
     }
 
     public Task DisposeAsync()
     {
+        // Disposing the derived factory does not dispose the one it was derived from.
         Api.Dispose();
+        _root.Dispose();
         return Task.CompletedTask;
     }
 
     public HttpClient CreateClient() => Api.CreateClient();
+
+    public IServiceScope CreateScope() => Api.Services.CreateScope();
 
     public T GetService<T>() where T : notnull => Api.Services.GetRequiredService<T>();
 }

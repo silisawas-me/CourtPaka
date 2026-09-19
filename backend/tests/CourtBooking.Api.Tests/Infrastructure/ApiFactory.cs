@@ -17,6 +17,12 @@ public sealed class ApiFactory(string connectionString) : WebApplicationFactory<
         builder.UseSetting("App:BaseUrl", "http://localhost:8080");
         builder.UseSetting("App:PrivacyPolicyVersion", PrivacyPolicyVersion);
         builder.UseSetting("App:RequireSecureCookies", "false");
+        // Tests apply migrations explicitly so each suite controls when the schema appears.
+        builder.UseSetting("App:ApplyMigrationsOnStartup", "false");
+        // Every test shares one client IP; a production-sized limit would make unrelated tests fail.
+        builder.UseSetting("App:AuthRequestsPerMinute", "10000");
+        // Re-check the session against the user row on every request so revocation is testable.
+        builder.UseSetting("App:SessionRevalidationSeconds", "0");
     }
 
     /// <summary>Creates the schema from the real migrations, the same way a deployment does.</summary>

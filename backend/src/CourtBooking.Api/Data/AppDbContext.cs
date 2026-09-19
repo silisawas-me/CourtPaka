@@ -13,9 +13,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     {
         base.OnModelCreating(builder);
 
-        builder.Entity<AppUser>()
-            .Property(user => user.Language)
-            .HasMaxLength(8);
+        builder.Entity<AppUser>(user =>
+        {
+            user.Property(u => u.Language).HasMaxLength(8);
+            // Identity only checks uniqueness in application code; the database has to enforce it too,
+            // otherwise two simultaneous registrations both succeed.
+            user.HasIndex(u => u.NormalizedEmail).HasDatabaseName("EmailIndex").IsUnique();
+        });
 
         builder.Entity<UserConsent>(consent =>
         {

@@ -6,8 +6,10 @@ using CourtBooking.Api.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace CourtBooking.Api.Identity;
 
@@ -18,9 +20,10 @@ public static class AuthEndpoints
         var auth = routes.MapGroup("/auth").WithTags("Auth");
 
         auth.MapGet("/privacy-policy", GetPrivacyPolicy);
-        auth.MapPost("/register", RegisterAsync);
-        auth.MapPost("/verify-email", VerifyEmailAsync);
-        auth.MapPost("/login", LoginAsync);
+        auth.MapPost("/register", RegisterAsync).RequireRateLimiting(RateLimitPolicies.Auth);
+        auth.MapPost("/resend-verification", ResendVerificationAsync).RequireRateLimiting(RateLimitPolicies.Auth);
+        auth.MapPost("/verify-email", VerifyEmailAsync).RequireRateLimiting(RateLimitPolicies.Auth);
+        auth.MapPost("/login", LoginAsync).RequireRateLimiting(RateLimitPolicies.Auth);
         auth.MapPost("/logout", LogoutAsync).RequireAuthorization();
         auth.MapGet("/me", GetCurrentUserAsync).RequireAuthorization();
         auth.MapPut("/me/language", ChangeLanguageAsync).RequireAuthorization();
@@ -60,42 +63,82 @@ public static class AuthEndpoints
             Language = language,
         };
 
-        var result = await userManager.CreateAsync(user, request.Password);
-        if (result.Succeeded)
-        {
-            database.UserConsents.Add(new UserConsent
-            {
-                UserId = user.Id,
-                Type = ConsentType.PrivacyPolicy,
-                Version = options.Value.PrivacyPolicyVersion,
-                AcceptedAt = timeProvider.GetUtcNow(),
-            });
-            await database.SaveChangesAsync(cancellationToken);
+        // The account and its consent row are one unit: a half-registered user with no recorded
+        // consent would violate PDPA (PRD 8) and could never be completed.
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
 
-            await SendVerificationEmailAsync(user, userManager, emailSender, options.Value, cancellationToken);
+        IdentityResult result;
+        try
+        {
+            result = await userManager.CreateAsync(user, request.Password);
+            if (result.Succeeded)
+            {
+                database.UserConsents.Add(new UserConsent
+                {
+                    UserId = user.Id,
+                    Type = ConsentType.PrivacyPolicy,
+                    Version = options.Value.PrivacyPolicyVersion,
+                    AcceptedAt = timeProvider.GetUtcNow(),
+                });
+                await database.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+
+                await SendVerificationEmailAsync(user, userManager, emailSender, options.Value, CancellationToken.None);
+                return TypedResults.Created("/api/auth/me");
+            }
+        }
+        catch (DbUpdateException exception) when (IsUniqueViolation(exception))
+        {
+            // Two registrations for the same address raced past the uniqueness check.
+            await transaction.RollbackAsync(cancellationToken);
+            await SendAccountExistsEmailAsync(request.Email, language, userManager, emailSender, CancellationToken.None);
             return TypedResults.Created("/api/auth/me");
         }
+
+        await transaction.RollbackAsync(cancellationToken);
 
         // An address that is already registered answers exactly like a fresh one and gets an email instead,
         // so this endpoint cannot be used to find out who has an account (PDPA, PRD 8).
         var codes = result.Errors.Select(error => error.Code).ToArray();
         if (codes.Any(code => code is "DuplicateUserName" or "DuplicateEmail"))
         {
-            await emailSender.SendAsync(
-                new EmailMessage(
-                    request.Email,
-                    language,
-                    "CourtPaka: account already exists",
-                    "Someone tried to register with this address. If it was you, sign in or reset your password."),
-                cancellationToken);
+            await SendAccountExistsEmailAsync(request.Email, language, userManager, emailSender, CancellationToken.None);
             return TypedResults.Created("/api/auth/me");
         }
 
         // Identity owns the rules, so its error decides the code the frontend shows.
-        var failureCode = codes.Any(code => code is "InvalidEmail" or "InvalidUserName")
-            ? AuthErrorCodes.InvalidEmail
-            : AuthErrorCodes.WeakPassword;
-        return ApiProblem.Of(StatusCodes.Status400BadRequest, failureCode);
+        if (codes.Any(code => code is "InvalidEmail" or "InvalidUserName" or "DuplicateEmail"))
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.InvalidEmail);
+        }
+
+        if (codes.Any(code => code.StartsWith("Password", StringComparison.Ordinal)))
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.WeakPassword);
+        }
+
+        // Anything else (store failures, concurrency) is ours, not the caller's.
+        return ApiProblem.Of(StatusCodes.Status500InternalServerError, AuthErrorCodes.RegistrationFailed);
+    }
+
+    /// <summary>
+    /// Sends the verification link again. Always answers the same way, so it cannot be used to find
+    /// out which addresses have an account.
+    /// </summary>
+    private static async Task<Accepted> ResendVerificationAsync(
+        ResendVerificationRequest request,
+        UserManager<AppUser> userManager,
+        ITransactionalEmailSender emailSender,
+        IOptions<AppOptions> options,
+        CancellationToken cancellationToken)
+    {
+        var user = await userManager.FindByEmailAsync(request.Email);
+        if (user is { EmailConfirmed: false })
+        {
+            await SendVerificationEmailAsync(user, userManager, emailSender, options.Value, cancellationToken);
+        }
+
+        return TypedResults.Accepted((string?)null);
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> VerifyEmailAsync(
@@ -119,14 +162,12 @@ public static class AuthEndpoints
         }
 
         var result = await userManager.ConfirmEmailAsync(user, token);
-        if (!result.Succeeded)
-        {
-            return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.InvalidVerificationToken);
-        }
 
-        // Sessions created before verification must stop claiming the account is unverified.
-        await userManager.UpdateSecurityStampAsync(user);
-        return TypedResults.NoContent();
+        // Verification state is read from the row on every request, so open sessions see it at once
+        // and do not have to be invalidated (which would sign the user out mid-flow).
+        return result.Succeeded
+            ? TypedResults.NoContent()
+            : ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.InvalidVerificationToken);
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> LoginAsync(
@@ -210,4 +251,27 @@ public static class AuthEndpoints
                 $"Confirm your address to finish signing up: {link}"),
             cancellationToken);
     }
+
+    /// <summary>Warns the address owner in the language of their account, not of whoever tried to register.</summary>
+    private static async Task SendAccountExistsEmailAsync(
+        string email,
+        string fallbackLanguage,
+        UserManager<AppUser> userManager,
+        ITransactionalEmailSender emailSender,
+        CancellationToken cancellationToken)
+    {
+        var owner = await userManager.FindByEmailAsync(email);
+
+        await emailSender.SendAsync(
+            new EmailMessage(
+                email,
+                owner?.Language ?? fallbackLanguage,
+                "CourtPaka: account already exists",
+                "Someone tried to register with this address. If it was you, sign in or reset your password."),
+            cancellationToken);
+    }
+
+    // 23505 is PostgreSQL's unique_violation.
+    private static bool IsUniqueViolation(DbUpdateException exception) =>
+        exception.InnerException is PostgresException { SqlState: "23505" };
 }

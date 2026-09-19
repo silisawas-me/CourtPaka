@@ -13,10 +13,16 @@ COPY src/ src/
 RUN --mount=type=cache,target=/root/.nuget/packages \
     dotnet publish src/CourtBooking.Api/CourtBooking.Api.csproj -c Release -a $TARGETARCH --no-restore -o /app
 
+# A named volume mounted here inherits this ownership, so the non-root runtime user can write the
+# data protection key ring (without it every restart invalidates all auth cookies).
+RUN mkdir -p /keys
+
 # chiseled-extra includes ICU + tzdata, required for Asia/Bangkok and Thai culture (PRD 9.2).
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra
+ARG APP_UID=1654
 WORKDIR /app
 COPY --from=build /app .
+COPY --from=build --chown=$APP_UID:$APP_UID /keys /keys
 ENV ASPNETCORE_HTTP_PORTS=8080
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "CourtBooking.Api.dll"]

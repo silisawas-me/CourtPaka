@@ -217,6 +217,49 @@ public sealed class AuthEndpointTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_verification_email_can_be_sent_again()
+    {
+        using var client = _api.CreateClient();
+        var email = await RegisterAsync(client);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/auth/resend-verification", new ResendVerificationRequest(email));
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var (userId, token) = ReadVerificationLink(_api.Emails.LastTo(email).Body);
+        var verified = await client.PostAsJsonAsync("/api/auth/verify-email", new VerifyEmailRequest(userId, token));
+        Assert.Equal(HttpStatusCode.NoContent, verified.StatusCode);
+    }
+
+    [Fact]
+    public async Task Resending_to_an_unknown_address_answers_the_same_way()
+    {
+        using var client = _api.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/api/auth/resend-verification", new ResendVerificationRequest(NewEmail()));
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Revoking_the_security_stamp_ends_existing_sessions()
+    {
+        using var client = _api.CreateClient();
+        var email = await RegisterAsync(client);
+        await LoginAsync(client, email);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/auth/me")).StatusCode);
+
+        using (var scope = _api.CreateScope())
+        {
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+            await users.UpdateSecurityStampAsync((await users.FindByEmailAsync(email))!);
+        }
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode);
+    }
+
+    [Fact]
     public async Task Signing_out_ends_the_session()
     {
         using var client = _api.CreateClient();
@@ -266,7 +309,7 @@ public sealed class AuthEndpointTests(PostgresFixture postgres) : IAsyncLifetime
 
     private async Task<List<UserConsent>> ReadConsentsAsync(string email)
     {
-        using var scope = _api.Api.Services.CreateScope();
+        using var scope = _api.CreateScope();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
         var database = scope.ServiceProvider.GetRequiredService<Data.AppDbContext>();
         var user = await users.FindByEmailAsync(email);

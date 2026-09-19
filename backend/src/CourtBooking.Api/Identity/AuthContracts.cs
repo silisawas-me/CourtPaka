@@ -11,6 +11,8 @@ public sealed record LoginRequest(string Email, string Password);
 
 public sealed record VerifyEmailRequest(Guid UserId, string Token);
 
+public sealed record ResendVerificationRequest(string Email);
+
 public sealed record ChangeLanguageRequest(string Language);
 
 public sealed record CurrentUserResponse(Guid Id, string Email, bool EmailConfirmed, string Language);
@@ -29,4 +31,10 @@ public static class AuthErrorCodes
     public const string WeakPassword = "auth.weak_password";
     public const string InvalidEmail = "auth.invalid_email";
     public const string PrivacyPolicyOutdated = "auth.privacy_policy_outdated";
+    public const string RegistrationFailed = "auth.registration_failed";
+}
+
+public static class RateLimitPolicies
+{
+    public const string Auth = "auth";
 }

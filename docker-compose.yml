@@ -33,6 +33,12 @@ services:
       App__PrivacyPolicyVersion: "2026-09-01"
       # Local stack is plain HTTP; deployed environments leave this at its secure default.
       App__RequireSecureCookies: "false"
+      # Local convenience: deployments run the migration bundle from the deploy job instead (PRD 9.4).
+      App__ApplyMigrationsOnStartup: "true"
+      # Keeps auth cookies valid across restarts.
+      App__DataProtectionKeysPath: "/keys"
+    volumes:
+      - api-keys:/keys
     depends_on:
       db:
         condition: service_healthy
@@ -58,3 +64,4 @@ services:
 
 volumes:
   db-data:
+  api-keys:
