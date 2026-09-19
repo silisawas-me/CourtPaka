@@ -6,11 +6,13 @@ WORKDIR /src
 
 COPY global.json Directory.Build.props ./
 COPY src/CourtBooking.Api/CourtBooking.Api.csproj src/CourtBooking.Api/
-RUN --mount=type=cache,target=/root/.nuget/packages \
+# One cache per architecture, and one writer at a time: a multi-arch build runs both stages at
+# once, and sharing a package folder makes them delete each other's half-extracted packages.
+RUN --mount=type=cache,id=nuget-$TARGETARCH,target=/root/.nuget/packages,sharing=locked \
     dotnet restore src/CourtBooking.Api/CourtBooking.Api.csproj -a $TARGETARCH
 
 COPY src/ src/
-RUN --mount=type=cache,target=/root/.nuget/packages \
+RUN --mount=type=cache,id=nuget-$TARGETARCH,target=/root/.nuget/packages,sharing=locked \
     dotnet publish src/CourtBooking.Api/CourtBooking.Api.csproj -c Release -a $TARGETARCH --no-restore -o /app
 
 # A named volume mounted here inherits this ownership, so the non-root runtime user can write the
