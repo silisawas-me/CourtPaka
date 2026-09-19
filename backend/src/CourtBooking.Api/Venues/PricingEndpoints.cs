@@ -71,9 +71,11 @@ public static class PricingEndpoints
         AppDbContext database,
         CancellationToken cancellationToken)
     {
-        // Every venue has a policy from the day it is created, so there is no "none" to describe.
+        // A venue gets its default policy when it is created, and the migration gave one to every
+        // venue that predates the feature. A venue that still has none — one written by some other
+        // path — reads as the terms it would have started with rather than as a 500.
         var policy = await InForcePolicyAsync(database, venueId, cancellationToken);
-        return TypedResults.Ok(ToResponse(policy!));
+        return TypedResults.Ok(policy is null ? DefaultTerms() : ToResponse(policy));
     }
 
     private static async Task<Results<Ok<CancellationPolicyResponse>, ProblemHttpResult>> SetPolicyAsync(
@@ -99,7 +101,7 @@ public static class PricingEndpoints
     }
 
     /// <summary>The newest published list, which is what a booking made now would be charged.</summary>
-    private static Task<PriceList?> InForcePricesAsync(
+    internal static Task<PriceList?> InForcePricesAsync(
         AppDbContext database,
         Guid venueId,
         CancellationToken cancellationToken) =>
@@ -124,6 +126,14 @@ public static class PricingEndpoints
             .ThenByDescending(policy => policy.Id)
             .Include(policy => policy.Tiers)
             .FirstOrDefaultAsync(cancellationToken);
+
+    private static CancellationPolicyResponse DefaultTerms() =>
+        new(
+            Guid.Empty,
+            default,
+            CancellationPolicy.Default
+                .Select(tier => new CancellationTierResponse(tier.HoursBefore, tier.RefundPercent))
+                .ToArray());
 
     private static PriceListResponse ToResponse(PriceList prices) =>
         new(

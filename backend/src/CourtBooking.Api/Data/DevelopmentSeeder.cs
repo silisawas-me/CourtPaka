@@ -53,6 +53,7 @@ public static class DevelopmentSeeder
         await EnsureCourtsAsync(database, venue.Id, owner.Id, time, cancellationToken);
         await EnsureOpeningHoursAsync(database, venue.Id, owner.Id, time, cancellationToken);
         await EnsurePricesAsync(database, venue.Id, owner.Id, time, cancellationToken);
+        await EnsureCancellationPolicyAsync(database, venue.Id, owner.Id, time, cancellationToken);
 
         await database.SaveChangesAsync(cancellationToken);
     }
@@ -126,6 +127,27 @@ public static class DevelopmentSeeder
             });
 
         database.PriceLists.Add(PriceList.Create(venueId, bands, ownerId, time.GetUtcNow()));
+    }
+
+    /// <summary>
+    /// The venue here is written straight to the context rather than through the endpoint, so the
+    /// terms it would have been created with have to be written too (PRD S-11).
+    /// </summary>
+    private static async Task EnsureCancellationPolicyAsync(
+        AppDbContext database,
+        Guid venueId,
+        Guid ownerId,
+        TimeProvider time,
+        CancellationToken cancellationToken)
+    {
+        if (await database.CancellationPolicies.AnyAsync(
+                policy => policy.VenueId == venueId, cancellationToken))
+        {
+            return;
+        }
+
+        database.CancellationPolicies.Add(CancellationPolicy.Create(
+            venueId, CancellationPolicy.Default, ownerId, time.GetUtcNow()));
     }
 
     private static async Task<AppUser> EnsureUserAsync(UserManager<AppUser> users, string email)

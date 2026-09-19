@@ -257,18 +257,17 @@ public static class CourtEndpoints
             .Where(change => change.Court!.VenueId == venueId && change.EffectiveFrom <= on)
             .ToListAsync(cancellationToken);
 
-    /// <summary>The bands a booking made now would be charged, as the rules read them.</summary>
+    /// <summary>
+    /// The bands a booking made now would be charged, as the rules read them. It goes through the
+    /// pricing endpoints' own resolver so both halves of the paired rule agree on which list is in
+    /// force, down to the tie-break.
+    /// </summary>
     private static async Task<List<BandHours>> PricedHoursAsync(
         AppDbContext database,
         Guid venueId,
         CancellationToken cancellationToken)
     {
-        var prices = await database.PriceLists
-            .AsNoTracking()
-            .Where(list => list.VenueId == venueId)
-            .OrderByDescending(list => list.CreatedAt)
-            .Include(list => list.Bands)
-            .FirstOrDefaultAsync(cancellationToken);
+        var prices = await PricingEndpoints.InForcePricesAsync(database, venueId, cancellationToken);
 
         return prices?.Bands
             .Select(band => new BandHours(band.Day, band.FromHour, band.ToHour, band.BahtPerHour))

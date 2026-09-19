@@ -1,7 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
+using CourtBooking.Api.Data;
 using CourtBooking.Api.Tests.Infrastructure;
 using CourtBooking.Api.Venues;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CourtBooking.Api.Tests;
 
@@ -204,6 +207,28 @@ public sealed class PricingTests(ApiTestFixture api)
         var tier = Assert.Single(policy.Tiers);
         Assert.Equal(24, tier.HoursBefore);
         Assert.Equal(100, tier.RefundPercent);
+        // It is a row, not a figure invented by the read: a booking has to be able to point at it.
+        Assert.NotEqual(Guid.Empty, policy.Id);
+    }
+
+    [Fact]
+    public async Task A_venue_whose_policy_row_is_missing_still_reads_as_the_default_terms()
+    {
+        var (owner, venue) = await OpenVenueAsync();
+
+        // A venue written by some path that skipped the default — the state the seeder used to
+        // leave behind — answers with the terms it would have started with, not a 500.
+        using (var scope = api.CreateScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await database.CancellationPolicies
+                .Where(policy => policy.VenueId == venue.Id)
+                .ExecuteDeleteAsync();
+        }
+
+        var policy = await ReadPolicyAsync(owner, venue.Id);
+
+        Assert.Equal(24, Assert.Single(policy.Tiers).HoursBefore);
     }
 
     [Fact]

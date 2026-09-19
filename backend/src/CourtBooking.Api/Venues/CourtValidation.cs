@@ -25,11 +25,6 @@ public static class CourtValidation
     public static string? ValidateEffectiveFrom(DateOnly effectiveFrom, DateOnly today) =>
         effectiveFrom < today ? CourtErrorCodes.EffectiveDateInThePast : null;
 
-    /// <summary>
-    /// Turns the seven submitted days into the week to store, or names the first thing wrong with
-    /// them. A week has to be complete: leaving a day out would otherwise read as "closed" by
-    /// accident.
-    /// </summary>
     /// <summary>A weekday as it travels on the wire, or null when it is not one.</summary>
     internal static DayOfWeek? ReadDay(string? name) =>
         Enum.TryParse<DayOfWeek>(name, ignoreCase: true, out var day) && Enum.IsDefined(day) ? day : null;
@@ -52,6 +47,11 @@ public static class CourtValidation
             : null;
     }
 
+    /// <summary>
+    /// Turns the seven submitted days into the week to store, or names the first thing wrong with
+    /// them. A week has to be complete: leaving a day out would otherwise read as "closed" by
+    /// accident.
+    /// </summary>
     public static string? TryReadWeek(
         IReadOnlyCollection<OpeningHoursDayRequest>? days,
         out List<WeekdayHours> week)

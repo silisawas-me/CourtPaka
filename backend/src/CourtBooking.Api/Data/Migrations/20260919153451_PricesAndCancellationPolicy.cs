@@ -113,6 +113,25 @@ namespace CourtBooking.Api.Data.Migrations
                 name: "IX_PriceLists_VenueId_CreatedAt",
                 table: "PriceLists",
                 columns: new[] { "VenueId", "CreatedAt" });
+
+            // Every venue already operates under the default terms (PRD S-11); this makes that a
+            // row, so "the policy in force" is one thing to read rather than a special case.
+            migrationBuilder.Sql(
+                """
+                WITH new_policy AS (
+                    INSERT INTO "CancellationPolicies" ("Id", "VenueId", "CreatedByUserId", "CreatedAt")
+                    SELECT gen_random_uuid(), v."Id", m."UserId", now()
+                    FROM "Venues" v
+                    JOIN LATERAL (
+                        SELECT "UserId" FROM "VenueMemberships"
+                        WHERE "VenueId" = v."Id" AND "Role" = 1
+                        ORDER BY "CreatedAt" LIMIT 1
+                    ) m ON TRUE
+                    RETURNING "Id"
+                )
+                INSERT INTO "CancellationTiers" ("Id", "PolicyId", "HoursBefore", "RefundPercent")
+                SELECT gen_random_uuid(), "Id", 24, 100 FROM new_policy;
+                """);
         }
 
         /// <inheritdoc />

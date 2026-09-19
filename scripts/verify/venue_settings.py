@@ -35,6 +35,11 @@ with sync_playwright() as p:
     venue_id = page.url.split("/venues/")[1].split("/")[0]
     check("the venue page links to its settings", page.url.endswith("/settings"), page)
 
+    # Every card on this page loads for the seeded venue, which is the one nothing set up by hand.
+    page.wait_for_selector("[data-testid=policy-list]")
+    check("the cancellation policy card loads", page.locator("[data-testid=policy-error]").count() == 0)
+    check("and shows the terms the venue starts with", page.locator("[data-testid=tier-24]").count() == 1)
+
     # 1. Add two courts.
     # Count only once the section has rendered: either list or empty note, never mid-load.
     page.wait_for_selector("[data-testid=court-row], [data-testid=no-courts]")
@@ -138,12 +143,12 @@ with sync_playwright() as p:
     yesterday = today - datetime.timedelta(days=1)
     # By its label, so the check cannot read a day of the wrong month, and expect() waits for the
     # calendar to settle.
-    expect(page.locator(f'[aria-label="{calendar_label(yesterday)}"]')).to_have_attribute(
-        "aria-disabled", "true"
-    )
-    page.keyboard.press("Escape")
+    yesterday_cell = page.locator(f'[aria-label="{calendar_label(yesterday)}"]')
+    expect(yesterday_cell).to_be_visible()
+    offered = yesterday_cell.get_attribute("aria-disabled") != "true"
 
-    check("yesterday cannot be picked", True, page)
+    check("yesterday cannot be picked", not offered, page)
+    page.keyboard.press("Escape")
 
     # The calendar stopping it is convenience; the server refusing it is the rule. Ask the API
     # directly, through the browser's own session, so the check does not only prove the UI.
