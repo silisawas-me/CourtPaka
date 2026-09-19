@@ -1,9 +1,19 @@
+using CourtBooking.Api;
 using CourtBooking.Api.Data;
+using CourtBooking.Api.Email;
 using CourtBooking.Api.Health;
+using CourtBooking.Api.Identity;
 using CourtBooking.Api.Localization;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 const string ReadyTag = "ready";
 
@@ -35,6 +45,92 @@ builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connect
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AppDbContext>(name: "database", tags: [ReadyTag]);
 builder.Services.AddProblemDetails();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<ITransactionalEmailSender, LoggingEmailSender>();
+
+// Missing or malformed values fail the deployment at startup, not at first use.
+builder.Services.AddOptions<AppOptions>()
+    .BindConfiguration(AppOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+var appOptions = builder.Configuration.GetSection(AppOptions.SectionName).Get<AppOptions>();
+
+builder.Services
+    .AddIdentityCore<AppUser>(options =>
+    {
+        options.User.RequireUniqueEmail = true;
+        options.SignIn.RequireConfirmedEmail = false; // Verification gates booking, not signing in (PRD US-01).
+        options.Password.RequiredLength = 8;
+        options.Password.RequireNonAlphanumeric = false;
+        // Five failures lock the account for fifteen minutes (PRD US-01).
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+        options.Lockout.AllowedForNewUsers = true;
+    })
+    .AddEntityFrameworkStores<AppDbContext>()
+    .AddSignInManager()
+    .AddDefaultTokenProviders();
+
+// Re-checks each sign-in cookie against the user row, so lockouts, deletions and password changes
+// take effect on live sessions instead of waiting out the 14-day cookie.
+builder.Services.TryAddScoped<ISecurityStampValidator, SecurityStampValidator<AppUser>>();
+builder.Services.Configure<SecurityStampValidatorOptions>(options =>
+    options.ValidationInterval = TimeSpan.FromSeconds(appOptions?.SessionRevalidationSeconds ?? 900));
+
+// Without a persisted key ring the keys that encrypt auth cookies are regenerated on every restart,
+// which signs every user out and breaks a second replica outright.
+if (!string.IsNullOrWhiteSpace(appOptions?.DataProtectionKeysPath))
+{
+    builder.Services.AddDataProtection()
+        .PersistKeysToFileSystem(Directory.CreateDirectory(appOptions.DataProtectionKeysPath))
+        .SetApplicationName("CourtPaka");
+}
+
+// AddIdentityCookies registers every scheme Identity signs out of (application, external, two-factor),
+// which the session validator needs when it rejects a cookie.
+builder.Services
+    .AddAuthentication(IdentityConstants.ApplicationScheme)
+    .AddIdentityCookies();
+
+builder.Services.ConfigureApplicationCookie(options =>
+    {
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        // Every deployed environment sits behind Caddy's TLS; only dev machines and tests turn this off.
+        options.Cookie.SecurePolicy = appOptions?.RequireSecureCookies ?? true
+            ? CookieSecurePolicy.Always
+            : CookieSecurePolicy.SameAsRequest;
+        options.ExpireTimeSpan = TimeSpan.FromDays(14);
+        options.SlidingExpiration = true;
+        // An API answers with status codes; redirects to login pages belong to the SPA.
+        options.Events.OnRedirectToLogin = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        };
+        options.Events.OnRedirectToAccessDenied = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Task.CompletedTask;
+        };
+        options.Events.OnValidatePrincipal = SecurityStampValidator.ValidatePrincipalAsync;
+    });
+
+builder.Services.AddAuthorization();
+
+// Registration and password endpoints send email and check credentials, so they are capped per client IP.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(RateLimitPolicies.Auth, context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = appOptions?.AuthRequestsPerMinute ?? 10,
+                Window = TimeSpan.FromMinutes(1),
+            }));
+});
 
 if (builder.Environment.IsDevelopment())
 {
@@ -62,9 +158,19 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 var app = builder.Build();
 
+// Local stacks bring their own schema up; deployments run the migration bundle before the swap (PRD 9.4).
+if (app.Services.GetRequiredService<IOptions<AppOptions>>().Value.ApplyMigrationsOnStartup)
+{
+    using var migrationScope = app.Services.CreateScope();
+    await migrationScope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
+}
+
 app.UseForwardedHeaders();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+app.UseRateLimiter();
+app.UseAuthentication();
+app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {
@@ -73,6 +179,8 @@ if (app.Environment.IsDevelopment())
 
 // Caddy and the dev-server proxy forward "/api" unchanged, so the API mounts everything under it once here.
 var api = app.MapGroup("/api");
+
+api.MapAuthEndpoints();
 
 // Liveness: the process is running. Readiness: dependencies such as the database are reachable.
 api.MapHealthChecks("/health/live", new HealthCheckOptions

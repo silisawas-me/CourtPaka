@@ -3,7 +3,7 @@ using Testcontainers.PostgreSql;
 namespace CourtBooking.Api.Tests.Infrastructure;
 
 /// <summary>
-/// Starts one real PostgreSQL container per test class (PRD 9.4). Requires Docker.
+/// One real PostgreSQL container for the whole test run (PRD 9.4). Requires Docker.
 /// </summary>
 public sealed class PostgresFixture : IAsyncLifetime
 {
@@ -17,4 +17,10 @@ public sealed class PostgresFixture : IAsyncLifetime
     public Task InitializeAsync() => _container.StartAsync();
 
     public Task DisposeAsync() => _container.DisposeAsync().AsTask();
+}
+
+[CollectionDefinition(Name)]
+public sealed class DatabaseCollection : ICollectionFixture<PostgresFixture>
+{
+    public const string Name = "database";
 }
