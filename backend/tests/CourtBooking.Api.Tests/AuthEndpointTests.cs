@@ -173,19 +173,40 @@ public sealed class AuthEndpointTests(PostgresFixture postgres) : IAsyncLifetime
         using var client = _api.CreateClient();
         var email = await RegisterAsync(client);
 
-        for (var attempt = 1; attempt < lockout.MaxFailedAccessAttempts; attempt++)
+        for (var attempt = 1; attempt <= lockout.MaxFailedAccessAttempts; attempt++)
         {
             var failure = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, "WrongPassword1"));
             Assert.Equal(HttpStatusCode.Unauthorized, failure.StatusCode);
         }
 
-        // The last allowed failure is the one that locks the account.
-        var locking = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, "WrongPassword1"));
-        Assert.Equal(HttpStatusCode.Locked, locking.StatusCode);
-
+        // Now locked: the right password no longer works either.
         var lockedOut = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, DefaultPassword));
-        Assert.Equal(HttpStatusCode.Locked, lockedOut.StatusCode);
-        Assert.Equal(AuthErrorCodes.AccountLocked, await ReadErrorCodeAsync(lockedOut));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, lockedOut.StatusCode);
+        Assert.Equal(AuthErrorCodes.InvalidCredentials, await ReadErrorCodeAsync(lockedOut));
+        Assert.Contains("locked", _api.Emails.LastTo(email).Subject, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task A_locked_account_answers_exactly_like_an_address_with_no_account()
+    {
+        var lockout = _api.GetService<IOptions<IdentityOptions>>().Value.Lockout;
+        using var client = _api.CreateClient();
+        var registered = await RegisterAsync(client);
+
+        for (var attempt = 1; attempt <= lockout.MaxFailedAccessAttempts; attempt++)
+        {
+            await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(registered, "WrongPassword1"));
+        }
+
+        var lockedResponse = await client.PostAsJsonAsync(
+            "/api/auth/login", new LoginRequest(registered, "WrongPassword1"));
+        var unknownResponse = await client.PostAsJsonAsync(
+            "/api/auth/login", new LoginRequest(NewEmail(), "WrongPassword1"));
+
+        // Same status and same code, so the endpoint cannot be used to find out who has an account.
+        Assert.Equal(unknownResponse.StatusCode, lockedResponse.StatusCode);
+        Assert.Equal(await ReadErrorCodeAsync(unknownResponse), await ReadErrorCodeAsync(lockedResponse));
     }
 
     [Fact]

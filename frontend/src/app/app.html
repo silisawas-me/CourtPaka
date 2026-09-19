@@ -32,5 +32,10 @@
   @if (languageNotSaved()) {
     <p class="form-error" data-testid="language-not-saved">{{ i18n.t('app.languageNotSaved') }}</p>
   }
+  @if (signOutIncomplete()) {
+    <p class="form-error" data-testid="sign-out-incomplete">
+      {{ i18n.t('app.signOutIncomplete') }}
+    </p>
+  }
   <router-outlet />
 </main>

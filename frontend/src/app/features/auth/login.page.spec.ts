@@ -40,10 +40,10 @@ describe('LoginPage', () => {
 
     httpMock
       .expectOne('/api/auth/login')
-      .flush({ code: 'auth.account_locked' }, { status: 423, statusText: 'Locked' });
+      .flush({ code: 'auth.invalid_credentials' }, { status: 401, statusText: 'Unauthorized' });
     fixture.detectChanges();
 
-    expect(textOf(fixture, 'form-error')).toBe(TRANSLATIONS.th['error.auth.account_locked']);
+    expect(textOf(fixture, 'form-error')).toBe(TRANSLATIONS.th['error.auth.invalid_credentials']);
   });
 
   it('adopts the language stored on the account after signing in', async () => {

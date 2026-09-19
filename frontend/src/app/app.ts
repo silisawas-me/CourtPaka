@@ -18,6 +18,7 @@ export class App {
   protected readonly languages = LANGUAGES;
   protected readonly user = this.auth.currentUser;
   protected readonly languageNotSaved = signal(false);
+  protected readonly signOutIncomplete = signal(false);
 
   protected switchLanguage(language: Language): void {
     this.i18n.use(language);
@@ -33,6 +34,9 @@ export class App {
   }
 
   protected signOut(): void {
-    this.auth.logout().subscribe({ next: () => void this.router.navigate(['/']) });
+    this.auth.logout().subscribe(({ confirmed }) => {
+      this.signOutIncomplete.set(!confirmed);
+      void this.router.navigate(['/']);
+    });
   }
 }

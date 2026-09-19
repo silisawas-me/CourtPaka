@@ -24,7 +24,6 @@ describe('translations', () => {
   it('translates every API error code the UI can receive', () => {
     const apiErrorCodes = [
       'auth.invalid_credentials',
-      'auth.account_locked',
       'auth.invalid_verification_token',
       'auth.unsupported_language',
       'auth.weak_password',
@@ -32,6 +31,7 @@ describe('translations', () => {
       'auth.privacy_policy_outdated',
       'auth.registration_failed',
       'tooManyRequests',
+      'sessionNotEstablished',
       'unknown',
     ];
 

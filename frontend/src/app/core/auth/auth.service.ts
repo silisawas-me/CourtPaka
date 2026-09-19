@@ -76,11 +76,18 @@ export class AuthService {
     );
   }
 
-  logout(): Observable<void> {
-    // Whatever the server says, this browser is signed out: an expired or revoked session answers
-    // 401 here, and leaving the UI in a signed-in state would trap the user.
+  /**
+   * Clears this browser either way — leaving the UI signed in would trap the user — but reports
+   * whether the server confirmed it. An unconfirmed sign-out leaves the cookie alive on the
+   * device, which matters on a shared computer.
+   */
+  logout(): Observable<{ confirmed: boolean }> {
     return this.http.post<void>('/api/auth/logout', {}).pipe(
-      catchError(() => of(undefined)),
+      map(() => ({ confirmed: true })),
+      // A 401 means the session was already gone, which is the outcome the user asked for.
+      catchError((error: unknown) =>
+        of({ confirmed: error instanceof ApiError && error.status === 401 }),
+      ),
       tap(() => this.adopt(null)),
     );
   }

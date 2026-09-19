@@ -1,5 +1,5 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { errorKey } from '../../core/http/api-error';
 import { TranslationService } from '../../core/i18n/translation.service';
@@ -14,6 +14,7 @@ type VerifyState = 'working' | 'done' | 'failed';
 export class VerifyEmailPage implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   protected readonly i18n = inject(TranslationService);
   protected readonly state = signal<VerifyState>('working');
@@ -32,6 +33,8 @@ export class VerifyEmailPage implements OnInit {
     this.auth.verifyEmail(userId, token).subscribe({
       next: () => {
         this.state.set('done');
+        // Keep the one-time token out of the browser history once it has been used.
+        void this.router.navigate([], { replaceUrl: true, queryParams: {} });
         // The account may be signed in here; refresh it so the verified state shows at once.
         this.auth.loadCurrentUser().subscribe({ error: () => undefined });
       },
