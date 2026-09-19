@@ -266,4 +266,9 @@
       </mat-card-content>
     </mat-card>
   </div>
+
+  <div class="columns">
+    <app-price-bands [venueId]="current.id" [canManage]="canManage()" />
+    <app-cancellation-policy [venueId]="current.id" [canManage]="canManage()" />
+  </div>
 }

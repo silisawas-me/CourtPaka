@@ -22,8 +22,10 @@ import { forkJoin } from 'rxjs';
 import { errorKey } from '../../core/http/api-error';
 import { TranslationService } from '../../core/i18n/translation.service';
 import {
+  CLOSING_HOURS,
   Court,
   CourtService,
+  OPENING_HOURS,
   CourtStatusChange,
   OpeningHours,
   OpeningHoursDay,
@@ -33,10 +35,8 @@ import {
 import { Venue, VenueService } from '../../core/venues/venue.service';
 import { FieldError } from '../../shared/field-error';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
-
-/** A venue opens on the hour: 0 is the start of the day, 24 is midnight at the end of it. */
-const OPENING_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
-const CLOSING_HOURS = OPENING_HOURS.map((hour) => hour + 1);
+import { CancellationPolicyEditor } from './cancellation-policy';
+import { PriceBands } from './price-bands';
 
 /** What the form offers before a venue says otherwise: a common Thai badminton day. */
 const DEFAULT_OPENS_HOUR = 6;
@@ -63,6 +63,8 @@ type DayForm = FormGroup<{
     MatProgressBarModule,
     MatSlideToggleModule,
     AppDatePipe,
+    PriceBands,
+    CancellationPolicyEditor,
   ],
   templateUrl: './venue-settings.page.html',
   // This is the only page with a datepicker, so its adapter stays out of the initial bundle.

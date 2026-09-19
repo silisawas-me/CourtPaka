@@ -8,7 +8,9 @@ from harness import (
     STAFF,
     Checks,
     control,
+    calendar_label,
     login,
+    open_seeded_venue,
     pick_date,
     thai_date,
     thai_month_year,
@@ -26,15 +28,17 @@ with sync_playwright() as p:
     page.wait_for_url(f"{BASE}/")
 
     # The seeded DEV01 venue is the approved one.
-    page.goto(f"{BASE}/venues")
-    page.wait_for_selector("[data-testid=venue-list] a")
-    dev = page.locator("[data-testid=venue-list] a", has_text="Development Court").first
-    venue_url = dev.get_attribute("href")
+    venue_url = open_seeded_venue(page)
     page.goto(BASE + venue_url)
     page.click("[data-testid=settings-link]")
     page.wait_for_url("**/settings")
     venue_id = page.url.split("/venues/")[1].split("/")[0]
     check("the venue page links to its settings", page.url.endswith("/settings"), page)
+
+    # Every card on this page loads for the seeded venue, which is the one nothing set up by hand.
+    page.wait_for_selector("[data-testid=policy-list]")
+    check("the cancellation policy card loads", page.locator("[data-testid=policy-error]").count() == 0)
+    check("and shows the terms the venue starts with", page.locator("[data-testid=tier-24]").count() == 1)
 
     # 1. Add two courts.
     # Count only once the section has rendered: either list or empty note, never mid-load.
@@ -43,13 +47,13 @@ with sync_playwright() as p:
     stamp = datetime.datetime.now().strftime("%H%M%S")
     for name in (f"Court {stamp}A", f"Court {stamp}B"):
         page.fill("#court-name", name)
-        page.locator("form").first.locator("button[type=submit]").click()
+        page.locator("form:has(#court-name)").locator("button[type=submit]").click()
         page.wait_for_selector(f"text={name}")
     check("courts are added and listed", page.locator("[data-testid=court-row]").count() == existing + 2, page)
 
     # 2. A duplicate name is refused, and the page survives it.
     page.fill("#court-name", f"Court {stamp}A")
-    page.locator("form").first.locator("button[type=submit]").click()
+    page.locator("form:has(#court-name)").locator("button[type=submit]").click()
     page.wait_for_selector("[data-testid=court-error]")
     check("a duplicate court name is refused", page.locator("[data-testid=court-error]").count() == 1)
     check("the page survives the refusal", page.locator("#court-name").count() == 1, page)
@@ -91,9 +95,9 @@ with sync_playwright() as p:
     pick_date(page, today)
     control(page, "open-Monday").uncheck()
     page.select_option('[data-testid="opens-Tuesday"]', label="7:00")
-    page.select_option('[data-testid="closes-Tuesday"]', label="24:00")
+    page.select_option('[data-testid="closes-Tuesday"]', label="22:00")
     with page.expect_response(lambda response: "/opening-hours" in response.url) as published:
-        page.locator("form").last.locator("button[type=submit]").click()
+        page.locator("form:has(#effective-from)").locator("button[type=submit]").click()
     check("the week was accepted", published.value.status == 200)
     page.reload()
     page.wait_for_selector("[data-testid=hours-current]")
@@ -101,14 +105,14 @@ with sync_playwright() as p:
     monday = page.locator("[data-testid=hours-Monday]").inner_text().strip()
     tuesday = page.locator("[data-testid=hours-Tuesday]").inner_text().strip()
     check("a closed weekday comes back as closed", monday == "ปิด", page)
-    check("an open weekday keeps its hours", tuesday == "7:00 – 24:00")
+    check("an open weekday keeps its hours", tuesday == "7:00 – 22:00")
     in_force = page.locator("[data-testid=hours-in-force]").inner_text()
     check("the published week is the one in force", thai_date(today) in in_force)
 
     # 5. A week dated ahead is listed separately.
     pick_date(page, today + datetime.timedelta(days=30))
     with page.expect_response(lambda response: "/opening-hours" in response.url):
-        page.locator("form").last.locator("button[type=submit]").click()
+        page.locator("form:has(#effective-from)").locator("button[type=submit]").click()
     page.wait_for_selector("[data-testid=hours-upcoming]")
     check(
         "a week dated ahead is listed as upcoming",
@@ -117,22 +121,34 @@ with sync_playwright() as p:
         page,
     )
 
-    # 6. A past date never leaves the page: the picker has a minimum, and the form stops there.
-    # A past date cannot be picked at all: the calendar will not offer it.
+    # 5b. Opening an hour the venue has no price for is refused: the rule belongs to the pair.
+    page.select_option('[data-testid="closes-Tuesday"]', label="24:00")
+    pick_date(page, today)
+    with page.expect_response(lambda response: "/opening-hours" in response.url) as refused:
+        page.locator("form:has(#effective-from)").locator("button[type=submit]").click()
+    check("opening an unpriced hour is refused", refused.value.status == 400)
+    page.wait_for_selector("[data-testid=hours-error]")
+    check(
+        "and the page says which rule it broke",
+        "ยังไม่มีราคา" in page.locator("[data-testid=hours-error]").inner_text(),
+        page,
+    )
+    page.select_option('[data-testid="closes-Tuesday"]', label="22:00")
+
+    # 6. A past date cannot be picked at all: the calendar will not offer it.
+    # Selecting today first means the calendar opens on this month, whatever it last showed.
+    pick_date(page, today)
     page.click("mat-datepicker-toggle button")
     page.wait_for_selector("mat-calendar")
-    # The field holds a date a month out, so the calendar opens there; walk back to this month.
-    for _ in range(3):
-        if page.locator("mat-calendar .mat-calendar-period-button").inner_text().strip() == thai_month_year(today):
-            break
-        page.click(".mat-calendar-previous-button")
     yesterday = today - datetime.timedelta(days=1)
-    disabled = page.locator(
-        f'.mat-calendar-body-cell[aria-disabled="true"] '
-        f'.mat-calendar-body-cell-content:text-is("{yesterday.day}")'
-    ).count()
+    # By its label, so the check cannot read a day of the wrong month, and expect() waits for the
+    # calendar to settle.
+    yesterday_cell = page.locator(f'[aria-label="{calendar_label(yesterday)}"]')
+    expect(yesterday_cell).to_be_visible()
+    offered = yesterday_cell.get_attribute("aria-disabled") != "true"
+
+    check("yesterday cannot be picked", not offered, page)
     page.keyboard.press("Escape")
-    check("yesterday cannot be picked", disabled == 1, page)
 
     # The calendar stopping it is convenience; the server refusing it is the rule. Ask the API
     # directly, through the browser's own session, so the check does not only prove the UI.

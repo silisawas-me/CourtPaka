@@ -68,6 +68,20 @@ describe('VenueSettingsPage', () => {
     httpMock.expectOne('/api/venues/v1/courts').flush(courts);
     httpMock.expectOne('/api/venues/v1/opening-hours').flush(schedules);
     fixture.detectChanges();
+    settleChildren('v1');
+  }
+
+  /** The prices and policy cards load themselves; their own specs cover what they then do. */
+  function settleChildren(venueId: string): void {
+    httpMock
+      .expectOne(`/api/venues/${venueId}/prices`)
+      .flush(null, { status: 204, statusText: 'No Content' });
+    httpMock.expectOne(`/api/venues/${venueId}/cancellation-policy`).flush({
+      id: 'c0',
+      createdAt: '2026-09-19T00:00:00Z',
+      tiers: [{ hoursBefore: 24, refundPercent: 100 }],
+    });
+    fixture.detectChanges();
   }
 
   /** The picker works in Dates; the page turns one into the plain date the API takes. */
@@ -379,6 +393,7 @@ describe('VenueSettingsPage', () => {
     httpMock.expectOne('/api/venues/v2/courts').flush([]);
     httpMock.expectOne('/api/venues/v2/opening-hours').flush([]);
     fixture.detectChanges();
+    settleChildren('v2');
 
     expect(textOf(fixture, 'venue-name')).toBe('Second Court');
     expect(textOf(fixture, 'no-courts')).toBe(TRANSLATIONS.th['settings.courts.none']);

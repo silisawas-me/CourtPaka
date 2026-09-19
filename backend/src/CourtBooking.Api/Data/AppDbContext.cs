@@ -24,6 +24,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<OpeningHoursDay> OpeningHoursDays => Set<OpeningHoursDay>();
 
+    public DbSet<PriceList> PriceLists => Set<PriceList>();
+
+    public DbSet<PriceBand> PriceBands => Set<PriceBand>();
+
+    public DbSet<CancellationPolicy> CancellationPolicies => Set<CancellationPolicy>();
+
+    public DbSet<CancellationTier> CancellationTiers => Set<CancellationTier>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -110,6 +118,45 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             day.HasOne(d => d.Schedule)
                 .WithMany(s => s.Days)
                 .HasForeignKey(d => d.ScheduleId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<PriceList>(list =>
+        {
+            // Read newest-first to find the one in force.
+            list.HasIndex(l => new { l.VenueId, l.CreatedAt });
+            list.HasOne(l => l.Venue)
+                .WithMany()
+                .HasForeignKey(l => l.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<PriceBand>(band =>
+        {
+            // Baht to two decimals (PRD BR-05); a float would drift on a month of bookings.
+            band.Property(b => b.BahtPerHour).HasPrecision(10, 2);
+            band.HasIndex(b => new { b.PriceListId, b.Day, b.FromHour });
+            band.HasOne(b => b.PriceList)
+                .WithMany(l => l.Bands)
+                .HasForeignKey(b => b.PriceListId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<CancellationPolicy>(policy =>
+        {
+            policy.HasIndex(p => new { p.VenueId, p.CreatedAt });
+            policy.HasOne(p => p.Venue)
+                .WithMany()
+                .HasForeignKey(p => p.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<CancellationTier>(tier =>
+        {
+            tier.HasIndex(t => new { t.PolicyId, t.HoursBefore }).IsUnique();
+            tier.HasOne(t => t.Policy)
+                .WithMany(p => p.Tiers)
+                .HasForeignKey(t => t.PolicyId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

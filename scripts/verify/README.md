@@ -14,16 +14,19 @@ They sign in as the seeded accounts (`owner@courtpaka.local` / `staff@courtpaka.
 `DevPassword1`) and write screenshots next to themselves. Each check prints PASS or FAIL and the
 script exits non-zero if anything failed.
 
-Two rules worth keeping. Wait for the section to render before counting what is in it — a count
-taken mid-load reads zero, and a check written against an empty database never notices. And wait
-for the response before reloading. The pages apply a change straight
-away and reconcile with the server, so reloading right after a click cancels the request in flight
-and the check reads the old state — which is a bug in the check, not in the page.
+Three rules worth keeping.
 
-`harness.py` holds what every script needs: where the stack is, the seeded accounts, the PASS/FAIL
-tally and the screenshots.
+1. Set up the state the script needs through the API before driving the UI. The scripts share one
+   venue, so one that closes a weekday will break another that prices one, and the failure will
+   look like an app bug.
+2. Wait for the response before reloading. The pages apply a change straight away and reconcile
+   with the server, so reloading right after a click cancels the request in flight and the check
+   reads the old state.
+3. Name what you are looking for. Count rows only once the section has rendered, and find a form by
+   something inside it rather than by where it sits — the settings page has four now.
 
 | Script | Covers |
 |---|---|
 | `venue_ui.py` | Sign-in redirects, venue detail, members and permissions (US-14) |
 | `venue_settings.py` | Courts and opening hours (US-11) |
+| `venue_pricing.py` | Prices and the cancellation policy (US-11) |

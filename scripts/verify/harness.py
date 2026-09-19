@@ -53,6 +53,17 @@ THAI_MONTHS = [
 ]
 
 
+THAI_MONTHS_FULL = [
+    "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+    "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
+]
+
+
+def calendar_label(date) -> str:
+    """How the datepicker labels one day, which names the month as well as the number."""
+    return f"{date.day} {THAI_MONTHS_FULL[date.month - 1]} {date.year + 543}"
+
+
 def thai_date(date) -> str:
     return f"{date.day} {THAI_MONTHS[date.month - 1]} {date.year + 543}"
 
@@ -63,14 +74,43 @@ def pick_date(page, date) -> None:
     page.click("mat-datepicker-toggle button")
     page.wait_for_selector("mat-calendar")
 
-    # The calendar opens on the current month; step forward until the header names the target.
+    # The calendar opens on whatever the field holds, which can be either side of the target, so
+    # walk in the direction that closes the gap and stop if the picker's minimum blocks the way.
     for _ in range(24):
         if page.locator("mat-calendar .mat-calendar-period-button").inner_text().strip() == thai_month_year(date):
             break
-        page.click(".mat-calendar-next-button")
-    page.click(f'.mat-calendar-body-cell-content:text-is("{date.day}")')
+        forward = shown_month(page) < (date.year, date.month)
+        step = page.locator(".mat-calendar-next-button" if forward else ".mat-calendar-previous-button")
+        if step.is_disabled():
+            break
+        step.click()
+
+    page.click(f'[aria-label="{calendar_label(date)}"]')
     page.wait_for_selector("mat-calendar", state="detached")
+
+
+def shown_month(page) -> tuple[int, int]:
+    """The month the calendar is showing, as (year, month) in the common era."""
+    abbreviation, year = page.locator(
+        "mat-calendar .mat-calendar-period-button"
+    ).inner_text().strip().rsplit(" ", 1)
+    return int(year) - 543, THAI_MONTHS.index(abbreviation) + 1
 
 
 def thai_month_year(date) -> str:
     return f"{THAI_MONTHS[date.month - 1]} {date.year + 543}"
+
+
+# The seeded venue is the only approved one, and only an approved venue can be edited, so every
+# script drives that one rather than whichever link happens to come first.
+SEEDED_VENUE = "Development Court"
+
+
+def open_seeded_venue(page) -> str:
+    """Signs the current session into the venue list and answers its href."""
+    page.goto(f"{BASE}/venues")
+    page.wait_for_selector("[data-testid=venue-list] a")
+    return (
+        page.locator("[data-testid=venue-list] a", has_text=SEEDED_VENUE)
+        .first.get_attribute("href")
+    )

@@ -15,6 +15,10 @@ export const WEEKDAYS = [
 
 export type Weekday = (typeof WEEKDAYS)[number];
 
+/** A venue opens, closes and charges on the hour: 0 starts the day, 24 is midnight at its end. */
+export const OPENING_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
+export const CLOSING_HOURS = OPENING_HOURS.map((hour) => hour + 1);
+
 export interface Court {
   id: string;
   name: string;

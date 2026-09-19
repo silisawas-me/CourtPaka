@@ -232,6 +232,15 @@ public static class CourtEndpoints
             currentVenue.Require().UserId,
             timeProvider.GetUtcNow());
 
+        // Opening an hour the venue has no price for would put it in the availability grid with
+        // nothing to charge, so this rule is checked from both sides (PRD US-11).
+        var unpriced = PricingValidation.PricedByExistingBands(
+            created, await PricedHoursAsync(database, venueId, cancellationToken));
+        if (unpriced is not null)
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, unpriced);
+        }
+
         database.OpeningHoursSchedules.Add(created);
         await database.SaveChangesAsync(cancellationToken);
 
@@ -248,7 +257,24 @@ public static class CourtEndpoints
             .Where(change => change.Court!.VenueId == venueId && change.EffectiveFrom <= on)
             .ToListAsync(cancellationToken);
 
-    private static Task<List<OpeningHoursSchedule>> SchedulesAsync(
+    /// <summary>
+    /// The bands a booking made now would be charged, as the rules read them. It goes through the
+    /// pricing endpoints' own resolver so both halves of the paired rule agree on which list is in
+    /// force, down to the tie-break.
+    /// </summary>
+    private static async Task<List<BandHours>> PricedHoursAsync(
+        AppDbContext database,
+        Guid venueId,
+        CancellationToken cancellationToken)
+    {
+        var prices = await PricingEndpoints.InForcePricesAsync(database, venueId, cancellationToken);
+
+        return prices?.Bands
+            .Select(band => new BandHours(band.Day, band.FromHour, band.ToHour, band.BahtPerHour))
+            .ToList() ?? [];
+    }
+
+    internal static Task<List<OpeningHoursSchedule>> SchedulesAsync(
         AppDbContext database,
         Guid venueId,
         CancellationToken cancellationToken) =>
