@@ -78,14 +78,15 @@ jobs:
         working-directory: backend
         run: |
           dotnet tool restore
-          dotnet tool run dotnet-ef migrations bundle \
-            --project src/CourtBooking.Api \
-            --self-contained --target-runtime linux-x64 \
-            --output "$GITHUB_WORKSPACE/migrate-linux-x64" --force
-          dotnet tool run dotnet-ef migrations bundle \
-            --project src/CourtBooking.Api \
-            --self-contained --target-runtime linux-arm64 \
-            --output "$GITHUB_WORKSPACE/migrate-linux-arm64" --force
+          # A self-contained bundle is restored per runtime identifier: without one the build
+          # has no assets file at all, and with the wrong one no runtime pack for the target.
+          for arch in x64 arm64; do
+            dotnet restore src/CourtBooking.Api/CourtBooking.Api.csproj -r "linux-$arch"
+            dotnet tool run dotnet-ef migrations bundle \
+              --project src/CourtBooking.Api \
+              --self-contained --target-runtime "linux-$arch" \
+              --output "$GITHUB_WORKSPACE/migrate-linux-$arch" --force
+          done
 
       - uses: actions/upload-artifact@v7
         with:
