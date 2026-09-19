@@ -18,6 +18,7 @@
 - **Error ของ API:** ส่งเป็น `code` ใน ProblemDetails ผ่าน `ApiProblem.Of(...)` แล้วให้ frontend แปลเป็นข้อความ (US-23) ห้ามส่งข้อความภาษาคนให้ผู้ใช้จาก backend
 - **สิทธิ์:** ผูกกับสนาม ไม่ใช่ role ระดับระบบ · `VenueMembership` เก็บ role + permission flags · endpoint ใต้ `/api/venues/{venueId}` ประกาศสิทธิ์ที่ต้องใช้ตอน map ด้วย `Member`, `OwnerOnly` หรือ `Needs(VenuePermissions.X)` ใน `VenueEndpoints` ซึ่งสร้าง `VenuePermissionRequirement` ให้ · Owner มีทุกสิทธิ์เสมอและถอนไม่ได้ · สนามที่ถูกระงับหรือถูกปฏิเสธจะอ่านได้อย่างเดียว · membership ของ request ปัจจุบันอยู่ใน `CurrentVenue` (handler โหลดให้แล้ว ไม่ต้อง query ซ้ำ)
 - **Config ที่ทุก environment ต้องมี:** `App:BaseUrl`, `App:PrivacyPolicyVersion` (ตรวจตอนเริ่มระบบ ถ้าไม่มีจะไม่ยอมเริ่ม) · `App:RequireSecureCookies` ปิดได้เฉพาะ dev/test · `App:ApplyMigrationsOnStartup` และ `App:SeedDevelopmentData` เปิดเฉพาะ local
+- **อีเมล:** Development เท่านั้นที่ log เนื้อหาอีเมล (`LoggingEmailSender` — ใช้ดูลิงก์ยืนยัน/คำเชิญตอน dev) นอกนั้นใช้ `UndeliveredEmailSender` ที่ไม่ส่งจริงและไม่ log เนื้อหา เพราะ body มี token ใช้ครั้งเดียว ผู้ให้บริการจริงรอ US-06
 - **บัญชีสำหรับ dev** (seed จะทำงานเฉพาะเมื่อเปิด flag **และ** environment เป็น Development): `owner@courtpaka.local` และ `staff@courtpaka.local` รหัสผ่าน `DevPassword1` สนาม `DEV01`
 
 ## คำสั่ง

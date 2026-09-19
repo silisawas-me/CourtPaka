@@ -48,7 +48,15 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<AppDbContext>(name: "database", tags: [ReadyTag]);
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton<ITransactionalEmailSender, LoggingEmailSender>();
+// Only a local stack logs the message itself: the body carries verification and invitation links.
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddSingleton<ITransactionalEmailSender, LoggingEmailSender>();
+}
+else
+{
+    builder.Services.AddSingleton<ITransactionalEmailSender, UndeliveredEmailSender>();
+}
 
 // Missing or malformed values fail the deployment at startup, not at first use.
 builder.Services.AddOptions<AppOptions>()

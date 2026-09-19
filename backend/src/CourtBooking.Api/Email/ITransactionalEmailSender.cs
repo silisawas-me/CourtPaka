@@ -14,14 +14,3 @@ public interface ITransactionalEmailSender
 {
     Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default);
 }
-
-public sealed class LoggingEmailSender(ILogger<LoggingEmailSender> logger) : ITransactionalEmailSender
-{
-    public Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
-    {
-        logger.LogInformation(
-            "Email to {Recipient} [{Language}]: {Subject}\n{Body}",
-            message.To, message.Language, message.Subject, message.Body);
-        return Task.CompletedTask;
-    }
-}

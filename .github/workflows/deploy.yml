@@ -105,23 +105,26 @@ jobs:
           name: migration-bundles
 
       - name: Copy the migration bundle to the server
-        uses: appleboy/scp-action@v1
+        # Pinned to a commit: a tag can be moved, and this step is handed the deploy key.
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
+          fingerprint: ${{ secrets.SSH_HOST_FINGERPRINT }}
           source: migrate-linux-x64,migrate-linux-arm64
           target: /opt/courtpaka/
 
       # Schema first, then the new images: the running version must tolerate the new schema.
       - name: Migrate, deploy and check
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
+          fingerprint: ${{ secrets.SSH_HOST_FINGERPRINT }}
           script: |
             set -euo pipefail
             cd /opt/courtpaka
@@ -129,7 +132,8 @@ jobs:
 
             bundle="./migrate-linux-$(dpkg --print-architecture | sed 's/amd64/x64/')"
             chmod +x "$bundle"
-            "$bundle" --connection "Host=127.0.0.1;Port=5432;Database=$POSTGRES_DB;Username=$POSTGRES_USER;Password=$POSTGRES_PASSWORD"
+            # Through the environment, not the command line: arguments are readable in ps.
+            ConnectionStrings__Default="Host=127.0.0.1;Port=5432;Database=$POSTGRES_DB;Username=$POSTGRES_USER;Password=$POSTGRES_PASSWORD"               "$bundle"
 
             # Record what is running now, so a failed health check can go back to it.
             cp .env .env.previous
