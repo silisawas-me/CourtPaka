@@ -1,0 +1,56 @@
+# Local development stack.
+#   docker compose up -d db              -> PostgreSQL only (run API/web from the SDKs)
+#   docker compose --profile full up -d  -> full stack from Docker images, http://localhost:8080
+# Credentials below are for local development only; the port is bound to 127.0.0.1.
+# Deploy-time compose files for UAT/PRD (image tags, domains, real secrets) come with the deploy workflow.
+name: court-booking
+
+x-db-credentials: &db-credentials
+  POSTGRES_DB: courtbooking
+  POSTGRES_USER: courtbooking
+  POSTGRES_PASSWORD: courtbooking_dev
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment: *db-credentials
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    profiles: [full]
+    build: ./backend
+    environment:
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=courtbooking;Username=courtbooking;Password=courtbooking_dev"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      # The chiseled runtime image has no shell or curl, so ask the runtime itself.
+      # Liveness only: a database outage must not mark the API container unhealthy.
+      test: ["CMD", "dotnet", "/app/CourtBooking.Api.dll", "--healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  web:
+    profiles: [full]
+    build: ./frontend
+    environment:
+      SITE_ADDRESS: ":80"
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  db-data:

@@ -1,0 +1,11 @@
+@CourtBooking.Api_HostAddress = http://localhost:5230
+
+GET {{CourtBooking.Api_HostAddress}}/api/health/live
+Accept: application/json
+
+###
+
+GET {{CourtBooking.Api_HostAddress}}/api/health/ready
+Accept: application/json
+
+###
