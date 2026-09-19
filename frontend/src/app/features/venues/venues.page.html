@@ -53,6 +53,27 @@
           <mat-error [appFieldError]="form.controls.name" testId="name-error"></mat-error>
         </mat-form-field>
 
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('venues.create.addressLine') }}</mat-label>
+          <input id="address-line" matInput type="text" formControlName="addressLine" />
+          <mat-error
+            [appFieldError]="form.controls.addressLine"
+            testId="address-line-error"
+          ></mat-error>
+        </mat-form-field>
+
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('venues.create.district') }}</mat-label>
+          <input id="district" matInput type="text" formControlName="district" />
+          <mat-error [appFieldError]="form.controls.district" testId="district-error"></mat-error>
+        </mat-form-field>
+
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('venues.create.province') }}</mat-label>
+          <input id="province" matInput type="text" formControlName="province" />
+          <mat-error [appFieldError]="form.controls.province" testId="province-error"></mat-error>
+        </mat-form-field>
+
         @if (errorKey(); as key) {
           <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
         }

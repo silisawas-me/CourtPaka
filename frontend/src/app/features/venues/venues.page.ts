@@ -36,6 +36,9 @@ export class VenuesPage implements OnInit {
   protected readonly form = inject(FormBuilder).nonNullable.group({
     code: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(6)]],
     name: ['', Validators.required],
+    addressLine: ['', Validators.required],
+    district: ['', Validators.required],
+    province: ['', Validators.required],
   });
 
   protected readonly mine = signal<Venue[]>([]);
@@ -64,9 +67,9 @@ export class VenuesPage implements OnInit {
 
     this.submitting.set(true);
     this.errorKey.set(null);
-    const { code, name } = this.form.getRawValue();
+    const { code, name, ...address } = this.form.getRawValue();
 
-    this.venues.create(code, name).subscribe({
+    this.venues.create(code, name, address).subscribe({
       next: (venue) => {
         this.submitting.set(false);
         void this.router.navigate(['/venues', venue.id]);

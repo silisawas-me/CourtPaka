@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Web;
 using CourtBooking.Api.Data;
 using CourtBooking.Api.Identity;
+using CourtBooking.Api.Localization;
 using CourtBooking.Api.Venues;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -40,7 +41,7 @@ public sealed class VenueScenario(ApiTestFixture api)
 
     public async Task<VenueResponse> CreateVenueAsync(HttpClient client) =>
         await ReadAsync<VenueResponse>(
-            await client.PostAsJsonAsync("/api/venues", new CreateVenueRequest(NewCode(), "Smash Court")),
+            await client.PostAsJsonAsync("/api/venues", new CreateVenueRequest(NewCode(), "Smash Court", "1 ถนนทดสอบ", "บางรัก", "กรุงเทพมหานคร")),
             HttpStatusCode.Created);
 
     /// <summary>
@@ -107,4 +108,49 @@ public sealed class VenueScenario(ApiTestFixture api)
 
     public async Task<VenueMemberResponse[]> GetMembersAsync(HttpClient client, Guid venueId) =>
         await ReadAsync<VenueMemberResponse[]>(await client.GetAsync($"/api/venues/{venueId}/members"));
+
+    /// <summary>
+    /// The day the platform is on, which is the day the server will compare a date against. Tests
+    /// that publish settings have to agree with it or the settings are dated in the past.
+    /// </summary>
+    public static DateOnly Today => PlatformRequirements.BangkokToday(TimeProvider.System);
+
+    /// <summary>New details for a venue whose address the test does not care about.</summary>
+    public static UpdateVenueRequest Details(string name) =>
+        new(name, "2 ถนนใหม่", "ปทุมวัน", "กรุงเทพมหานคร");
+
+    /// <summary>The same hours seven days a week, with one day optionally closed.</summary>
+    public static OpeningHoursDayRequest[] Week(int opens, int closes, DayOfWeek? closedOn = null) =>
+        Enum.GetValues<DayOfWeek>()
+            .Select(day => day == closedOn
+                ? new OpeningHoursDayRequest(day.ToString(), null, null)
+                : new OpeningHoursDayRequest(day.ToString(), opens, closes))
+            .ToArray();
+
+    public static async Task SetHoursAsync(
+        HttpClient client,
+        Guid venueId,
+        DateOnly from,
+        int opens = 6,
+        int closes = 22,
+        DayOfWeek? closedOn = null)
+    {
+        var response = await client.PutAsJsonAsync(
+            $"/api/venues/{venueId}/opening-hours",
+            new SetOpeningHoursRequest(from, Week(opens, closes, closedOn)));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    /// <summary>One price for every hour of every day, which is what most tests want.</summary>
+    public static PriceBandRequest[] AllWeek(int from, int to, decimal baht) =>
+        Enum.GetValues<DayOfWeek>()
+            .Select(day => new PriceBandRequest(day.ToString(), from, to, baht))
+            .ToArray();
+
+    public static async Task<PriceListResponse> SetPricesAsync(
+        HttpClient client,
+        Guid venueId,
+        IEnumerable<PriceBandRequest> bands) =>
+        await ReadAsync<PriceListResponse>(
+            await client.PutAsJsonAsync($"/api/venues/{venueId}/prices", new SetPricesRequest(bands.ToArray())));
 }

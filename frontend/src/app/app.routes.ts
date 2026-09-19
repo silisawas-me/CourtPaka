@@ -24,6 +24,16 @@ export const routes: Routes = [
       import('./features/auth/resend-verification.page').then((m) => m.ResendVerificationPage),
   },
   {
+    path: 'book',
+    loadComponent: () =>
+      import('./features/booking/venue-search.page').then((m) => m.VenueSearchPage),
+  },
+  {
+    path: 'book/:venueId',
+    loadComponent: () =>
+      import('./features/booking/availability.page').then((m) => m.AvailabilityPage),
+  },
+  {
     path: 'venues',
     canActivate: [authGuard],
     loadComponent: () => import('./features/venues/venues.page').then((m) => m.VenuesPage),

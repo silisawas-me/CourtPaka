@@ -1,0 +1,42 @@
+/** A wide grid on a narrow phone scrolls sideways rather than squeezing the hours out of shape. */
+.grid-scroll {
+  overflow-x: auto;
+  margin-inline: -0.5rem;
+  padding-inline: 0.5rem;
+}
+
+.grid {
+  border-collapse: collapse;
+  min-width: 100%;
+  font: var(--mat-sys-body-medium);
+
+  th,
+  td {
+    border: 1px solid var(--mat-sys-outline-variant);
+    padding: 0.35rem 0.5rem;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  th[scope='row'] {
+    text-align: start;
+    position: sticky;
+    inset-inline-start: 0;
+    background: var(--mat-sys-surface);
+  }
+}
+
+/** Free reads as available at a glance; closed recedes. */
+.free {
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
+.closed {
+  background: var(--mat-sys-surface-container-highest);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.price {
+  font: var(--mat-sys-label-medium);
+}

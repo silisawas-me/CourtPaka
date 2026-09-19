@@ -1,0 +1,38 @@
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>{{ i18n.t('search.title') }}</mat-card-title>
+    <mat-card-subtitle>{{ i18n.t('search.subtitle') }}</mat-card-subtitle>
+  </mat-card-header>
+
+  <mat-card-content>
+    <mat-form-field class="field">
+      <mat-label>{{ i18n.t('search.label') }}</mat-label>
+      <input id="search" matInput type="search" [formControl]="term" autocomplete="off" />
+    </mat-form-field>
+
+    @if (searching()) {
+      <mat-progress-bar mode="indeterminate" />
+    }
+
+    @if (error(); as key) {
+      <p class="form-error" data-testid="search-error">{{ i18n.t(key) }}</p>
+    }
+
+    @if (found().length === 0 && !searching() && !error()) {
+      <p class="muted" data-testid="no-venues">{{ i18n.t('search.none') }}</p>
+    } @else {
+      <div class="stack" data-testid="venue-results">
+        @for (venue of found(); track venue.id) {
+          <a class="entry" data-testid="venue-result" [routerLink]="['/book', venue.id]">
+            <span class="stack">
+              <span class="entry-name">{{ venue.name }}</span>
+              <span class="muted">
+                {{ venue | venueAddress }}
+              </span>
+            </span>
+          </a>
+        }
+      </div>
+    }
+  </mat-card-content>
+</mat-card>

@@ -12,6 +12,9 @@ public static class VenueValidation
     public const int CodeMinLength = 3;
     public const int NameMaxLength = 200;
     public const int EmailMaxLength = 256;
+    public const int AddressLineMaxLength = 200;
+    public const int DistrictMaxLength = 100;
+    public const int ProvinceMaxLength = 100;
 
     private static readonly EmailAddressAttribute EmailValidator = new();
 
@@ -34,6 +37,15 @@ public static class VenueValidation
         var trimmed = value?.Trim();
         return string.IsNullOrEmpty(trimmed) || trimmed.Length > maxLength ? code : null;
     }
+
+    /// <summary>
+    /// Where the venue is, in the three parts a booker reads and searches by (PRD US-10, US-02).
+    /// Each part refuses under its own code, so the form can point at the field that is wrong.
+    /// </summary>
+    public static string? ValidateAddress(string? line, string? district, string? province) =>
+        ValidateText(line, AddressLineMaxLength, VenueErrorCodes.InvalidAddressLine)
+        ?? ValidateText(district, DistrictMaxLength, VenueErrorCodes.InvalidDistrict)
+        ?? ValidateText(province, ProvinceMaxLength, VenueErrorCodes.InvalidProvince);
 
     public static string? ValidateEmail(string? email)
     {

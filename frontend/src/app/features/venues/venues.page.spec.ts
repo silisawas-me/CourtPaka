@@ -39,16 +39,30 @@ describe('VenuesPage', () => {
     expect(textOf(fixture, 'venue-list')).toContain('Smash Court');
   });
 
-  it('creates a venue with the code and name entered', () => {
+  /** A venue needs somewhere to be, because that is how a booker finds it. */
+  function fillForm(): void {
+    setInput(fixture, '#code', 'SBC');
+    setInput(fixture, '#name', 'Smash Court');
+    setInput(fixture, '#address-line', '1 ถนนทดสอบ');
+    setInput(fixture, '#district', 'บางรัก');
+    setInput(fixture, '#province', 'กรุงเทพมหานคร');
+  }
+
+  it('creates a venue with the code, name and address entered', () => {
     httpMock.expectOne('/api/venues/mine').flush([]);
     fixture.detectChanges();
 
-    setInput(fixture, '#code', 'SBC');
-    setInput(fixture, '#name', 'Smash Court');
+    fillForm();
     submitForm(fixture);
 
     const request = httpMock.expectOne('/api/venues');
-    expect(request.request.body).toEqual({ code: 'SBC', name: 'Smash Court' });
+    expect(request.request.body).toEqual({
+      code: 'SBC',
+      name: 'Smash Court',
+      addressLine: '1 ถนนทดสอบ',
+      district: 'บางรัก',
+      province: 'กรุงเทพมหานคร',
+    });
     request.flush({ id: 'v1', code: 'SBC', name: 'Smash Court', status: 'Pending' });
   });
 
@@ -56,8 +70,7 @@ describe('VenuesPage', () => {
     httpMock.expectOne('/api/venues/mine').flush([]);
     fixture.detectChanges();
 
-    setInput(fixture, '#code', 'SBC');
-    setInput(fixture, '#name', 'Smash Court');
+    fillForm();
     submitForm(fixture);
 
     httpMock

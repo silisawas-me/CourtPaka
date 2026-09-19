@@ -247,7 +247,11 @@ public static class CourtEndpoints
         return TypedResults.Ok(ToResponse(created, created.EffectiveFrom <= today));
     }
 
-    private static Task<List<CourtStatusChange>> StatusChangesAsync(
+    /// <summary>
+    /// The status rows that can decide whether a court was in use on a date — everything up to it,
+    /// because the newest one at or before the date is the one that counts.
+    /// </summary>
+    internal static Task<List<CourtStatusChange>> StatusChangesAsync(
         AppDbContext database,
         Guid venueId,
         DateOnly on,
@@ -274,6 +278,7 @@ public static class CourtEndpoints
             .ToList() ?? [];
     }
 
+    /// <summary>Every version the venue has published, which is what an owner's page shows.</summary>
     internal static Task<List<OpeningHoursSchedule>> SchedulesAsync(
         AppDbContext database,
         Guid venueId,
@@ -283,6 +288,24 @@ public static class CourtEndpoints
             .Where(schedule => schedule.VenueId == venueId)
             .Include(schedule => schedule.Days)
             .ToListAsync(cancellationToken);
+
+    /// <summary>
+    /// Only the week in force on a date. Versions are append-only, so a venue that republishes its
+    /// hours accumulates them forever; asking for one keeps that history out of the answer. The
+    /// order is the same tie-break <see cref="VenueTimeline.OpeningHoursOn"/> applies in memory.
+    /// </summary>
+    internal static Task<OpeningHoursSchedule?> ScheduleOnAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateOnly on,
+        CancellationToken cancellationToken) =>
+        database.OpeningHoursSchedules
+            .AsNoTracking()
+            .Where(schedule => schedule.VenueId == venueId && schedule.EffectiveFrom <= on)
+            .OrderByDescending(schedule => schedule.EffectiveFrom)
+            .ThenByDescending(schedule => schedule.CreatedAt)
+            .Include(schedule => schedule.Days)
+            .FirstOrDefaultAsync(cancellationToken);
 
     private static Task<Court?> FindCourtAsync(
         AppDbContext database,

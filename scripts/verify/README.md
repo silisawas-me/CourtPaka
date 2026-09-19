@@ -14,7 +14,7 @@ They sign in as the seeded accounts (`owner@courtpaka.local` / `staff@courtpaka.
 `DevPassword1`) and write screenshots next to themselves. Each check prints PASS or FAIL and the
 script exits non-zero if anything failed.
 
-Three rules worth keeping.
+Five rules worth keeping.
 
 1. Set up the state the script needs through the API before driving the UI. The scripts share one
    venue, so one that closes a weekday will break another that prices one, and the failure will
@@ -24,9 +24,15 @@ Three rules worth keeping.
    reads the old state.
 3. Name what you are looking for. Count rows only once the section has rendered, and find a form by
    something inside it rather than by where it sits — the settings page has four now.
+4. Check the positive next to the negative. "The day past the window is not offered" passes on
+   its own when the calendar is simply showing another month — pair it with "the last day of the
+   window is offered" so a check that stopped reaching its subject fails instead of passing.
+5. Never hard-code what the seed put there. The scripts run in sequence against one database and
+   the earlier ones add courts, so ask the API how many to expect rather than writing the number.
 
 | Script | Covers |
 |---|---|
 | `venue_ui.py` | Sign-in redirects, venue detail, members and permissions (US-14) |
 | `venue_settings.py` | Courts and opening hours (US-11) |
 | `venue_pricing.py` | Prices and the cancellation policy (US-11) |
+| `booking_grid.py` | Venue search and the court-by-hour grid (US-02) |

@@ -15,7 +15,10 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
 {
     private readonly VenueScenario scenario = new(api);
 
-    private static DateOnly Today => PlatformRequirements.BangkokToday(TimeProvider.System);
+    private static DateOnly Today => VenueScenario.Today;
+
+    private static SetOpeningHoursRequest OpenEveryDay(DateOnly from, int opens = 6, int closes = 22) =>
+        new(from, VenueScenario.Week(opens, closes));
 
     [Fact]
     public async Task A_new_court_is_in_use_and_lands_at_the_end_of_the_grid()
@@ -466,13 +469,6 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(CourtErrorCodes.InvalidDay, await response.ErrorCodeAsync());
     }
-
-    private static SetOpeningHoursRequest OpenEveryDay(DateOnly from, int? opens = 6, int? closes = 22) =>
-        new(
-            from,
-            Enum.GetValues<DayOfWeek>()
-                .Select(day => new OpeningHoursDayRequest(day.ToString(), opens, closes))
-                .ToArray());
 
     private async Task<(HttpClient Owner, VenueResponse Venue)> OwnedVenueAsync()
     {

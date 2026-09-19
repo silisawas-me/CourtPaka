@@ -1,5 +1,6 @@
 """Shared plumbing for the browser checks: where the stack is, who to sign in as, how to report."""
 
+import datetime
 import pathlib
 import sys
 
@@ -59,6 +60,21 @@ THAI_MONTHS_FULL = [
 ]
 
 
+def venue_today():
+    """Today where the venues are. The server validates against the Bangkok date, so a check run
+    from another zone must ask about the same day the server would."""
+    return datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7))).date()
+
+
+def day_is_offered(page, date) -> bool:
+    """Whether the open calendar will let that day be chosen. It walks to the month first: a day in
+    a month the calendar is not showing has no cell at all, and reading that as "not offered" is how
+    a check passes without ever reaching the boundary it is about."""
+    reached = show_month(page, date)
+    cell = page.locator(f'[aria-label="{calendar_label(date)}"]')
+    return reached and cell.count() == 1 and cell.get_attribute("aria-disabled") != "true"
+
+
 def calendar_label(date) -> str:
     """How the datepicker labels one day, which names the month as well as the number."""
     return f"{date.day} {THAI_MONTHS_FULL[date.month - 1]} {date.year + 543}"
@@ -71,22 +87,40 @@ def thai_date(date) -> str:
 def pick_date(page, date) -> None:
     """Drives the calendar, because the field itself is read-only: Intl prints Thai dates but
     cannot read one back, so typing into it would be thrown away."""
-    page.click("mat-datepicker-toggle button")
-    page.wait_for_selector("mat-calendar")
+    if page.locator("mat-calendar").count() == 0:
+        page.click("mat-datepicker-toggle button")
+        page.wait_for_selector("mat-calendar")
 
-    # The calendar opens on whatever the field holds, which can be either side of the target, so
-    # walk in the direction that closes the gap and stop if the picker's minimum blocks the way.
-    for _ in range(24):
-        if page.locator("mat-calendar .mat-calendar-period-button").inner_text().strip() == thai_month_year(date):
-            break
-        forward = shown_month(page) < (date.year, date.month)
-        step = page.locator(".mat-calendar-next-button" if forward else ".mat-calendar-previous-button")
-        if step.is_disabled():
-            break
-        step.click()
-
+    show_month(page, date)
     page.click(f'[aria-label="{calendar_label(date)}"]')
     page.wait_for_selector("mat-calendar", state="detached")
+
+
+def show_month(page, date) -> bool:
+    """Walks the open calendar to the month holding that date, and says whether it got there. The
+    calendar opens on whatever the field holds, which can be either side of the target, so it walks
+    in the direction that closes the gap and stops when the picker's own bounds block the way."""
+    period = page.locator("mat-calendar .mat-calendar-period-button")
+    for _ in range(24):
+        showing = period.inner_text().strip()
+        if shown_month(page) == (date.year, date.month):
+            return True
+
+        forward = shown_month(page) < (date.year, date.month)
+        step = page.locator(".mat-calendar-next-button" if forward else ".mat-calendar-previous-button")
+        # The arrow is disabled at the picker's own bounds, which is a real answer: the month cannot
+        # be reached because every day in it is outside the window.
+        if not step.is_enabled():
+            return False
+
+        step.click()
+        # The label is what says the move landed. Reading the month back before it does walks past
+        # the target and into the arrow the picker has just disabled.
+        page.wait_for_function(
+            "([element, before]) => element.innerText.trim() !== before",
+            arg=[period.element_handle(), showing],
+        )
+    return False
 
 
 def shown_month(page) -> tuple[int, int]:

@@ -27,8 +27,8 @@ export function plainDate(date: Date): string {
  * A plain date as a Date at local midnight. `new Date('2026-10-01')` would read it as midnight UTC,
  * which prints as the day before for anyone west of Greenwich.
  */
-export function fromPlainDate(value: string): Date | null {
-  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+export function fromPlainDate(value: string | null | undefined): Date | null {
+  const parts = value ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim()) : null;
   if (!parts) {
     return null;
   }

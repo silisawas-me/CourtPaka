@@ -22,10 +22,12 @@ import {
 } from '../../core/venues/venue.service';
 import { FieldError } from '../../shared/field-error';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
+import { VenueAddressPipe } from '../../shared/venue-address.pipe';
 
 @Component({
   selector: 'app-venue-detail-page',
   imports: [
+    VenueAddressPipe,
     ReactiveFormsModule,
     RouterLink,
     FieldError,

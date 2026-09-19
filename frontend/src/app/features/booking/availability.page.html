@@ -1,0 +1,107 @@
+@if (loading()) {
+  <mat-progress-bar mode="indeterminate" />
+} @else if (pageError(); as key) {
+  <mat-card>
+    <mat-card-content>
+      <p class="form-error" data-testid="page-error">{{ i18n.t(key) }}</p>
+    </mat-card-content>
+    <mat-card-actions>
+      <a matButton routerLink="/book">{{ i18n.t('search.title') }}</a>
+    </mat-card-actions>
+  </mat-card>
+}
+
+@if (venue(); as current) {
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title data-testid="venue-name">{{ current.name }}</mat-card-title>
+      <mat-card-subtitle>
+        {{ current | venueAddress }}
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <mat-form-field class="field">
+        <mat-label>{{ i18n.t('availability.day') }}</mat-label>
+        <input
+          id="day"
+          matInput
+          readonly
+          [formControl]="picked"
+          [matDatepicker]="picker"
+          [min]="today"
+          [max]="lastBookableDay()"
+          (dateChange)="pick($event.value)"
+          (click)="picker.open()"
+        />
+        <mat-datepicker-toggle matIconSuffix [for]="picker" />
+        <mat-datepicker #picker />
+        <mat-hint>{{ i18n.t('availability.window') }}</mat-hint>
+      </mat-form-field>
+    </mat-card-content>
+  </mat-card>
+}
+
+@if (day(); as grid) {
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title data-testid="grid-date">{{
+        grid.date | appDate: i18n.locale()
+      }}</mat-card-title>
+    </mat-card-header>
+
+    <mat-card-content>
+      @if (hours().length === 0) {
+        <p class="muted" data-testid="closed-that-day">{{ i18n.t('availability.closed') }}</p>
+      } @else {
+        <div class="grid-scroll">
+          <table class="grid" data-testid="availability-grid">
+            <thead>
+              <tr>
+                <th scope="col">{{ i18n.t('availability.court') }}</th>
+                @for (hour of hours(); track hour) {
+                  <th scope="col">{{ hour }}:00</th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (court of grid.courts; track court.courtId) {
+                <tr [attr.data-testid]="'court-' + court.courtId">
+                  <th scope="row">{{ court.name }}</th>
+                  @for (cell of court.hours; track cell.hour) {
+                    <td
+                      [class.free]="cell.status === 'Free'"
+                      [class.closed]="cell.status === 'Closed'"
+                      [attr.data-testid]="'cell-' + court.courtId + '-' + cell.hour"
+                      [attr.aria-label]="
+                        court.name +
+                        ' ' +
+                        cell.hour +
+                        ':00 ' +
+                        i18n.t('availability.status.' + cell.status)
+                      "
+                    >
+                      <span class="price">{{ cell.bahtPerHour ?? '—' }}</span>
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </mat-card-content>
+
+    <mat-card-actions>
+      @if (signedIn()) {
+        <button matButton="filled" type="button" disabled data-testid="book">
+          {{ i18n.t('availability.book') }}
+        </button>
+      } @else {
+        <a matButton="filled" routerLink="/login" data-testid="sign-in-to-book">
+          {{ i18n.t('availability.signInToBook') }}
+        </a>
+      }
+    </mat-card-actions>
+  </mat-card>
+}
