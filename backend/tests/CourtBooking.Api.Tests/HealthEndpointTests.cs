@@ -5,7 +5,7 @@ using CourtBooking.Api.Tests.Infrastructure;
 
 namespace CourtBooking.Api.Tests;
 
-[Collection(DatabaseCollection.Name)]
+[Collection(ApiCollection.Name)]
 public sealed class HealthEndpointTests : IDisposable
 {
     // Port 1 on loopback refuses connections immediately, so the check fails fast.
@@ -15,9 +15,9 @@ public sealed class HealthEndpointTests : IDisposable
     private readonly ApiFactory _withDatabase;
     private readonly ApiFactory _withoutDatabase;
 
-    public HealthEndpointTests(PostgresFixture postgres)
+    public HealthEndpointTests(ApiTestFixture api)
     {
-        _withDatabase = new ApiFactory(postgres.ConnectionString);
+        _withDatabase = new ApiFactory(api.ConnectionString);
         _withoutDatabase = new ApiFactory(UnreachableDatabase);
     }
 

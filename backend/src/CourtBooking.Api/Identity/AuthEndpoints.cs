@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using Npgsql;
 
 namespace CourtBooking.Api.Identity;
 
@@ -87,7 +86,7 @@ public static class AuthEndpoints
                 return TypedResults.Created("/api/auth/me");
             }
         }
-        catch (DbUpdateException exception) when (IsUniqueViolation(exception))
+        catch (DbUpdateException exception) when (DbErrors.IsUniqueViolation(exception))
         {
             // Two registrations for the same address raced past the uniqueness check.
             await transaction.RollbackAsync(cancellationToken);
@@ -291,7 +290,4 @@ public static class AuthEndpoints
             cancellationToken);
     }
 
-    // 23505 is PostgreSQL's unique_violation.
-    private static bool IsUniqueViolation(DbUpdateException exception) =>
-        exception.InnerException is PostgresException { SqlState: "23505" };
 }

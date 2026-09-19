@@ -9,14 +9,42 @@ namespace CourtBooking.Api.Venues;
 /// "May this user do X at the venue in the route?" — the one question every venue endpoint asks.
 /// Global roles cannot express it, because the answer differs per venue (PRD US-14, 9.2).
 /// </summary>
-public sealed class VenuePermissionRequirement(VenuePermissions permission) : IAuthorizationRequirement
+public sealed class VenuePermissionRequirement : IAuthorizationRequirement
 {
-    public VenuePermissions Permission { get; } = permission;
+    private VenuePermissionRequirement(VenuePermissions permission, bool ownerOnly)
+    {
+        Permission = permission;
+        OwnerOnly = ownerOnly;
+    }
+
+    public VenuePermissions Permission { get; }
+
+    public bool OwnerOnly { get; }
+
+    /// <summary>Any member of the venue, whatever their permissions.</summary>
+    public static VenuePermissionRequirement Member { get; } = new(VenuePermissions.None, ownerOnly: false);
+
+    /// <summary>Actions the owner may not delegate: membership, tax identity, document voiding (PRD US-14).</summary>
+    public static VenuePermissionRequirement Owner { get; } = new(VenuePermissions.None, ownerOnly: true);
+
+    public static VenuePermissionRequirement Needs(VenuePermissions permission) => new(permission, ownerOnly: false);
 }
 
-public sealed class VenuePermissionHandler(
-    IHttpContextAccessor httpContextAccessor,
-    AppDbContext database)
+/// <summary>
+/// The membership the current request runs under. Populated once by the authorization handler, so
+/// endpoints do not query it again.
+/// </summary>
+public sealed class CurrentVenue
+{
+    public VenueMembership? Membership { get; set; }
+
+    public VenueStatus? Status { get; set; }
+
+    public VenueMembership Require() =>
+        Membership ?? throw new InvalidOperationException("No venue membership was resolved for this request.");
+}
+
+public sealed class VenuePermissionHandler(AppDbContext database, CurrentVenue currentVenue)
     : AuthorizationHandler<VenuePermissionRequirement>
 {
     public const string VenueRouteValue = "venueId";
@@ -25,53 +53,45 @@ public sealed class VenuePermissionHandler(
         AuthorizationHandlerContext context,
         VenuePermissionRequirement requirement)
     {
-        var httpContext = httpContextAccessor.HttpContext;
-        if (httpContext is null)
+        // In endpoint routing the resource is the HttpContext, so the route value is right here.
+        if (context.Resource is not HttpContext httpContext)
         {
             return;
         }
 
-        if (!Guid.TryParse(context.User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+        if (!Guid.TryParse(context.User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)
+            || !Guid.TryParse(httpContext.Request.RouteValues[VenueRouteValue]?.ToString(), out var venueId))
         {
             return;
         }
 
-        if (!Guid.TryParse(httpContext.Request.RouteValues[VenueRouteValue]?.ToString(), out var venueId))
+        if (currentVenue.Membership is null)
+        {
+            var found = await database.VenueMemberships
+                .AsNoTracking()
+                .Include(member => member.Venue)
+                .SingleOrDefaultAsync(member => member.VenueId == venueId && member.UserId == userId);
+
+            currentVenue.Membership = found;
+            currentVenue.Status = found?.Venue?.Status;
+        }
+
+        var membership = currentVenue.Membership;
+        if (membership is null)
         {
             return;
         }
 
-        var membership = await database.VenueMemberships
-            .AsNoTracking()
-            .SingleOrDefaultAsync(member => member.VenueId == venueId && member.UserId == userId);
+        var allowed = requirement switch
+        {
+            { OwnerOnly: true } => membership.Role == VenueRole.Owner,
+            { Permission: VenuePermissions.None } => true,
+            var needed => membership.Allows(needed.Permission),
+        };
 
-        if (membership?.Allows(requirement.Permission) == true)
+        if (allowed)
         {
             context.Succeed(requirement);
-        }
-    }
-}
-
-/// <summary>Policy names map one to one onto permissions, so endpoints read as the rule they enforce.</summary>
-public static class VenuePolicies
-{
-    public const string Prefix = "venue:";
-
-    public static string For(VenuePermissions permission) => Prefix + permission;
-
-    public static string Member => Prefix + nameof(VenuePermissions.None);
-
-    public static IEnumerable<(string Name, VenuePermissions Permission)> All()
-    {
-        yield return (Member, VenuePermissions.None);
-        foreach (var permission in Enum.GetValues<VenuePermissions>())
-        {
-            if (permission is VenuePermissions.None or VenuePermissions.StaffDefault or VenuePermissions.All)
-            {
-                continue;
-            }
-
-            yield return (For(permission), permission);
         }
     }
 }

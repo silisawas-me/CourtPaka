@@ -34,13 +34,12 @@ public static class DevelopmentSeeder
                 Code = VenueCode,
                 Name = "Development Court",
                 Status = VenueStatus.Approved,
-                OwnerId = owner.Id,
                 CreatedAt = time.GetUtcNow(),
             };
             database.Venues.Add(venue);
         }
 
-        await EnsureMembershipAsync(database, venue.Id, owner.Id, VenueRole.Owner, VenuePermissions.All, time);
+        await EnsureMembershipAsync(database, venue.Id, owner.Id, VenueRole.Owner, VenuePermissions.None, time);
         await EnsureMembershipAsync(
             database, venue.Id, staff.Id, VenueRole.Staff, VenuePermissions.StaffDefault, time);
 

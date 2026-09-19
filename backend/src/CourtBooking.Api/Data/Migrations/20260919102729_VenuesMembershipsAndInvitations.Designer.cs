@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CourtBooking.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260919101517_VenuesAndMemberships")]
-    partial class VenuesAndMemberships
+    [Migration("20260919102729_VenuesMembershipsAndInvitations")]
+    partial class VenuesMembershipsAndInvitations
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -142,9 +142,6 @@ namespace CourtBooking.Api.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<Guid>("OwnerId")
-                        .HasColumnType("uuid");
-
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -153,9 +150,45 @@ namespace CourtBooking.Api.Data.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.HasIndex("Status");
-
                     b.ToTable("Venues");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Venues.VenueInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AcceptedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Permissions")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("VenueId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VenueId", "Email");
+
+                    b.ToTable("VenueInvitations");
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.VenueMembership", b =>
@@ -328,6 +361,17 @@ namespace CourtBooking.Api.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("CourtBooking.Api.Venues.VenueInvitation", b =>
+                {
+                    b.HasOne("CourtBooking.Api.Venues.Venue", "Venue")
+                        .WithMany()
+                        .HasForeignKey("VenueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Venue");
+                });
+
             modelBuilder.Entity("CourtBooking.Api.Venues.VenueMembership", b =>
                 {
                     b.HasOne("CourtBooking.Api.Identity.AppUser", "User")
@@ -336,13 +380,15 @@ namespace CourtBooking.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("CourtBooking.Api.Venues.Venue", null)
-                        .WithMany("Members")
+                    b.HasOne("CourtBooking.Api.Venues.Venue", "Venue")
+                        .WithMany()
                         .HasForeignKey("VenueId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("User");
+
+                    b.Navigation("Venue");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
@@ -399,11 +445,6 @@ namespace CourtBooking.Api.Data.Migrations
             modelBuilder.Entity("CourtBooking.Api.Identity.AppUser", b =>
                 {
                     b.Navigation("Consents");
-                });
-
-            modelBuilder.Entity("CourtBooking.Api.Venues.Venue", b =>
-                {
-                    b.Navigation("Members");
                 });
 #pragma warning restore 612, 618
         }

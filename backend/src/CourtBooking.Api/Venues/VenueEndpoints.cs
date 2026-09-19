@@ -1,34 +1,52 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using CourtBooking.Api.Data;
+using CourtBooking.Api.Email;
 using CourtBooking.Api.Http;
 using CourtBooking.Api.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
+using Microsoft.Extensions.Options;
 
 namespace CourtBooking.Api.Venues;
 
 public static class VenueEndpoints
 {
+    /// <summary>An invitation has to outlive a weekend but not a month (PRD US-14).</summary>
+    private static readonly TimeSpan InvitationLifetime = TimeSpan.FromDays(7);
+
     public static RouteGroupBuilder MapVenueEndpoints(this IEndpointRouteBuilder routes)
     {
         var venues = routes.MapGroup("/venues").WithTags("Venues").RequireAuthorization();
 
         venues.MapPost("/", CreateAsync);
         venues.MapGet("/mine", ListMineAsync);
+        venues.MapPost("/invitations/accept", AcceptInvitationAsync);
 
         var venue = venues.MapGroup("/{venueId:guid}");
-        venue.MapGet("/", GetAsync).RequireAuthorization(VenuePolicies.Member);
-        venue.MapPut("/", RenameAsync).RequireAuthorization(VenuePolicies.For(VenuePermissions.ManageSettings));
-        venue.MapGet("/members", ListMembersAsync).RequireAuthorization(VenuePolicies.Member);
-        venue.MapPost("/members", InviteMemberAsync).RequireAuthorization(VenuePolicies.Member);
-        venue.MapPut("/members/{userId:guid}/permissions", ChangePermissionsAsync)
-            .RequireAuthorization(VenuePolicies.Member);
-        venue.MapDelete("/members/{userId:guid}", RemoveMemberAsync).RequireAuthorization(VenuePolicies.Member);
+        venue.MapGet("/", Get).RequireAuthorization(Member);
+        venue.MapPut("/", RenameAsync).RequireAuthorization(Needs(VenuePermissions.ManageSettings));
+        venue.MapGet("/members", ListMembersAsync).RequireAuthorization(Member);
+        venue.MapGet("/invitations", ListInvitationsAsync).RequireAuthorization(OwnerOnly);
+        venue.MapPost("/invitations", InviteAsync).RequireAuthorization(OwnerOnly);
+        venue.MapPut("/members/{userId:guid}/permissions", ChangePermissionsAsync).RequireAuthorization(OwnerOnly);
+        venue.MapDelete("/members/{userId:guid}", RemoveMemberAsync).RequireAuthorization(OwnerOnly);
 
         return venues;
     }
+
+    private static Action<AuthorizationPolicyBuilder> Member =>
+        policy => policy.RequireAuthenticatedUser().AddRequirements(VenuePermissionRequirement.Member);
+
+    private static Action<AuthorizationPolicyBuilder> OwnerOnly =>
+        policy => policy.RequireAuthenticatedUser().AddRequirements(VenuePermissionRequirement.Owner);
+
+    private static Action<AuthorizationPolicyBuilder> Needs(VenuePermissions permission) =>
+        policy => policy.RequireAuthenticatedUser().AddRequirements(VenuePermissionRequirement.Needs(permission));
 
     private static async Task<Results<Created<VenueResponse>, ProblemHttpResult>> CreateAsync(
         CreateVenueRequest request,
@@ -37,13 +55,12 @@ public static class VenueEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var ownerId = UserId(principal);
+        var now = timeProvider.GetUtcNow();
         var venue = new Venue
         {
             Code = request.Code.Trim().ToUpperInvariant(),
             Name = request.Name.Trim(),
-            OwnerId = ownerId,
-            CreatedAt = timeProvider.GetUtcNow(),
+            CreatedAt = now,
         };
 
         database.Venues.Add(venue);
@@ -51,18 +68,17 @@ public static class VenueEndpoints
         database.VenueMemberships.Add(new VenueMembership
         {
             VenueId = venue.Id,
-            UserId = ownerId,
+            UserId = UserId(principal),
             Role = VenueRole.Owner,
-            Permissions = VenuePermissions.All,
-            CreatedAt = timeProvider.GetUtcNow(),
+            Permissions = VenuePermissions.None, // Owners derive their permissions from the role.
+            CreatedAt = now,
         });
 
         try
         {
             await database.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException exception)
-            when (exception.InnerException is PostgresException { SqlState: "23505" })
+        catch (DbUpdateException exception) when (DbErrors.IsUniqueViolation(exception))
         {
             return ApiProblem.Of(StatusCodes.Status409Conflict, VenueErrorCodes.CodeAlreadyUsed);
         }
@@ -79,23 +95,17 @@ public static class VenueEndpoints
         var venues = await database.VenueMemberships
             .AsNoTracking()
             .Where(member => member.UserId == userId)
-            .Join(database.Venues, member => member.VenueId, v => v.Id, (_, v) => v)
-            .OrderBy(v => v.Name)
-            .ToListAsync(cancellationToken);
+            .OrderBy(member => member.Venue!.Name)
+            .Select(member => new VenueResponse(
+                member.Venue!.Id, member.Venue.Code, member.Venue.Name, member.Venue.Status.ToString()))
+            .ToArrayAsync(cancellationToken);
 
-        return TypedResults.Ok(venues.Select(ToResponse).ToArray());
+        return TypedResults.Ok(venues);
     }
 
-    private static async Task<Results<Ok<VenueResponse>, NotFound>> GetAsync(
-        Guid venueId,
-        AppDbContext database,
-        CancellationToken cancellationToken)
-    {
-        var venue = await database.Venues.AsNoTracking()
-            .SingleOrDefaultAsync(v => v.Id == venueId, cancellationToken);
-
-        return venue is null ? TypedResults.NotFound() : TypedResults.Ok(ToResponse(venue));
-    }
+    private static Ok<VenueResponse> Get(CurrentVenue currentVenue) =>
+        // Authorization already loaded the venue this request runs against.
+        TypedResults.Ok(ToResponse(currentVenue.Require().Venue!));
 
     private static async Task<Results<NoContent, NotFound>> RenameAsync(
         Guid venueId,
@@ -127,65 +137,150 @@ public static class VenueEndpoints
         return TypedResults.Ok(members.Select(ToResponse).ToArray());
     }
 
-    private static async Task<Results<Created, ProblemHttpResult, ForbidHttpResult>> InviteMemberAsync(
+    private static async Task<Ok<VenueInvitationResponse[]>> ListInvitationsAsync(
+        Guid venueId,
+        AppDbContext database,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        var invitations = await database.VenueInvitations
+            .AsNoTracking()
+            .Where(invitation =>
+                invitation.VenueId == venueId && invitation.AcceptedAt == null && invitation.ExpiresAt > now)
+            .OrderBy(invitation => invitation.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        return TypedResults.Ok(invitations
+            .Select(invitation => new VenueInvitationResponse(
+                invitation.Id, invitation.Email, Describe(invitation.Permissions), invitation.ExpiresAt))
+            .ToArray());
+    }
+
+    /// <summary>
+    /// Invites an address, which may not have an account yet: the link in the email is what grants
+    /// access, once the person signs in and accepts it (PRD US-14).
+    /// </summary>
+    private static async Task<Results<Created<VenueInvitationResponse>, ProblemHttpResult>> InviteAsync(
         Guid venueId,
         InviteMemberRequest request,
+        AppDbContext database,
+        CurrentVenue currentVenue,
+        UserManager<AppUser> userManager,
+        ITransactionalEmailSender emailSender,
+        IOptions<AppOptions> options,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        var permissions = request.Permissions ?? VenuePermissions.StaffDefault;
+        if (!VenuePermissionSet.IsValid(permissions))
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, VenueErrorCodes.InvalidPermissions);
+        }
+
+        var email = request.Email.Trim();
+        var existing = await userManager.FindByEmailAsync(email);
+        if (existing is not null
+            && await database.VenueMemberships.AnyAsync(
+                member => member.VenueId == venueId && member.UserId == existing.Id, cancellationToken))
+        {
+            return ApiProblem.Of(StatusCodes.Status409Conflict, VenueErrorCodes.AlreadyMember);
+        }
+
+        var now = timeProvider.GetUtcNow();
+        var token = GenerateToken();
+        var invitation = new VenueInvitation
+        {
+            VenueId = venueId,
+            Email = email,
+            Permissions = permissions,
+            TokenHash = HashToken(token),
+            ExpiresAt = now + InvitationLifetime,
+            CreatedAt = now,
+        };
+
+        database.VenueInvitations.Add(invitation);
+        await database.SaveChangesAsync(cancellationToken);
+
+        var link = QueryHelpers.AddQueryString(
+            $"{options.Value.BaseUrl.TrimEnd('/')}/venue-invitation",
+            new Dictionary<string, string?> { ["invitationId"] = invitation.Id.ToString(), ["token"] = token });
+
+        await emailSender.SendAsync(
+            new EmailMessage(
+                email,
+                existing?.Language ?? SupportedLanguages.Default,
+                $"CourtPaka: you were invited to {currentVenue.Require().Venue!.Name}",
+                $"Accept the invitation within 7 days: {link}"),
+            cancellationToken);
+
+        return TypedResults.Created(
+            $"/api/venues/{venueId}/invitations",
+            new VenueInvitationResponse(invitation.Id, email, Describe(permissions), invitation.ExpiresAt));
+    }
+
+    private static async Task<Results<Ok<VenueResponse>, ProblemHttpResult>> AcceptInvitationAsync(
+        AcceptInvitationRequest request,
         ClaimsPrincipal principal,
         AppDbContext database,
         UserManager<AppUser> userManager,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        if (!await IsOwnerAsync(venueId, principal, database, cancellationToken))
+        var now = timeProvider.GetUtcNow();
+        var invitation = await database.VenueInvitations
+            .Include(item => item.Venue)
+            .SingleOrDefaultAsync(item => item.Id == request.InvitationId, cancellationToken);
+
+        if (invitation is null
+            || invitation.AcceptedAt is not null
+            || invitation.ExpiresAt <= now
+            || !CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(invitation.TokenHash), Encoding.UTF8.GetBytes(HashToken(request.Token))))
         {
-            return TypedResults.Forbid();
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, VenueErrorCodes.InvitationInvalid);
         }
 
-        var permissions = request.Permissions ?? VenuePermissions.StaffDefault;
-        if ((permissions & ~VenuePermissions.All) != 0)
-        {
-            return ApiProblem.Of(StatusCodes.Status400BadRequest, VenueErrorCodes.InvalidPermissions);
-        }
-
-        var user = await userManager.FindByEmailAsync(request.Email);
+        var user = await userManager.GetUserAsync(principal);
         if (user is null)
         {
-            return ApiProblem.Of(StatusCodes.Status404NotFound, VenueErrorCodes.UnknownUser);
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, VenueErrorCodes.InvitationInvalid);
+        }
+
+        // The invitation names an address; only that person may take it.
+        if (!string.Equals(user.Email, invitation.Email, StringComparison.OrdinalIgnoreCase))
+        {
+            return ApiProblem.Of(StatusCodes.Status403Forbidden, VenueErrorCodes.InvitationForAnotherAddress);
         }
 
         if (await database.VenueMemberships.AnyAsync(
-                member => member.VenueId == venueId && member.UserId == user.Id, cancellationToken))
+                member => member.VenueId == invitation.VenueId && member.UserId == user.Id, cancellationToken))
         {
             return ApiProblem.Of(StatusCodes.Status409Conflict, VenueErrorCodes.AlreadyMember);
         }
 
         database.VenueMemberships.Add(new VenueMembership
         {
-            VenueId = venueId,
+            VenueId = invitation.VenueId,
             UserId = user.Id,
             Role = VenueRole.Staff,
-            Permissions = permissions,
-            CreatedAt = timeProvider.GetUtcNow(),
+            Permissions = invitation.Permissions,
+            CreatedAt = now,
         });
+        invitation.AcceptedAt = now;
         await database.SaveChangesAsync(cancellationToken);
 
-        return TypedResults.Created($"/api/venues/{venueId}/members");
+        return TypedResults.Ok(ToResponse(invitation.Venue!));
     }
 
-    private static async Task<Results<NoContent, ProblemHttpResult, NotFound, ForbidHttpResult>> ChangePermissionsAsync(
+    private static async Task<Results<NoContent, ProblemHttpResult, NotFound>> ChangePermissionsAsync(
         Guid venueId,
         Guid userId,
         ChangePermissionsRequest request,
-        ClaimsPrincipal principal,
         AppDbContext database,
         CancellationToken cancellationToken)
     {
-        if (!await IsOwnerAsync(venueId, principal, database, cancellationToken))
-        {
-            return TypedResults.Forbid();
-        }
-
-        if ((request.Permissions & ~VenuePermissions.All) != 0)
+        if (!VenuePermissionSet.IsValid(request.Permissions))
         {
             return ApiProblem.Of(StatusCodes.Status400BadRequest, VenueErrorCodes.InvalidPermissions);
         }
@@ -209,18 +304,12 @@ public static class VenueEndpoints
         return TypedResults.NoContent();
     }
 
-    private static async Task<Results<NoContent, ProblemHttpResult, NotFound, ForbidHttpResult>> RemoveMemberAsync(
+    private static async Task<Results<NoContent, ProblemHttpResult, NotFound>> RemoveMemberAsync(
         Guid venueId,
         Guid userId,
-        ClaimsPrincipal principal,
         AppDbContext database,
         CancellationToken cancellationToken)
     {
-        if (!await IsOwnerAsync(venueId, principal, database, cancellationToken))
-        {
-            return TypedResults.Forbid();
-        }
-
         var membership = await database.VenueMemberships
             .SingleOrDefaultAsync(member => member.VenueId == venueId && member.UserId == userId, cancellationToken);
 
@@ -239,17 +328,10 @@ public static class VenueEndpoints
         return TypedResults.NoContent();
     }
 
-    private static Task<bool> IsOwnerAsync(
-        Guid venueId,
-        ClaimsPrincipal principal,
-        AppDbContext database,
-        CancellationToken cancellationToken)
-    {
-        var userId = UserId(principal);
-        return database.VenueMemberships.AnyAsync(
-            member => member.VenueId == venueId && member.UserId == userId && member.Role == VenueRole.Owner,
-            cancellationToken);
-    }
+    private static string GenerateToken() => WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
+
+    private static string HashToken(string token) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
     private static Guid UserId(ClaimsPrincipal principal) =>
         Guid.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -262,10 +344,14 @@ public static class VenueEndpoints
             membership.UserId,
             membership.User?.Email ?? string.Empty,
             membership.Role.ToString(),
-            Enum.GetValues<VenuePermissions>()
-                .Where(permission =>
-                    permission is not (VenuePermissions.None or VenuePermissions.StaffDefault or VenuePermissions.All)
-                    && membership.Allows(permission))
+            VenuePermissionSet.Grantable
+                .Where(membership.Allows)
                 .Select(permission => permission.ToString())
                 .ToArray());
+
+    private static string[] Describe(VenuePermissions permissions) =>
+        VenuePermissionSet.Grantable
+            .Where(permission => permissions.HasFlag(permission))
+            .Select(permission => permission.ToString())
+            .ToArray();
 }

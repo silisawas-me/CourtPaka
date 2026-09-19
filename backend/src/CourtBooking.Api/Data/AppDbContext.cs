@@ -14,6 +14,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<VenueMembership> VenueMemberships => Set<VenueMembership>();
 
+    public DbSet<VenueInvitation> VenueInvitations => Set<VenueInvitation>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -32,20 +34,30 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             venue.Property(v => v.Name).HasMaxLength(200);
             // The code prefixes document numbers, so two venues may never share one (PRD 7.4).
             venue.HasIndex(v => v.Code).IsUnique();
-            venue.HasIndex(v => v.Status);
         });
 
         builder.Entity<VenueMembership>(member =>
         {
             // One row per person per venue: permissions are the venue's answer about that person.
             member.HasIndex(m => new { m.VenueId, m.UserId }).IsUnique();
-            member.HasOne<Venue>()
-                .WithMany(venue => venue.Members)
+            member.HasOne(m => m.Venue)
+                .WithMany()
                 .HasForeignKey(m => m.VenueId)
                 .OnDelete(DeleteBehavior.Cascade);
             member.HasOne(m => m.User)
                 .WithMany()
                 .HasForeignKey(m => m.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<VenueInvitation>(invitation =>
+        {
+            invitation.Property(i => i.Email).HasMaxLength(256);
+            invitation.Property(i => i.TokenHash).HasMaxLength(64);
+            invitation.HasIndex(i => new { i.VenueId, i.Email });
+            invitation.HasOne(i => i.Venue)
+                .WithMany()
+                .HasForeignKey(i => i.VenueId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

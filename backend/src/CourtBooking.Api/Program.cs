@@ -118,16 +118,10 @@ builder.Services.ConfigureApplicationCookie(options =>
         options.Events.OnValidatePrincipal = SecurityStampValidator.ValidatePrincipalAsync;
     });
 
-builder.Services.AddHttpContextAccessor();
+builder.Services.AddAuthorization();
+// Venue endpoints declare the permission they need inline; the handler answers it per venue (PRD US-14).
+builder.Services.AddScoped<CurrentVenue>();
 builder.Services.AddScoped<IAuthorizationHandler, VenuePermissionHandler>();
-
-// One policy per venue permission, so an endpoint states the rule it enforces (PRD US-14).
-var authorization = builder.Services.AddAuthorizationBuilder();
-foreach (var (name, permission) in VenuePolicies.All())
-{
-    authorization.AddPolicy(name, policy =>
-        policy.RequireAuthenticatedUser().AddRequirements(new VenuePermissionRequirement(permission)));
-}
 
 // Registration and password endpoints send email and check credentials, so they are capped per client IP.
 builder.Services.AddRateLimiter(options =>
