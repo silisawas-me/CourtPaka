@@ -22,8 +22,10 @@ import { forkJoin } from 'rxjs';
 import { errorKey } from '../../core/http/api-error';
 import { TranslationService } from '../../core/i18n/translation.service';
 import {
+  CLOSING_HOURS,
   Court,
   CourtService,
+  OPENING_HOURS,
   CourtStatusChange,
   OpeningHours,
   OpeningHoursDay,
@@ -35,10 +37,6 @@ import { FieldError } from '../../shared/field-error';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 import { CancellationPolicyEditor } from './cancellation-policy';
 import { PriceBands } from './price-bands';
-
-/** A venue opens on the hour: 0 is the start of the day, 24 is midnight at the end of it. */
-const OPENING_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
-const CLOSING_HOURS = OPENING_HOURS.map((hour) => hour + 1);
 
 /** What the form offers before a venue says otherwise: a common Thai badminton day. */
 const DEFAULT_OPENS_HOUR = 6;

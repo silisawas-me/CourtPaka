@@ -64,7 +64,11 @@ public sealed class PriceBand
     /// <summary>1–24, where 24 is midnight at the end of the day.</summary>
     public required int ToHour { get; init; }
 
-    /// <summary>Baht per court-hour, to two decimals (PRD BR-05).</summary>
+    /// <summary>
+    /// Baht per court-hour, gross: for a VAT-registered venue this is the VAT-inclusive price the
+    /// booker pays, not a figure to add VAT to (PRD BR-05, S-10). The invoice in 7.1 splits it,
+    /// using the venue's registration at the time of the booking.
+    /// </summary>
     public required decimal BahtPerHour { get; init; }
 
     public PriceList? PriceList { get; init; }
@@ -118,15 +122,28 @@ public sealed class CancellationPolicy
     }
 
     /// <summary>
-    /// What this policy refunds for a cancellation that many hours before play. The most generous
-    /// tier the cancellation qualifies for wins; qualifying for none refunds nothing (PRD US-11).
+    /// What this policy refunds for a cancellation at a given moment. The most generous tier the
+    /// notice qualifies for wins; qualifying for none refunds nothing, and so does cancelling after
+    /// play was due to start (PRD US-11, 6.1).
+    ///
+    /// It takes the two instants rather than a number of hours so the rounding is decided here,
+    /// once: 23 hours 50 minutes of notice is short of a 24-hour step, however a caller would have
+    /// rounded it.
     /// </summary>
-    public int RefundPercentFor(int hoursBeforePlay) =>
-        Tiers
-            .Where(tier => hoursBeforePlay >= tier.HoursBefore)
+    public int RefundPercentFor(DateTimeOffset cancelledAt, DateTimeOffset playStartsAt)
+    {
+        if (cancelledAt >= playStartsAt)
+        {
+            return 0;
+        }
+
+        var notice = (int)Math.Floor((playStartsAt - cancelledAt).TotalHours);
+        return Tiers
+            .Where(tier => notice >= tier.HoursBefore)
             .Select(tier => tier.RefundPercent)
             .DefaultIfEmpty(0)
             .Max();
+    }
 }
 
 /// <summary>"Cancel this many hours before play and you get this much back."</summary>

@@ -79,10 +79,52 @@ public sealed class PricingTests(ApiTestFixture api)
     {
         var (owner, venue) = await OpenVenueAsync(closedOn: DayOfWeek.Monday);
 
+        // Every open hour is priced although Monday has no band at all, because Monday is closed.
         var prices = await SetPricesAsync(
             owner, venue.Id, AllWeek(6, 22, 200m).Where(band => band.Day != nameof(DayOfWeek.Monday)));
 
-        Assert.DoesNotContain(prices.Bands, band => band.Day == nameof(DayOfWeek.Monday));
+        Assert.Equal(6, prices.Bands.Select(band => band.Day).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task Prices_must_cover_a_week_that_has_not_started_yet()
+    {
+        var (owner, venue) = await OpenVenueAsync();
+        // From next month the venue stays open until midnight.
+        await SetHoursAsync(owner, venue.Id, PlatformToday.AddDays(30), 6, 24);
+
+        var response = await owner.PutAsJsonAsync(
+            $"/api/venues/{venue.Id}/prices", new SetPricesRequest([.. AllWeek(6, 22, 200m)]));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(PricingErrorCodes.HourWithoutPrice, await response.ErrorCodeAsync());
+    }
+
+    [Fact]
+    public async Task A_venue_can_price_hours_that_start_tomorrow()
+    {
+        var owner = await scenario.SignedInClientAsync();
+        var venue = await scenario.CreateVenueAsync(owner);
+        await SetHoursAsync(owner, venue.Id, PlatformToday.AddDays(1), 6, 22);
+
+        var prices = await SetPricesAsync(owner, venue.Id, AllWeek(6, 22, 200m));
+
+        Assert.NotEmpty(prices.Bands);
+    }
+
+    [Fact]
+    public async Task Opening_an_hour_no_band_covers_is_refused_from_the_hours_side_too()
+    {
+        var (owner, venue) = await OpenVenueAsync();
+        await SetPricesAsync(owner, venue.Id, AllWeek(6, 22, 200m));
+
+        // The rule belongs to the pair, so it has to hold whichever half is edited.
+        var response = await owner.PutAsJsonAsync(
+            $"/api/venues/{venue.Id}/opening-hours",
+            new SetOpeningHoursRequest(PlatformToday, Week(6, 24)));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(PricingErrorCodes.HourWithoutPrice, await response.ErrorCodeAsync());
     }
 
     [Fact]
@@ -99,27 +141,16 @@ public sealed class PricingTests(ApiTestFixture api)
     }
 
     [Theory]
-    [InlineData(0, PricingErrorCodes.InvalidPrice)]
-    [InlineData(-50, PricingErrorCodes.InvalidPrice)]
-    [InlineData(200_000, PricingErrorCodes.InvalidPrice)]
-    public async Task A_price_that_makes_no_sense_is_refused(decimal baht, string expected)
+    [InlineData(0)]
+    [InlineData(-50)]
+    [InlineData(200_000)]
+    [InlineData(200.123)] // More than satang.
+    public async Task A_price_that_makes_no_sense_is_refused(decimal baht)
     {
         var (owner, venue) = await OpenVenueAsync();
 
         var response = await owner.PutAsJsonAsync(
             $"/api/venues/{venue.Id}/prices", new SetPricesRequest([.. AllWeek(6, 22, baht)]));
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(expected, await response.ErrorCodeAsync());
-    }
-
-    [Fact]
-    public async Task A_price_with_more_than_satang_is_refused()
-    {
-        var (owner, venue) = await OpenVenueAsync();
-
-        var response = await owner.PutAsJsonAsync(
-            $"/api/venues/{venue.Id}/prices", new SetPricesRequest([.. AllWeek(6, 22, 200.123m)]));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(PricingErrorCodes.InvalidPrice, await response.ErrorCodeAsync());
@@ -221,10 +252,10 @@ public sealed class PricingTests(ApiTestFixture api)
     }
 
     [Theory]
-    [InlineData(-1, 100, PricingErrorCodes.InvalidTier)]
-    [InlineData(24, 101, PricingErrorCodes.InvalidTier)]
-    [InlineData(24, -1, PricingErrorCodes.InvalidTier)]
-    public async Task A_step_that_makes_no_sense_is_refused(int hours, int percent, string expected)
+    [InlineData(-1, 100)]
+    [InlineData(24, 101)]
+    [InlineData(24, -1)]
+    public async Task A_step_that_makes_no_sense_is_refused(int hours, int percent)
     {
         var (owner, venue) = await OpenVenueAsync();
 
@@ -233,7 +264,7 @@ public sealed class PricingTests(ApiTestFixture api)
             new SetCancellationPolicyRequest([new(hours, percent)]));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(expected, await response.ErrorCodeAsync());
+        Assert.Equal(PricingErrorCodes.InvalidTier, await response.ErrorCodeAsync());
     }
 
     [Fact]
@@ -258,14 +289,41 @@ public sealed class PricingTests(ApiTestFixture api)
     [InlineData(11, 0)] // Later than every step: nothing back.
     public void A_cancellation_gets_the_best_step_it_qualifies_for(int hoursBefore, int expected)
     {
-        var policy = CancellationPolicy.Create(
+        var play = new DateTimeOffset(2026, 10, 1, 19, 0, 0, TimeSpan.FromHours(7));
+
+        Assert.Equal(expected, Ladder().RefundPercentFor(play.AddHours(-hoursBefore), play));
+    }
+
+    [Fact]
+    public void Notice_short_of_a_step_does_not_reach_it()
+    {
+        var play = new DateTimeOffset(2026, 10, 1, 19, 0, 0, TimeSpan.FromHours(7));
+
+        // Ten minutes short of 24 hours is 23 hours of notice, whatever rounding a caller would
+        // use, so the 24-hour step is missed and the 12-hour one applies.
+        Assert.Equal(25, Ladder().RefundPercentFor(play.AddHours(-24).AddMinutes(10), play));
+        Assert.Equal(50, Ladder().RefundPercentFor(play.AddHours(-24), play));
+    }
+
+    [Fact]
+    public void Cancelling_after_play_was_due_to_start_gets_nothing_back()
+    {
+        var play = new DateTimeOffset(2026, 10, 1, 19, 0, 0, TimeSpan.FromHours(7));
+        var everythingRefunded = CancellationPolicy.Create(
+            Guid.NewGuid(), [new(0, 100)], Guid.NewGuid(), DateTimeOffset.UtcNow);
+
+        // A step of "0 hours before" must not catch a cancellation made after the hour began (6.1).
+        Assert.Equal(0, everythingRefunded.RefundPercentFor(play, play));
+        Assert.Equal(0, everythingRefunded.RefundPercentFor(play.AddMinutes(30), play));
+        Assert.Equal(100, everythingRefunded.RefundPercentFor(play.AddMinutes(-30), play));
+    }
+
+    private static CancellationPolicy Ladder() =>
+        CancellationPolicy.Create(
             Guid.NewGuid(),
             [new(48, 100), new(24, 50), new(12, 25)],
             Guid.NewGuid(),
             DateTimeOffset.UtcNow);
-
-        Assert.Equal(expected, policy.RefundPercentFor(hoursBefore));
-    }
 
     private static PriceBandRequest[] AllWeek(int from, int to, decimal baht) =>
         Enum.GetValues<DayOfWeek>()
@@ -278,18 +336,31 @@ public sealed class PricingTests(ApiTestFixture api)
         var owner = await scenario.SignedInClientAsync();
         var venue = await scenario.CreateVenueAsync(owner);
 
-        var week = Enum.GetValues<DayOfWeek>()
-            .Select(day => day == closedOn
-                ? new OpeningHoursDayRequest(day.ToString(), null, null)
-                : new OpeningHoursDayRequest(day.ToString(), 6, 22))
-            .ToArray();
-
         var response = await owner.PutAsJsonAsync(
             $"/api/venues/{venue.Id}/opening-hours",
-            new SetOpeningHoursRequest(PlatformToday, week));
+            new SetOpeningHoursRequest(PlatformToday, Week(6, 22, closedOn)));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         return (owner, venue);
+    }
+
+    private static OpeningHoursDayRequest[] Week(int opens, int closes, DayOfWeek? closedOn = null) =>
+        Enum.GetValues<DayOfWeek>()
+            .Select(day => day == closedOn
+                ? new OpeningHoursDayRequest(day.ToString(), null, null)
+                : new OpeningHoursDayRequest(day.ToString(), opens, closes))
+            .ToArray();
+
+    private static async Task SetHoursAsync(
+        HttpClient client,
+        Guid venueId,
+        DateOnly from,
+        int opens,
+        int closes)
+    {
+        var response = await client.PutAsJsonAsync(
+            $"/api/venues/{venueId}/opening-hours", new SetOpeningHoursRequest(from, Week(opens, closes)));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     private static DateOnly PlatformToday =>

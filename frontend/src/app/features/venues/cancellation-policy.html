@@ -28,7 +28,7 @@
 
       @if (canManage()) {
         <form class="stack" [formGroup]="form" (ngSubmit)="save()" novalidate>
-          <div [formArrayName]="'tiers'" class="stack">
+          <div formArrayName="tiers" class="stack">
             @for (tier of tiers.controls; track $index) {
               <div
                 class="band-row"

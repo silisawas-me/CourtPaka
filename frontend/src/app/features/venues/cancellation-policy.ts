@@ -48,13 +48,13 @@ export class CancellationPolicyEditor {
   protected readonly error = signal<string | null>(null);
   protected readonly published = signal<CancellationTier[]>([]);
 
-  private readonly tiersArray = this.formBuilder.array<TierForm>([]);
-
-  /** The array needs a group around it for the template to bind to. */
-  protected readonly form = this.formBuilder.group({ tiers: this.tiersArray });
+  /** Angular has no [formArray] directive, so the array is bound through a group around it. */
+  protected readonly form = this.formBuilder.group({
+    tiers: this.formBuilder.array<TierForm>([]),
+  });
 
   protected get tiers() {
-    return this.tiersArray;
+    return this.form.controls.tiers;
   }
 
   constructor() {

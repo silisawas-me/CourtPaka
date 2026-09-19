@@ -25,16 +25,17 @@ public static class PricingValidation
 
         foreach (var band in bands)
         {
-            if (!Enum.TryParse<DayOfWeek>(band.Day, ignoreCase: true, out var day) || !Enum.IsDefined(day))
+            if (CourtValidation.ReadDay(band.Day) is not DayOfWeek day)
             {
                 return CourtErrorCodes.InvalidDay;
             }
 
-            if (band.FromHour is < CourtValidation.EarliestOpeningHour or > CourtValidation.LatestOpeningHour
-                || band.ToHour is < CourtValidation.EarliestClosingHour or > CourtValidation.LatestClosingHour
-                || band.ToHour <= band.FromHour)
+            // A band always has hours; only a weekday may be closed.
+            var invalidHours = CourtValidation.ValidateHours(
+                band.FromHour, band.ToHour, closedAllowed: false);
+            if (invalidHours is not null)
             {
-                return CourtErrorCodes.InvalidHours;
+                return invalidHours;
             }
 
             if (band.BahtPerHour <= 0 || band.BahtPerHour > MaxBahtPerHour
@@ -51,22 +52,47 @@ public static class PricingValidation
 
     /// <summary>
     /// Every hour the venue is open has to have a price, or the availability grid would offer an
-    /// hour it cannot charge for. The week in force on the day the prices are published is what
-    /// they are checked against (PRD US-11).
+    /// hour it cannot charge for (PRD US-11).
+    ///
+    /// Every week the venue has committed to is checked, not only the one running today: a price
+    /// list has no end date, so it governs the weeks already published for future dates too.
     /// </summary>
     public static string? CoversOpeningHours(
         IReadOnlyCollection<BandHours> bands,
-        OpeningHoursSchedule? openingHours)
+        IReadOnlyCollection<OpeningHoursSchedule> weeks)
     {
-        if (openingHours is null)
+        if (weeks.Count == 0)
         {
             return PricingErrorCodes.NoOpeningHours;
         }
 
-        foreach (var day in openingHours.Days.Where(day => day.OpensHour is not null))
+        return weeks.Select(week => EveryOpenHourPriced(bands, week)).FirstOrDefault(fault => fault is not null);
+    }
+
+    /// <summary>
+    /// The same rule read from the other side, because either write can break it: a week that opens
+    /// an hour the prices do not cover would put an hour in the grid with nothing to charge for it.
+    /// A venue that has not priced anything yet is publishing its hours first, which is the normal
+    /// order and is allowed.
+    /// </summary>
+    public static string? PricedByExistingBands(
+        OpeningHoursSchedule week,
+        IReadOnlyCollection<BandHours> bands) =>
+        bands.Count == 0 ? null : EveryOpenHourPriced(bands, week);
+
+    private static string? EveryOpenHourPriced(
+        IReadOnlyCollection<BandHours> bands,
+        OpeningHoursSchedule week)
+    {
+        foreach (var day in week.Days)
         {
+            if (day.OpensHour is not int opens || day.ClosesHour is not int closes)
+            {
+                continue;
+            }
+
             var priced = bands.Where(band => band.Day == day.Day).ToList();
-            for (var hour = day.OpensHour!.Value; hour < day.ClosesHour!.Value; hour++)
+            for (var hour = opens; hour < closes; hour++)
             {
                 if (!priced.Any(band => band.FromHour <= hour && hour < band.ToHour))
                 {
@@ -120,10 +146,9 @@ public static class PricingValidation
     }
 
     private static bool Overlapping(IReadOnlyCollection<BandHours> bands) =>
-        bands
-            .GroupBy(band => band.Day)
-            .Any(day => day
-                .OrderBy(band => band.FromHour)
-                .Zip(day.OrderBy(band => band.FromHour).Skip(1))
-                .Any(pair => pair.First.ToHour > pair.Second.FromHour));
+        bands.GroupBy(band => band.Day).Any(day =>
+        {
+            var sorted = day.OrderBy(band => band.FromHour).ToList();
+            return sorted.Zip(sorted.Skip(1)).Any(pair => pair.First.ToHour > pair.Second.FromHour);
+        });
 }

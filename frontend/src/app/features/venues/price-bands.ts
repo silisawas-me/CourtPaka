@@ -12,7 +12,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { errorKey } from '../../core/http/api-error';
 import { TranslationService } from '../../core/i18n/translation.service';
-import { WEEKDAYS, Weekday } from '../../core/venues/court.service';
+import { CLOSING_HOURS, OPENING_HOURS, WEEKDAYS, Weekday } from '../../core/venues/court.service';
 import { PriceBand, PricingService } from '../../core/venues/pricing.service';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 
@@ -22,10 +22,6 @@ type BandForm = FormGroup<{
   toHour: FormControl<number>;
   bahtPerHour: FormControl<number>;
 }>;
-
-/** A venue opens on the hour, and charges by the hour, so the two lists match. */
-const FROM_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
-const TO_HOURS = FROM_HOURS.map((hour) => hour + 1);
 
 /**
  * What the venue charges per court-hour (PRD US-11). Published as a whole list: the server refuses
@@ -50,8 +46,8 @@ export class PriceBands {
 
   protected readonly i18n = inject(TranslationService);
   protected readonly weekdays = WEEKDAYS;
-  protected readonly fromHours = FROM_HOURS;
-  protected readonly toHours = TO_HOURS;
+  protected readonly fromHours = OPENING_HOURS;
+  protected readonly toHours = CLOSING_HOURS;
 
   readonly venueId = input.required<string>();
   readonly canManage = input.required<boolean>();
@@ -59,28 +55,24 @@ export class PriceBands {
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
-  protected readonly published = signal<PriceBand[] | null>(null);
+  protected readonly published = signal<PriceBand[]>([]);
 
-  private readonly bandsArray = this.formBuilder.array<BandForm>([]);
-
-  /** A venue reads its prices by day, not in the order the rows happen to be typed. */
+  /** A venue reads its prices by day; the server already orders them by day and by hour. */
   protected readonly byDay = computed(() => {
     const bands = this.published();
-    return bands === null
-      ? []
-      : WEEKDAYS.map((day) => ({
-          day,
-          bands: bands
-            .filter((band) => band.day === day)
-            .sort((left, right) => left.fromHour - right.fromHour),
-        })).filter((entry) => entry.bands.length > 0);
+    return WEEKDAYS.map((day) => ({
+      day,
+      bands: bands.filter((band) => band.day === day),
+    })).filter((entry) => entry.bands.length > 0);
   });
 
-  /** The array needs a group around it for the template to bind to. */
-  protected readonly form = this.formBuilder.group({ bands: this.bandsArray });
+  /** Angular has no [formArray] directive, so the array is bound through a group around it. */
+  protected readonly form = this.formBuilder.group({
+    bands: this.formBuilder.array<BandForm>([]),
+  });
 
   protected get bands() {
-    return this.bandsArray;
+    return this.form.controls.bands;
   }
 
   constructor() {
@@ -127,13 +119,13 @@ export class PriceBands {
   private load(venueId: string): void {
     this.loading.set(true);
     this.error.set(null);
-    this.published.set(null);
+    this.published.set([]);
     this.bands.clear();
 
     this.pricing.prices(venueId).subscribe({
       next: (list) => {
         this.loading.set(false);
-        this.published.set(list?.bands ?? null);
+        this.published.set(list?.bands ?? []);
         // Editing starts from what is published, so a small change is a small edit.
         for (const band of list?.bands ?? []) {
           this.bands.push(this.bandForm(band));

@@ -8,7 +8,9 @@ from harness import (
     STAFF,
     Checks,
     control,
+    calendar_label,
     login,
+    open_seeded_venue,
     pick_date,
     thai_date,
     thai_month_year,
@@ -26,10 +28,7 @@ with sync_playwright() as p:
     page.wait_for_url(f"{BASE}/")
 
     # The seeded DEV01 venue is the approved one.
-    page.goto(f"{BASE}/venues")
-    page.wait_for_selector("[data-testid=venue-list] a")
-    dev = page.locator("[data-testid=venue-list] a", has_text="Development Court").first
-    venue_url = dev.get_attribute("href")
+    venue_url = open_seeded_venue(page)
     page.goto(BASE + venue_url)
     page.click("[data-testid=settings-link]")
     page.wait_for_url("**/settings")
@@ -91,7 +90,7 @@ with sync_playwright() as p:
     pick_date(page, today)
     control(page, "open-Monday").uncheck()
     page.select_option('[data-testid="opens-Tuesday"]', label="7:00")
-    page.select_option('[data-testid="closes-Tuesday"]', label="24:00")
+    page.select_option('[data-testid="closes-Tuesday"]', label="22:00")
     with page.expect_response(lambda response: "/opening-hours" in response.url) as published:
         page.locator("form:has(#effective-from)").locator("button[type=submit]").click()
     check("the week was accepted", published.value.status == 200)
@@ -101,7 +100,7 @@ with sync_playwright() as p:
     monday = page.locator("[data-testid=hours-Monday]").inner_text().strip()
     tuesday = page.locator("[data-testid=hours-Tuesday]").inner_text().strip()
     check("a closed weekday comes back as closed", monday == "ปิด", page)
-    check("an open weekday keeps its hours", tuesday == "7:00 – 24:00")
+    check("an open weekday keeps its hours", tuesday == "7:00 – 22:00")
     in_force = page.locator("[data-testid=hours-in-force]").inner_text()
     check("the published week is the one in force", thai_date(today) in in_force)
 
@@ -117,22 +116,34 @@ with sync_playwright() as p:
         page,
     )
 
-    # 6. A past date never leaves the page: the picker has a minimum, and the form stops there.
-    # A past date cannot be picked at all: the calendar will not offer it.
+    # 5b. Opening an hour the venue has no price for is refused: the rule belongs to the pair.
+    page.select_option('[data-testid="closes-Tuesday"]', label="24:00")
+    pick_date(page, today)
+    with page.expect_response(lambda response: "/opening-hours" in response.url) as refused:
+        page.locator("form:has(#effective-from)").locator("button[type=submit]").click()
+    check("opening an unpriced hour is refused", refused.value.status == 400)
+    page.wait_for_selector("[data-testid=hours-error]")
+    check(
+        "and the page says which rule it broke",
+        "ยังไม่มีราคา" in page.locator("[data-testid=hours-error]").inner_text(),
+        page,
+    )
+    page.select_option('[data-testid="closes-Tuesday"]', label="22:00")
+
+    # 6. A past date cannot be picked at all: the calendar will not offer it.
+    # Selecting today first means the calendar opens on this month, whatever it last showed.
+    pick_date(page, today)
     page.click("mat-datepicker-toggle button")
     page.wait_for_selector("mat-calendar")
-    # The field holds a date a month out, so the calendar opens there; walk back to this month.
-    for _ in range(3):
-        if page.locator("mat-calendar .mat-calendar-period-button").inner_text().strip() == thai_month_year(today):
-            break
-        page.click(".mat-calendar-previous-button")
     yesterday = today - datetime.timedelta(days=1)
-    disabled = page.locator(
-        f'.mat-calendar-body-cell[aria-disabled="true"] '
-        f'.mat-calendar-body-cell-content:text-is("{yesterday.day}")'
-    ).count()
+    # By its label, so the check cannot read a day of the wrong month, and expect() waits for the
+    # calendar to settle.
+    expect(page.locator(f'[aria-label="{calendar_label(yesterday)}"]')).to_have_attribute(
+        "aria-disabled", "true"
+    )
     page.keyboard.press("Escape")
-    check("yesterday cannot be picked", disabled == 1, page)
+
+    check("yesterday cannot be picked", True, page)
 
     # The calendar stopping it is convenience; the server refusing it is the rule. Ask the API
     # directly, through the browser's own session, so the check does not only prove the UI.

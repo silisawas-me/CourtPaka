@@ -63,6 +63,10 @@ public static class VenueEndpoints
         };
 
         database.Venues.Add(venue);
+        // The terms a venue starts with are a row like any other, so a booking made on day one has
+        // a policy to point at rather than a default resolved somewhere else (PRD S-11, BR-05).
+        database.CancellationPolicies.Add(CancellationPolicy.Create(
+            venue.Id, CancellationPolicy.Default, UserId(principal), now));
         // The person who applies runs the venue, so they start as its owner (PRD US-10).
         database.VenueMemberships.Add(new VenueMembership
         {

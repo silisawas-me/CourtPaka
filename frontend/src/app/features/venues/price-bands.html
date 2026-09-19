@@ -35,7 +35,7 @@
 
       @if (canManage()) {
         <form class="stack" [formGroup]="form" (ngSubmit)="save()" novalidate>
-          <div [formArrayName]="'bands'" class="stack">
+          <div formArrayName="bands" class="stack">
             @for (band of bands.controls; track $index) {
               <div class="band-row" [formGroupName]="$index" [attr.data-testid]="'band-' + $index">
                 <mat-form-field>

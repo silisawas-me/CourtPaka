@@ -45,16 +45,15 @@ public static class PricingEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, invalid);
         }
 
-        // Prices are checked against the week the venue is open for today: an hour that is open and
-        // has no price would show in the availability grid with nothing to charge (PRD US-11).
-        var schedules = await database.OpeningHoursSchedules
-            .AsNoTracking()
-            .Where(schedule => schedule.VenueId == venueId)
-            .Include(schedule => schedule.Days)
-            .ToListAsync(cancellationToken);
+        // Checked against every week the venue has committed to from today on, not only the one
+        // running today: these prices govern those weeks too, and a venue whose hours start
+        // tomorrow must still be able to price them (PRD US-11).
+        var schedules = await CourtEndpoints.SchedulesAsync(database, venueId, cancellationToken);
+        var committed = VenueTimeline
+            .CurrentAndUpcoming(schedules, PlatformRequirements.BangkokToday(timeProvider))
+            .ToList();
 
-        var uncovered = PricingValidation.CoversOpeningHours(
-            bands, VenueTimeline.OpeningHoursOn(schedules, PlatformRequirements.BangkokToday(timeProvider)));
+        var uncovered = PricingValidation.CoversOpeningHours(bands, committed);
         if (uncovered is not null)
         {
             return ApiProblem.Of(StatusCodes.Status400BadRequest, uncovered);
@@ -72,17 +71,9 @@ public static class PricingEndpoints
         AppDbContext database,
         CancellationToken cancellationToken)
     {
+        // Every venue has a policy from the day it is created, so there is no "none" to describe.
         var policy = await InForcePolicyAsync(database, venueId, cancellationToken);
-
-        // A venue that has never set one still has terms: the default it started with (PRD S-11).
-        return TypedResults.Ok(policy is null
-            ? new CancellationPolicyResponse(
-                Guid.Empty,
-                default,
-                CancellationPolicy.Default
-                    .Select(tier => new CancellationTierResponse(tier.HoursBefore, tier.RefundPercent))
-                    .ToArray())
-            : ToResponse(policy));
+        return TypedResults.Ok(ToResponse(policy!));
     }
 
     private static async Task<Results<Ok<CancellationPolicyResponse>, ProblemHttpResult>> SetPolicyAsync(
@@ -115,7 +106,10 @@ public static class PricingEndpoints
         database.PriceLists
             .AsNoTracking()
             .Where(list => list.VenueId == venueId)
+            // The id breaks a tie: two publishes can land in the same timestamp, and a clock that
+            // steps backwards must not resurrect an older list. UUIDv7 is ordered by creation.
             .OrderByDescending(list => list.CreatedAt)
+            .ThenByDescending(list => list.Id)
             .Include(list => list.Bands)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -127,6 +121,7 @@ public static class PricingEndpoints
             .AsNoTracking()
             .Where(policy => policy.VenueId == venueId)
             .OrderByDescending(policy => policy.CreatedAt)
+            .ThenByDescending(policy => policy.Id)
             .Include(policy => policy.Tiers)
             .FirstOrDefaultAsync(cancellationToken);
 

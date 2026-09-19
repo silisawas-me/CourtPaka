@@ -30,6 +30,28 @@ public static class CourtValidation
     /// them. A week has to be complete: leaving a day out would otherwise read as "closed" by
     /// accident.
     /// </summary>
+    /// <summary>A weekday as it travels on the wire, or null when it is not one.</summary>
+    internal static DayOfWeek? ReadDay(string? name) =>
+        Enum.TryParse<DayOfWeek>(name, ignoreCase: true, out var day) && Enum.IsDefined(day) ? day : null;
+
+    /// <summary>
+    /// The hour grammar every setting shares: open on an hour from 0 to 23, close on one from 1 to
+    /// 24, and close after opening. Both null means closed, which only a weekday can be.
+    /// </summary>
+    internal static string? ValidateHours(int? opens, int? closes, bool closedAllowed)
+    {
+        if (opens is null && closes is null)
+        {
+            return closedAllowed ? null : CourtErrorCodes.InvalidHours;
+        }
+
+        return opens is null or < EarliestOpeningHour or > LatestOpeningHour
+               || closes is null or < EarliestClosingHour or > LatestClosingHour
+               || closes <= opens
+            ? CourtErrorCodes.InvalidHours
+            : null;
+    }
+
     public static string? TryReadWeek(
         IReadOnlyCollection<OpeningHoursDayRequest>? days,
         out List<WeekdayHours> week)
@@ -39,7 +61,7 @@ public static class CourtValidation
 
         foreach (var entry in days ?? [])
         {
-            if (!Enum.TryParse<DayOfWeek>(entry.Day, ignoreCase: true, out var day) || !Enum.IsDefined(day))
+            if (ReadDay(entry.Day) is not DayOfWeek day)
             {
                 return CourtErrorCodes.InvalidDay;
             }
@@ -49,7 +71,7 @@ public static class CourtValidation
                 return CourtErrorCodes.DuplicateDay;
             }
 
-            var invalidHours = ValidateHours(entry.OpensHour, entry.ClosesHour);
+            var invalidHours = ValidateHours(entry.OpensHour, entry.ClosesHour, closedAllowed: true);
             if (invalidHours is not null)
             {
                 return invalidHours;
@@ -67,17 +89,4 @@ public static class CourtValidation
         return week.All(day => day.OpensHour is null) ? CourtErrorCodes.NeverOpen : null;
     }
 
-    private static string? ValidateHours(int? opens, int? closes)
-    {
-        if (opens is null && closes is null)
-        {
-            return null;
-        }
-
-        return opens is null or < EarliestOpeningHour or > LatestOpeningHour
-               || closes is null or < EarliestClosingHour or > LatestClosingHour
-               || closes <= opens
-            ? CourtErrorCodes.InvalidHours
-            : null;
-    }
 }

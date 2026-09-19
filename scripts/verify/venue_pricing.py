@@ -2,8 +2,8 @@
 
 import datetime
 
-from harness import BASE, OWNER, STAFF, Checks, login
-from playwright.sync_api import expect, sync_playwright
+from harness import BASE, OWNER, STAFF, Checks, login, open_seeded_venue
+from playwright.sync_api import sync_playwright
 
 check = Checks(__file__)
 
@@ -14,9 +14,7 @@ with sync_playwright() as p:
     page.goto(f"{BASE}/login")
     login(page, OWNER)
     page.wait_for_url(f"{BASE}/")
-    page.goto(f"{BASE}/venues")
-    page.wait_for_selector("[data-testid=venue-list] a")
-    venue_url = page.locator("[data-testid=venue-list] a").first.get_attribute("href")
+    venue_url = open_seeded_venue(page)
     venue_id = venue_url.split("/venues/")[1]
 
     # These checks share one venue with the other scripts, and prices are only valid against the
