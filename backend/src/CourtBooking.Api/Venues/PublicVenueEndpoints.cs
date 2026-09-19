@@ -73,6 +73,7 @@ public static class PublicVenueEndpoints
         ILoggerFactory loggers,
         CancellationToken cancellationToken)
     {
+        var now = timeProvider.GetUtcNow();
         var today = PlatformRequirements.BangkokToday(timeProvider);
         var asked = date ?? today;
 
@@ -89,30 +90,18 @@ public static class PublicVenueEndpoints
             return ApiProblem.Of(StatusCodes.Status404NotFound, VenueErrorCodes.NotFound);
         }
 
-        var courts = await database.Courts
-            .AsNoTracking()
-            .Where(court => court.VenueId == venueId)
-            .ToListAsync(cancellationToken);
-
-        var statusChanges = await CourtEndpoints.StatusChangesAsync(
-            database, venueId, asked, cancellationToken);
-        var week = await CourtEndpoints.ScheduleOnAsync(database, venueId, asked, cancellationToken);
-        var prices = await PricingEndpoints.InForcePricesAsync(database, venueId, cancellationToken);
+        var day = await VenueDay.LoadAsync(database, venueId, asked, now, cancellationToken);
 
         AppEvents.For(loggers).LogInformation("venue_page_viewed {VenueId} {Date}", venueId, asked);
 
-        return TypedResults.Ok(Availability.Build(
-            Public(venue),
-            asked,
-            today,
-            courts,
-            statusChanges,
-            week,
-            prices?.Bands ?? [],
-            await BookedSlots.OnAsync(database, venueId, asked, timeProvider.GetUtcNow(), cancellationToken)));
+        return TypedResults.Ok(Availability.Draw(Public(venue), day, today));
     }
 
-    private static Task<Venue?> ApprovedAsync(
+    /// <summary>
+    /// The venue a booker is allowed to see. A pending, rejected or suspended one is not one of
+    /// them, however it is asked for.
+    /// </summary>
+    internal static Task<Venue?> ApprovedAsync(
         AppDbContext database,
         Guid venueId,
         CancellationToken cancellationToken) =>

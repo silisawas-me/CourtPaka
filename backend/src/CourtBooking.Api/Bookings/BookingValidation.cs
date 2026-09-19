@@ -44,7 +44,8 @@ public static class BookingValidation
 
         foreach (var slot in slots)
         {
-            if (slot.Hour is < 0 or > 23)
+            if (slot.Hour < CourtValidation.EarliestOpeningHour
+                || slot.Hour > CourtValidation.LatestOpeningHour)
             {
                 return BookingErrorCodes.HourNotAvailable;
             }

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Web;
 using CourtBooking.Api.Data;
+using CourtBooking.Api.Bookings;
 using CourtBooking.Api.Identity;
 using CourtBooking.Api.Localization;
 using CourtBooking.Api.Venues;
@@ -104,6 +105,57 @@ public sealed class VenueScenario(ApiTestFixture api)
         await database.Venues
             .Where(venue => venue.Id == venueId)
             .ExecuteUpdateAsync(setters => setters.SetProperty(venue => venue.Status, status));
+    }
+
+    /// <summary>
+    /// A venue a booker can actually use: approved, open 06:00–22:00 every day at one price, with
+    /// the courts asked for. It is what both the grid and the booking tests start from.
+    /// </summary>
+    public async Task<(HttpClient Owner, VenueResponse Venue, Guid[] CourtIds)> BookableVenueAsync(
+        int courts = 1,
+        decimal baht = 200m)
+    {
+        var owner = await SignedInClientAsync();
+        var venue = await CreateVenueAsync(owner);
+        await SetHoursAsync(owner, venue.Id, Today);
+        await SetPricesAsync(owner, venue.Id, AllWeek(6, 22, baht));
+
+        var courtIds = new List<Guid>(courts);
+        for (var number = 1; number <= courts; number++)
+        {
+            var court = await ReadAsync<CourtResponse>(
+                await owner.PostAsJsonAsync(
+                    $"/api/venues/{venue.Id}/courts", new CreateCourtRequest($"Court {number}")),
+                HttpStatusCode.Created);
+            courtIds.Add(court.Id);
+        }
+
+        // Venue approval arrives with US-20; until then the test sets the status directly.
+        await SetStatusAsync(venue.Id, VenueStatus.Approved);
+
+        return (owner, venue, [.. courtIds]);
+    }
+
+    /// <summary>The grid one day at a venue, as a booker with no account reads it.</summary>
+    public async Task<AvailabilityResponse> ReadAvailabilityAsync(
+        HttpClient client,
+        Guid venueId,
+        DateOnly date) =>
+        await ReadAsync<AvailabilityResponse>(
+            await client.GetAsync($"/api/venues/{venueId}/availability?date={date:yyyy-MM-dd}"));
+
+    /// <summary>
+    /// Winds a held booking's clock back so the test can see what happens once it lapses, which is
+    /// otherwise fifteen minutes away.
+    /// </summary>
+    public async Task LapseHoldAsync(Guid bookingId)
+    {
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await database.Bookings
+            .Where(booking => booking.Id == bookingId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(
+                booking => booking.HoldExpiresAt, DateTimeOffset.UtcNow.AddMinutes(-1)));
     }
 
     public async Task<VenueMemberResponse[]> GetMembersAsync(HttpClient client, Guid venueId) =>

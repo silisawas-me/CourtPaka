@@ -64,9 +64,7 @@ public sealed class BookingTests(ApiTestFixture api) : IClassFixture<ApiTestFixt
         await HoldAsync(first, venue.Id, (courtId, Tomorrow, 18));
 
         var second = await scenario.SignedInClientAsync();
-        var day = await VenueScenario.ReadAsync<AvailabilityResponse>(
-            await api.CreateClient().GetAsync(
-                $"/api/venues/{venue.Id}/availability?date={Tomorrow:yyyy-MM-dd}"));
+        var day = await scenario.ReadAvailabilityAsync(api.CreateClient(), venue.Id, Tomorrow);
 
         var hour = day.Courts.Single(court => court.CourtId == courtId).Hours.Single(cell => cell.Hour == 18);
         Assert.Equal(nameof(HourStatus.Booked), hour.Status);
@@ -91,9 +89,7 @@ public sealed class BookingTests(ApiTestFixture api) : IClassFixture<ApiTestFixt
         Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
 
         // The hour that was free is still free: the whole booking was refused (PRD BR-04).
-        var day = await VenueScenario.ReadAsync<AvailabilityResponse>(
-            await api.CreateClient().GetAsync(
-                $"/api/venues/{venue.Id}/availability?date={Tomorrow:yyyy-MM-dd}"));
+        var day = await scenario.ReadAvailabilityAsync(api.CreateClient(), venue.Id, Tomorrow);
         var hour = day.Courts.Single(court => court.CourtId == courtId).Hours.Single(cell => cell.Hour == 18);
         Assert.Equal(nameof(HourStatus.Free), hour.Status);
     }
@@ -114,6 +110,38 @@ public sealed class BookingTests(ApiTestFixture api) : IClassFixture<ApiTestFixt
             Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
             Assert.Equal(BookingErrorCodes.SlotJustTaken, await refused.ErrorCodeAsync());
         }
+    }
+
+    [Fact]
+    public async Task A_hold_that_lapsed_puts_its_hours_back_on_sale()
+    {
+        var (_, venue, courtId) = await BookableVenueAsync();
+        var first = await scenario.SignedInClientAsync();
+        var abandoned = await HoldAsync(first, venue.Id, (courtId, Tomorrow, 18));
+        await scenario.LapseHoldAsync(abandoned.Id);
+
+        // The grid says it is free, so the booking that follows has to agree (PRD 9.2).
+        var day = await scenario.ReadAvailabilityAsync(api.CreateClient(), venue.Id, Tomorrow);
+        var hour = day.Courts.Single(court => court.CourtId == courtId)
+            .Hours.Single(cell => cell.Hour == 18);
+        Assert.Equal(nameof(HourStatus.Free), hour.Status);
+
+        var second = await scenario.SignedInClientAsync();
+        var taken = await HoldAsync(second, venue.Id, (courtId, Tomorrow, 18));
+        Assert.Equal(nameof(BookingStatus.Held), taken.Status);
+    }
+
+    [Fact]
+    public async Task A_hold_that_lapsed_does_not_stop_its_own_booker_making_another()
+    {
+        var (_, venue, courtId) = await BookableVenueAsync();
+        var booker = await scenario.SignedInClientAsync();
+        var abandoned = await HoldAsync(booker, venue.Id, (courtId, Tomorrow, 18));
+        await scenario.LapseHoldAsync(abandoned.Id);
+
+        var again = await HoldAsync(booker, venue.Id, (courtId, Tomorrow, 19));
+
+        Assert.Equal(nameof(BookingStatus.Held), again.Status);
     }
 
     [Fact]
@@ -248,6 +276,13 @@ public sealed class BookingTests(ApiTestFixture api) : IClassFixture<ApiTestFixt
                 venueId,
                 [.. slots.Select(slot => new BookingSlotRequest(slot.CourtId, slot.Date, slot.Hour))]));
 
+    /// <summary>An approved venue, open and priced, with one court to book.</summary>
+    private async Task<(HttpClient Owner, VenueResponse Venue, Guid CourtId)> BookableVenueAsync()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        return (owner, venue, courts[0]);
+    }
+
     private static async Task<BookingResponse> HoldAsync(
         HttpClient client,
         Guid venueId,
@@ -255,21 +290,4 @@ public sealed class BookingTests(ApiTestFixture api) : IClassFixture<ApiTestFixt
         await VenueScenario.ReadAsync<BookingResponse>(
             await PostAsync(client, venueId, slots), HttpStatusCode.Created);
 
-    /// <summary>An approved venue, open 06:00–22:00 at 200 baht, with one court.</summary>
-    private async Task<(HttpClient Owner, VenueResponse Venue, Guid CourtId)> BookableVenueAsync()
-    {
-        var owner = await scenario.SignedInClientAsync();
-        var venue = await scenario.CreateVenueAsync(owner);
-        await VenueScenario.SetHoursAsync(owner, venue.Id, VenueScenario.Today);
-        await VenueScenario.SetPricesAsync(owner, venue.Id, VenueScenario.AllWeek(6, 22, 200m));
-
-        var court = await VenueScenario.ReadAsync<CourtResponse>(
-            await owner.PostAsJsonAsync(
-                $"/api/venues/{venue.Id}/courts", new CreateCourtRequest("Court 1")),
-            HttpStatusCode.Created);
-
-        await scenario.SetStatusAsync(venue.Id, VenueStatus.Approved);
-
-        return (owner, venue, court.Id);
-    }
 }

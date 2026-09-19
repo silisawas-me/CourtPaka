@@ -10,9 +10,6 @@ OWNER = "owner@courtpaka.local"
 STAFF = "staff@courtpaka.local"
 PASSWORD = "DevPassword1"
 
-# The version the local stack is configured with; registering has to accept the current one.
-PRIVACY_POLICY_VERSION = "2026-09-01"
-
 
 class Checks:
     """Records what passed, writes a screenshot per check, and decides the exit code."""
@@ -41,12 +38,14 @@ def new_booker(page) -> str:
     """A booker with no venue of their own and no history, made through the API so the script can
     be run again without tripping the one-hold-at-a-time rule (PRD S-22)."""
     email = f"booker-{uuid.uuid4().hex[:12]}@example.com"
+    # The server states the version it will accept, the same way the register page asks for it.
+    version = page.request.get(f"{BASE}/api/auth/privacy-policy").json()["version"]
     registered = page.request.post(
         f"{BASE}/api/auth/register",
         data={
             "email": email,
             "password": PASSWORD,
-            "privacyPolicyVersion": PRIVACY_POLICY_VERSION,
+            "privacyPolicyVersion": version,
             "language": "th",
             "phoneNumber": None,
         },
@@ -60,6 +59,13 @@ def login(page, email: str, password: str = PASSWORD) -> None:
     page.fill("#email", email)
     page.fill("#password", password)
     page.click("button[type=submit]")
+
+
+def sign_in(page, email: str) -> None:
+    """The whole sequence: open the page, sign in, and wait to land."""
+    page.goto(f"{BASE}/login")
+    login(page, email)
+    page.wait_for_url(f"{BASE}/")
 
 
 # Material renders a checkbox as an <input> inside its host and a slide toggle as a

@@ -71,8 +71,7 @@ describe('AvailabilityPage', () => {
 
   /** Picks an hour the way a booker does: by touching the cell. */
   function pickHour(courtId: string, hour: number): void {
-    clickOn(fixture, `cell-${courtId}-${hour}`, 'button');
-    fixture.detectChanges();
+    clickOn(fixture, `cell-${courtId}-${hour}`);
   }
 
   it('draws a cell for every court and hour, with the price, from one request', () => {
@@ -167,7 +166,6 @@ describe('AvailabilityPage', () => {
     pickHour('c1', 19);
 
     clickOn(fixture, 'book');
-    fixture.detectChanges();
 
     const request = httpMock.expectOne('/api/bookings');
     expect(request.request.body).toEqual({
@@ -204,7 +202,6 @@ describe('AvailabilityPage', () => {
     pickHour('c1', 18);
 
     clickOn(fixture, 'book');
-    fixture.detectChanges();
 
     httpMock
       .expectOne('/api/bookings')
@@ -231,6 +228,63 @@ describe('AvailabilityPage', () => {
     fixture.detectChanges();
 
     expect(elementOf(fixture, 'cell-c1-18')?.classList.contains('booked')).toBe(true);
+  });
+
+  it('re-prices the summary from the grid it is looking at, not from what it picked', () => {
+    render();
+    pickHour('c1', 18);
+    expect(textOf(fixture, 'summary-total')).toContain('300');
+
+    // The venue republished its prices; the day is read again and the summary follows it.
+    fixture.componentInstance['refresh'].update((attempt: number) => attempt + 1);
+    fixture.detectChanges();
+    expectRead().flush(
+      day({
+        courts: [
+          {
+            courtId: 'c1',
+            name: 'Court 1',
+            hours: [
+              { hour: 18, status: 'Free', bahtPerHour: 350 },
+              { hour: 19, status: 'Free', bahtPerHour: 350 },
+            ],
+          },
+        ],
+      }),
+    );
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'summary-total')).toContain('350');
+  });
+
+  it('drops a picked hour that someone else took while it was picked', () => {
+    render();
+    pickHour('c1', 18);
+    pickHour('c1', 19);
+    expect(textOf(fixture, 'summary-total')).toContain('600');
+
+    fixture.componentInstance['refresh'].update((attempt: number) => attempt + 1);
+    fixture.detectChanges();
+    expectRead().flush(
+      day({
+        courts: [
+          {
+            courtId: 'c1',
+            name: 'Court 1',
+            hours: [
+              { hour: 18, status: 'Booked', bahtPerHour: 300 },
+              { hour: 19, status: 'Free', bahtPerHour: 300 },
+            ],
+          },
+        ],
+      }),
+    );
+    fixture.detectChanges();
+
+    // The hour that went is not in the summary, and what is left still adds up.
+    expect(fixture.nativeElement.querySelectorAll('[data-testid=summary-slot]')).toHaveLength(1);
+    expect(textOf(fixture, 'summary-total')).toContain('300');
+    expect(elementOf(fixture, 'cell-c1-18')?.classList.contains('picked')).toBe(false);
   });
 
   it('forgets the hours picked when the day changes', () => {

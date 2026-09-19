@@ -14,7 +14,7 @@ public static class BookedSlots
     /// The statuses that still occupy a court (PRD BR-04). <c>NoShow</c> is deliberately absent:
     /// the hours a no-show did not turn up for go back on sale.
     /// </summary>
-    public static readonly BookingStatus[] Occupying =
+    public static readonly BookingStatus[] OccupyingStatuses =
     [
         BookingStatus.Held,
         BookingStatus.PendingVerification,
@@ -23,35 +23,89 @@ public static class BookedSlots
     ];
 
     /// <summary>
-    /// A held booking past its expiry does not hold anything, whether or not the job that marks it
-    /// <c>Expired</c> has run (PRD 9.2). Every read and every write goes through this.
+    /// Holds whose fifteen minutes are up. Everything else here is defined against this, so "the
+    /// hold is over" is stated once (PRD BR-02).
+    /// </summary>
+    public static IQueryable<Booking> Lapsed(AppDbContext database, DateTimeOffset now) =>
+        database.Bookings.Where(booking =>
+            booking.Status == BookingStatus.Held && booking.HoldExpiresAt <= now);
+
+    /// <summary>
+    /// The one booking a booker may have waiting to be paid for (PRD S-22). A hold that has lapsed
+    /// is not one of them, whether or not anything has marked it <c>Expired</c> yet.
+    /// </summary>
+    public static IQueryable<Booking> LiveHolds(AppDbContext database, DateTimeOffset now) =>
+        database.Bookings
+            .Where(booking => booking.Status == BookingStatus.Held)
+            .Where(booking => !Lapsed(database, now).Any(over => over.Id == booking.Id));
+
+    /// <summary>
+    /// A lapsed hold does not hold anything, whether or not the job that marks it <c>Expired</c>
+    /// has run (PRD 9.2). Every read and every write goes through this.
     /// </summary>
     public static IQueryable<BookingSlot> Active(AppDbContext database, DateTimeOffset now) =>
         database.BookingSlots
-            .Where(slot =>
-                slot.IsActive
-                && Occupying.Contains(slot.Booking!.Status)
-                && (slot.Booking.Status != BookingStatus.Held || slot.Booking.HoldExpiresAt > now));
+            .Where(slot => slot.IsActive)
+            .Where(slot => OccupyingStatuses.Contains(slot.Booking!.Status))
+            .Where(slot => !Lapsed(database, now).Any(over => over.Id == slot.BookingId));
 
-    /// <summary>The court-hours of one Bangkok day that a booker cannot take.</summary>
+    /// <summary>
+    /// Lets go of the hours lapsed holds still claim, and marks them
+    /// <see cref="BookingStatus.Expired"/>.
+    ///
+    /// A read can tell a lapsed hold from a live one on its own; the database cannot, because the
+    /// exclusion constraint only sees <see cref="BookingSlot.IsActive"/>. Without this, an hour the
+    /// grid calls free stays unbookable for as long as that column says otherwise — which, with no
+    /// expiry job yet, is forever. So the write releases them itself rather than waiting for a job
+    /// (PRD 9.2). Running it twice does nothing the first run did not.
+    /// </summary>
+    public static async Task ReleaseLapsedAsync(
+        AppDbContext database,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var lapsed = Lapsed(database, now);
+
+        await database.BookingSlots
+            .Where(slot => slot.IsActive && lapsed.Any(over => over.Id == slot.BookingId))
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(slot => slot.IsActive, false), cancellationToken);
+
+        await lapsed.ExecuteUpdateAsync(
+            setters => setters.SetProperty(booking => booking.Status, BookingStatus.Expired),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// The court-hours of one Bangkok day that a booker cannot take, as an hour per court. It asks
+    /// by court rather than by venue so the query reads the (CourtId, StartsAt) index and never
+    /// walks a venue's whole booking history to answer a question about one day.
+    /// </summary>
     public static async Task<HashSet<(Guid CourtId, int Hour)>> OnAsync(
         AppDbContext database,
-        Guid venueId,
+        IReadOnlyCollection<Guid> courtIds,
         DateOnly date,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
+        if (courtIds.Count == 0)
+        {
+            return [];
+        }
+
         var from = PlatformRequirements.BangkokHour(date, 0);
         var until = PlatformRequirements.BangkokHour(date.AddDays(1), 0);
 
         var slots = await Active(database, now)
             .Where(slot =>
-                slot.Booking!.VenueId == venueId && slot.StartsAt >= from && slot.StartsAt < until)
+                courtIds.Contains(slot.CourtId) && slot.StartsAt >= from && slot.StartsAt < until)
             .Select(slot => new { slot.CourtId, slot.StartsAt })
             .ToListAsync(cancellationToken);
 
+        // Every row is inside the day, so the hour is the distance from its start. Thailand has no
+        // daylight saving, which is what makes that arithmetic and a timezone lookup agree.
         return slots
-            .Select(slot => (slot.CourtId, PlatformRequirements.BangkokDateAndHour(slot.StartsAt).Hour))
+            .Select(slot => (slot.CourtId, (int)(slot.StartsAt - from).TotalHours))
             .ToHashSet();
     }
 }
