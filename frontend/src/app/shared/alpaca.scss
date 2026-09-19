@@ -1,0 +1,114 @@
+:host {
+  display: block;
+  line-height: 0;
+}
+
+/*
+ * Fill is set on the groups and inherited by whatever shape is inside them, so adding a circle or
+ * an ellipse later cannot fall through to the browser's default black — which is exactly what the
+ * first version of this did.
+ */
+.alpaca {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  fill: var(--mat-sys-primary-container);
+}
+
+.limbs,
+.neck {
+  fill: color-mix(
+    in srgb,
+    var(--mat-sys-primary-container) 80%,
+    var(--mat-sys-on-primary-container)
+  );
+}
+
+.fleece,
+.head .skull,
+.head .ear {
+  fill: var(--mat-sys-primary-container);
+}
+
+/* The fringe and muzzle catch a little light, which is what separates the head from the fleece. */
+.head .fringe,
+.head .muzzle {
+  fill: color-mix(in srgb, var(--mat-sys-primary-container) 72%, white);
+}
+
+.face .eye,
+.face .nose {
+  fill: var(--mat-sys-on-primary-container);
+}
+
+.face .smile {
+  fill: none;
+  stroke: var(--mat-sys-on-primary-container);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.75;
+}
+
+.face .blush {
+  fill: var(--mat-sys-tertiary);
+  opacity: 0.3;
+}
+
+.shadow {
+  fill: var(--mat-sys-on-surface);
+  opacity: 0.1;
+}
+
+.shuttle {
+  .feathers {
+    fill: var(--mat-sys-surface);
+    stroke: var(--mat-sys-outline-variant);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+  }
+
+  .skirt {
+    fill: var(--mat-sys-surface);
+    stroke: var(--mat-sys-outline-variant);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+  }
+
+  .cork {
+    fill: var(--mat-sys-tertiary);
+  }
+}
+
+/*
+ * One slow nod. Enough to feel alive on a page someone waits on; not enough to pull the eye off
+ * the form beside it.
+ */
+.waving .head,
+.waving .face,
+.waving .neck {
+  transform-box: view-box;
+  transform-origin: 140px 120px;
+  animation: nod 7s ease-in-out infinite;
+}
+
+@keyframes nod {
+  0%,
+  86%,
+  100% {
+    transform: rotate(0deg);
+  }
+  90% {
+    transform: rotate(-4deg);
+  }
+  95% {
+    transform: rotate(2deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .waving .head,
+  .waving .face,
+  .waving .neck {
+    animation: none;
+  }
+}

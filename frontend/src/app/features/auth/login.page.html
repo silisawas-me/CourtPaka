@@ -1,41 +1,80 @@
-<mat-card>
-  <mat-card-header>
-    <mat-card-title data-testid="page-title">{{ i18n.t('login.title') }}</mat-card-title>
-  </mat-card-header>
+<div class="auth">
+  <!--
+    The welcome half. On a phone it becomes a short band above the form: the alpaca shrinks and the
+    selling points fall away, because what a booker came here to do is sign in.
+  -->
+  <aside class="auth-brand">
+    <div class="auth-brand-inner">
+      <app-alpaca class="auth-mascot" [label]="i18n.t('login.mascot')" [waving]="true" />
 
-  <mat-card-content>
-    <form class="stack" [formGroup]="form" (ngSubmit)="submit()" novalidate>
-      <mat-form-field class="field">
-        <mat-label>{{ i18n.t('common.email') }}</mat-label>
-        <input matInput id="email" type="email" formControlName="email" autocomplete="email" />
-        <mat-error [appFieldError]="form.controls.email" testId="email-error"></mat-error>
-      </mat-form-field>
+      <h1 class="auth-wordmark">{{ i18n.t('app.name') }}</h1>
+      <p class="auth-tagline">{{ i18n.t('login.tagline') }}</p>
 
-      <mat-form-field class="field">
-        <mat-label>{{ i18n.t('common.password') }}</mat-label>
-        <input
-          matInput
-          id="password"
-          type="password"
-          formControlName="password"
-          autocomplete="current-password"
-        />
-        <mat-error [appFieldError]="form.controls.password" testId="password-error"></mat-error>
-      </mat-form-field>
+      <ul class="auth-points">
+        <li>{{ i18n.t('login.point.find') }}</li>
+        <li>{{ i18n.t('login.point.book') }}</li>
+        <li>{{ i18n.t('login.point.pay') }}</li>
+      </ul>
+    </div>
+  </aside>
 
-      @if (formError(); as key) {
-        <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
-      }
+  <mat-card class="auth-card" appearance="outlined">
+    <mat-card-header>
+      <mat-card-title data-testid="page-title">{{ i18n.t('login.title') }}</mat-card-title>
+      <mat-card-subtitle>{{ i18n.t('login.subtitle') }}</mat-card-subtitle>
+    </mat-card-header>
 
-      <button matButton="filled" type="submit" [disabled]="submitting()">
-        {{ i18n.t(submitting() ? 'common.loading' : 'login.submit') }}
-      </button>
-    </form>
-  </mat-card-content>
+    <mat-card-content>
+      <form class="stack" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('common.email') }}</mat-label>
+          <input matInput id="email" type="email" formControlName="email" autocomplete="email" />
+          <mat-error [appFieldError]="form.controls.email" testId="email-error"></mat-error>
+        </mat-form-field>
 
-  <mat-card-actions class="row">
-    <span class="muted">{{ i18n.t('login.needAccount') }}</span>
-    <a matButton routerLink="/register">{{ i18n.t('nav.signUp') }}</a>
-    <a matButton routerLink="/resend-verification">{{ i18n.t('login.resendVerification') }}</a>
-  </mat-card-actions>
-</mat-card>
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('common.password') }}</mat-label>
+          <input
+            matInput
+            id="password"
+            [type]="passwordShown() ? 'text' : 'password'"
+            formControlName="password"
+            autocomplete="current-password"
+          />
+          <!--
+            A password nobody can read is how a sign-in fails twice. The button says which state it
+            will move to, so a screen reader hears the action rather than the current state.
+          -->
+          <button
+            matIconButton
+            matSuffix
+            type="button"
+            data-testid="toggle-password"
+            [attr.aria-label]="
+              i18n.t(passwordShown() ? 'login.hidePassword' : 'login.showPassword')
+            "
+            (click)="togglePassword()"
+          >
+            <span class="eye-icon" [class.off]="passwordShown()" aria-hidden="true"></span>
+          </button>
+          <mat-error [appFieldError]="form.controls.password" testId="password-error"></mat-error>
+        </mat-form-field>
+
+        @if (formError(); as key) {
+          <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
+        }
+
+        <button matButton="filled" class="auth-submit" type="submit" [disabled]="submitting()">
+          {{ i18n.t(submitting() ? 'common.loading' : 'login.submit') }}
+        </button>
+      </form>
+    </mat-card-content>
+
+    <mat-card-actions class="auth-actions">
+      <span class="muted">{{ i18n.t('login.needAccount') }}</span>
+      <a matButton="tonal" routerLink="/register">{{ i18n.t('nav.signUp') }}</a>
+      <span class="spacer"></span>
+      <a matButton routerLink="/resend-verification">{{ i18n.t('login.resendVerification') }}</a>
+    </mat-card-actions>
+  </mat-card>
+</div>

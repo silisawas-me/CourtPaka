@@ -1,0 +1,155 @@
+/*
+ * Two halves: the welcome and the form. Side by side once there is room, stacked on a phone with
+ * the welcome shrunk to a band — the form is what someone came for, so it never gets pushed under
+ * the fold to make space for a mascot.
+ */
+.auth {
+  display: grid;
+  gap: 1rem;
+  align-items: stretch;
+
+  @media (min-width: 56rem) {
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    /* Fills what is left under the header, so the page reads as a screen rather than a fragment. */
+    min-height: min(38rem, calc(100vh - 10rem));
+  }
+}
+
+.auth-brand {
+  border-radius: var(--mat-sys-corner-large);
+  background:
+    radial-gradient(
+      120% 90% at 80% 0%,
+      color-mix(in srgb, var(--mat-sys-tertiary) 28%, transparent),
+      transparent 60%
+    ),
+    var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  padding: 1.5rem;
+  display: grid;
+  align-content: center;
+  overflow: hidden;
+}
+
+.auth-brand-inner {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 0.5rem;
+}
+
+.auth-mascot {
+  width: 9rem;
+
+  @media (min-width: 56rem) {
+    width: 13rem;
+  }
+}
+
+.auth-wordmark {
+  font: var(--mat-sys-display-small);
+  margin: 0.25rem 0 0;
+  letter-spacing: -0.01em;
+}
+
+.auth-tagline {
+  font: var(--mat-sys-body-medium);
+  margin: 0;
+  max-width: 28ch;
+  opacity: 0.9;
+}
+
+/*
+ * The three things this account is for. They are the reason to sign in, so they are only worth the
+ * room on a screen that has it — on a phone the form takes the space instead.
+ */
+.auth-points {
+  display: none;
+
+  @media (min-width: 56rem) {
+    display: grid;
+    gap: 0.4rem;
+    margin: 1rem 0 0;
+    padding: 0;
+    list-style: none;
+    font: var(--mat-sys-body-medium);
+    text-align: start;
+
+    li {
+      display: grid;
+      grid-template-columns: 1.25rem 1fr;
+      align-items: baseline;
+      gap: 0.5rem;
+      opacity: 0.92;
+    }
+
+    /* A shuttlecock rather than a tick: the list is about playing, not about features. */
+    li::before {
+      content: '';
+      width: 0.6rem;
+      height: 0.6rem;
+      border-radius: 50% 50% 40% 40%;
+      background: var(--mat-sys-on-primary);
+      opacity: 0.75;
+      justify-self: center;
+    }
+  }
+}
+
+.auth-card {
+  align-self: center;
+  width: 100%;
+}
+
+.auth-submit {
+  margin-top: 0.25rem;
+  height: 3rem;
+}
+
+.auth-actions {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-inline: 1rem;
+}
+
+/*
+ * The show/hide control. Two overlapping shapes rather than an icon font: the app ships no icon
+ * set, and a glyph here would cost a download for one button.
+ */
+.eye-icon {
+  position: relative;
+  display: block;
+  width: 1.25rem;
+  height: 1.25rem;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0.25rem 0;
+    border: 1.5px solid currentColor;
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0.5rem 0.4rem;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  /* Struck through when the password is showing, so the button reads as "hide it again". */
+  &.off {
+    &::before {
+      opacity: 0.5;
+    }
+
+    &::after {
+      inset: 0.55rem 0.1rem;
+      height: 1.5px;
+      border-radius: 1px;
+      rotate: -40deg;
+    }
+  }
+}
