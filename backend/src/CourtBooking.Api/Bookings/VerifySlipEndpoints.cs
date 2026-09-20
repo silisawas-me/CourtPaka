@@ -236,6 +236,7 @@ public static class VerifySlipEndpoints
         var moved = await database.Bookings
             .Where(candidate =>
                 candidate.Id == bookingId
+                && candidate.VenueId == venueId
                 && candidate.Status == BookingStatus.PendingVerification)
             .ExecuteUpdateAsync(
                 set => set
@@ -255,7 +256,10 @@ public static class VerifySlipEndpoints
         if (decided == BookingStatus.Rejected)
         {
             await database.BookingSlots
-                .Where(slot => slot.BookingId == bookingId && slot.IsActive)
+                .Where(slot =>
+                    slot.BookingId == bookingId
+                    && slot.Booking!.VenueId == venueId
+                    && slot.IsActive)
                 .ExecuteUpdateAsync(
                     set => set.SetProperty(slot => slot.IsActive, false),
                     cancellationToken);
