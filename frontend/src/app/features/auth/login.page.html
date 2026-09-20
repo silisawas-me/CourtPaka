@@ -1,26 +1,17 @@
 <div class="auth">
   <!--
-    The welcome half. On a phone it becomes a short band above the form: the alpaca shrinks and the
-    selling points fall away, because what a booker came here to do is sign in.
+    The page is a court seen from behind the baseline. The form is the only solid thing standing on
+    it, and the alpaca stands on the card's edge the way a player waits on the service line.
   -->
-  <aside class="auth-brand">
-    <div class="auth-brand-inner">
-      <app-alpaca class="auth-mascot" [label]="i18n.t('login.mascot')" [waving]="true" />
+  <app-court-art />
 
-      <h1 class="auth-wordmark">{{ i18n.t('app.name') }}</h1>
-      <p class="auth-tagline">{{ i18n.t('login.tagline') }}</p>
+  <mat-card class="auth-card" appearance="raised">
+    <app-alpaca class="auth-mascot" [label]="i18n.t('login.mascot')" [waving]="true" />
 
-      <ul class="auth-points">
-        <li>{{ i18n.t('login.point.find') }}</li>
-        <li>{{ i18n.t('login.point.book') }}</li>
-        <li>{{ i18n.t('login.point.pay') }}</li>
-      </ul>
-    </div>
-  </aside>
+    <h1 class="auth-wordmark">{{ i18n.t('app.name') }}</h1>
 
-  <mat-card class="auth-card" appearance="outlined">
     <mat-card-header>
-      <mat-card-title data-testid="page-title">{{ i18n.t('login.title') }}</mat-card-title>
+      <h2 mat-card-title data-testid="page-title">{{ i18n.t('login.title') }}</h2>
       <mat-card-subtitle>{{ i18n.t('login.subtitle') }}</mat-card-subtitle>
     </mat-card-header>
 
@@ -73,8 +64,16 @@
     <mat-card-actions class="auth-actions">
       <span class="muted">{{ i18n.t('login.needAccount') }}</span>
       <a matButton="tonal" routerLink="/register">{{ i18n.t('nav.signUp') }}</a>
-      <span class="spacer"></span>
       <a matButton routerLink="/resend-verification">{{ i18n.t('login.resendVerification') }}</a>
     </mat-card-actions>
+    <!--
+      What the account is for. Inside the card rather than on the court: the floor is one flat
+      green, and six words of body text on it are under the contrast a reader needs.
+    -->
+    <ul class="auth-points">
+      <li>{{ i18n.t('login.point.find') }}</li>
+      <li>{{ i18n.t('login.point.book') }}</li>
+      <li>{{ i18n.t('login.point.pay') }}</li>
+    </ul>
   </mat-card>
 </div>

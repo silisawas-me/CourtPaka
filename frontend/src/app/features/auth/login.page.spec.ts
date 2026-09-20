@@ -1,7 +1,7 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TRANSLATIONS } from '../../core/i18n/locales';
-import { clickOn, pageProviders, setInput, submitForm, textOf } from '../../testing/dom';
+import { clickOn, elementOf, pageProviders, setInput, submitForm, textOf } from '../../testing/dom';
 import { LoginPage } from './login.page';
 
 describe('LoginPage', () => {
@@ -74,5 +74,13 @@ describe('LoginPage', () => {
 
     clickOn(fixture, 'toggle-password');
     expect(password().type).toBe('password');
+  });
+
+  /* The wordmark is the page's one h1; the thing you came to do is the heading under it. */
+  it('puts the form heading under the wordmark', () => {
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelectorAll('h1').length).toBe(1);
+    expect(elementOf(fixture, 'page-title')?.tagName).toBe('H2');
   });
 });

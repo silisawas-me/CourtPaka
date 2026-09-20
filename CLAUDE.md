@@ -61,6 +61,7 @@
 | Build image arm64 (UAT) | `docker buildx build --platform linux/arm64 backend` |
 | ตรวจ health | `GET /api/health/live` (process) · `GET /api/health/ready` (รวม database) |
 | ตรวจ flow จริงบนเบราว์เซอร์ | `python scripts/verify/venue_settings.py` · `venue_pricing.py` · `venue_ui.py` · `booking_grid.py` · `booking.py` · `payment.py` · `slip_queue.py` · `my_bookings.py` · `venue_bookings.py` · `venue_notices.py` (ต้องเปิด stack ด้วย `--profile full` ก่อน ดู `scripts/verify/README.md`) |
+| วาดรูปสนามของหน้า sign-in ใหม่ | `python scripts/gen_court.py` แล้ววางผลลัพธ์ทั้งก้อน **และ viewBox ที่บรรทัดท้าย** ลงใน `frontend/src/app/shared/court-art.ts` (ห้ามแก้พิกัดด้วยมือ) |
 
 ## วิธีทำงาน
 - **ทำงานจากเป้าหมาย:** งานแต่ละชิ้นผูกกับ user story / acceptance criteria ใน `docs/prd.md` ถ้า requirement ไม่ชัด ให้ถามก่อนลงมือ
