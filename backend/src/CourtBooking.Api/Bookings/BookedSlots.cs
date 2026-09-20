@@ -1,6 +1,7 @@
 using CourtBooking.Api.Data;
 using CourtBooking.Api.Localization;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace CourtBooking.Api.Bookings;
 
@@ -92,6 +93,59 @@ public static class BookedSlots
             .ExecuteUpdateAsync(
                 set => set.SetProperty(slot => slot.IsActive, false),
                 cancellationToken);
+
+    /// <summary>
+    /// Lets go of the hours a booking has not reached yet, keeping the ones it has. What a
+    /// no-show did not turn up for goes back on sale; what was already played stays played
+    /// (PRD 6.1).
+    /// </summary>
+    public static Task<int> ReleaseRemainingAsync(
+        AppDbContext database,
+        Guid bookingId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken) =>
+        database.BookingSlots
+            .Where(slot => slot.BookingId == bookingId && slot.IsActive && slot.StartsAt >= now)
+            .ExecuteUpdateAsync(
+                set => set.SetProperty(slot => slot.IsActive, false),
+                cancellationToken);
+
+    /// <summary>
+    /// Claims a booking's hours again, for a venue taking back a no-show it recorded by mistake
+    /// (PRD 6.1). Answers whether it could: somebody else may have taken them in the meantime,
+    /// and the exclusion constraint is what says so rather than a query that could be stale.
+    /// </summary>
+    public static async Task<bool> TakeBackAsync(
+        AppDbContext database,
+        Guid bookingId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await database.BookingSlots
+                .Where(slot => slot.BookingId == bookingId && !slot.IsActive)
+                .ExecuteUpdateAsync(
+                    set => set.SetProperty(slot => slot.IsActive, true),
+                    cancellationToken);
+            return true;
+        }
+        // ExecuteUpdate runs its own statement, so the constraint arrives bare rather than
+        // wrapped the way SaveChanges wraps one.
+        catch (PostgresException failure) when (failure.SqlState == ExclusionViolation)
+        {
+            return false;
+        }
+        catch (DbUpdateException failure) when (failure.InnerException is PostgresException
+        {
+            SqlState: ExclusionViolation,
+        })
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Postgres raises this when the no-overlap constraint refuses a row (PRD BR-04).</summary>
+    private const string ExclusionViolation = "23P01";
 
     /// <summary>
     /// Lets go of the hours lapsed holds claim on these courts, and marks those holds

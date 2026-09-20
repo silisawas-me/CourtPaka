@@ -257,12 +257,64 @@ public sealed class VenueScenario(ApiTestFixture api)
         return (booker, booking);
     }
 
-    /// <summary>Whether any of a booking's hours are still held against its court (PRD BR-04).</summary>
-    public async Task<bool> HoldsItsHoursAsync(Guid bookingId)
+    /// <summary>
+    /// Somebody else takes the hours a booking has let go. Written straight to the database: a
+    /// test that has moved a booking's hours around no longer lines up with the grid, and what is
+    /// being tested is the constraint that stops two bookings holding one court-hour (PRD BR-04).
+    /// </summary>
+    public async Task<Guid> SomebodyElseTakesAsync(Guid bookingId)
     {
         using var scope = api.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        return await database.BookingSlots.AnyAsync(
+
+        var released = await database.Bookings
+            .AsNoTracking()
+            .Include(booking => booking.Slots)
+            .Where(booking => booking.Id == bookingId)
+            .SelectMany(booking => booking.Slots.Where(slot => !slot.IsActive))
+            .ToListAsync();
+
+        var original = await database.Bookings.AsNoTracking()
+            .SingleAsync(booking => booking.Id == bookingId);
+
+        var taker = new Booking
+        {
+            VenueId = original.VenueId,
+            BookerUserId = original.BookerUserId,
+            Channel = original.Channel,
+            Status = BookingStatus.Confirmed,
+            PaymentState = PaymentState.Received,
+            CreatedAt = DateTimeOffset.UtcNow,
+            HoldExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),
+            TotalBaht = released.Sum(slot => slot.BahtPerHour),
+            CancellationPolicyId = original.CancellationPolicyId,
+        };
+
+        taker.Slots.AddRange(released.Select(slot => new BookingSlot
+        {
+            BookingId = taker.Id,
+            CourtId = slot.CourtId,
+            StartsAt = slot.StartsAt,
+            EndsAt = slot.EndsAt,
+            BahtPerHour = slot.BahtPerHour,
+            IsActive = true,
+        }));
+
+        database.Bookings.Add(taker);
+        await database.SaveChangesAsync();
+        return taker.Id;
+    }
+
+    /// <summary>Whether any of a booking's hours are still held against its court (PRD BR-04).</summary>
+    public async Task<bool> HoldsItsHoursAsync(Guid bookingId) =>
+        await HoursStillHeldAsync(bookingId) > 0;
+
+    /// <summary>How many of a booking's hours it still holds, for the decisions that free some.</summary>
+    public async Task<int> HoursStillHeldAsync(Guid bookingId)
+    {
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await database.BookingSlots.CountAsync(
             slot => slot.BookingId == bookingId && slot.IsActive);
     }
 

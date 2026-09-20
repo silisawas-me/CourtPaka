@@ -83,6 +83,30 @@ public static class BookingErrorCodes
     /// <summary>The hours have begun. There is nothing left to give up (PRD 6.1).</summary>
     public const string PlayHasStarted = "booking.play_has_started";
 
+    /// <summary>The venue has to say why, and pick from the reasons PRD 6.1 names.</summary>
+    public const string ReasonRequired = "booking.reason_required";
+
+    /// <summary>That reason does not describe hours that have already been played (PRD 6.1).</summary>
+    public const string ReasonNotAllowedHere = "booking.reason_not_allowed_here";
+
+    /// <summary>The venue has to say whether the money arrived; it is what settles the amount.</summary>
+    public const string PaymentAnswerRequired = "booking.payment_answer_required";
+
+    /// <summary>What was played may be corrected for a day, and this is past it (PRD 6.1).</summary>
+    public const string TooLateToCorrect = "booking.too_late_to_correct";
+
+    /// <summary>Nobody is a no-show a minute after the hour begins (PRD 6.1).</summary>
+    public const string NotYetLateEnough = "booking.not_yet_late_enough";
+
+    /// <summary>Correcting what was recorded after the hours is the owner's (PRD 6.1).</summary>
+    public const string OwnerOnly = "booking.owner_only";
+
+    /// <summary>The hours have been sold to somebody else since (PRD 6.1).</summary>
+    public const string HoursAlreadyTaken = "booking.hours_already_taken";
+
+    /// <summary>There is no unsettled payment on this booking to answer for.</summary>
+    public const string NothingToSettle = "booking.nothing_to_settle";
+
     /// <summary>
     /// It moved between being read and being written — usually the venue deciding about the slip.
     /// What may be done with it now depends on where it has got to, so the answer is to look again.
@@ -130,3 +154,48 @@ public sealed record SlipQueueItemResponse(
     DateTimeOffset StartsAt,
     bool PlaysSoon,
     bool SameSlipSeenBefore);
+
+/// <summary>
+/// The venue turning a booking away (PRD US-13, 6.1). Which answers are needed depends on where
+/// the booking stands: a hold needs none, one waiting to be checked needs to know whether the
+/// money arrived, and one already paid for needs a reason.
+/// </summary>
+public sealed record VenueCancelRequest(string? Reason, bool? PaymentReceived, string? Note);
+
+/// <summary>The venue saying, at last, whether the money arrived (PRD US-13, 6.2).</summary>
+public sealed record SettlePaymentRequest(bool PaymentReceived);
+
+/// <summary>Taking back a no-show that was recorded wrongly. It has to say why (PRD 6.1).</summary>
+public sealed record PlayedAfterAllRequest(string Reason);
+
+/// <summary>
+/// One of the venue's bookings for a day, as its counter reads it (PRD US-13). It names the
+/// booker by the address they signed up with, which is what the venue needs to find them, and
+/// nothing else about them.
+/// </summary>
+public sealed record VenueBookingResponse(
+    Guid BookingId,
+    string? BookerEmail,
+    string Status,
+    string PaymentState,
+    decimal TotalBaht,
+    decimal RefundDueBaht,
+    decimal RefundedBaht,
+    DateTimeOffset StartsAt,
+    DateTimeOffset EndsAt,
+    BookingSlotResponse[] Slots,
+    /// <summary>What each door the counter can press would come to, worked out by the server.</summary>
+    VenueBookingActionsResponse Can);
+
+/// <summary>
+/// Which of the counter's doors are open on this booking right now, and what the money would do
+/// if they were pressed (PRD US-13, 6.1). The page draws the buttons from this rather than from
+/// rules of its own.
+/// </summary>
+public sealed record VenueBookingActionsResponse(
+    bool Cancel,
+    bool NoShow,
+    bool SettlePayment,
+    bool PlayedAfterAll,
+    /// <summary>What cancelling at the customer's request would give back, when that is an answer.</summary>
+    int RefundPercentOnRequest);
