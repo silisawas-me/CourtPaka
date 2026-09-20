@@ -131,6 +131,65 @@ public sealed class VenueApplicationTests(ApiTestFixture api) : IClassFixture<Ap
         Assert.Equal(HttpStatusCode.Created, applied.StatusCode);
     }
 
+    /// <summary>
+    /// A body with no business block at all answers 400 with a code, like every other malformed
+    /// request, rather than falling over on a null (PRD US-23).
+    /// </summary>
+    [Fact]
+    public async Task An_application_with_no_business_block_is_refused_rather_than_breaking()
+    {
+        var applicant = await scenario.SignedInClientAsync();
+
+        var refused = await applicant.PostAsJsonAsync(
+            "/api/venues",
+            new
+            {
+                code = scenario.NewCode(),
+                name = "Smash Court",
+                addressLine = "1 ถนนทดสอบ",
+                district = "บางรัก",
+                province = "กรุงเทพมหานคร",
+                business = (object?)null,
+                agreementVersion = ApiFactory.VenueAgreementVersion,
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.False(string.IsNullOrEmpty(await refused.ErrorCodeAsync()));
+    }
+
+    /// <summary>
+    /// Where the money lands is not something an owner may delegate, so the details endpoint —
+    /// which staff with ManageSettings may reach — cannot move it (PRD US-14).
+    /// </summary>
+    [Fact]
+    public async Task The_details_endpoint_cannot_move_where_the_money_goes()
+    {
+        var (owner, venue, _) = await scenario.BookableVenueAsync();
+        var staff = await scenario.StaffClientAsync(
+            owner, venue.Id, nameof(VenuePermissions.ManageSettings));
+
+        var before = await VenueScenario.ReadAsync<VenueBusinessResponse>(
+            await owner.GetAsync($"/api/venues/{venue.Id}/business"));
+
+        // Sent anyway, the way a hand-rolled client would: the field is not on the contract, so
+        // it has to be ignored rather than quietly honoured.
+        var changed = await staff.PutAsJsonAsync(
+            $"/api/venues/{venue.Id}",
+            new
+            {
+                name = "Renamed Court",
+                addressLine = "2 ถนนใหม่",
+                district = "ปทุมวัน",
+                province = "กรุงเทพมหานคร",
+                business = new { promptPayId = "0899999999" },
+            });
+        Assert.Equal(HttpStatusCode.NoContent, changed.StatusCode);
+
+        var after = await VenueScenario.ReadAsync<VenueBusinessResponse>(
+            await owner.GetAsync($"/api/venues/{venue.Id}/business"));
+        Assert.Equal(before.PromptPayId, after.PromptPayId);
+    }
+
     [Fact]
     public async Task Where_the_money_goes_is_the_owner_s_alone()
     {

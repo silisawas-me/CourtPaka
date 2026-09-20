@@ -428,7 +428,7 @@ public sealed class VenueScenario(ApiTestFixture api)
 
     /// <summary>New details for a venue whose address the test does not care about.</summary>
     public static UpdateVenueRequest Details(string name) =>
-        new(name, "2 ถนนใหม่", "ปทุมวัน", "กรุงเทพมหานคร", Business());
+        new(name, "2 ถนนใหม่", "ปทุมวัน", "กรุงเทพมหานคร");
 
     /// <summary>The same hours seven days a week, with one day optionally closed.</summary>
     public static OpeningHoursDayRequest[] Week(int opens, int closes, DayOfWeek? closedOn = null) =>

@@ -30,15 +30,17 @@ public sealed record CreateVenueRequest(
     string AgreementVersion);
 
 /// <summary>
-/// The venue's details, as its owner corrects them. A venue that was turned away and edited is
-/// asking to be looked at again, so this is also how it applies a second time (PRD US-10).
+/// The venue's name and where it is — what a booker reads (PRD US-02, US-11).
+///
+/// Deliberately not the business block. This is behind <c>ManageSettings</c>, which an owner may
+/// delegate, and where the money lands is not delegable (PRD US-14): it has its own endpoint and
+/// its own policy. Leaving a field here that nothing reads is how it gets wired up by accident.
 /// </summary>
 public sealed record UpdateVenueRequest(
     string Name,
     string AddressLine,
     string District,
-    string Province,
-    VenueBusinessRequest Business);
+    string Province);
 
 /// <summary>What the venue agreed to, and what the platform is asking for now (PRD US-10, Q8).</summary>
 public sealed record VenueAgreementResponse(string Version);

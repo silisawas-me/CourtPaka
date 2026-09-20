@@ -34,23 +34,28 @@ public static class VenueValidation
     /// <summary>
     /// Everything the venue has to say about itself before it can take money or issue a document
     /// (PRD US-10, 7.2). Each part answers under its own code so the form can point at the field.
+    ///
+    /// A body with no business block at all is refused the same way, because a malformed request
+    /// has to answer 400 with a code rather than fall over on a null.
     /// </summary>
-    public static string? ValidateBusiness(VenueBusinessRequest business) =>
-        ValidateText(
-            business.PromptPayId, VenueBusiness.PromptPayIdMaxLength,
-            VenueErrorCodes.InvalidPromptPayId)
-        ?? ValidateText(
-            business.PromptPayAccountName, VenueBusiness.AccountNameMaxLength,
-            VenueErrorCodes.InvalidPromptPayAccountName)
-        ?? ValidateText(
-            business.LegalName, VenueBusiness.LegalNameMaxLength,
-            VenueErrorCodes.InvalidLegalName)
-        ?? ValidateTaxId(business.TaxId)
-        ?? ValidateTaxBranch(business.TaxBranch)
-        ?? ValidateText(
-            business.BillingAddress, VenueBusiness.BillingAddressMaxLength,
-            VenueErrorCodes.InvalidBillingAddress)
-        ?? ValidateCoordinates(business.Latitude, business.Longitude);
+    public static string? ValidateBusiness(VenueBusinessRequest? business) =>
+        business is null
+            ? VenueErrorCodes.InvalidPromptPayId
+            : ValidateText(
+                  business.PromptPayId, VenueBusiness.PromptPayIdMaxLength,
+                  VenueErrorCodes.InvalidPromptPayId)
+              ?? ValidateText(
+                  business.PromptPayAccountName, VenueBusiness.AccountNameMaxLength,
+                  VenueErrorCodes.InvalidPromptPayAccountName)
+              ?? ValidateText(
+                  business.LegalName, VenueBusiness.LegalNameMaxLength,
+                  VenueErrorCodes.InvalidLegalName)
+              ?? ValidateTaxId(business.TaxId)
+              ?? ValidateTaxBranch(business.TaxBranch)
+              ?? ValidateText(
+                  business.BillingAddress, VenueBusiness.BillingAddressMaxLength,
+                  VenueErrorCodes.InvalidBillingAddress)
+              ?? ValidateCoordinates(business.Latitude, business.Longitude);
 
     /// <summary>Thirteen digits and nothing else. The checksum is the Revenue Department's to judge.</summary>
     public static string? ValidateTaxId(string? taxId)
