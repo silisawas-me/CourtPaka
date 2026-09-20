@@ -73,6 +73,15 @@ public sealed class Booking
     /// </summary>
     public decimal RefundDueBaht { get; set; }
 
+    /// <summary>
+    /// The share of the booking, as a percentage, that its ending gives back (PRD 6.1). It is
+    /// written down when the booking ends rather than worked out again later: the cancellation
+    /// terms are a snapshot (BR-05) and the amount depends on how much notice was given, so a
+    /// venue that says weeks afterwards that the money did arrive (US-13) must be able to arrive
+    /// at the number the booker was shown, not at today's.
+    /// </summary>
+    public int RefundPercent { get; set; }
+
     public required DateTimeOffset CreatedAt { get; init; }
 
     /// <summary>When the hold lapses. Read on every availability query, not only by the job (PRD 9.2).</summary>

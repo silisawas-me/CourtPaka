@@ -222,7 +222,10 @@ public static class VerifySlipEndpoints
             ? BookingStatus.Completed
             : decided;
 
-        var refundDue = Refunds.DueFor(landed, payment, booking.TotalBaht);
+        // A rejection gives back everything; a confirmation gives back nothing. The share is
+        // written down so that a later answer about the money lands on the same number (PRD 6.2).
+        var refundPercent = decided == BookingStatus.Rejected ? Refunds.AllOfIt : 0;
+        var refundDue = Refunds.DueFor(landed, payment, booking.TotalBaht, refundPercent);
 
         await using var transaction =
             await database.Database.BeginTransactionAsync(cancellationToken);
@@ -242,6 +245,7 @@ public static class VerifySlipEndpoints
                 set => set
                     .SetProperty(candidate => candidate.Status, landed)
                     .SetProperty(candidate => candidate.PaymentState, payment)
+                    .SetProperty(candidate => candidate.RefundPercent, refundPercent)
                     .SetProperty(candidate => candidate.RefundDueBaht, refundDue),
                 cancellationToken);
 

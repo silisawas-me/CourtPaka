@@ -46,12 +46,20 @@ public static class BookingEndpoints
     /// </summary>
     private static readonly TimeSpan RetryJitter = TimeSpan.FromMilliseconds(120);
 
+    /// <summary>
+    /// How much of their own history one answer carries. A booker who has played every week for
+    /// years has hundreds of them; what they opened the page for is at the top.
+    /// </summary>
+    public const int MaxHistory = 200;
+
     public static void MapBookingEndpoints(this IEndpointRouteBuilder routes)
     {
         var bookings = routes.MapGroup("/bookings").WithTags("Bookings").RequireAuthorization();
 
         bookings.MapPost("/", CreateAsync);
+        bookings.MapGet("/", MineAsync);
         bookings.MapGet("/{bookingId:guid}", GetAsync);
+        bookings.MapPost("/{bookingId:guid}/cancel", CancelAsync);
         bookings.MapSlipEndpoints();
     }
 
@@ -75,6 +83,193 @@ public static class BookingEndpoints
     }
 
     /// <summary>
+    /// Everything this booker has taken, split into what is still ahead of them and what is behind
+    /// (PRD US-05). One request: a history page that had to ask again for every booking would be
+    /// slower than the grid it came from.
+    /// </summary>
+    private static async Task<Ok<BookingHistoryResponse>> MineAsync(
+        ClaimsPrincipal principal,
+        AppDbContext database,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        var bookerId = CallerId.Of(principal);
+
+        // Newest first and capped: a booker who has played for years should not be handed all of
+        // it at once, and what they came to look at is at the top. Paging is its own story.
+        var mine = await database.Bookings
+            .AsNoTracking()
+            .Include(booking => booking.Slots)
+            .Include(booking => booking.CancellationPolicy!)
+            .ThenInclude(policy => policy.Tiers)
+            .Where(booking => booking.BookerUserId == bookerId)
+            .OrderByDescending(booking => booking.CreatedAt)
+            .Take(MaxHistory)
+            .ToListAsync(cancellationToken);
+
+        var venueIds = mine.Select(booking => booking.VenueId).Distinct().ToArray();
+
+        var venueNames = await database.Venues
+            .Where(venue => venueIds.Contains(venue.Id))
+            .ToDictionaryAsync(venue => venue.Id, venue => venue.Name, cancellationToken);
+
+        var courtNames = await database.Courts
+            .Where(court => venueIds.Contains(court.VenueId))
+            .ToDictionaryAsync(court => court.Id, court => court.Name, cancellationToken);
+
+        var bookingIds = mine.Select(booking => booking.Id).ToArray();
+        var slipTimes = await database.PaymentSlips
+            .Where(slip => bookingIds.Contains(slip.BookingId))
+            .GroupBy(slip => slip.BookingId)
+            .Select(slips => new
+            {
+                BookingId = slips.Key,
+                Latest = slips.Max(slip => slip.UploadedAt),
+            })
+            .ToDictionaryAsync(row => row.BookingId, row => row.Latest, cancellationToken);
+
+        var upcoming = new List<BookingResponse>();
+        var past = new List<BookingResponse>();
+
+        foreach (var booking in mine)
+        {
+            // A hold whose time is up reads as Expired here as everywhere else (PRD 9.2).
+            var status = BookedSlots.HasLapsed(booking, now) ? BookingStatus.Expired : booking.Status;
+            var response = ToResponse(
+                booking,
+                venueNames.GetValueOrDefault(booking.VenueId, string.Empty),
+                courtNames,
+                now,
+                status,
+                slipTimes.TryGetValue(booking.Id, out var uploaded) ? uploaded : null);
+
+            (Ahead(status, booking, now) ? upcoming : past).Add(response);
+        }
+
+        // Ahead of them: soonest first, because the next one to be played is the one being looked
+        // for. Behind them stays newest first, which is the order they happened in, backwards.
+        upcoming.Reverse();
+
+        return TypedResults.Ok(new BookingHistoryResponse([.. upcoming], [.. past]));
+    }
+
+    /// <summary>
+    /// Whether this booking is still ahead of the booker: hours that have not been played, held by
+    /// a booking that still holds them. Everything else — cancelled, refused, lapsed, played — is
+    /// history, whatever day it falls on (PRD US-05).
+    /// </summary>
+    private static bool Ahead(BookingStatus status, Booking booking, DateTimeOffset now) =>
+        status is BookingStatus.Held or BookingStatus.PendingVerification or BookingStatus.Confirmed
+        && booking.Slots.Count > 0
+        && booking.Slots.Max(slot => slot.EndsAt) > now;
+
+    /// <summary>
+    /// The booker lets the hours go (PRD US-05). What comes back is decided here and not by the
+    /// page that asked, so the number shown before the button and the number written after it are
+    /// the same one.
+    /// </summary>
+    private static async Task<Results<Ok<BookingResponse>, ProblemHttpResult>> CancelAsync(
+        Guid bookingId,
+        ClaimsPrincipal principal,
+        AppDbContext database,
+        TimeProvider timeProvider,
+        ILoggerFactory loggers,
+        CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        var bookerId = CallerId.Of(principal);
+
+        var booking = await database.Bookings
+            .AsNoTracking()
+            .Include(candidate => candidate.Slots)
+            .Include(candidate => candidate.CancellationPolicy!)
+            .ThenInclude(policy => policy.Tiers)
+            .SingleOrDefaultAsync(
+                candidate => candidate.Id == bookingId && candidate.BookerUserId == bookerId,
+                cancellationToken);
+
+        // Someone else's booking answers the same as one that is not there.
+        if (booking is null || booking.Slots.Count == 0)
+        {
+            return ApiProblem.Of(StatusCodes.Status404NotFound, BookingErrorCodes.NotFound);
+        }
+
+        var status = BookedSlots.HasLapsed(booking, now) ? BookingStatus.Expired : booking.Status;
+        var offer = Cancellation.For(
+            booking,
+            status,
+            booking.CancellationPolicy,
+            booking.Slots.Min(slot => slot.StartsAt),
+            now);
+
+        if (offer.Refused is { } refused)
+        {
+            return ApiProblem.Of(StatusCodes.Status409Conflict, refused);
+        }
+
+        var payment = Cancellation.PaymentAfter(status, booking.PaymentState);
+        var refundDue = Refunds.DueFor(
+            BookingStatus.Cancelled, payment, booking.TotalBaht, offer.RefundPercent);
+
+        await using var transaction =
+            await database.Database.BeginTransactionAsync(cancellationToken);
+
+        // The status was read a moment ago and the venue may have decided in between. The move
+        // carries its condition, so a booking that has moved on is left alone (PRD 6.1).
+        var moving = database.Bookings.Where(candidate =>
+            candidate.Id == bookingId
+            && candidate.BookerUserId == bookerId
+            && candidate.Status == status);
+
+        // Letting go of a hold is only letting go while it is still a hold (PRD BR-02).
+        if (status == BookingStatus.Held)
+        {
+            moving = moving.Where(candidate => candidate.HoldExpiresAt > now);
+        }
+
+        var moved = await moving.ExecuteUpdateAsync(
+            set => set
+                .SetProperty(candidate => candidate.Status, BookingStatus.Cancelled)
+                .SetProperty(candidate => candidate.PaymentState, payment)
+                .SetProperty(candidate => candidate.RefundPercent, offer.RefundPercent)
+                .SetProperty(candidate => candidate.RefundDueBaht, refundDue),
+            cancellationToken);
+
+        if (moved == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return ApiProblem.Of(StatusCodes.Status409Conflict, BookingErrorCodes.NotCancellable);
+        }
+
+        // The hours go back on sale the moment they are given up (PRD 6.1).
+        await database.BookingSlots
+            .Where(slot => slot.BookingId == bookingId && slot.IsActive)
+            .ExecuteUpdateAsync(
+                set => set.SetProperty(slot => slot.IsActive, false),
+                cancellationToken);
+
+        database.BookingStatusChanges.Add(BookingTransitions.Record(
+            bookingId, status, BookingStatus.Cancelled, bookerId, now));
+
+        await database.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        // The name is part of the template, not a parameter, so a sink that groups by template
+        // counts these apart from every other move (PRD 8).
+        AppEvents.For(loggers).LogInformation(
+            "booking_cancelled {BookingId} {VenueId} {From} {RefundDueBaht} {AwaitsVenue}",
+            bookingId,
+            booking.VenueId,
+            status,
+            refundDue,
+            offer.AwaitsVenue);
+
+        return TypedResults.Ok(await ReadBookingAsync(
+            database, bookingId, now, cancellationToken));
+    }
+
+    /// <summary>
     /// A booking as its booker sees it, read back from the database so it says what was stored
     /// rather than what was asked for.
     /// </summary>
@@ -87,6 +282,8 @@ public static class BookingEndpoints
         var booking = await database.Bookings
             .AsNoTracking()
             .Include(candidate => candidate.Slots)
+            .Include(candidate => candidate.CancellationPolicy!)
+            .ThenInclude(policy => policy.Tiers)
             .SingleAsync(candidate => candidate.Id == bookingId, cancellationToken);
 
         var venueName = await database.Venues
@@ -108,7 +305,7 @@ public static class BookingEndpoints
         // the same way every other query treats one (PRD 9.2).
         var status = BookedSlots.HasLapsed(booking, now) ? BookingStatus.Expired : booking.Status;
 
-        return ToResponse(booking, venueName, courtNames, status, slipUploadedAt);
+        return ToResponse(booking, venueName, courtNames, now, status, slipUploadedAt);
     }
 
     /// <summary>
@@ -246,7 +443,7 @@ public static class BookingEndpoints
 
         return TypedResults.Created(
             $"/api/bookings/{booking.Id}",
-            ToResponse(booking, venue.Name, priced.CourtNames));
+            ToResponse(booking, venue.Name, priced.CourtNames, now));
     }
 
     /// <summary>
@@ -369,6 +566,7 @@ public static class BookingEndpoints
         Booking booking,
         string venueName,
         IReadOnlyDictionary<Guid, string> courtNames,
+        DateTimeOffset now,
         BookingStatus? status = null,
         DateTimeOffset? slipUploadedAt = null) =>
         new(
@@ -395,7 +593,39 @@ public static class BookingEndpoints
                 .ToArray(),
             slipUploadedAt,
             booking.PaymentState.ToString(),
-            booking.RefundDueBaht);
+            booking.RefundDueBaht,
+            // Refunds are made by the venue outside the system and written down against the
+            // booking, which is US-18. Nothing has been written down yet, so nothing has been
+            // sent back (PRD 6.2, BR-06).
+            RefundedBaht: 0m,
+            Offer(booking, now, status ?? booking.Status));
+
+    /// <summary>
+    /// What letting this booking go would come to, for the page to show before anything is
+    /// pressed. A booking with no slots or no policy in hand cannot be offered one, which is a
+    /// read that did not ask for them rather than a booking that lacks them.
+    /// </summary>
+    private static CancellationOfferResponse Offer(
+        Booking booking,
+        DateTimeOffset now,
+        BookingStatus status)
+    {
+        if (booking.Slots.Count == 0)
+        {
+            return new CancellationOfferResponse(
+                false, BookingErrorCodes.NotCancellable, 0, 0m, false);
+        }
+
+        var offer = Cancellation.For(
+            booking,
+            status,
+            booking.CancellationPolicy,
+            booking.Slots.Min(slot => slot.StartsAt),
+            now);
+
+        return new CancellationOfferResponse(
+            offer.Allowed, offer.Refused, offer.RefundPercent, offer.RefundBaht, offer.AwaitsVenue);
+    }
 
     /// <summary>The hours as priced, or the reason none of them can be had.</summary>
     private readonly record struct PricedSlots(

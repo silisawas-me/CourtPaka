@@ -29,7 +29,37 @@ public sealed record BookingResponse(
     DateTimeOffset? SlipUploadedAt,
     /// <summary>Whether the venue has the money, and what it owes back (PRD 6.2).</summary>
     string PaymentState,
-    decimal RefundDueBaht);
+    decimal RefundDueBaht,
+    /// <summary>
+    /// Of what is owed, how much has actually been sent back. Refunds are made outside the system
+    /// and written down against the booking (PRD BR-06), which is US-18 — until then nothing has
+    /// been recorded and this is nothing.
+    /// </summary>
+    decimal RefundedBaht,
+    /// <summary>What letting this booking go would mean right now (PRD US-05).</summary>
+    CancellationOfferResponse Cancellation);
+
+/// <summary>
+/// What the booker would get back for cancelling, worked out by the server so that the number
+/// they are shown and the number they are given are the same one (PRD US-05, BR-06).
+/// </summary>
+public sealed record CancellationOfferResponse(
+    bool Allowed,
+    /// <summary>Why not, when it may not be cancelled. Null when it may.</summary>
+    string? Refused,
+    int RefundPercent,
+    decimal RefundBaht,
+    /// <summary>The venue has yet to say whether the money arrived, so the amount is not settled.</summary>
+    bool AwaitsVenue);
+
+/// <summary>
+/// A booker's own bookings, split where US-05 asks for the split: what is still ahead of them,
+/// and what is behind. The server decides which is which, because it holds the clock that every
+/// other answer about these bookings is given against (PRD 9.2).
+/// </summary>
+public sealed record BookingHistoryResponse(
+    BookingResponse[] Upcoming,
+    BookingResponse[] Past);
 
 public static class BookingErrorCodes
 {
@@ -47,6 +77,12 @@ public static class BookingErrorCodes
     public const string AlreadyHolding = "booking.already_holding";
 
     public const string NotFound = "booking.not_found";
+
+    /// <summary>This booking is not in a state a booker may let go of (PRD 6.1).</summary>
+    public const string NotCancellable = "booking.not_cancellable";
+
+    /// <summary>The hours have begun. There is nothing left to give up (PRD 6.1).</summary>
+    public const string PlayHasStarted = "booking.play_has_started";
 }
 
 public static class SlipErrorCodes
