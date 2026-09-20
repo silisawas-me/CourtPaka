@@ -140,6 +140,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         builder.Entity<Booking>(booking =>
         {
             booking.Property(b => b.TotalBaht).HasPrecision(10, 2);
+            booking.Property(b => b.RefundDueBaht).HasPrecision(10, 2);
             // The booker's own history (US-05), and the check that they hold only one (PRD S-22).
             booking.HasIndex(b => new { b.BookerUserId, b.Status });
             booking.HasIndex(b => new { b.VenueId, b.CreatedAt });
@@ -178,7 +179,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<BookingStatusChange>(change =>
         {
-            change.Property(c => c.Reason).HasMaxLength(500);
+            change.Property(c => c.Reason).HasMaxLength(BookingStatusChange.ReasonMaxLength);
             // A booking's history, oldest first, which is how US-12 and US-22 will read it.
             change.HasIndex(c => new { c.BookingId, c.ChangedAt });
             // The history lives exactly as long as the booking it describes. Nothing deletes a

@@ -393,7 +393,9 @@ public static class BookingEndpoints
                         slot.BahtPerHour);
                 })
                 .ToArray(),
-            slipUploadedAt);
+            slipUploadedAt,
+            booking.PaymentState.ToString(),
+            booking.RefundDueBaht);
 
     /// <summary>The hours as priced, or the reason none of them can be had.</summary>
     private readonly record struct PricedSlots(

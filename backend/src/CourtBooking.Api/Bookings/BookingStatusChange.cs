@@ -11,6 +11,9 @@ namespace CourtBooking.Api.Bookings;
 /// </summary>
 public sealed class BookingStatusChange
 {
+    /// <summary>As much as a venue needs to explain itself, and no more.</summary>
+    public const int ReasonMaxLength = 500;
+
     public Guid Id { get; init; } = Guid.CreateVersion7();
 
     public required Guid BookingId { get; init; }
