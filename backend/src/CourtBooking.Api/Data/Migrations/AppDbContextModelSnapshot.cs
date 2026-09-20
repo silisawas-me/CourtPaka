@@ -604,7 +604,9 @@ namespace CourtBooking.Api.Data.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<bool>("WantsSlipEmails")
-                        .HasColumnType("boolean");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.HasKey("Id");
 

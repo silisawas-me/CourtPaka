@@ -1,5 +1,5 @@
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
-import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -62,7 +62,7 @@ export class VenueDetailPage {
   protected readonly attention = signal<VenueAttention | null>(null);
 
   /** The one notice that can be turned off, and it is turned off per venue (PRD US-17). */
-  protected readonly slipEmails = new FormControl(true, { nonNullable: true });
+  protected readonly slipEmails = signal(true);
   protected readonly slipEmailsError = signal<string | null>(null);
   protected readonly invitations = signal<VenueInvitation[]>([]);
   protected readonly loading = signal(true);
@@ -193,11 +193,12 @@ export class VenueDetailPage {
    */
   protected chooseSlipEmails(wanted: boolean): void {
     this.slipEmailsError.set(null);
+    this.slipEmails.set(wanted);
 
     this.venues.chooseSlipEmails(this.venueId(), wanted).subscribe({
       error: (failure: unknown) => {
         // Put back what the server still holds, so the switch never says something untrue.
-        this.slipEmails.setValue(!wanted, { emitEvent: false });
+        this.slipEmails.set(!wanted);
         this.slipEmailsError.set(errorKey(failure));
       },
     });
@@ -224,7 +225,7 @@ export class VenueDetailPage {
         this.attention.set(attention);
         // Set from what the server holds rather than left at its default, so the switch never
         // says something the venue did not choose.
-        this.slipEmails.setValue(venue.wantsSlipEmails, { emitEvent: false });
+        this.slipEmails.set(venue.wantsSlipEmails);
         this.loading.set(false);
 
         // Only fetched when the invite section can be shown, so a frozen venue asks for nothing.

@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CourtBooking.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260920151918_VenueSlipEmails")]
+    [Migration("20260920154615_VenueSlipEmails")]
     partial class VenueSlipEmails
     {
         /// <inheritdoc />
@@ -607,7 +607,9 @@ namespace CourtBooking.Api.Data.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<bool>("WantsSlipEmails")
-                        .HasColumnType("boolean");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.HasKey("Id");
 

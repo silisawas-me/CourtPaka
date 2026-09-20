@@ -15,7 +15,7 @@ namespace CourtBooking.Api.Data.Migrations
                 table: "VenueMemberships",
                 type: "boolean",
                 nullable: false,
-                defaultValue: false);
+                defaultValue: true);
         }
 
         /// <inheritdoc />

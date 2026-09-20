@@ -45,12 +45,8 @@
         data-testid="venue-bookings-link"
       >
         {{ i18n.t('venueBookings.title') }}
-        @if (attention(); as waiting) {
-          @if (waiting.bookingsWithMoneyWaiting > 0) {
-            <span class="badge badge-waiting" data-testid="money-waiting">
-              {{ waiting.bookingsWithMoneyWaiting }}
-            </span>
-          }
+        @if (attention()?.bookingsWithMoneyWaiting; as waiting) {
+          <span class="badge badge-waiting" data-testid="money-waiting">{{ waiting }}</span>
         }
       </a>
       <a
@@ -59,12 +55,8 @@
         data-testid="slip-queue-link"
       >
         {{ i18n.t('slipQueue.title') }}
-        @if (attention(); as waiting) {
-          @if (waiting.slipsToCheck > 0) {
-            <span class="badge badge-waiting" data-testid="slips-waiting">
-              {{ waiting.slipsToCheck }}
-            </span>
-          }
+        @if (attention()?.slipsToCheck; as waiting) {
+          <span class="badge badge-waiting" data-testid="slips-waiting">{{ waiting }}</span>
         }
       </a>
     </mat-card-actions>
@@ -76,7 +68,7 @@
     <mat-card-content>
       <mat-slide-toggle
         data-testid="slip-emails"
-        [formControl]="slipEmails"
+        [checked]="slipEmails()"
         (change)="chooseSlipEmails($event.checked)"
       >
         {{ i18n.t('venues.slipEmails') }}

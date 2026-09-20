@@ -21,7 +21,6 @@ public sealed class VenueNotificationTests(ApiTestFixture api) : IClassFixture<A
 
         Assert.Equal(0, waiting.SlipsToCheck);
         Assert.Equal(0, waiting.BookingsWithMoneyWaiting);
-        Assert.Equal(0, waiting.PaymentsUnanswered);
     }
 
     [Fact]
@@ -102,20 +101,33 @@ public sealed class VenueNotificationTests(ApiTestFixture api) : IClassFixture<A
     }
 
     [Fact]
-    public async Task Money_left_unanswered_is_counted_and_the_people_who_answer_are_told()
+    public async Task Money_left_unanswered_is_counted_and_only_those_who_answer_are_told()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var handler = await scenario.StaffClientAsync(
+            owner, venue.Id, nameof(VenuePermissions.ManageBookings));
+        var checker = await scenario.StaffClientAsync(
+            owner, venue.Id, nameof(VenuePermissions.VerifySlip));
         var (booker, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
 
         var before = await WrittenToAsync(venue.Id);
         await booker.PostAsync($"/api/bookings/{booking.Id}/cancel", null);
 
-        var waiting = await AttentionAsync(owner, venue.Id);
-        Assert.Equal(1, waiting.PaymentsUnanswered);
-        Assert.Equal(1, waiting.BookingsWithMoneyWaiting);
+        Assert.Equal(1, (await AttentionAsync(owner, venue.Id)).BookingsWithMoneyWaiting);
 
-        var told = Assert.Single(Assert.Single(await SinceAsync(before, venue.Id)).Value);
-        Assert.Contains("payment", told.Subject, StringComparison.OrdinalIgnoreCase);
+        // Told: the owner and the one who handles bookings. Not told: the one who only checks
+        // slips, who cannot answer for money (PRD US-14, US-17).
+        var told = await SinceAsync(before, venue.Id);
+        Assert.Equal(3, told.Count);
+        Assert.Equal(2, told.Count(member => member.Value.Count == 1));
+        Assert.Single(told, member => member.Value.Count == 0);
+        Assert.All(
+            told.Values.Where(mail => mail.Count == 1),
+            mail => Assert.Contains("payment", mail[0].Subject, StringComparison.OrdinalIgnoreCase));
+
+        // And the number follows the same rule as the mail.
+        Assert.Equal(1, (await AttentionAsync(handler, venue.Id)).BookingsWithMoneyWaiting);
+        Assert.Equal(0, (await AttentionAsync(checker, venue.Id)).BookingsWithMoneyWaiting);
     }
 
     [Fact]
@@ -161,10 +173,88 @@ public sealed class VenueNotificationTests(ApiTestFixture api) : IClassFixture<A
             $"/api/venues/{venue.Id}/bookings/{booking.Id}/settle-payment",
             new SettlePaymentRequest(false));
 
-        var waiting = await AttentionAsync(owner, venue.Id);
-        Assert.Equal(0, waiting.PaymentsUnanswered);
         // Nothing arrived, so nothing is owed either (PRD 6.2).
+        Assert.Equal(0, (await AttentionAsync(owner, venue.Id)).BookingsWithMoneyWaiting);
+    }
+
+    [Fact]
+    public async Task Saying_the_money_did_arrive_is_what_creates_the_debt_and_it_says_so()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (booker, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        await booker.PostAsync($"/api/bookings/{booking.Id}/cancel", null);
+
+        var before = await WrittenToAsync(venue.Id);
+        await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/bookings/{booking.Id}/settle-payment",
+            new SettlePaymentRequest(true));
+
+        // The count does not change — the booking only moves from one half of it to the other —
+        // so the message is the only thing that says a transfer is now owed (PRD US-17, BR-06).
+        Assert.Equal(1, (await AttentionAsync(owner, venue.Id)).BookingsWithMoneyWaiting);
+        var told = Assert.Single(Assert.Single(await SinceAsync(before, venue.Id)).Value);
+        Assert.Contains("owed", told.Subject, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task A_venue_cancelling_a_paid_booking_itself_is_told_it_owes_the_money_back()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        await owner.PostAsync($"/api/venues/{venue.Id}/slip-queue/{booking.Id}/confirm", null);
+
+        var before = await WrittenToAsync(venue.Id);
+        await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/bookings/{booking.Id}/cancel",
+            new VenueCancelRequest(nameof(CancellationReason.VenueInitiated), null, null));
+
+        var told = Assert.Single(Assert.Single(await SinceAsync(before, venue.Id)).Value);
+        Assert.Contains("owed", told.Subject, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task A_venue_that_may_not_act_is_neither_told_nor_shown_anything()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        Assert.Equal(1, (await AttentionAsync(owner, venue.Id)).SlipsToCheck);
+
+        await scenario.SetStatusAsync(venue.Id, VenueStatus.Suspended);
+
+        // Every door these numbers sit on is refused to a suspended venue, so a count it cannot
+        // clear would be only a reproach (PRD US-20).
+        var waiting = await AttentionAsync(owner, venue.Id);
+        Assert.Equal(0, waiting.SlipsToCheck);
         Assert.Equal(0, waiting.BookingsWithMoneyWaiting);
+
+        // And a better picture of the same slip tells nobody anything either.
+        var before = await WrittenToAsync(venue.Id);
+        await VenueScenario.UploadAsync(await scenario.SignedInClientAsync(), booking.Id, VenueScenario.Jpeg());
+        Assert.Empty(Assert.Single(await SinceAsync(before, venue.Id)).Value);
+    }
+
+    [Fact]
+    public async Task Turning_the_mail_off_at_one_venue_leaves_the_other_alone()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (elsewhere, other, otherCourts) = await scenario.BookableVenueAsync();
+
+        // The same person at both counters, which is the case the per-venue choice exists for.
+        await scenario.InviteAndAcceptAsync(
+            elsewhere, owner, other.Id, await OwnerEmailAsync(venue.Id));
+
+        await owner.PutAsJsonAsync(
+            $"/api/venues/{venue.Id}/notifications", new NotificationPreferenceRequest(false));
+
+        var before = await WrittenToAsync(venue.Id);
+        var (_, here) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        var (_, there) = await scenario.WaitingBookingAsync(other.Id, otherCourts[0], 18);
+
+        // One inbox, two venues, so the bookings the mail names are what tells them apart.
+        var mail = Assert.Single(await SinceAsync(before, venue.Id)).Value;
+
+        Assert.DoesNotContain(mail, message => message.Body.Contains(here.Id.ToString()));
+        Assert.Contains(mail, message => message.Body.Contains(there.Id.ToString()));
     }
 
     [Fact]
@@ -217,6 +307,9 @@ public sealed class VenueNotificationTests(ApiTestFixture api) : IClassFixture<A
 
         return since;
     }
+
+    private async Task<string> OwnerEmailAsync(Guid venueId) =>
+        (await scenario.MemberEmailsAsync(venueId)).Values.Single();
 
     private static async Task<VenueAttentionResponse> AttentionAsync(
         HttpClient client,

@@ -54,20 +54,20 @@ describe('VenueDetailPage', () => {
 
   afterEach(() => httpMock.verify());
 
-  const NOTHING_WAITING = {
-    slipsToCheck: 0,
-    bookingsWithMoneyWaiting: 0,
-    paymentsUnanswered: 0,
-  };
+  const NOTHING_WAITING = { slipsToCheck: 0, bookingsWithMoneyWaiting: 0 };
 
-  function render(role: 'Owner' | 'Staff', members: unknown[]): void {
+  function render(
+    role: 'Owner' | 'Staff',
+    members: unknown[],
+    attention: object = NOTHING_WAITING,
+  ): void {
     signInAs(role === 'Owner' ? OWNER.email : STAFF.email);
     fixture = TestBed.createComponent(VenueDetailPage);
     fixture.componentRef.setInput('venueId', 'v1');
     fixture.detectChanges();
     httpMock.expectOne('/api/venues/v1').flush(venueAs(role));
     httpMock.expectOne('/api/venues/v1/members').flush(members);
-    httpMock.expectOne('/api/venues/v1/attention').flush(NOTHING_WAITING);
+    httpMock.expectOne('/api/venues/v1/attention').flush(attention);
     fixture.detectChanges();
     if (role === 'Owner') {
       httpMock.expectOne('/api/venues/v1/invitations').flush([]);
@@ -272,20 +272,7 @@ describe('VenueDetailPage', () => {
   });
 
   it('puts the number of things waiting on the door it belongs to', () => {
-    fixture = TestBed.createComponent(VenueDetailPage);
-    fixture.componentRef.setInput('venueId', 'v1');
-    fixture.detectChanges();
-
-    httpMock.expectOne('/api/venues/v1').flush(venueAs('Owner'));
-    httpMock.expectOne('/api/venues/v1/members').flush([OWNER]);
-    httpMock.expectOne('/api/venues/v1/attention').flush({
-      slipsToCheck: 3,
-      bookingsWithMoneyWaiting: 1,
-      paymentsUnanswered: 1,
-    });
-    fixture.detectChanges();
-    httpMock.expectOne('/api/venues/v1/invitations').flush([]);
-    fixture.detectChanges();
+    render('Owner', [OWNER], { slipsToCheck: 3, bookingsWithMoneyWaiting: 1 });
 
     expect(textOf(fixture, 'slips-waiting')).toContain('3');
     expect(textOf(fixture, 'money-waiting')).toContain('1');

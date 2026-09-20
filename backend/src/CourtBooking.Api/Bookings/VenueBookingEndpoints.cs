@@ -217,6 +217,7 @@ public static class VenueBookingEndpoints
         Guid bookingId,
         SettlePaymentRequest request,
         CurrentVenue venue,
+        VenueNotifications notifications,
         AppDbContext database,
         TimeProvider timeProvider,
         ILoggerFactory loggers,
@@ -274,6 +275,12 @@ public static class VenueBookingEndpoints
         AppEvents.For(loggers).LogInformation(
             "booking_payment_settled {BookingId} {VenueId} {PaymentState} {RefundDueBaht}",
             bookingId, venueId, payment, refundDue);
+
+        // Saying the money did arrive is what turns the share into a debt, and nothing else would
+        // say so — the count beside the door does not even change, because the booking only moves
+        // from one half of it to the other (PRD US-17, BR-06).
+        await notifications.MoneyMayBeWaitingAsync(
+            venueId, bookingId, refundDue, payment, cancellationToken);
 
         return TypedResults.Ok(
             await OneDrawnAsync(database, venueId, bookingId, venue, now, cancellationToken));
@@ -387,11 +394,8 @@ public static class VenueBookingEndpoints
 
         // An amount owed back is a transfer somebody has to make by hand, outside this system
         // (BR-06), so the people who can make it are told there is one (PRD US-17).
-        if (offer.RefundBaht > 0)
-        {
-            await notifications.MoneyWaitingAsync(
-                venueId, bookingId, awaitingAnswer: false, cancellationToken);
-        }
+        await notifications.MoneyMayBeWaitingAsync(
+            venueId, bookingId, offer.RefundBaht, offer.Payment, cancellationToken);
 
         return TypedResults.Ok(
             await OneDrawnAsync(database, venueId, bookingId, venue, now, cancellationToken));

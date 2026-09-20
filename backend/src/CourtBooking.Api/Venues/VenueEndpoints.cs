@@ -62,18 +62,21 @@ public static class VenueEndpoints
     /// This member saying whether they want to hear each time a slip arrives here. It is the only
     /// notice that can be turned off, and it is turned off per venue: somebody working two
     /// counters may want to hear from one of them (PRD US-17).
+    ///
+    /// Behind Member rather than a permission, and allowed even where the venue is frozen: what
+    /// somebody wants in their own inbox is theirs and not the venue's, and a venue that has been
+    /// suspended is exactly where a member might want the mail to stop.
     /// </summary>
     private static async Task<NoContent> ChooseNotificationsAsync(
-        Guid venueId,
         NotificationPreferenceRequest request,
         CurrentVenue venue,
         AppDbContext database,
         CancellationToken cancellationToken)
     {
-        var userId = venue.Require().UserId;
+        var membership = venue.Require();
 
         await database.VenueMemberships
-            .Where(member => member.VenueId == venueId && member.UserId == userId)
+            .Where(member => member.Id == membership.Id)
             .ExecuteUpdateAsync(
                 set => set.SetProperty(
                     member => member.WantsSlipEmails, request.WantsSlipEmails),
@@ -115,14 +118,16 @@ public static class VenueEndpoints
         database.CancellationPolicies.Add(CancellationPolicy.Create(
             venue.Id, CancellationPolicy.Default, CallerId.Of(principal), now));
         // The person who applies runs the venue, so they start as its owner (PRD US-10).
-        database.VenueMemberships.Add(new VenueMembership
+        var membership = new VenueMembership
         {
             VenueId = venue.Id,
             UserId = CallerId.Of(principal),
             Role = VenueRole.Owner,
             Permissions = VenuePermissions.None, // Owners derive their permissions from the role.
             CreatedAt = now,
-        });
+        };
+
+        database.VenueMemberships.Add(membership);
 
         try
         {
@@ -133,8 +138,7 @@ public static class VenueEndpoints
             return ApiProblem.Of(StatusCodes.Status409Conflict, VenueErrorCodes.CodeAlreadyUsed);
         }
 
-        return TypedResults.Created(
-            $"/api/venues/{venue.Id}", ToResponse(venue, VenueRole.Owner, VenuePermissions.None));
+        return TypedResults.Created($"/api/venues/{venue.Id}", ToResponse(venue, membership));
     }
 
     private static async Task<Ok<VenueResponse[]>> ListMineAsync(
@@ -151,8 +155,7 @@ public static class VenueEndpoints
             .ToListAsync(cancellationToken);
 
         return TypedResults.Ok(memberships
-            .Select(member => ToResponse(
-                member.Venue!, member.Role, member.Permissions, member.WantsSlipEmails))
+            .Select(member => ToResponse(member.Venue!, member))
             .ToArray());
     }
 
@@ -160,8 +163,7 @@ public static class VenueEndpoints
     {
         // Authorization already loaded the venue and the caller's membership for this request.
         var membership = currentVenue.Require();
-        return TypedResults.Ok(ToResponse(
-            membership.Venue!, membership.Role, membership.Permissions, membership.WantsSlipEmails));
+        return TypedResults.Ok(ToResponse(membership.Venue!, membership));
     }
 
     private static async Task<Results<NoContent, NotFound, ProblemHttpResult>> UpdateDetailsAsync(
@@ -360,14 +362,16 @@ public static class VenueEndpoints
             return ApiProblem.Of(StatusCodes.Status409Conflict, VenueErrorCodes.AlreadyMember);
         }
 
-        database.VenueMemberships.Add(new VenueMembership
+        var membership = new VenueMembership
         {
             VenueId = invitation.VenueId,
             UserId = user.Id,
             Role = VenueRole.Staff,
             Permissions = invitation.Permissions,
             CreatedAt = now,
-        });
+        };
+
+        database.VenueMemberships.Add(membership);
         invitation.AcceptedAt = now;
 
         try
@@ -380,7 +384,7 @@ public static class VenueEndpoints
             return ApiProblem.Of(StatusCodes.Status409Conflict, VenueErrorCodes.AlreadyMember);
         }
 
-        return TypedResults.Ok(ToResponse(invitation.Venue!, VenueRole.Staff, invitation.Permissions));
+        return TypedResults.Ok(ToResponse(invitation.Venue!, membership));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult, NotFound>> ChangePermissionsAsync(
@@ -445,11 +449,12 @@ public static class VenueEndpoints
     private static string HashToken(string token) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
-    private static VenueResponse ToResponse(
-        Venue venue,
-        VenueRole role,
-        VenuePermissions permissions,
-        bool wantsSlipEmails = true) =>
+    /// <summary>
+    /// A venue as one of its members sees it: the place, plus what this member may do here and
+    /// what they want to hear about. Built from the membership so that nothing about the reader
+    /// has to be restated by the caller.
+    /// </summary>
+    private static VenueResponse ToResponse(Venue venue, VenueMembership membership) =>
         new(
             venue.Id,
             venue.Code,
@@ -458,9 +463,12 @@ public static class VenueEndpoints
             venue.District,
             venue.Province,
             venue.Status.ToString(),
-            role.ToString(),
-            VenuePermissionSet.Describe(role == VenueRole.Owner ? VenuePermissions.All : permissions),
-            wantsSlipEmails);
+            membership.Role.ToString(),
+            VenuePermissionSet.Describe(
+                membership.Role == VenueRole.Owner
+                    ? VenuePermissions.All
+                    : membership.Permissions),
+            membership.WantsSlipEmails);
 
     private static VenueMemberResponse ToResponse(VenueMembership membership) =>
         new(

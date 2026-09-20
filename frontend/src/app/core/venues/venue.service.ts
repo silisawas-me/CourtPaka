@@ -62,7 +62,6 @@ export interface VenueInvitation {
 export interface VenueAttention {
   slipsToCheck: number;
   bookingsWithMoneyWaiting: number;
-  paymentsUnanswered: number;
 }
 
 @Injectable({ providedIn: 'root' })

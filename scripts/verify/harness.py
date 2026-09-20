@@ -279,6 +279,23 @@ def real_jpeg() -> bytes:
     return base64.b64decode(encoded) + uuid.uuid4().bytes
 
 
+def clear_waiting(page, venue_id, date) -> None:
+    """Answers everything an earlier run left waiting at this venue, so a run starts from a venue
+    with nothing on its mind. Through the API rather than the screen: it is the setup, not the
+    subject."""
+    for slip in page.request.get(f"{BASE}/api/venues/{venue_id}/slip-queue").json():
+        page.request.post(
+            f"{BASE}/api/venues/{venue_id}/slip-queue/{slip['bookingId']}/confirm")
+
+    for booking in page.request.get(
+        f"{BASE}/api/venues/{venue_id}/bookings?date={date.isoformat()}"
+    ).json():
+        if booking["can"]["settlePayment"]:
+            page.request.post(
+                f"{BASE}/api/venues/{venue_id}/bookings/{booking['bookingId']}/settle-payment",
+                data={"paymentReceived": False})
+
+
 def open_seeded_venue(page) -> str:
     """Signs the current session into the venue list and answers its href."""
     page.goto(f"{BASE}/venues")

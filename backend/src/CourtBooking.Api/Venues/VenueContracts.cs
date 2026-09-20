@@ -47,11 +47,7 @@ public sealed record VenueMemberResponse(Guid UserId, string Email, string Role,
 /// for somebody who could do something about it, so a member who checks slips is not shown the
 /// money and a member who handles money is not shown the queue.
 /// </summary>
-public sealed record VenueAttentionResponse(
-    int SlipsToCheck,
-    int BookingsWithMoneyWaiting,
-    /// <summary>Of those, the ones where nobody has said yet whether the money arrived (PRD 6.2).</summary>
-    int PaymentsUnanswered);
+public sealed record VenueAttentionResponse(int SlipsToCheck, int BookingsWithMoneyWaiting);
 
 /// <summary>What this member wants to hear about, for the one notice that can be turned off.</summary>
 public sealed record NotificationPreferenceRequest(bool WantsSlipEmails);

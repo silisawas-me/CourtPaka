@@ -7,6 +7,8 @@ from harness import (
     OWNER,
     Checks,
     as_upload,
+    clear_waiting,
+    control,
     new_booker,
     open_seeded_venue,
     real_jpeg,
@@ -28,16 +30,7 @@ with sync_playwright() as p:
     # Whatever an earlier run left waiting is not this run's subject, and the switch starts on.
     staff = browser.new_page()
     sign_in(staff, OWNER)
-    for waiting in staff.request.get(f"{BASE}/api/venues/{venue_id}/slip-queue").json():
-        staff.request.post(
-            f"{BASE}/api/venues/{venue_id}/slip-queue/{waiting['bookingId']}/confirm")
-    for stuck in staff.request.get(
-        f"{BASE}/api/venues/{venue_id}/bookings?date={tomorrow.isoformat()}"
-    ).json():
-        if stuck["can"]["settlePayment"]:
-            staff.request.post(
-                f"{BASE}/api/venues/{venue_id}/bookings/{stuck['bookingId']}/settle-payment",
-                data={"paymentReceived": False})
+    clear_waiting(staff, venue_id, tomorrow)
     staff.request.put(f"{BASE}/api/venues/{venue_id}/notifications",
                       data={"wantsSlipEmails": True})
     staff.close()
@@ -69,14 +62,12 @@ with sync_playwright() as p:
     check("money left unanswered puts one on the other door", True, page)
 
     # 3. The one notice that can be turned off, and it stays turned off.
-    switch = page.locator("[data-testid=slip-emails] button")
     with page.expect_response(lambda r: r.url.endswith("/notifications")) as chosen:
-        switch.click()
+        control(page, "slip-emails").click()
     check("turning slip mail off is accepted", chosen.value.status == 204)
 
     page.reload()
-    expect(page.locator("[data-testid=slip-emails] button")).to_have_attribute(
-        "aria-checked", "false")
+    expect(control(page, "slip-emails")).to_have_attribute("aria-checked", "false")
     check("and the switch still says so after a reload", True, page)
 
     # 4. Someone who cannot act on any of it is shown none of it.

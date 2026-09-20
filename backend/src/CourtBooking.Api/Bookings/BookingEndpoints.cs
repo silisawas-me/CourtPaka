@@ -245,13 +245,10 @@ public static class BookingEndpoints
             offer.AwaitsVenue);
 
         // Money the venue has to move or answer for is money nobody will see unless the venue is
-        // told: a booking given up mid-check waits for an answer that only the venue can give,
-        // and one owed a refund waits for a transfer nothing else will prompt (PRD US-17).
-        if (offer.AwaitsVenue || refundDue > 0)
-        {
-            await notifications.MoneyWaitingAsync(
-                booking.VenueId, bookingId, offer.AwaitsVenue, cancellationToken);
-        }
+        // told. Whether there is any is not decided here: the same rule has to answer for the
+        // number beside the door, so it lives with it (PRD US-17).
+        await notifications.MoneyMayBeWaitingAsync(
+            booking.VenueId, bookingId, refundDue, offer.Payment, cancellationToken);
 
         return TypedResults.Ok(await ReadBookingAsync(
             database, bookingId, now, cancellationToken));

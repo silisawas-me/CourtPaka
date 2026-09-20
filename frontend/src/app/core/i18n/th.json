@@ -289,6 +289,8 @@
   "venues.permission.ViewReports": "ดูรายงาน",
   "venues.role.Owner": "เจ้าของสนาม",
   "venues.role.Staff": "พนักงาน",
+  "venues.slipEmails": "ส่งอีเมลเมื่อมีสลิปใหม่",
+  "venues.slipEmailsNote": "ปิดได้เฉพาะอีเมลสลิป — เรื่องเงินที่ค้างอยู่จะแจ้งเสมอ",
   "venues.status.Approved": "อนุมัติแล้ว",
   "venues.status.Pending": "รออนุมัติ",
   "venues.status.Rejected": "ถูกปฏิเสธ",

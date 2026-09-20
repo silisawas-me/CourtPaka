@@ -7,6 +7,7 @@ from harness import (
     OWNER,
     Checks,
     as_upload,
+    clear_waiting,
     new_booker,
     open_seeded_venue,
     pick_date,

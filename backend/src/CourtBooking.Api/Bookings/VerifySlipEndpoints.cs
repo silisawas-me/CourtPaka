@@ -293,11 +293,8 @@ public static class VerifySlipEndpoints
 
         // Turning a booking away after the money arrived leaves the venue owing it back, and
         // nothing else would say so (PRD US-17, BR-06).
-        if (refundDue > 0)
-        {
-            await notifications.MoneyWaitingAsync(
-                venueId, bookingId, awaitingAnswer: false, cancellationToken);
-        }
+        await notifications.MoneyMayBeWaitingAsync(
+            venueId, bookingId, refundDue, payment, cancellationToken);
 
         return TypedResults.Ok(await BookingEndpoints.ReadBookingAsync(
             database, bookingId, now, cancellationToken));
