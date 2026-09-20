@@ -10,7 +10,32 @@ public sealed record BookingSlotResponse(
     string CourtName,
     DateOnly Date,
     int Hour,
-    decimal BahtPerHour);
+    decimal BahtPerHour)
+{
+    /// <summary>
+    /// A booking's hours as a reader sees them: in the order they are played, and named in the
+    /// venue's own day rather than the reader's (PRD BR-10).
+    /// </summary>
+    public static BookingSlotResponse[] Of(
+        Booking booking,
+        IReadOnlyDictionary<Guid, string> courtNames) =>
+        [
+            .. booking.Slots
+                .OrderBy(slot => slot.StartsAt)
+                .ThenBy(slot => courtNames.GetValueOrDefault(slot.CourtId))
+                .Select(slot =>
+                {
+                    var (date, hour) = Localization.PlatformRequirements.BangkokDateAndHour(
+                        slot.StartsAt);
+                    return new BookingSlotResponse(
+                        slot.CourtId,
+                        courtNames.GetValueOrDefault(slot.CourtId, string.Empty),
+                        date,
+                        hour,
+                        slot.BahtPerHour);
+                }),
+        ];
+}
 
 /// <summary>
 /// A booking as its booker sees it. The total and the slots are the snapshot (PRD BR-05), and
@@ -180,9 +205,6 @@ public sealed record VenueBookingResponse(
     string PaymentState,
     decimal TotalBaht,
     decimal RefundDueBaht,
-    decimal RefundedBaht,
-    DateTimeOffset StartsAt,
-    DateTimeOffset EndsAt,
     BookingSlotResponse[] Slots,
     /// <summary>What each door the counter can press would come to, worked out by the server.</summary>
     VenueBookingActionsResponse Can);
@@ -197,5 +219,17 @@ public sealed record VenueBookingActionsResponse(
     bool NoShow,
     bool SettlePayment,
     bool PlayedAfterAll,
-    /// <summary>What cancelling at the customer's request would give back, when that is an answer.</summary>
-    int RefundPercentOnRequest);
+    /// <summary>
+    /// The reasons this booking may be turned away for, and what each would owe the booker.
+    /// Only the ones PRD 6.1 allows where it stands: a booking whose hours were played cannot be
+    /// given back at the customer's request, so that answer is not offered.
+    /// </summary>
+    CancelChoiceResponse[] CancelChoices);
+
+/// <summary>
+/// One answer the counter may give for turning a booking away, and the money it settles. The
+/// amount rather than the share, because the share of a booking whose money never arrived is
+/// still nothing (PRD 6.2) — and it is the amount the venue has to be sure about before it
+/// presses (PRD US-13).
+/// </summary>
+public sealed record CancelChoiceResponse(string Reason, decimal RefundBaht);

@@ -58,9 +58,12 @@ with sync_playwright() as p:
     sent = send_slip(page, as_upload("slip.jpg", JPEG, "image/jpeg"))
     check("a real slip is accepted", sent.status == 200)
     page.wait_for_selector("[data-testid=slip-sent]")
+    # Asked of the server rather than read off the badge: the words on the badge are the
+    # reader's language and change with it, and what this check is about is the booking.
     check(
         "and the booking is now waiting for the venue",
-        "รอสนามตรวจ" in page.locator("[data-testid=booking-status]").inner_text(),
+        page.request.get(f"{BASE}/api/bookings/{booking['id']}").json()["status"]
+        == "PendingVerification",
         page,
     )
     check(
@@ -99,7 +102,7 @@ with sync_playwright() as p:
     check(
         "and the booker is told nothing about it",
         second.locator("[data-testid=upload-error]").count() == 0
-        and "รอสนามตรวจ" in second.locator("[data-testid=booking-status]").inner_text(),
+        and second.locator("[data-testid=slip-sent]").count() == 1,
         second,
     )
 

@@ -250,23 +250,27 @@
                   </div>
                 } @else {
                   <form class="stack" [formGroup]="cancelForm" novalidate>
+                    <!--
+                      The answers come from the server, which is also what decides them, so the
+                      counter is never offered one that would be refused — and each says the
+                      amount it settles rather than a share, because a share of money that never
+                      arrived is still nothing (PRD 6.2).
+                    -->
                     <fieldset class="reasons">
                       <legend>{{ i18n.t('venueBookings.reasonQuestion') }}</legend>
-                      @for (reason of reasons; track reason) {
+                      @for (choice of booking.can.cancelChoices; track choice.reason) {
                         <label class="reason-choice">
                           <input
                             type="radio"
                             formControlName="reason"
-                            [value]="reason"
-                            [attr.data-testid]="'reason-' + reason"
+                            [value]="choice.reason"
+                            [attr.data-testid]="'reason-' + choice.reason"
                           />
                           <span>
-                            {{ i18n.t('venueBookings.reason.' + reason) }}
-                            @if (reason === 'CustomerRequest') {
-                              <span class="muted" data-testid="refund-on-request">
-                                ({{ booking.can.refundPercentOnRequest }}%)
-                              </span>
-                            }
+                            {{ i18n.t('venueBookings.reason.' + choice.reason) }}
+                            <span class="muted" [attr.data-testid]="'gives-' + choice.reason">
+                              {{ i18n.t('venueBookings.gives') }} {{ choice.refundBaht }}
+                            </span>
                           </span>
                         </label>
                       }

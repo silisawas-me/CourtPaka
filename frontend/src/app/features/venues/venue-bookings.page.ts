@@ -21,9 +21,6 @@ import { FieldError } from '../../shared/field-error';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 import { provideLocalizedDateAdapter } from '../../shared/localized-date-adapter';
 
-/** The three answers PRD 6.1 will accept for turning a paid booking away. */
-const REASONS: CancellationReason[] = ['CustomerRequest', 'VenueInitiated', 'PaymentNotReceived'];
-
 /** As much as the venue may write against a booking, and as much as the column holds. */
 const NOTE_MAX_LENGTH = 400;
 
@@ -60,7 +57,6 @@ export class VenueBookingsPage {
   private readonly forms = inject(FormBuilder);
 
   protected readonly i18n = inject(TranslationService);
-  protected readonly reasons = REASONS;
   protected readonly noteMaxLength = NOTE_MAX_LENGTH;
 
   readonly venueId = input.required<string>();

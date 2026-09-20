@@ -5,18 +5,19 @@ namespace CourtBooking.Api.Bookings;
 ///
 /// The booker is shown this before they press anything and the write is decided by it afterwards,
 /// so it is one answer rather than two that could differ. It says nothing about the venue
-/// cancelling on the booker's behalf; that is US-13, with its own reasons and its own amounts.
+/// cancelling on the booker's behalf; that is <see cref="VenueDecisions"/>, with its own reasons
+/// and its own amounts.
 /// </summary>
 public static class Cancellation
 {
     /// <summary>
-    /// What the booker would get back, where it would leave the money, and what stands in the way
-    /// if anything does.
+    /// What would be got back, where it would leave the money, and what stands in the way if
+    /// anything does. Every door a booking has — the booker's and the counter's — answers in this.
     /// </summary>
-    /// <param name="Refused">The reason this cannot be cancelled, or null if it can.</param>
+    /// <param name="Refused">The reason this cannot be done, or null if it can.</param>
     /// <param name="RefundPercent">The share the ending gives back, whoever ends up holding it.</param>
     /// <param name="RefundBaht">What would be owed back today, which is nothing until the money is known to have arrived.</param>
-    /// <param name="Payment">Where cancelling would leave the payment state (PRD 6.2).</param>
+    /// <param name="Payment">Where going through would leave the payment state (PRD 6.2).</param>
     public readonly record struct Offer(
         string? Refused,
         int RefundPercent,
@@ -30,6 +31,25 @@ public static class Cancellation
         /// booker is told that rather than being shown a nought they would read as a loss.
         /// </summary>
         public bool AwaitsVenue => Payment == PaymentState.Unconfirmed;
+
+        /// <summary>
+        /// A door that is open, and what going through it does to the money. Where the booking
+        /// lands and the share it lands with are what decide the amount, so they arrive together
+        /// (PRD 6.2).
+        /// </summary>
+        public static Offer Giving(
+            Booking booking,
+            BookingStatus landing,
+            int percent,
+            PaymentState payment) =>
+            new(
+                null,
+                percent,
+                Refunds.DueFor(landing, payment, booking.TotalBaht, percent),
+                payment);
+
+        /// <summary>A door that is shut, and why. Nothing moves, so nothing is owed.</summary>
+        public static Offer Refusing(string code, PaymentState payment) => new(code, 0, 0m, payment);
     }
 
     /// <summary>
@@ -46,7 +66,7 @@ public static class Cancellation
         // A booking always has hours; one read without them cannot be spoken for.
         if (booking.Slots.Count == 0)
         {
-            return Refuse(BookingErrorCodes.NotCancellable, booking.PaymentState);
+            return Offer.Refusing(BookingErrorCodes.NotCancellable, booking.PaymentState);
         }
 
         var playStartsAt = booking.Slots.Min(slot => slot.StartsAt);
@@ -57,34 +77,34 @@ public static class Cancellation
             // lapsed is not cancelling it — it is gone, and says so (PRD 9.2).
             case BookingStatus.Held:
                 return booking.HoldExpiresAt <= now
-                    ? Refuse(BookingErrorCodes.NotCancellable, booking.PaymentState)
-                    : Give(booking, 0, booking.PaymentState);
+                    ? Offer.Refusing(BookingErrorCodes.NotCancellable, booking.PaymentState)
+                    : Offer.Giving(booking, BookingStatus.Cancelled, 0, booking.PaymentState);
 
             // The money may well be at the venue; only the venue can say. Until it does, the
             // booking owes nothing and sits in the venue's list of things to settle (PRD 6.2).
             case BookingStatus.PendingVerification:
                 return now >= playStartsAt
-                    ? Refuse(BookingErrorCodes.PlayHasStarted, booking.PaymentState)
-                    : Give(booking, Refunds.AllOfIt, PaymentState.Unconfirmed);
+                    ? Offer.Refusing(BookingErrorCodes.PlayHasStarted, booking.PaymentState)
+                    : Offer.Giving(
+                        booking,
+                        BookingStatus.Cancelled,
+                        Refunds.AllOfIt,
+                        PaymentState.Unconfirmed);
 
             // The venue has the money, so the terms the booking was made under decide the rest.
-            // Only this answer needs the terms, so only this answer insists on having them: a
+            // Only this answer needs those terms, so only this answer insists on having them: a
             // booking just created carries the id of its policy and not the policy itself.
             case BookingStatus.Confirmed when booking.CancellationPolicy is { } policy:
                 return now >= playStartsAt
-                    ? Refuse(BookingErrorCodes.PlayHasStarted, booking.PaymentState)
-                    : Give(
+                    ? Offer.Refusing(BookingErrorCodes.PlayHasStarted, booking.PaymentState)
+                    : Offer.Giving(
                         booking,
+                        BookingStatus.Cancelled,
                         policy.RefundPercentFor(now, playStartsAt),
                         booking.PaymentState);
 
             default:
-                return Refuse(BookingErrorCodes.NotCancellable, booking.PaymentState);
+                return Offer.Refusing(BookingErrorCodes.NotCancellable, booking.PaymentState);
         }
     }
-
-    private static Offer Give(Booking booking, int percent, PaymentState payment) =>
-        new(null, percent, Refunds.DueFor(BookingStatus.Cancelled, payment, booking.TotalBaht, percent), payment);
-
-    private static Offer Refuse(string code, PaymentState payment) => new(code, 0, 0m, payment);
 }

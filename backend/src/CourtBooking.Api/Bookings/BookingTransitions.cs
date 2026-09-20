@@ -134,6 +134,28 @@ public static class BookingTransitions
         };
 
     /// <summary>
+    /// The venue answering, after the fact, whether the money for a booking arrived (PRD US-13,
+    /// 6.2). It moves nothing — the booking is already where it ended — so there is no move for
+    /// the table to check. It is written down because who decided it and when is the first thing
+    /// a complaint asks (PRD 6.1).
+    /// </summary>
+    public static BookingStatusChange Settled(
+        Guid bookingId,
+        BookingStatus status,
+        PaymentState payment,
+        Guid byUserId,
+        DateTimeOffset at) =>
+        new()
+        {
+            BookingId = bookingId,
+            From = status,
+            To = status,
+            ChangedAt = at,
+            ChangedByUserId = byUserId,
+            Reason = payment.ToString(),
+        };
+
+    /// <summary>
     /// Moves every booking a query selects, and records each one, in a single transaction. The
     /// bookings that moved are answered back so the caller can say so (PRD 8).
     ///
@@ -248,6 +270,14 @@ public static class BookingTransitions
     /// The event name for a booking that has just arrived somewhere, as PRD 8 names them:
     /// <c>booking_pending_verification</c>, <c>booking_expired</c>, and so on.
     /// </summary>
+    /// <summary>
+    /// The line a move writes to the event log, with the name inside the template rather than
+    /// beside it: a sink that groups by template has to see these as the different events they
+    /// are, which is the whole point of recording them (PRD 8).
+    /// </summary>
+    public static string EventTemplate(BookingStatus status) =>
+        EventName(status) + " {BookingId} {VenueId} {RefundDueBaht}";
+
     public static string EventName(BookingStatus status) =>
         $"booking_{string.Concat(status.ToString().Select((letter, index) =>
             char.IsUpper(letter) && index > 0 ? $"_{char.ToLowerInvariant(letter)}" : $"{char.ToLowerInvariant(letter)}"))}";

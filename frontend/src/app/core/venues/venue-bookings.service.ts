@@ -16,8 +16,18 @@ export interface VenueBookingActions {
   noShow: boolean;
   settlePayment: boolean;
   playedAfterAll: boolean;
-  /** What cancelling at the customer's request would give back, when that is an answer. */
-  refundPercentOnRequest: number;
+  /**
+   * The reasons this booking may be turned away for, and what each owes the booker. Only the
+   * ones the rules allow where it stands, so the page can never offer an answer the server
+   * would refuse (PRD 6.1).
+   */
+  cancelChoices: CancelChoice[];
+}
+
+/** One answer the counter may give, and the money it settles (PRD US-13). */
+export interface CancelChoice {
+  reason: CancellationReason;
+  refundBaht: number;
 }
 
 /** One of the venue's bookings for a day, as its counter reads it (PRD US-13). */
@@ -28,9 +38,6 @@ export interface VenueBooking {
   paymentState: 'NotReceived' | 'Received' | 'Unconfirmed';
   totalBaht: number;
   refundDueBaht: number;
-  refundedBaht: number;
-  startsAt: string;
-  endsAt: string;
   slots: BookingSlot[];
   can: VenueBookingActions;
 }

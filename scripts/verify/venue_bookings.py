@@ -139,7 +139,9 @@ with sync_playwright() as p:
     pick_date(page, tomorrow)
     page.wait_for_selector("[data-testid=day-list]")
     page.click(f"[data-testid=cancel-{confirmed['id']}]")
-    expect(page.locator("[data-testid=refund-on-request]")).to_be_visible()
+    # Each answer carries the amount it settles, in baht, from the server that will decide it.
+    expect(page.locator("[data-testid=gives-CustomerRequest]")).to_be_visible()
+    expect(page.locator("[data-testid=gives-VenueInitiated]")).to_be_visible()
     check("a paid booking says what each reason would give back", True, page)
 
     page.click("[data-testid=cancel-confirm]")

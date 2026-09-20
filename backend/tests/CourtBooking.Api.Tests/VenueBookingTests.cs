@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using CourtBooking.Api.Bookings;
+using CourtBooking.Api.Localization;
 using CourtBooking.Api.Tests.Infrastructure;
 using CourtBooking.Api.Venues;
 
@@ -53,14 +54,19 @@ public sealed class VenueBookingTests(ApiTestFixture api) : IClassFixture<ApiTes
     }
 
     [Fact]
-    public async Task Staff_without_the_permission_may_look_but_not_touch()
+    public async Task Staff_without_the_permission_see_none_of_the_day()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();
         var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
         var staff = await scenario.StaffClientAsync(
             owner, venue.Id, nameof(VenuePermissions.VerifySlip));
 
-        Assert.Single(await DayAsync(staff, venue.Id, VenueScenario.Today.AddDays(1)));
+        // The day names every booker by the address they signed up with, so it is the permission
+        // holders' and not the venue's members at large (PDPA, PRD 8, US-13).
+        var read = await staff.GetAsync(
+            $"/api/venues/{venue.Id}/bookings?date={VenueScenario.Today.AddDays(1):yyyy-MM-dd}");
+
+        Assert.Equal(HttpStatusCode.Forbidden, read.StatusCode);
         Assert.Equal(
             HttpStatusCode.Forbidden,
             (await CancelAsync(staff, venue.Id, booking.Id, paymentReceived: false)).StatusCode);
@@ -139,19 +145,98 @@ public sealed class VenueBookingTests(ApiTestFixture api) : IClassFixture<ApiTes
         Assert.False(await scenario.HoldsItsHoursAsync(booking.Id));
     }
 
-    [Fact]
-    public async Task A_customer_asking_gets_what_the_terms_they_booked_under_give()
+    [Theory]
+    [InlineData(2, false)]
+    [InlineData(30, true)]
+    public async Task A_customer_asking_gets_what_the_terms_they_booked_under_give(
+        int hoursOfNotice,
+        bool allOfIt)
     {
         var (owner, venue, booking) = await ConfirmedBookingAsync();
 
-        // Inside the day's notice the venue's default terms ask for (PRD S-11).
-        await scenario.StartsInAsync(booking.Id, TimeSpan.FromHours(2));
+        // The venue's default terms turn at a day's notice (PRD S-11), so this stands either
+        // side of it rather than on a calendar date, which would move with the hour it is run at.
+        await scenario.StartsInAsync(booking.Id, TimeSpan.FromHours(hoursOfNotice));
 
         var cancelled = await CancelledAsync(
             owner, venue.Id, booking.Id, reason: nameof(CancellationReason.CustomerRequest));
 
-        Assert.Equal(0m, cancelled.RefundDueBaht);
+        Assert.Equal(allOfIt ? booking.TotalBaht : 0m, cancelled.RefundDueBaht);
         Assert.Equal(nameof(PaymentState.Received), cancelled.PaymentState);
+    }
+
+    [Fact]
+    public async Task What_each_answer_would_give_back_is_named_before_anything_is_pressed()
+    {
+        var (owner, venue, booking) = await ConfirmedBookingAsync();
+        await scenario.StartsInAsync(booking.Id, TimeSpan.FromHours(30));
+
+        var offered = Assert.Single(
+            await DayAsync(owner, venue.Id, DayOf(TimeSpan.FromHours(30))),
+            row => row.BookingId == booking.Id);
+
+        // All three are open on a live booking, each with the amount it settles (PRD US-13).
+        Assert.Equal(
+            [
+                nameof(CancellationReason.CustomerRequest),
+                nameof(CancellationReason.VenueInitiated),
+                nameof(CancellationReason.PaymentNotReceived),
+            ],
+            offered.Can.CancelChoices.Select(choice => choice.Reason));
+
+        Assert.Equal(booking.TotalBaht, offered.Can.CancelChoices[0].RefundBaht);
+        Assert.Equal(booking.TotalBaht, offered.Can.CancelChoices[1].RefundBaht);
+        Assert.Equal(0m, offered.Can.CancelChoices[2].RefundBaht);
+    }
+
+    [Fact]
+    public async Task Hours_already_played_are_not_given_back_at_the_customer_s_asking()
+    {
+        var (owner, venue, booking) = await ConfirmedBookingAsync();
+        await scenario.StartsInAsync(booking.Id, TimeSpan.FromHours(-2));
+
+        var offered = Assert.Single(
+            await DayAsync(owner, venue.Id, DayOf(TimeSpan.FromHours(-2))),
+            row => row.BookingId == booking.Id);
+
+        // The counter is never offered an answer the rules would refuse (PRD 6.1).
+        Assert.DoesNotContain(
+            nameof(CancellationReason.CustomerRequest),
+            offered.Can.CancelChoices.Select(choice => choice.Reason));
+
+        var cancelled = await CancelledAsync(
+            owner, venue.Id, booking.Id, reason: nameof(CancellationReason.VenueInitiated));
+
+        // Inside the correcting window the money still answers to the reason (PRD 6.1).
+        Assert.Equal(nameof(BookingStatus.Cancelled), cancelled.Status);
+        Assert.Equal(booking.TotalBaht, cancelled.RefundDueBaht);
+    }
+
+    [Fact]
+    public async Task A_reason_that_is_only_a_number_is_refused()
+    {
+        var (owner, venue, booking) = await ConfirmedBookingAsync();
+
+        // The enum parses "7" happily; it is still not one of the three (PRD 6.1).
+        var refused = await CancelAsync(owner, venue.Id, booking.Id, reason: "7");
+
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal(BookingErrorCodes.ReasonNotAllowedHere, await refused.ErrorCodeAsync());
+    }
+
+    [Fact]
+    public async Task A_hold_that_ran_out_is_gone_rather_than_cancellable()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var booker = await scenario.SignedInClientAsync();
+        var booking = await VenueScenario.HoldAsync(
+            booker, venue.Id, VenueScenario.Today.AddDays(1), (courts[0], 18));
+        await scenario.LapseHoldAsync(booking.Id);
+
+        var refused = await CancelAsync(owner, venue.Id, booking.Id);
+
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Equal(BookingErrorCodes.NotCancellable, await refused.ErrorCodeAsync());
     }
 
     [Fact]
@@ -205,10 +290,26 @@ public sealed class VenueBookingTests(ApiTestFixture api) : IClassFixture<ApiTes
 
         Assert.Equal(nameof(BookingStatus.NoShow), written.Status);
         Assert.Equal(0m, written.RefundDueBaht);
-        // The venue keeps what it was paid, and what was not reached goes back on sale — the
-        // hour already running does not (PRD 6.1).
+        // The venue keeps what it was paid, and every hour that is not over goes back on sale —
+        // the one already running included, because a walk-in may have the rest of it
+        // (PRD BR-04, US-13).
         Assert.Equal(nameof(PaymentState.Received), written.PaymentState);
-        Assert.Equal(1, await scenario.HoursStillHeldAsync(booking.Id));
+        Assert.Equal(0, await scenario.HoursStillHeldAsync(booking.Id));
+    }
+
+    [Fact]
+    public async Task Writing_off_a_no_show_is_not_the_owner_s_alone()
+    {
+        var (owner, venue, booking) = await ConfirmedTwoHoursAsync();
+        await scenario.StartsInAsync(booking.Id, TimeSpan.FromMinutes(-20));
+        var staff = await scenario.StaffClientAsync(
+            owner, venue.Id, nameof(VenuePermissions.ManageBookings));
+
+        // PRD 6.1 puts this row under ManageBookings, not under the owner.
+        var written = await ReadAsync(await staff.PostAsync(
+            $"/api/venues/{venue.Id}/bookings/{booking.Id}/no-show", null));
+
+        Assert.Equal(nameof(BookingStatus.NoShow), written.Status);
     }
 
     [Fact]
@@ -274,18 +375,43 @@ public sealed class VenueBookingTests(ApiTestFixture api) : IClassFixture<ApiTes
     }
 
     [Fact]
+    public async Task Who_answered_for_the_money_is_in_the_history()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (booker, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        await booker.PostAsync($"/api/bookings/{booking.Id}/cancel", null);
+
+        await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/bookings/{booking.Id}/settle-payment",
+            new SettlePaymentRequest(true));
+
+        // It moves nothing, and it decides money, so it is written down all the same (PRD 6.1).
+        var answered = Assert.Single(
+            await scenario.HistoryAsync(booking.Id),
+            change => change.From == BookingStatus.Cancelled
+                && change.To == BookingStatus.Cancelled);
+        Assert.Equal(nameof(PaymentState.Received), answered.Reason);
+        Assert.NotNull(answered.ChangedByUserId);
+    }
+
+    [Fact]
     public async Task A_no_show_written_by_mistake_can_be_taken_back_by_the_owner()
     {
-        var (owner, venue, booking) = await ConfirmedBookingAsync();
+        var (owner, venue, booking) = await ConfirmedTwoHoursAsync();
         await scenario.StartsInAsync(booking.Id, TimeSpan.FromMinutes(-20));
         await owner.PostAsync($"/api/venues/{venue.Id}/bookings/{booking.Id}/no-show", null);
+        Assert.Equal(0, await scenario.HoursStillHeldAsync(booking.Id));
+
+        // Correcting what was recorded starts once the hours are over (PRD 6.1).
+        await scenario.StartsInAsync(booking.Id, TimeSpan.FromHours(-3));
 
         var corrected = await ReadAsync(await owner.PostAsJsonAsync(
             $"/api/venues/{venue.Id}/bookings/{booking.Id}/played",
             new PlayedAfterAllRequest("มาเล่นจริง พนักงานกดผิด")));
 
         Assert.Equal(nameof(BookingStatus.Completed), corrected.Status);
-        Assert.True(await scenario.HoldsItsHoursAsync(booking.Id));
+        // The hours are the booking's again, which is what makes the record true.
+        Assert.Equal(2, await scenario.HoursStillHeldAsync(booking.Id));
 
         var change = Assert.Single(
             await scenario.HistoryAsync(booking.Id),
@@ -294,11 +420,28 @@ public sealed class VenueBookingTests(ApiTestFixture api) : IClassFixture<ApiTes
     }
 
     [Fact]
+    public async Task A_no_show_cannot_be_taken_back_while_the_hours_are_still_running()
+    {
+        var (owner, venue, booking) = await ConfirmedTwoHoursAsync();
+        await scenario.StartsInAsync(booking.Id, TimeSpan.FromMinutes(-20));
+        await owner.PostAsync($"/api/venues/{venue.Id}/bookings/{booking.Id}/no-show", null);
+
+        var refused = await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/bookings/{booking.Id}/played",
+            new PlayedAfterAllRequest("มาเล่นจริง"));
+
+        // PRD 6.1 opens the correcting window at the moment the hours end, not before.
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Equal(BookingErrorCodes.TooLateToCorrect, await refused.ErrorCodeAsync());
+    }
+
+    [Fact]
     public async Task Taking_a_no_show_back_needs_a_reason_and_needs_the_owner()
     {
         var (owner, venue, booking) = await ConfirmedBookingAsync();
         await scenario.StartsInAsync(booking.Id, TimeSpan.FromMinutes(-20));
         await owner.PostAsync($"/api/venues/{venue.Id}/bookings/{booking.Id}/no-show", null);
+        await scenario.StartsInAsync(booking.Id, TimeSpan.FromHours(-3));
 
         var noReason = await owner.PostAsJsonAsync(
             $"/api/venues/{venue.Id}/bookings/{booking.Id}/played",
@@ -318,12 +461,15 @@ public sealed class VenueBookingTests(ApiTestFixture api) : IClassFixture<ApiTes
     {
         var (owner, venue, booking) = await ConfirmedTwoHoursAsync();
 
-        // Written off twenty minutes in, which puts the second hour back on sale, and it is taken.
+        // Written off twenty minutes in, which puts its hours back on sale, and they are taken.
         await scenario.StartsInAsync(booking.Id, TimeSpan.FromMinutes(-20));
         var written = await owner.PostAsync(
             $"/api/venues/{venue.Id}/bookings/{booking.Id}/no-show", null);
         Assert.Equal(HttpStatusCode.OK, written.StatusCode);
 
+        // The hours are moved behind them first and taken afterwards, so that what somebody else
+        // holds is the hours this booking would be claiming back.
+        await scenario.StartsInAsync(booking.Id, TimeSpan.FromHours(-3));
         await scenario.SomebodyElseTakesAsync(booking.Id);
 
         var refused = await owner.PostAsJsonAsync(
@@ -415,6 +561,14 @@ public sealed class VenueBookingTests(ApiTestFixture api) : IClassFixture<ApiTes
 
         return (owner, venue, booking);
     }
+
+    /// <summary>
+    /// The venue's day a booking falls on once its hours have been moved. Tests stand at a
+    /// distance from now rather than on a calendar date, so the date has to be worked out from
+    /// the same clock the server reads (PRD BR-10).
+    /// </summary>
+    private static DateOnly DayOf(TimeSpan fromNow) =>
+        PlatformRequirements.BangkokDateAndHour(DateTimeOffset.UtcNow + fromNow).Date;
 
     private static async Task<VenueBookingResponse[]> DayAsync(
         HttpClient client,

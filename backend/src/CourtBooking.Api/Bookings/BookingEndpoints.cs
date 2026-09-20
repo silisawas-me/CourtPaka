@@ -398,11 +398,7 @@ public static class BookingEndpoints
             // exclusion constraint's index and Postgres breaks the standoff by killing one of them
             // with a deadlock — a 500, where waiting a moment gives a real answer. The constraint
             // is still what guarantees the rule; this only decides who asks it first.
-            foreach (var key in booking.Slots.Select(LockKey).Order())
-            {
-                await database.Database.ExecuteSqlInterpolatedAsync(
-                    $"SELECT pg_advisory_xact_lock({key})", cancellationToken);
-            }
+            await BookedSlots.LockAsync(database, booking.Slots, cancellationToken);
 
             database.Bookings.Add(booking);
 
@@ -461,16 +457,6 @@ public static class BookingEndpoints
     }
 
     /// <summary>
-    /// One number per court-hour, the same for everyone asking for it. Two different hours sharing
-    /// a number only means they queue behind each other, which costs a moment and nothing else.
-    /// </summary>
-    private static long LockKey(BookingSlot slot)
-    {
-        Span<byte> id = stackalloc byte[16];
-        slot.CourtId.TryWriteBytes(id);
-        return BitConverter.ToInt64(id[..8]) ^ BitConverter.ToInt64(id[8..]) ^ slot.StartsAt.UtcTicks;
-    }
-
     /// <summary>
     /// Says that holds ran out. A status change is an event whoever is watching should see, and
     /// this is the one nobody asks for (PRD 8, 6.1).
@@ -591,20 +577,7 @@ public static class BookingEndpoints
             booking.CreatedAt,
             booking.HoldExpiresAt,
             booking.TotalBaht,
-            booking.Slots
-                .OrderBy(slot => slot.StartsAt)
-                .ThenBy(slot => courtNames.GetValueOrDefault(slot.CourtId))
-                .Select(slot =>
-                {
-                    var (date, hour) = PlatformRequirements.BangkokDateAndHour(slot.StartsAt);
-                    return new BookingSlotResponse(
-                        slot.CourtId,
-                        courtNames.GetValueOrDefault(slot.CourtId, string.Empty),
-                        date,
-                        hour,
-                        slot.BahtPerHour);
-                })
-                .ToArray(),
+            BookingSlotResponse.Of(booking, courtNames),
             slipUploadedAt,
             booking.PaymentState.ToString(),
             booking.RefundDueBaht,

@@ -13,8 +13,6 @@ function booking(overrides: Record<string, unknown> = {}) {
     totalBaht: 400,
     refundDueBaht: 0,
     refundedBaht: 0,
-    startsAt: '2026-09-21T11:00:00Z',
-    endsAt: '2026-09-21T13:00:00Z',
     slots: [
       { courtId: 'c1', courtName: 'คอร์ท 1', date: '2026-09-21', hour: 18, bahtPerHour: 200 },
       { courtId: 'c1', courtName: 'คอร์ท 1', date: '2026-09-21', hour: 19, bahtPerHour: 200 },
@@ -24,7 +22,11 @@ function booking(overrides: Record<string, unknown> = {}) {
       noShow: false,
       settlePayment: false,
       playedAfterAll: false,
-      refundPercentOnRequest: 100,
+      cancelChoices: [
+        { reason: 'CustomerRequest', refundBaht: 400 },
+        { reason: 'VenueInitiated', refundBaht: 400 },
+        { reason: 'PaymentNotReceived', refundBaht: 0 },
+      ],
     },
     ...overrides,
   };
@@ -83,7 +85,7 @@ describe('VenueBookingsPage', () => {
           noShow: true,
           settlePayment: false,
           playedAfterAll: false,
-          refundPercentOnRequest: 0,
+          cancelChoices: [],
         },
       }),
     ]);
@@ -92,13 +94,44 @@ describe('VenueBookingsPage', () => {
     expect(elementOf(fixture, 'no-show-b1')).not.toBeNull();
   });
 
-  it('asks why before it turns a paid booking away, and says what each answer gives back', () => {
-    render([booking({ can: { ...booking().can, refundPercentOnRequest: 50 } })]);
+  it('says what each answer would give back, in baht, beside the answer', () => {
+    render([
+      booking({
+        can: {
+          ...booking().can,
+          cancelChoices: [
+            { reason: 'CustomerRequest', refundBaht: 200 },
+            { reason: 'VenueInitiated', refundBaht: 400 },
+          ],
+        },
+      }),
+    ]);
 
     clickOn(fixture, 'cancel-b1');
 
-    // The share the customer's own terms would give is shown beside the choice that uses it.
-    expect(textOf(fixture, 'refund-on-request')).toContain('50%');
+    expect(textOf(fixture, 'gives-CustomerRequest')).toContain('200');
+    expect(textOf(fixture, 'gives-VenueInitiated')).toContain('400');
+  });
+
+  it('offers only the answers the server allows for this booking', () => {
+    render([
+      booking({
+        status: 'Completed',
+        can: {
+          ...booking().can,
+          cancelChoices: [
+            { reason: 'VenueInitiated', refundBaht: 400 },
+            { reason: 'PaymentNotReceived', refundBaht: 0 },
+          ],
+        },
+      }),
+    ]);
+
+    clickOn(fixture, 'cancel-b1');
+
+    // Hours already played cannot be given back at the customer's asking (PRD 6.1), so that
+    // answer is not there to pick.
+    expect(elementOf(fixture, 'reason-CustomerRequest')).toBeNull();
     expect(elementOf(fixture, 'reason-VenueInitiated')).not.toBeNull();
   });
 
