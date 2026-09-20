@@ -212,16 +212,43 @@ public sealed class VenueBookingTests(ApiTestFixture api) : IClassFixture<ApiTes
         Assert.Equal(booking.TotalBaht, cancelled.RefundDueBaht);
     }
 
-    [Fact]
-    public async Task A_reason_that_is_only_a_number_is_refused()
+    [Theory]
+    // Parses to an undefined value.
+    [InlineData("7")]
+    // Parses to CustomerRequest by its number rather than its name.
+    [InlineData("1")]
+    // Ors the two into a third reason, which would apply that reason's money while the record
+    // said something else entirely.
+    [InlineData("CustomerRequest,VenueInitiated")]
+    [InlineData("customerrequest")]
+    public async Task A_reason_that_is_not_one_of_the_three_names_is_refused(string sent)
     {
         var (owner, venue, booking) = await ConfirmedBookingAsync();
 
-        // The enum parses "7" happily; it is still not one of the three (PRD 6.1).
-        var refused = await CancelAsync(owner, venue.Id, booking.Id, reason: "7");
+        var refused = await CancelAsync(owner, venue.Id, booking.Id, reason: sent);
 
         Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
         Assert.Equal(BookingErrorCodes.ReasonNotAllowedHere, await refused.ErrorCodeAsync());
+    }
+
+    [Fact]
+    public async Task The_record_says_the_reason_that_was_decided_on()
+    {
+        var (owner, venue, booking) = await ConfirmedBookingAsync();
+
+        await CancelledAsync(
+            owner,
+            venue.Id,
+            booking.Id,
+            reason: nameof(CancellationReason.VenueInitiated),
+            note: "ไฟดับทั้งสนาม");
+
+        var change = Assert.Single(
+            await scenario.HistoryAsync(booking.Id),
+            recorded => recorded.To == BookingStatus.Cancelled);
+
+        // The record and the money have to say the same thing (PRD 6.1).
+        Assert.Equal($"{nameof(CancellationReason.VenueInitiated)}: ไฟดับทั้งสนาม", change.Reason);
     }
 
     [Fact]
@@ -582,18 +609,21 @@ public sealed class VenueBookingTests(ApiTestFixture api) : IClassFixture<ApiTes
         Guid venueId,
         Guid bookingId,
         string? reason = null,
-        bool? paymentReceived = null) =>
+        bool? paymentReceived = null,
+        string? note = null) =>
         client.PostAsJsonAsync(
             $"/api/venues/{venueId}/bookings/{bookingId}/cancel",
-            new VenueCancelRequest(reason, paymentReceived, null));
+            new VenueCancelRequest(reason, paymentReceived, note));
 
     private static async Task<VenueBookingResponse> CancelledAsync(
         HttpClient client,
         Guid venueId,
         Guid bookingId,
         string? reason = null,
-        bool? paymentReceived = null) =>
-        await ReadAsync(await CancelAsync(client, venueId, bookingId, reason, paymentReceived));
+        bool? paymentReceived = null,
+        string? note = null) =>
+        await ReadAsync(
+            await CancelAsync(client, venueId, bookingId, reason, paymentReceived, note));
 
     private static Task<VenueBookingResponse> ReadAsync(HttpResponseMessage response) =>
         VenueScenario.ReadAsync<VenueBookingResponse>(response);

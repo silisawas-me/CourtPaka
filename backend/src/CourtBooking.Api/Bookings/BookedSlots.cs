@@ -88,11 +88,7 @@ public static class BookedSlots
         AppDbContext database,
         Guid bookingId,
         CancellationToken cancellationToken) =>
-        database.BookingSlots
-            .Where(slot => slot.BookingId == bookingId && slot.IsActive)
-            .ExecuteUpdateAsync(
-                set => set.SetProperty(slot => slot.IsActive, false),
-                cancellationToken);
+        ReleaseWhereAsync(database, bookingId, _ => true, cancellationToken);
 
     /// <summary>
     /// Lets go of the hours a booking has not finished, keeping the ones it has. What a no-show
@@ -105,11 +101,39 @@ public static class BookedSlots
         Guid bookingId,
         DateTimeOffset now,
         CancellationToken cancellationToken) =>
-        database.BookingSlots
-            .Where(slot => slot.BookingId == bookingId && slot.IsActive && slot.EndsAt > now)
+        ReleaseWhereAsync(database, bookingId, slot => slot.EndsAt > now, cancellationToken);
+
+    /// <summary>
+    /// Lets go of the hours of one booking that a rule picks out, behind the same locks everyone
+    /// reaching for those court-hours takes. Letting go touches the same index that claiming
+    /// does, so a writer that skipped the queue would meet a claimer inside it (PRD BR-04).
+    /// </summary>
+    private static async Task<int> ReleaseWhereAsync(
+        AppDbContext database,
+        Guid bookingId,
+        Func<BookingSlot, bool> chosen,
+        CancellationToken cancellationToken)
+    {
+        var holding = await database.BookingSlots
+            .AsNoTracking()
+            .Where(slot => slot.BookingId == bookingId && slot.IsActive)
+            .ToListAsync(cancellationToken);
+
+        var letting = holding.Where(chosen).ToList();
+        if (letting.Count == 0)
+        {
+            return 0;
+        }
+
+        await LockAsync(database, letting, cancellationToken);
+
+        var ids = letting.Select(slot => slot.Id).ToArray();
+        return await database.BookingSlots
+            .Where(slot => ids.Contains(slot.Id) && slot.IsActive)
             .ExecuteUpdateAsync(
                 set => set.SetProperty(slot => slot.IsActive, false),
                 cancellationToken);
+    }
 
     /// <summary>
     /// Claims a booking's hours again, for a venue taking back a no-show it recorded by mistake

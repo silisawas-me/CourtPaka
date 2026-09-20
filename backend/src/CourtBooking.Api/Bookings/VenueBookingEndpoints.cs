@@ -98,10 +98,12 @@ public static class VenueBookingEndpoints
         CancellationReason? reason = null;
         if (request.Reason is { } named)
         {
-            // TryParse alone accepts "7", which is not one of the three and would then be
-            // decided on as though it were.
+            // Only one of the three names, spelled as it is spelled. TryParse is looser than it
+            // looks: it takes "7", and it takes "CustomerRequest,VenueInitiated" and ors them
+            // into a third reason — which would apply that reason's money while the record said
+            // something else entirely (PRD 6.1).
             if (!Enum.TryParse<CancellationReason>(named, out var parsed)
-                || !Enum.IsDefined(parsed))
+                || !Enum.GetNames<CancellationReason>().Contains(named, StringComparer.Ordinal))
             {
                 return ApiProblem.Of(
                     StatusCodes.Status400BadRequest, BookingErrorCodes.ReasonNotAllowedHere);
@@ -110,7 +112,9 @@ public static class VenueBookingEndpoints
             reason = parsed;
         }
 
-        if (Recorded(request.Reason, request.Note) is not { } recorded)
+        // Written down as the reason that was decided on, not as the string that was sent: the
+        // record and the money have to say the same thing (PRD 6.1).
+        if (Recorded(reason?.ToString(), request.Note) is not { } recorded)
         {
             // The same column and the same refusal the slip queue gives, so the same code: a
             // reader who has learned what it means should not have to learn a second one.
