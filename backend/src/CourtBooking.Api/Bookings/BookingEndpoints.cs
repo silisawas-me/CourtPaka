@@ -304,6 +304,19 @@ public static class BookingEndpoints
             .Where(court => venueIds.Contains(court.VenueId))
             .ToDictionaryAsync(court => court.Id, court => court.Name, cancellationToken);
 
+        // What the venue has actually sent back, per booking: the sum of the records that still
+        // stand (PRD 6.2, US-18).
+        var sentBack = await database.RefundRecords
+            .StillStanding()
+            .Where(record => bookingIds.Contains(record.BookingId))
+            .GroupBy(record => record.BookingId)
+            .Select(records => new
+            {
+                BookingId = records.Key,
+                Baht = records.Sum(record => record.AmountBaht),
+            })
+            .ToDictionaryAsync(row => row.BookingId, row => row.Baht, cancellationToken);
+
         // When the newest slip arrived. The tiebreak that SlipDownload.NewestFirst applies decides
         // which slip is the current one; the latest moment is the same either way, and asking for
         // it per booking rather than per set would be a query each.
@@ -325,7 +338,8 @@ public static class BookingEndpoints
                 courtNames,
                 now,
                 BookedSlots.StatusAt(booking, now),
-                slipTimes.TryGetValue(booking.Id, out var uploaded) ? uploaded : null)),
+                slipTimes.TryGetValue(booking.Id, out var uploaded) ? uploaded : null,
+                sentBack.GetValueOrDefault(booking.Id))),
         ];
     }
 
@@ -575,7 +589,8 @@ public static class BookingEndpoints
         IReadOnlyDictionary<Guid, string> courtNames,
         DateTimeOffset now,
         BookingStatus status,
-        DateTimeOffset? slipUploadedAt = null) =>
+        DateTimeOffset? slipUploadedAt = null,
+        decimal sentBackBaht = 0m) =>
         new(
             booking.Id,
             booking.VenueId,
@@ -588,10 +603,9 @@ public static class BookingEndpoints
             slipUploadedAt,
             booking.PaymentState.ToString(),
             booking.RefundDueBaht,
-            // Refunds are made by the venue outside the system and written down against the
-            // booking, which is US-18. Nothing has been written down yet, so nothing has been
-            // sent back (PRD 6.2, BR-06).
-            RefundedBaht: 0m,
+            // Made outside this system and written down after the fact, so this is the sum of
+            // what the venue says it sent (PRD 6.2, BR-06, US-18).
+            sentBackBaht,
             Offer(booking, now, status));
 
     /// <summary>What letting this booking go would come to, as the page reads it.</summary>

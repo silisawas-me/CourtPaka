@@ -9,11 +9,14 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 import { courtsOf, hoursOf } from '../../core/bookings/hours';
+import { AppDatePipe } from '../../core/i18n/app-date.pipe';
 import { errorKey } from '../../core/http/api-error';
 import { plainDate, venueToday } from '../../core/i18n/plain-date';
 import { TranslationService } from '../../core/i18n/translation.service';
 import {
   CancellationReason,
+  RefundMethod,
+  Refunds,
   VenueBooking,
   VenueBookingsService,
 } from '../../core/venues/venue-bookings.service';
@@ -25,7 +28,10 @@ import { provideLocalizedDateAdapter } from '../../shared/localized-date-adapter
 const NOTE_MAX_LENGTH = 400;
 
 /** Which question a row is being asked. One row at a time: these decide money. */
-type Asking = 'cancel' | 'noShow' | 'settle' | 'played';
+type Asking = 'cancel' | 'noShow' | 'settle' | 'played' | 'refund';
+
+/** The two ways a venue gets money back to somebody (PRD US-18). */
+const REFUND_METHODS: RefundMethod[] = ['Transfer', 'Cash'];
 
 /**
  * A day at the counter (PRD US-13): who booked what, and every door the venue can press on it.
@@ -47,6 +53,7 @@ type Asking = 'cancel' | 'noShow' | 'settle' | 'played';
     MatFormFieldModule,
     MatInputModule,
     MatProgressBarModule,
+    AppDatePipe,
   ],
   providers: [FORM_FIELD_DEFAULTS, provideLocalizedDateAdapter()],
   templateUrl: './venue-bookings.page.html',
@@ -58,6 +65,10 @@ export class VenueBookingsPage {
 
   protected readonly i18n = inject(TranslationService);
   protected readonly noteMaxLength = NOTE_MAX_LENGTH;
+  protected readonly refundMethods = REFUND_METHODS;
+
+  /** A transfer cannot have happened tomorrow, so the calendar does not offer it (PRD US-18). */
+  protected readonly today = venueToday();
 
   readonly venueId = input.required<string>();
 
@@ -81,6 +92,41 @@ export class VenueBookingsPage {
   /** Turning a paid booking away needs one of three reasons, and may carry a note (PRD 6.1). */
   protected readonly cancelForm = this.forms.group({
     reason: this.forms.control<CancellationReason | null>(null),
+    note: this.forms.nonNullable.control('', Validators.maxLength(NOTE_MAX_LENGTH)),
+  });
+
+  /**
+   * What has been sent back on the booking whose refunds are open, once it has been asked for.
+   * Only one row can be open at a time, so one holder is enough.
+   */
+  protected readonly refunds = signal<Refunds | null>(null);
+
+  /**
+   * The record whose reason is being typed, if any. Taking money back writes into a row that can
+   * never be corrected, so the reason is asked for beside the record it belongs to rather than
+   * once for the list.
+   */
+  protected readonly voiding = signal<string | null>(null);
+
+  protected readonly voidForm = this.forms.group({
+    reason: this.forms.nonNullable.control('', [
+      Validators.required,
+      Validators.maxLength(NOTE_MAX_LENGTH),
+    ]),
+  });
+
+  /**
+   * Writing down a transfer that has already been made (PRD US-18). The amount is filled in with
+   * what is still owed, because sending all of it is what usually happens and typing it again is
+   * only a chance to type it wrong.
+   */
+  protected readonly refundForm = this.forms.group({
+    amountBaht: this.forms.control<number | null>(null, [
+      Validators.required,
+      Validators.min(0.01),
+    ]),
+    refundedOn: this.forms.nonNullable.control(venueToday(), Validators.required),
+    method: this.forms.nonNullable.control<RefundMethod>('Transfer'),
     note: this.forms.nonNullable.control('', Validators.maxLength(NOTE_MAX_LENGTH)),
   });
 
@@ -112,6 +158,122 @@ export class VenueBookingsPage {
     this.decideError.set(null);
     this.cancelForm.reset({ reason: null, note: '' });
     this.playedForm.reset({ reason: '' });
+    this.refunds.set(null);
+    this.voiding.set(null);
+
+    if (door === 'refund') {
+      this.openRefunds(bookingId);
+    }
+  }
+
+  /**
+   * Writes down a transfer the venue has made. The list that comes back is what the row shows
+   * afterwards — the server decides what is still owed, and it is the same answer that refuses
+   * an amount larger than that.
+   */
+  protected recordRefund(booking: VenueBooking): void {
+    this.refundForm.markAllAsTouched();
+    if (this.refundForm.invalid || this.deciding()) {
+      return;
+    }
+
+    const { amountBaht, refundedOn, method, note } = this.refundForm.getRawValue();
+
+    this.sending(
+      this.bookings.recordRefund(this.venueId(), booking.bookingId, {
+        amountBaht: amountBaht!,
+        refundedOn: plainDate(refundedOn),
+        method,
+        note: note.trim() || undefined,
+      }),
+      booking,
+    );
+  }
+
+  /** Opens the reason box against one record, so what is typed can only reach that one. */
+  protected askVoid(refundId: string): void {
+    this.voiding.set(refundId);
+    this.voidForm.reset({ reason: '' });
+    this.decideError.set(null);
+  }
+
+  /** Taking a record back. The owner's alone, and the server says so if it is not them. */
+  protected voidRefund(booking: VenueBooking, refundId: string): void {
+    this.voidForm.markAllAsTouched();
+    const reason = this.voidForm.getRawValue().reason.trim();
+
+    if (reason.length === 0 || this.voidForm.invalid || this.deciding()) {
+      return;
+    }
+
+    this.sending(
+      this.bookings.voidRefund(this.venueId(), booking.bookingId, refundId, reason),
+      booking,
+    );
+  }
+
+  private openRefunds(bookingId: string): void {
+    this.bookings.refunds(this.venueId(), bookingId).subscribe({
+      next: (refunds) => {
+        // The counter may have moved on while this was in the air. Answering into whichever row
+        // is open now would show one booking's records under another's name — and prefill the
+        // amount from the wrong debt (PRD US-18).
+        if (this.asking()?.bookingId !== bookingId) {
+          return;
+        }
+
+        this.refunds.set(refunds);
+        this.readyToRecord(refunds.outstandingBaht);
+      },
+      error: (failure: unknown) => this.decideError.set(errorKey(failure)),
+    });
+  }
+
+  /**
+   * Ready for the next transfer: the amount starts at what is still owed, because sending all of
+   * it is what usually happens and typing it again is only a chance to type it wrong.
+   */
+  private readyToRecord(outstanding: number): void {
+    this.refundForm.reset({
+      amountBaht: outstanding > 0 ? outstanding : null,
+      refundedOn: venueToday(),
+      method: 'Transfer',
+      note: '',
+    });
+  }
+
+  /**
+   * A refund write answers with the refunds rather than with the booking, so the row's own
+   * numbers are read again afterwards — what is owed has not moved, but what is left has.
+   */
+  private sending(refunds: Observable<Refunds>, booking: VenueBooking): void {
+    this.deciding.set(true);
+    this.decideError.set(null);
+
+    refunds.subscribe({
+      next: (sent) => {
+        this.deciding.set(false);
+        this.refunds.set(sent);
+        this.voiding.set(null);
+        this.readyToRecord(sent.outstandingBaht);
+
+        this.bookings$.update((day) =>
+          day.map((row) =>
+            row.bookingId === booking.bookingId
+              ? {
+                  ...row,
+                  sentBackBaht: sent.sentBackBaht,
+                  outstandingBaht: sent.outstandingBaht,
+                }
+              : row,
+          ),
+        );
+      },
+      error: (failure: unknown) => {
+        this.deciding.set(false);
+        this.decideError.set(errorKey(failure));
+      },
+    });
   }
 
   protected asked(bookingId: string, door: Asking): boolean {

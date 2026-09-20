@@ -44,4 +44,24 @@ public static class Refunds
 
     /// <summary>The whole of it. A venue that refuses hours it took money for keeps none (PRD 6.1).</summary>
     public const int AllOfIt = 100;
+
+    /// <summary>
+    /// The records that count towards what has been sent back. A voided one stays in the table —
+    /// what the venue said at the time is part of the history — and stops counting. Every screen
+    /// that shows how much came back reads the rule from here (PRD 6.2, US-18).
+    /// </summary>
+    public static IQueryable<RefundRecord> StillStanding(this IQueryable<RefundRecord> records) =>
+        records.Where(record => record.VoidedAt == null);
+
+    /// <summary>
+    /// What is still owed after what has already been sent back (PRD 6.2). This is the number a
+    /// venue acts on: what it owes is a fact about the booking, and what it still has to send is
+    /// what it has to do about it.
+    ///
+    /// It never goes below zero, because a venue cannot owe less than nothing. That also means it
+    /// cannot show that more went out than was owed — the write path is what keeps that from
+    /// happening (one transaction, one lock per booking), and nothing here would notice if it did.
+    /// </summary>
+    public static decimal OutstandingOf(decimal refundDueBaht, decimal sentBackBaht) =>
+        Math.Max(0m, refundDueBaht - sentBackBaht);
 }

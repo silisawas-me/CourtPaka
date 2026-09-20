@@ -205,6 +205,9 @@ public sealed record VenueBookingResponse(
     string PaymentState,
     decimal TotalBaht,
     decimal RefundDueBaht,
+    /// <summary>What the venue says it has sent back, and what that leaves (PRD 6.2, US-18).</summary>
+    decimal SentBackBaht,
+    decimal OutstandingBaht,
     BookingSlotResponse[] Slots,
     /// <summary>What each door the counter can press would come to, worked out by the server.</summary>
     VenueBookingActionsResponse Can);
@@ -233,3 +236,50 @@ public sealed record VenueBookingActionsResponse(
 /// presses (PRD US-13).
 /// </summary>
 public sealed record CancelChoiceResponse(string Reason, decimal RefundBaht);
+
+/// <summary>Writing down a transfer the venue has already made (PRD US-18).</summary>
+public sealed record RecordRefundRequest(
+    decimal AmountBaht,
+    DateOnly RefundedOn,
+    string Method,
+    string? Note);
+
+/// <summary>Taking a record back. The owner may not do it without saying why (PRD US-18).</summary>
+public sealed record VoidRefundRequest(string? Reason);
+
+/// <summary>One transfer, as it was written down. Nothing about it changes afterwards.</summary>
+public sealed record RefundRecordResponse(
+    Guid Id,
+    decimal AmountBaht,
+    DateOnly RefundedOn,
+    string Method,
+    string? Note,
+    DateTimeOffset RecordedAt,
+    /// <summary>When it was taken back, if it was. A voided record still shows (PRD US-18).</summary>
+    DateTimeOffset? VoidedAt,
+    string? VoidReason);
+
+/// <summary>
+/// What a booking owes, what has been sent back, and what is left (PRD 6.2). The last of these is
+/// the number a venue acts on: what it owes is a fact, what it still has to send is a job.
+/// </summary>
+public sealed record RefundsResponse(
+    decimal RefundDueBaht,
+    decimal SentBackBaht,
+    decimal OutstandingBaht,
+    RefundRecordResponse[] Records);
+
+public static class RefundErrorCodes
+{
+    public const string AmountNotPositive = "refund.amount_not_positive";
+
+    /// <summary>More than the booking still owes. Part payments are fine; overpaying is not.</summary>
+    public const string MoreThanIsOwed = "refund.more_than_is_owed";
+
+    /// <summary>A day in the future is not a transfer that has happened.</summary>
+    public const string NotYetSent = "refund.not_yet_sent";
+
+    public const string MethodNotAllowed = "refund.method_not_allowed";
+    public const string NoteTooLong = "refund.note_too_long";
+    public const string AlreadyVoided = "refund.already_voided";
+}

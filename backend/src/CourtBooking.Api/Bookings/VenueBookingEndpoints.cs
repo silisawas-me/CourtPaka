@@ -41,14 +41,15 @@ public static class VenueBookingEndpoints
         // Reading the day is behind the permission too, not merely behind membership: it names
         // every booker by the address they signed up with, and PRD 8 gives that to the people
         // holding the permission rather than to the venue's members at large (PDPA, US-13).
-        var manage = bookings.RequireAuthorization(
-            VenuePolicies.Needs(VenuePermissions.ManageBookings));
+        bookings.RequireAuthorization(VenuePolicies.Needs(VenuePermissions.ManageBookings));
 
-        manage.MapGet("/", DayAsync);
-        manage.MapPost("/{bookingId:guid}/cancel", CancelAsync);
-        manage.MapPost("/{bookingId:guid}/no-show", NoShowAsync);
-        manage.MapPost("/{bookingId:guid}/settle-payment", SettleAsync);
-        manage.MapPost("/{bookingId:guid}/played", PlayedAfterAllAsync);
+        bookings.MapGet("/", DayAsync);
+        bookings.MapPost("/{bookingId:guid}/cancel", CancelAsync);
+        bookings.MapPost("/{bookingId:guid}/no-show", NoShowAsync);
+        bookings.MapPost("/{bookingId:guid}/settle-payment", SettleAsync);
+        bookings.MapPost("/{bookingId:guid}/played", PlayedAfterAllAsync);
+
+        bookings.MapRefundEndpoints();
     }
 
     /// <summary>
@@ -495,12 +496,30 @@ public static class VenueBookingEndpoints
             .Where(court => court.VenueId == venueId)
             .ToDictionaryAsync(court => court.Id, court => court.Name, cancellationToken);
 
+        var bookingIds = found.Select(row => row.Booking.Id).ToArray();
+        var sentBack = await database.RefundRecords
+            .StillStanding()
+            .Where(record => bookingIds.Contains(record.BookingId))
+            .GroupBy(record => record.BookingId)
+            .Select(records => new
+            {
+                BookingId = records.Key,
+                Baht = records.Sum(record => record.AmountBaht),
+            })
+            .ToDictionaryAsync(row => row.BookingId, row => row.Baht, cancellationToken);
+
         return
         [
             .. found
                 .OrderBy(row => row.Booking.Slots.Min(slot => slot.StartsAt))
                 .ThenBy(row => row.Email)
-                .Select(row => Draw(row.Booking, row.Email, courtNames, byOwner, now)),
+                .Select(row => Draw(
+                    row.Booking,
+                    row.Email,
+                    courtNames,
+                    byOwner,
+                    sentBack.GetValueOrDefault(row.Booking.Id),
+                    now)),
         ];
     }
 
@@ -509,6 +528,7 @@ public static class VenueBookingEndpoints
         string? bookerEmail,
         IReadOnlyDictionary<Guid, string> courtNames,
         bool byOwner,
+        decimal sentBackBaht,
         DateTimeOffset now)
     {
         var status = BookedSlots.StatusAt(booking, now);
@@ -520,6 +540,8 @@ public static class VenueBookingEndpoints
             booking.PaymentState.ToString(),
             booking.TotalBaht,
             booking.RefundDueBaht,
+            sentBackBaht,
+            Refunds.OutstandingOf(booking.RefundDueBaht, sentBackBaht),
             BookingSlotResponse.Of(booking, courtNames),
             Doors(booking, status, byOwner, now));
     }
