@@ -13,7 +13,8 @@ describe('App shell', () => {
     localStorage.clear();
     await TestBed.configureTestingModule({
       imports: [App],
-      providers: pageProviders(),
+      // The panel test follows a link, and a navigation with nowhere to go rejects in the background.
+      providers: pageProviders([{ path: 'book', children: [] }]),
     }).compileComponents();
 
     httpMock = TestBed.inject(HttpTestingController);
