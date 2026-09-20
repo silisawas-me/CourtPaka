@@ -3,17 +3,45 @@
 
   <span class="spacer"></span>
 
-  <a matButton routerLink="/book" data-testid="nav-book">{{ i18n.t('nav.book') }}</a>
+  <!--
+    The same links twice, from one list: laid out along the bar where there is room, and folded
+    into a panel where there is not. CSS picks which one is shown, so a link added to the list
+    appears in both and neither copy is the one somebody forgot.
+  -->
+  <nav class="bar-links" [attr.aria-label]="i18n.t('nav.label')">
+    @for (link of links(); track link.path) {
+      <a
+        matButton
+        [routerLink]="link.path"
+        [attr.data-testid]="link.testId"
+        [class.accent]="link.accent"
+      >
+        {{ i18n.t(link.label) }}
+      </a>
+    }
+    @if (user()) {
+      <button matButton type="button" data-testid="sign-out" (click)="signOut()">
+        {{ i18n.t('nav.signOut') }}
+      </button>
+    }
+  </nav>
 
-  @if (user()) {
-    <a matButton routerLink="/venues" data-testid="nav-venues">{{ i18n.t('nav.venues') }}</a>
-    <button matButton type="button" data-testid="sign-out" (click)="signOut()">
-      {{ i18n.t('nav.signOut') }}
-    </button>
-  } @else {
-    <a matButton routerLink="/login">{{ i18n.t('nav.signIn') }}</a>
-    <a matButton="filled" routerLink="/register">{{ i18n.t('nav.signUp') }}</a>
-  }
+  <!--
+    A disclosure rather than a menu component: this is the one bundle every page pays for, and
+    Material's menu costs 16 kB gzipped to fold four links on a phone.
+  -->
+  <button
+    matButton
+    class="bar-menu-button"
+    type="button"
+    data-testid="open-menu"
+    [attr.aria-label]="i18n.t('nav.menu')"
+    [attr.aria-expanded]="menuOpen()"
+    aria-controls="bar-menu"
+    (click)="toggleMenu()"
+  >
+    <span class="hamburger" [class.open]="menuOpen()" aria-hidden="true"></span>
+  </button>
 
   <span class="languages" role="group" [attr.aria-label]="i18n.t('app.language')">
     @for (option of languages; track option) {
@@ -31,6 +59,31 @@
     }
   </span>
 </mat-toolbar>
+
+@if (menuOpen()) {
+  <nav
+    id="bar-menu"
+    class="bar-menu"
+    data-testid="bar-menu"
+    [attr.aria-label]="i18n.t('nav.label')"
+  >
+    @for (link of links(); track link.path) {
+      <a
+        matButton
+        [routerLink]="link.path"
+        [attr.data-testid]="link.testId + '-menu'"
+        (click)="closeMenu()"
+      >
+        {{ i18n.t(link.label) }}
+      </a>
+    }
+    @if (user()) {
+      <button matButton type="button" data-testid="sign-out-menu" (click)="signOut()">
+        {{ i18n.t('nav.signOut') }}
+      </button>
+    }
+  </nav>
+}
 
 <main class="shell">
   @if (languageNotSaved()) {

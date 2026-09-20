@@ -132,6 +132,8 @@
   "login.tagline": "Badminton courts, booked in a minute.",
   "login.title": "Sign in",
   "nav.book": "Book a court",
+  "nav.label": "Main",
+  "nav.menu": "Menu",
   "nav.signIn": "Sign in",
   "nav.signOut": "Sign out",
   "nav.signUp": "Sign up",
