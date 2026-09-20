@@ -69,7 +69,7 @@ public static class BookingTransitions
                 $"A booking cannot go from {from} to {to} (PRD 6.1).");
         }
 
-        if (NeedsReason(from, to) && string.IsNullOrWhiteSpace(reason))
+        if (NeedReason.Contains((from, to)) && string.IsNullOrWhiteSpace(reason))
         {
             throw new InvalidOperationException(
                 $"Going from {from} to {to} has to say why (PRD 6.1).");
@@ -213,12 +213,8 @@ public static class BookingTransitions
         return moved;
     }
 
-    public static bool CanMove(BookingStatus from, BookingStatus to) =>
+    private static bool CanMove(BookingStatus from, BookingStatus to) =>
         Allowed.TryGetValue(from, out var next) && next.Contains(to);
-
-    /// <summary>Whether this move may not be made without saying why (PRD 6.1).</summary>
-    public static bool NeedsReason(BookingStatus from, BookingStatus to) =>
-        NeedReason.Contains((from, to));
 
     /// <summary>
     /// The event name for a booking that has just arrived somewhere, as PRD 8 names them:

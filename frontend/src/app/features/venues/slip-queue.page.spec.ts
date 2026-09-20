@@ -99,6 +99,24 @@ describe('SlipQueuePage', () => {
     expect(textOf(fixture, 'decision-who')).toBe('other@example.com');
   });
 
+  it('shows a PDF slip as a file to open, not as a picture', () => {
+    fixture = TestBed.createComponent(SlipQueuePage);
+    fixture.componentRef.setInput('venueId', 'v1');
+    fixture.detectChanges();
+
+    httpMock.expectOne('/api/venues/v1/slip-queue').flush([item()]);
+    fixture.detectChanges();
+    httpMock
+      .expectOne('/api/venues/v1/slip-queue/b1/slip')
+      .flush(new Blob(['%PDF-1.7'], { type: 'application/pdf' }));
+    fixture.detectChanges();
+
+    // A PDF in an <img> is a broken-image icon and no explanation.
+    const slip = elementOf(fixture, 'slip');
+    expect(slip?.querySelector('img')).toBeNull();
+    expect(slip?.getAttribute('href')).toContain('blob:slip');
+  });
+
   it('will not turn a booking away without a reason', () => {
     render();
 
@@ -110,16 +128,57 @@ describe('SlipQueuePage', () => {
     expect(elementOf(fixture, 'reason-error')).not.toBeNull();
   });
 
+  it('will not turn a booking away until the money question is answered', () => {
+    render();
+
+    clickOn(fixture, 'reject');
+    setInput(fixture, '#reason', 'ยอดไม่ตรง');
+    clickOn(fixture, 'reject-confirm');
+
+    // Neither answer is ticked to begin with, because the answer decides whether money goes back.
+    httpMock.expectNone('/api/venues/v1/slip-queue/b1/reject');
+    expect(textOf(fixture, 'money-error')).toBe(TRANSLATIONS.th['slipQueue.moneyRequired']);
+  });
+
+  it('will not send a reason that is only spaces', () => {
+    render();
+
+    clickOn(fixture, 'reject');
+    setInput(fixture, '#reason', '    ');
+    clickOn(fixture, 'money-no');
+    clickOn(fixture, 'reject-confirm');
+
+    // The server would refuse it, so the page does not pretend otherwise.
+    httpMock.expectNone('/api/venues/v1/slip-queue/b1/reject');
+    expect(elementOf(fixture, 'reason-error')).not.toBeNull();
+  });
+
+  it('empties the rejection form when it moves on to the next booking', () => {
+    render([item(), item({ bookingId: 'b2', bookerEmail: 'other@example.com' })]);
+
+    clickOn(fixture, 'reject');
+    setInput(fixture, '#reason', 'ยอดไม่ตรง 500');
+    clickOn(fixture, 'money-yes');
+    clickOn(fixture, 'reject-confirm');
+    httpMock.expectOne('/api/venues/v1/slip-queue/b1/reject').flush({});
+    fixture.detectChanges();
+    httpMock.expectOne('/api/venues/v1/slip-queue/b2/slip').flush(new Blob(['slip']));
+    fixture.detectChanges();
+
+    // What was said about one booking must not be sitting in the box above the next one.
+    clickOn(fixture, 'reject');
+    expect(
+      elementOf<HTMLTextAreaElement>(fixture, 'decision')?.querySelector('textarea')?.value,
+    ).toBe('');
+    expect(elementOf<HTMLInputElement>(fixture, 'money-yes')?.checked).toBe(false);
+  });
+
   it('sends the reason and the answer about the money', () => {
     render();
 
     clickOn(fixture, 'reject');
     setInput(fixture, '#reason', 'ยอดไม่ตรง');
-    const received = (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLInputElement>(
-      'input[type=radio]',
-    )[1];
-    received.click();
-    fixture.detectChanges();
+    clickOn(fixture, 'money-yes');
 
     // Saying the money arrived says out loud that it has to go back.
     expect(textOf(fixture, 'refund-note')).toBe(TRANSLATIONS.th['slipQueue.refundNote']);

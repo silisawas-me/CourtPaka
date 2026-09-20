@@ -16,6 +16,14 @@ public sealed class BookingStatusChange
 
     public Guid Id { get; init; } = Guid.CreateVersion7();
 
+    /// <summary>
+    /// Two moves made in one transaction — confirming hours that were already played is both a
+    /// confirm and a complete (PRD 6.1) — share an instant, and a v7 id is random inside a
+    /// millisecond, so neither the clock nor the id puts them in order. What does is the chain:
+    /// each row's <see cref="From"/> is the row before it's <see cref="To"/>. A reader drawing a
+    /// booking's history follows that.
+    /// </summary>
+
     public required Guid BookingId { get; init; }
 
     /// <summary>Null for the first row, which records the booking coming into existence.</summary>

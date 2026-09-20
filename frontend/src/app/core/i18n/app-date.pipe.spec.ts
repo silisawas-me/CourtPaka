@@ -20,6 +20,15 @@ describe('AppDateTimePipe', () => {
     expect(printed).toMatch(/\d{2}:\d{2}/);
   });
 
+  it('reads the moment in the venue s zone, not the reader s', () => {
+    // 23:30 UTC is half past six the next morning in Bangkok. A member of staff abroad is still
+    // asking about the court's clock (PRD BR-10).
+    const printed = new AppDateTimePipe().transform('2026-09-20T23:30:00Z', DATE_LOCALES.en);
+
+    expect(printed).toContain('21');
+    expect(printed).toContain('06:30');
+  });
+
   it('answers nothing rather than "Invalid Date"', () => {
     expect(new AppDateTimePipe().transform('not a time', DATE_LOCALES.th)).toBe('');
   });

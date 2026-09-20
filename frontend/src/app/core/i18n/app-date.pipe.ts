@@ -1,11 +1,18 @@
 import { Pipe, PipeTransform } from '@angular/core';
-import { fromPlainDate } from './plain-date';
+import { fromPlainDate, VENUE_TIME_ZONE } from './plain-date';
 
 const FORMAT: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' };
 
-/** The same date, plus the time of day — for things that happened at a moment, not on a day. */
+/**
+ * The same date, plus the time of day — for things that happened at a moment, not on a day.
+ *
+ * Read in the venue's zone, not the reader's: a booking is at six in the evening at the court,
+ * and a member of staff looking at it from another country is asking about the court's clock
+ * (PRD BR-10).
+ */
 const WITH_TIME: Intl.DateTimeFormatOptions = {
   ...FORMAT,
+  timeZone: VENUE_TIME_ZONE,
   hour: '2-digit',
   minute: '2-digit',
 };

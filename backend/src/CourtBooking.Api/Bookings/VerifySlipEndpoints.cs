@@ -1,8 +1,5 @@
-using System.Security.Claims;
 using CourtBooking.Api.Data;
 using CourtBooking.Api.Http;
-using CourtBooking.Api.Identity;
-using CourtBooking.Api.Localization;
 using CourtBooking.Api.Observability;
 using CourtBooking.Api.Venues;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -20,8 +17,31 @@ public static class VerifySlipEndpoints
     /// <summary>A booking closer than this to its first hour is worth looking at first (PRD US-12).</summary>
     public static readonly TimeSpan SoonToPlay = TimeSpan.FromHours(1);
 
+    /// <summary>
+    /// How much of the queue one answer carries. A venue that stops checking never has its queue
+    /// emptied for it — PRD 6.1 gives PendingVerification no timeout — so without a ceiling the
+    /// response grows for as long as the venue neglects it.
+    /// </summary>
+    public const int MaxWaiting = 200;
+
+    /// <summary>
+    /// The fields an event line carries, one line per status, so that a sink grouping by template
+    /// sees these as the different events they are (PRD 8). The names come from
+    /// <see cref="BookingTransitions.EventName"/>, which is where the platform's event names live.
+    /// </summary>
+    private static readonly Dictionary<BookingStatus, string> Announcements =
+        new[] { BookingStatus.Confirmed, BookingStatus.Rejected, BookingStatus.Completed }
+            .ToDictionary(
+                status => status,
+                status => BookingTransitions.EventName(status)
+                    + " {BookingId} {VenueId} {RefundDueBaht}");
+
     public static void MapVerifySlipEndpoints(this RouteGroupBuilder venue)
     {
+        // Reading is behind the permission too, not merely behind membership: a slip is someone's
+        // bank account, and PRD 8 gives it to the people holding this permission rather than to
+        // the venue's members at large (PDPA). A frozen venue therefore cannot open its queue at
+        // all, which is meant: a venue that may not take money should not be checking payments.
         var slips = venue.MapGroup("/slip-queue")
             .RequireAuthorization(VenuePolicies.Needs(VenuePermissions.VerifySlip));
 
@@ -43,6 +63,9 @@ public static class VerifySlipEndpoints
     {
         var now = timeProvider.GetUtcNow();
 
+        // The ordering is spelled out here rather than taken from SlipDownload.NewestFirst: this
+        // one is inside the projection, where the database does the composing and a method of
+        // ours would have nothing to translate to.
         var waiting = await database.Bookings
             .AsNoTracking()
             .Where(booking =>
@@ -61,20 +84,23 @@ public static class VerifySlipEndpoints
                     .Select(slip => new { slip.UploadedAt, slip.SameBytesAsSlipId })
                     .FirstOrDefault(),
             })
+            // A booking reaches this queue by a slip arriving, so there is always one to sort by,
+            // and sorting in the database is what makes the ceiling above mean the oldest.
+            .OrderBy(booking => booking.Latest!.UploadedAt)
+            .Take(MaxWaiting)
             .ToListAsync(cancellationToken);
 
         var queue = waiting
-            .OrderBy(booking => booking.Latest == null ? now : booking.Latest.UploadedAt)
             .Select(booking => new SlipQueueItemResponse(
                 booking.Id,
                 booking.BookerEmail,
                 booking.TotalBaht,
-                booking.Latest == null ? now : booking.Latest.UploadedAt,
+                booking.Latest!.UploadedAt,
                 booking.StartsAt,
                 // Said plainly rather than left to the page to work out, so the venue's view and
                 // the platform's reports cannot disagree about what "soon" means.
                 booking.StartsAt - now <= SoonToPlay,
-                booking.Latest != null && booking.Latest.SameBytesAsSlipId != null))
+                booking.Latest.SameBytesAsSlipId != null))
             .ToArray();
 
         return TypedResults.Ok(queue);
@@ -82,38 +108,21 @@ public static class VerifySlipEndpoints
 
     /// <summary>
     /// The picture itself. The venue may look at the slips of its own bookings and no others
-    /// (PRD 8, PDPA); it is handed over as a download, never rendered in the page's own origin.
+    /// (PRD 8, PDPA).
     /// </summary>
-    private static async Task<Results<FileStreamHttpResult, NotFound, ProblemHttpResult>> SlipAsync(
+    private static Task<Results<FileStreamHttpResult, NotFound, ProblemHttpResult>> SlipAsync(
         Guid venueId,
         Guid bookingId,
         HttpResponse response,
         AppDbContext database,
         ISlipStore slips,
-        CancellationToken cancellationToken)
-    {
-        var slip = await database.PaymentSlips
-            .AsNoTracking()
-            .Where(candidate =>
-                candidate.BookingId == bookingId && candidate.Booking!.VenueId == venueId)
-            .OrderByDescending(candidate => candidate.UploadedAt)
-            .ThenByDescending(candidate => candidate.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (slip is null)
-        {
-            return ApiProblem.Of(StatusCodes.Status404NotFound, SlipErrorCodes.NoSlip);
-        }
-
-        var content = await slips.OpenAsync(slip.StoredName, cancellationToken);
-        if (content is null)
-        {
-            return TypedResults.NotFound();
-        }
-
-        response.Headers.XContentTypeOptions = "nosniff";
-        return TypedResults.File(content, slip.ContentType, fileDownloadName: slip.StoredName);
-    }
+        CancellationToken cancellationToken) =>
+        SlipDownload.NewestAsync(
+            database.PaymentSlips.Where(candidate =>
+                candidate.BookingId == bookingId && candidate.Booking!.VenueId == venueId),
+            slips,
+            response,
+            cancellationToken);
 
     /// <summary>
     /// The money is there. The booking is confirmed, and if the hours have already been played it
@@ -122,7 +131,7 @@ public static class VerifySlipEndpoints
     private static Task<Results<Ok<BookingResponse>, ProblemHttpResult>> ConfirmAsync(
         Guid venueId,
         Guid bookingId,
-        ClaimsPrincipal principal,
+        CurrentVenue venue,
         AppDbContext database,
         TimeProvider timeProvider,
         ILoggerFactory loggers,
@@ -130,12 +139,13 @@ public static class VerifySlipEndpoints
         DecideAsync(
             venueId,
             bookingId,
-            principal,
+            BookingStatus.Confirmed,
+            PaymentState.Received,
+            reason: null,
+            venue,
             database,
             timeProvider,
             loggers,
-            PaymentState.Received,
-            reason: null,
             cancellationToken);
 
     /// <summary>
@@ -146,7 +156,7 @@ public static class VerifySlipEndpoints
         Guid venueId,
         Guid bookingId,
         RejectSlipRequest request,
-        ClaimsPrincipal principal,
+        CurrentVenue venue,
         AppDbContext database,
         TimeProvider timeProvider,
         ILoggerFactory loggers,
@@ -154,104 +164,126 @@ public static class VerifySlipEndpoints
         DecideAsync(
             venueId,
             bookingId,
-            principal,
+            BookingStatus.Rejected,
+            request.PaymentReceived ? PaymentState.Received : PaymentState.NotReceived,
+            request.Reason,
+            venue,
             database,
             timeProvider,
             loggers,
-            Refunds.StateFor(request.PaymentReceived
-                ? Refunds.RejectionOutcome.PaymentReceived
-                : Refunds.RejectionOutcome.PaymentNotReceived),
-            request.Reason,
-            cancellationToken,
-            rejecting: true);
+            cancellationToken);
 
     private static async Task<Results<Ok<BookingResponse>, ProblemHttpResult>> DecideAsync(
         Guid venueId,
         Guid bookingId,
-        ClaimsPrincipal principal,
+        BookingStatus decided,
+        PaymentState payment,
+        string? reason,
+        CurrentVenue venue,
         AppDbContext database,
         TimeProvider timeProvider,
         ILoggerFactory loggers,
-        PaymentState payment,
-        string? reason,
-        CancellationToken cancellationToken,
-        bool rejecting = false)
+        CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
-        var decidedBy = CallerId.Of(principal);
+        var decidedBy = venue.Require().UserId;
 
         var booking = await database.Bookings
-            .Include(candidate => candidate.Slots)
-            .SingleOrDefaultAsync(
-                candidate => candidate.Id == bookingId && candidate.VenueId == venueId,
-                cancellationToken);
+            .AsNoTracking()
+            .Where(candidate => candidate.Id == bookingId && candidate.VenueId == venueId)
+            .Select(candidate => new
+            {
+                candidate.TotalBaht,
+                LastHourEndsAt = candidate.Slots.Max(slot => slot.EndsAt),
+            })
+            .SingleOrDefaultAsync(cancellationToken);
 
         if (booking is null)
         {
             return ApiProblem.Of(StatusCodes.Status404NotFound, BookingErrorCodes.NotFound);
         }
 
-        if (booking.Status != BookingStatus.PendingVerification)
-        {
-            return ApiProblem.Of(
-                StatusCodes.Status409Conflict, SlipErrorCodes.NotAwaitingVerification);
-        }
+        // Trimmed before it is measured as well as before it is kept, so that what the length is
+        // judged on is what would be stored.
+        var written = reason?.Trim();
 
-        if (rejecting && string.IsNullOrWhiteSpace(reason))
+        if (decided == BookingStatus.Rejected && string.IsNullOrEmpty(written))
         {
             return ApiProblem.Of(StatusCodes.Status400BadRequest, SlipErrorCodes.ReasonRequired);
         }
 
-        if (reason is { Length: > BookingStatusChange.ReasonMaxLength })
+        if (written is { Length: > BookingStatusChange.ReasonMaxLength })
         {
             return ApiProblem.Of(StatusCodes.Status400BadRequest, SlipErrorCodes.ReasonTooLong);
         }
 
-        // Added through the set, not the booking's collection: the booking is already tracked and
-        // the record carries its own key, so EF would take it for a row that exists and try to
-        // update one that does not.
-        var decided = rejecting ? BookingStatus.Rejected : BookingStatus.Confirmed;
+        // Confirmed after the hours were played is played, not upcoming (PRD 6.1).
+        var landed = decided == BookingStatus.Confirmed && booking.LastHourEndsAt <= now
+            ? BookingStatus.Completed
+            : decided;
+
+        var refundDue = Refunds.DueFor(landed, payment, booking.TotalBaht);
+
+        await using var transaction =
+            await database.Database.BeginTransactionAsync(cancellationToken);
+
+        // Two people can be working one queue, and the status was read a moment ago. PRD 6.1 asks
+        // for the condition and the move to be decided together, so the move carries the
+        // condition: it changes nothing unless the booking is still waiting to be checked.
+        // Without it a confirm landing just after a reject would leave a booking confirmed whose
+        // hours had already gone back on sale — and the constraint that stops double booking reads
+        // only those hours, so the court would then be sold twice over (PRD BR-04).
+        var moved = await database.Bookings
+            .Where(candidate =>
+                candidate.Id == bookingId
+                && candidate.Status == BookingStatus.PendingVerification)
+            .ExecuteUpdateAsync(
+                set => set
+                    .SetProperty(candidate => candidate.Status, landed)
+                    .SetProperty(candidate => candidate.PaymentState, payment)
+                    .SetProperty(candidate => candidate.RefundDueBaht, refundDue),
+                cancellationToken);
+
+        if (moved == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return ApiProblem.Of(
+                StatusCodes.Status409Conflict, SlipErrorCodes.NotAwaitingVerification);
+        }
+
+        // A booking that was turned away stops holding its hours; they go back on sale (PRD 6.1).
+        if (decided == BookingStatus.Rejected)
+        {
+            await database.BookingSlots
+                .Where(slot => slot.BookingId == bookingId && slot.IsActive)
+                .ExecuteUpdateAsync(
+                    set => set.SetProperty(slot => slot.IsActive, false),
+                    cancellationToken);
+        }
+
         var recorded = new List<BookingStatusChange>
         {
             BookingTransitions.Record(
-                booking.Id, booking.Status, decided, decidedBy, now, reason?.Trim()),
+                bookingId, BookingStatus.PendingVerification, decided, decidedBy, now, written),
         };
-        booking.Status = decided;
-        booking.PaymentState = payment;
 
-        // A booking that was turned away stops holding its hours; they go back on sale (PRD 6.1).
-        if (rejecting)
+        if (landed != decided)
         {
-            foreach (var slot in booking.Slots)
-            {
-                slot.IsActive = false;
-            }
+            // Nobody pressed this one; the clock did (PRD 6.1), so it is recorded with no actor.
+            recorded.Add(BookingTransitions.Record(bookingId, decided, landed, null, now));
         }
-        else if (booking.Slots.Max(slot => slot.EndsAt) <= now)
-        {
-            // Confirmed after the hours were played is played, not upcoming (PRD 6.1).
-            recorded.Add(BookingTransitions.Record(
-                booking.Id, booking.Status, BookingStatus.Completed, null, now));
-            booking.Status = BookingStatus.Completed;
-        }
-
-        booking.RefundDueBaht = Refunds.DueFor(booking.Status, booking.PaymentState, booking.TotalBaht);
 
         database.BookingStatusChanges.AddRange(recorded);
         await database.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         var events = AppEvents.For(loggers);
         foreach (var change in recorded)
         {
-            events.LogInformation(
-                "{Event} {BookingId} {VenueId} {RefundDueBaht}",
-                BookingTransitions.EventName(change.To),
-                booking.Id,
-                venueId,
-                booking.RefundDueBaht);
+            events.LogInformation(Announcements[change.To], bookingId, venueId, refundDue);
         }
 
         return TypedResults.Ok(await BookingEndpoints.ReadBookingAsync(
-            database, booking.Id, now, cancellationToken));
+            database, bookingId, now, cancellationToken));
     }
 }

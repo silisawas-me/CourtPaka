@@ -100,7 +100,7 @@ public static class BookingEndpoints
 
         var slipUploadedAt = await database.PaymentSlips
             .Where(slip => slip.BookingId == booking.Id)
-            .OrderByDescending(slip => slip.UploadedAt)
+            .NewestFirst()
             .Select(slip => (DateTimeOffset?)slip.UploadedAt)
             .FirstOrDefaultAsync(cancellationToken);
 

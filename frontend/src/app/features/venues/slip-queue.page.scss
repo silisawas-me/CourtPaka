@@ -1,13 +1,10 @@
 /**
- * The queue beside the decision. On a counter screen both are visible at once, which is what lets
- * someone work down a list; on a phone the queue comes first and the decision follows it, because
- * a list you have to scroll past to reach the thing you chose is worse than one you scroll to.
+ * The queue beside the decision: two columns, as .columns already gives, but not halves of the
+ * screen. The list is as wide as its rows need and the picture — the thing actually being judged —
+ * takes the rest. On a phone the queue comes first and the decision follows it, because a list you
+ * have to scroll past to reach the thing you chose is worse than one you scroll to.
  */
 .queue {
-  display: grid;
-  gap: var(--stack);
-  align-items: start;
-
   @media (min-width: 60rem) {
     grid-template-columns: 22rem 1fr;
   }
@@ -119,6 +116,11 @@
     outline: 2px solid var(--mat-sys-primary);
     outline-offset: 2px;
   }
+}
+
+/** A PDF cannot be shown in place, so what stands in for it is the way to open it. */
+.slip-file {
+  justify-self: start;
 }
 
 /** Label above value: Thai labels and dates are long enough that two columns would wrap badly. */

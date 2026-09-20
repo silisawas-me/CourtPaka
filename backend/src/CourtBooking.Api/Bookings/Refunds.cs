@@ -14,11 +14,7 @@ public static class Refunds
     /// The amount owed for a booking that has arrived somewhere final. Statuses that are not an
     /// ending owe nothing — a booking still being played is not a refund waiting to happen.
     /// </summary>
-    public static decimal DueFor(
-        BookingStatus status,
-        PaymentState payment,
-        decimal totalBaht,
-        RejectionOutcome? rejection = null)
+    public static decimal DueFor(BookingStatus status, PaymentState payment, decimal totalBaht)
     {
         if (payment != PaymentState.Received)
         {
@@ -35,23 +31,4 @@ public static class Refunds
             _ => 0m,
         };
     }
-
-    /// <summary>
-    /// What the venue said about the money when it turned a booking away (PRD US-12). It is not a
-    /// free choice: the answer is what decides whether anything goes back.
-    /// </summary>
-    public enum RejectionOutcome
-    {
-        /// <summary>The money arrived, and the venue is refusing the booking anyway.</summary>
-        PaymentReceived = 1,
-
-        /// <summary>The slip did not match a payment the venue can find.</summary>
-        PaymentNotReceived = 2,
-    }
-
-    /// <summary>The payment state a rejection leaves behind (PRD 6.2).</summary>
-    public static PaymentState StateFor(RejectionOutcome outcome) =>
-        outcome == RejectionOutcome.PaymentReceived
-            ? PaymentState.Received
-            : PaymentState.NotReceived;
 }

@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using CourtBooking.Api.Bookings;
 using CourtBooking.Api.Tests.Infrastructure;
@@ -172,6 +171,71 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
     }
 
     [Fact]
+    public async Task Confirming_hours_that_have_already_been_played_completes_them()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var waiting = await WaitingBookingAsync(venue.Id, courts[0], 18);
+        await scenario.PlayOutAsync(waiting.Booking.Id);
+
+        var confirmed = await VenueScenario.ReadAsync<BookingResponse>(
+            await owner.PostAsync(
+                $"/api/venues/{venue.Id}/slip-queue/{waiting.Booking.Id}/confirm", null));
+
+        // The venue checking late does not un-play the hours (PRD 6.1).
+        Assert.Equal(nameof(BookingStatus.Completed), confirmed.Status);
+        Assert.Equal(nameof(PaymentState.Received), confirmed.PaymentState);
+        Assert.Equal(0m, confirmed.RefundDueBaht);
+
+        // Both moves are written down, and they chain: the venue's answer, then the clock's.
+        var history = await scenario.HistoryAsync(waiting.Booking.Id);
+        Assert.Equal(
+            BookingStatus.PendingVerification,
+            Assert.Single(history, change => change.To == BookingStatus.Confirmed).From);
+        var completed = Assert.Single(history, change => change.To == BookingStatus.Completed);
+        Assert.Equal(BookingStatus.Confirmed, completed.From);
+        // Nobody pressed it, so nobody is named (PRD 6.1).
+        Assert.Null(completed.ChangedByUserId);
+    }
+
+    [Fact]
+    public async Task Two_people_deciding_at_once_leave_one_answer_and_hours_that_agree_with_it()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var waiting = await WaitingBookingAsync(venue.Id, courts[0], 18);
+        var staff = await scenario.StaffClientAsync(
+            owner, venue.Id, nameof(VenuePermissions.VerifySlip));
+
+        // One says the money is there, the other turns it away, and neither knows about the other.
+        var answers = await Task.WhenAll(
+            owner.PostAsync($"/api/venues/{venue.Id}/slip-queue/{waiting.Booking.Id}/confirm", null),
+            staff.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/slip-queue/{waiting.Booking.Id}/reject",
+                new RejectSlipRequest("ยอดไม่ตรง", false)));
+
+        Assert.Single(answers, answer => answer.StatusCode == HttpStatusCode.OK);
+        var refused = Assert.Single(answers, answer => answer.StatusCode != HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Equal(SlipErrorCodes.NotAwaitingVerification, await refused.ErrorCodeAsync());
+
+        // The history holds the one move that happened, not both.
+        var history = await scenario.HistoryAsync(waiting.Booking.Id);
+        var decided = Assert.Single(history, change => change.From == BookingStatus.PendingVerification);
+
+        // And the hours say the same thing that move does. A confirmed booking whose hours had
+        // been let go would be a court sold twice over (PRD BR-04, 9.2).
+        var hour = (await scenario.ReadAvailabilityAsync(
+                owner, venue.Id, VenueScenario.Today.AddDays(1)))
+            .Courts.Single(court => court.CourtId == courts[0])
+            .Hours.Single(cell => cell.Hour == 18);
+
+        Assert.Equal(
+            decided.To == BookingStatus.Rejected
+                ? nameof(HourStatus.Free)
+                : nameof(HourStatus.Booked),
+            hour.Status);
+    }
+
+    [Fact]
     public async Task The_venue_reads_the_slip_of_its_own_booking()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();
@@ -238,8 +302,7 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
         Assert.Equal(nameof(BookingStatus.Confirmed), confirmed.Status);
     }
 
-    private static byte[] Jpeg() =>
-        [0xFF, 0xD8, 0xFF, 0xE0, .. "JFIF"u8, .. Guid.CreateVersion7().ToByteArray()];
+    private static byte[] Jpeg() => VenueScenario.Jpeg();
 
     private static async Task<SlipQueueItemResponse[]> QueueAsync(HttpClient client, Guid venueId) =>
         await VenueScenario.ReadAsync<SlipQueueItemResponse[]>(
@@ -267,12 +330,7 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
         var booking = await VenueScenario.HoldAsync(
             booker, venueId, VenueScenario.Today.AddDays(1), (courtId, hour));
 
-        using var form = new MultipartFormDataContent();
-        var file = new ByteArrayContent(slip ?? Jpeg());
-        file.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
-        form.Add(file, "file", "slip.jpg");
-
-        var sent = await booker.PostAsync($"/api/bookings/{booking.Id}/slip", form);
+        var sent = await VenueScenario.UploadAsync(booker, booking.Id, slip ?? Jpeg());
         Assert.Equal(HttpStatusCode.OK, sent.StatusCode);
 
         return (booker, booking);

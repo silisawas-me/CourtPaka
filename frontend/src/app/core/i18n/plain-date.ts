@@ -1,5 +1,5 @@
 /** The zone every date in this app means, whatever zone the viewer's browser is in (PRD BR-10). */
-const VENUE_TIME_ZONE = 'Asia/Bangkok';
+export const VENUE_TIME_ZONE = 'Asia/Bangkok';
 
 /** en-CA writes YYYY-MM-DD, which is the shape the API speaks. */
 const PLAIN_DATE = new Intl.DateTimeFormat('en-CA', {

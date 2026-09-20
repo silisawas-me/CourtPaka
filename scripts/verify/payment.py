@@ -4,10 +4,11 @@ import datetime
 
 from harness import (
     BASE,
-    SEEDED_VENUE,
     Checks,
-    control,
+    as_upload,
     new_booker,
+    seeded_venue_id,
+    send_slip,
     sign_in,
     take_first_free_hour,
     venue_today,
@@ -22,23 +23,11 @@ JPEG = bytes([0xFF, 0xD8, 0xFF, 0xE0]) + b"JFIF " + b"slip"
 PNG = bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) + b"IHDR slip"
 
 
-def as_upload(name: str, content: bytes, mime: str) -> dict:
-    """Playwright takes a file from memory, so nothing is left behind in the temp directory."""
-    return {"name": name, "mimeType": mime, "buffer": content}
-
-
-def send(page, upload):
-    """Puts a file into the slip control and waits for the server's answer."""
-    with page.expect_response(lambda response: response.url.endswith("/slip")) as answer:
-        control(page, "send-slip").set_input_files(upload)
-    return answer.value
-
-
 with sync_playwright() as p:
     browser = p.chromium.launch()
     page = browser.new_page(viewport={"width": 390, "height": 844})
 
-    venue_id = page.request.get(f"{BASE}/api/venues/search?q={SEEDED_VENUE}").json()[0]["id"]
+    venue_id = seeded_venue_id(page)
 
     # 1. Holding an hour lands on the page that pays for it.
     sign_in(page, new_booker(page))
@@ -58,7 +47,7 @@ with sync_playwright() as p:
     )
 
     # 2. A file that is not a picture is refused, whatever it is called.
-    bad = send(page, as_upload("not-a-slip.jpg", b"<script>x</script>", "image/jpeg"))
+    bad = send_slip(page, as_upload("not-a-slip.jpg", b"<script>x</script>", "image/jpeg"))
     check("a file that is not a slip is refused", bad.status == 400)
     check(
         "and the page says why in the reader's language",
@@ -67,7 +56,7 @@ with sync_playwright() as p:
     )
 
     # 3. The real slip goes through and moves the booking into the venue's queue.
-    sent = send(page, as_upload("slip.jpg", JPEG, "image/jpeg"))
+    sent = send_slip(page, as_upload("slip.jpg", JPEG, "image/jpeg"))
     check("a real slip is accepted", sent.status == 200)
     page.wait_for_selector("[data-testid=slip-sent]")
     check(
@@ -81,7 +70,7 @@ with sync_playwright() as p:
     )
 
     # 4. Replacing it keeps both, and the one served back is the newest.
-    replaced = send(page, as_upload("slip.png", PNG, "image/png"))
+    replaced = send_slip(page, as_upload("slip.png", PNG, "image/png"))
     check("the slip can be replaced", replaced.status == 200)
     served = page.request.get(f"{BASE}/api/bookings/{booking['id']}/slip")
     check("and the newest one is what is served back", served.body() == PNG, page)
@@ -107,7 +96,7 @@ with sync_playwright() as p:
     sign_in(second, new_booker(second))
     take_first_free_hour(second, venue_id, tomorrow, skip=1)
     second.wait_for_selector("[data-testid=countdown]")
-    duplicate = send(second, as_upload("same.png", PNG, "image/png"))
+    duplicate = send_slip(second, as_upload("same.png", PNG, "image/png"))
     check("the same picture is still accepted", duplicate.status == 200)
     check(
         "and the booker is told nothing about it",
