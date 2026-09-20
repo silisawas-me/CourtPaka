@@ -29,6 +29,12 @@ export const routes: Routes = [
       import('./features/booking/venue-search.page').then((m) => m.VenueSearchPage),
   },
   {
+    path: 'venues/:venueId/bookings',
+    loadComponent: () =>
+      import('./features/venues/venue-bookings.page').then((m) => m.VenueBookingsPage),
+    canActivate: [authGuard],
+  },
+  {
     path: 'venues/:venueId/slip-queue',
     loadComponent: () => import('./features/venues/slip-queue.page').then((m) => m.SlipQueuePage),
     canActivate: [authGuard],

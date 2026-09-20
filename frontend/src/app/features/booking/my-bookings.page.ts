@@ -4,6 +4,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
 import { Booking, BookingHistory, BookingService } from '../../core/bookings/booking.service';
+import { courtsOf, hoursOf } from '../../core/bookings/hours';
 import { errorKey } from '../../core/http/api-error';
 import { AppDatePipe } from '../../core/i18n/app-date.pipe';
 import { TranslationService } from '../../core/i18n/translation.service';
@@ -122,39 +123,5 @@ export interface BookingCard extends Booking {
 }
 
 function card(booking: Booking): BookingCard {
-  return { ...booking, when: hours(booking), courts: courts(booking) };
-}
-
-/**
- * The hours a booking holds, as the spans they are. Four hours in a row is one line; six o'clock
- * and eight o'clock with a gap between them is two, because writing it as 18:00 – 21:00 would
- * claim an hour the booker does not have.
- */
-function hours(booking: Booking): string {
-  // One set, not one per slot: a booking can hold the same hour on several courts, which is what
-  // a group of eight playing at six o'clock looks like.
-  const taken = [...new Set(booking.slots.map((slot) => slot.hour))].sort(
-    (first, next) => first - next,
-  );
-
-  const spans: [number, number][] = [];
-  for (const hour of taken) {
-    const last = spans.at(-1);
-    if (last && last[1] === hour) {
-      last[1] = hour + 1;
-    } else {
-      spans.push([hour, hour + 1]);
-    }
-  }
-
-  return spans.map(([from, to]) => `${clock(from)} – ${clock(to)}`).join(', ');
-}
-
-/** The courts a booking covers, each named once however many hours it holds. */
-function courts(booking: Booking): string {
-  return [...new Set(booking.slots.map((slot) => slot.courtName))].join(', ');
-}
-
-function clock(hour: number): string {
-  return `${String(hour).padStart(2, '0')}:00`;
+  return { ...booking, when: hoursOf(booking.slots), courts: courtsOf(booking.slots) };
 }

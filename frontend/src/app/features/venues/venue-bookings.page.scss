@@ -1,0 +1,130 @@
+/**
+ * A day as rows, not as cards. This is read across a counter while somebody waits, so what
+ * matters is how quickly the eye finds the hour and the name — air between cards would make the
+ * same day take three screens.
+ */
+.day {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/** A row of its own, with the line under it that .entry would have given a flex row. */
+.booking {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+/**
+ * The facts of a booking in columns that line up down the page, because a counter reads one
+ * column at a time — the hour, or the name, never the whole row. On a phone there is no room for
+ * five columns, so they fold into three lines in the order the question is asked: when and how
+ * much, who, then where and how it stands.
+ */
+.booking-line {
+  display: grid;
+  gap: 0.25rem 0.75rem;
+  align-items: baseline;
+  font: var(--mat-sys-body-medium);
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'when baht'
+    'who who'
+    'courts status';
+
+  @media (min-width: 60rem) {
+    grid-template-columns: 10rem 7rem minmax(12rem, 1fr) auto auto;
+    grid-template-areas: 'when courts who status baht';
+  }
+}
+
+.booking-when {
+  grid-area: when;
+  font: var(--mat-sys-title-medium);
+  /* An hour that breaks across two lines is no longer something the eye can scan. */
+  white-space: nowrap;
+}
+
+.booking-courts {
+  grid-area: courts;
+}
+
+/* The address is what a counter searches by, so it takes the room a wrapping line needs. */
+.booking-who {
+  grid-area: who;
+  overflow-wrap: anywhere;
+}
+
+.booking-status {
+  grid-area: status;
+  justify-self: start;
+}
+
+.booking-baht {
+  grid-area: baht;
+  justify-self: end;
+  font: var(--mat-sys-title-medium);
+}
+
+.booking-money {
+  margin: 0.25rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font: var(--mat-sys-body-medium);
+}
+
+.booking-doors {
+  margin-top: 0.5rem;
+}
+
+/** The question sits inside the row it is about, set off so it reads as a step and not a row. */
+.asking {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border-radius: var(--mat-sys-corner-medium);
+  background: var(--mat-sys-surface-container-high);
+
+  p {
+    margin: 0 0 0.5rem;
+    max-width: 44ch;
+  }
+}
+
+.reasons {
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-medium);
+  padding: 0.5rem 0.75rem 0.75rem;
+  margin: 0;
+
+  legend {
+    font: var(--mat-sys-label-large);
+    color: var(--mat-sys-on-surface-variant);
+    padding-inline: 0.25rem;
+  }
+}
+
+.reason-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  cursor: pointer;
+  font: var(--mat-sys-body-large);
+
+  input {
+    accent-color: var(--mat-sys-primary);
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+}
+
+/* Taking hours away from someone is not the same weight of action as recording them. */
+.danger {
+  background: var(--mat-sys-error);
+  color: var(--mat-sys-on-error);
+}
