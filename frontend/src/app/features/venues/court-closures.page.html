@@ -1,0 +1,221 @@
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>{{ i18n.t('closures.title') }}</mat-card-title>
+    <mat-card-subtitle>{{ i18n.t('closures.subtitle') }}</mat-card-subtitle>
+  </mat-card-header>
+
+  <mat-card-actions>
+    <a matButton [routerLink]="['/venues', venueId()]">{{ i18n.t('settings.backToVenue') }}</a>
+  </mat-card-actions>
+</mat-card>
+
+@if (loading()) {
+  <mat-progress-bar mode="indeterminate" />
+} @else if (pageError(); as key) {
+  <mat-card>
+    <mat-card-content>
+      <p class="form-error" data-testid="page-error">{{ i18n.t(key) }}</p>
+    </mat-card-content>
+  </mat-card>
+} @else {
+  <mat-card>
+    <mat-card-content>
+      <form class="stack" [formGroup]="form" novalidate>
+        <!--
+          Radios rather than a dropdown: a venue has a handful of courts, and seeing them all is
+          what tells whoever is standing in front of one which name it goes by.
+        -->
+        <fieldset class="courts">
+          <legend>{{ i18n.t('closures.whichCourt') }}</legend>
+          @for (court of courts$(); track court.id) {
+            <label class="court-choice">
+              <input
+                type="radio"
+                formControlName="courtId"
+                [value]="court.id"
+                [attr.data-testid]="'court-' + court.id"
+              />
+              <span>{{ court.name }}</span>
+            </label>
+          }
+        </fieldset>
+
+        <div class="when">
+          <mat-form-field class="field">
+            <mat-label>{{ i18n.t('closures.from') }}</mat-label>
+            <input
+              matInput
+              readonly
+              id="starts-on"
+              data-testid="starts-on"
+              formControlName="startsOn"
+              [matDatepicker]="startPicker"
+              (click)="startPicker.open()"
+            />
+            <mat-datepicker-toggle
+              matIconSuffix
+              data-testid="starts-on-toggle"
+              [for]="startPicker"
+            />
+            <mat-datepicker #startPicker />
+          </mat-form-field>
+
+          <mat-form-field class="hour">
+            <mat-label>{{ i18n.t('closures.fromHour') }}</mat-label>
+            <input
+              matInput
+              type="number"
+              id="start-hour"
+              data-testid="start-hour"
+              formControlName="startHour"
+              [min]="firstHour"
+              [max]="lastHour - 1"
+            />
+          </mat-form-field>
+        </div>
+
+        <div class="when">
+          <mat-form-field class="field">
+            <mat-label>{{ i18n.t('closures.until') }}</mat-label>
+            <input
+              matInput
+              readonly
+              id="ends-on"
+              data-testid="ends-on"
+              formControlName="endsOn"
+              [matDatepicker]="endPicker"
+              (click)="endPicker.open()"
+            />
+            <mat-datepicker-toggle matIconSuffix data-testid="ends-on-toggle" [for]="endPicker" />
+            <mat-datepicker #endPicker />
+          </mat-form-field>
+
+          <mat-form-field class="hour">
+            <mat-label>{{ i18n.t('closures.untilHour') }}</mat-label>
+            <input
+              matInput
+              type="number"
+              id="end-hour"
+              data-testid="end-hour"
+              formControlName="endHour"
+              [min]="firstHour + 1"
+              [max]="lastHour"
+            />
+          </mat-form-field>
+        </div>
+
+        <p class="muted hint">{{ i18n.t('closures.endHourHint') }}</p>
+
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('closures.reason') }}</mat-label>
+          <input
+            matInput
+            id="reason"
+            data-testid="reason"
+            formControlName="reason"
+            [attr.maxlength]="reasonMaxLength"
+          />
+          <mat-error [appFieldError]="form.controls.reason" testId="reason-error"></mat-error>
+        </mat-form-field>
+      </form>
+
+      <div class="row">
+        <button
+          matButton="filled"
+          type="button"
+          data-testid="close-court"
+          [disabled]="saving()"
+          (click)="close()"
+        >
+          {{ i18n.t('closures.close') }}
+        </button>
+      </div>
+
+      <!--
+        Only when there is nothing better to say. The panel below carries the same refusal at
+        length, and with what to do about it, so two messages would read as two problems.
+      -->
+      @if (inTheWay().length === 0 && saveError()) {
+        <p class="form-error" data-testid="save-error">{{ i18n.t(saveError()!) }}</p>
+      }
+
+      <!--
+        The refusal that matters. It is not an error message with a list attached — the list is
+        the whole answer, so it gets the room, and the venue is told what to do about it rather
+        than only that something is wrong (PRD US-11, 6.1).
+      -->
+      @if (inTheWay().length > 0) {
+        <section class="clashes" data-testid="in-the-way">
+          <h2>{{ i18n.t('closures.inTheWay') }}</h2>
+          <p class="muted">{{ i18n.t('closures.inTheWayHow') }}</p>
+
+          <ul class="clash-list">
+            @for (clash of inTheWay(); track clash.bookingId) {
+              <li class="clash" [attr.data-testid]="'clash-' + clash.bookingId">
+                <span class="clash-when">
+                  {{ clash.date | appDate: i18n.locale() }}
+                  {{ clash.fromHour }}:00 – {{ clash.toHour }}:00
+                </span>
+                <span class="muted">{{ clash.courtName }}</span>
+                <span class="badge">{{ i18n.t('booking.status.' + clash.status) }}</span>
+              </li>
+            }
+          </ul>
+
+          <a matButton="filled" [routerLink]="['/venues', venueId(), 'bookings']">
+            {{ i18n.t('venueBookings.title') }}
+          </a>
+        </section>
+      }
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('closures.shutNow') }}</mat-card-title>
+    </mat-card-header>
+
+    <mat-card-content>
+      @if (nothingShut()) {
+        <p class="muted" data-testid="nothing-shut">{{ i18n.t('closures.nothingShut') }}</p>
+      } @else {
+        <ul class="closure-list" data-testid="closure-list">
+          @for (closure of closures$(); track closure.id) {
+            <li
+              class="closure"
+              [class.lifted]="closure.liftedAt !== null"
+              [attr.data-testid]="'closure-' + closure.id"
+            >
+              <span class="closure-court">{{ courtName(closure.courtId) }}</span>
+              <!-- Most closures sit inside one day, and printing that day twice reads as two. -->
+              <span class="closure-when">
+                {{ closure.startsOn | appDate: i18n.locale() }} {{ closure.startHour }}:00 –
+                @if (closure.endsOn !== closure.startsOn) {
+                  {{ closure.endsOn | appDate: i18n.locale() }}
+                }
+                {{ closure.endHour }}:00
+              </span>
+              <span class="muted closure-reason">{{ closure.reason }}</span>
+
+              @if (closure.liftedAt !== null) {
+                <span class="badge" [attr.data-testid]="'lifted-' + closure.id">
+                  {{ i18n.t('closures.lifted') }}
+                </span>
+              } @else {
+                <button
+                  matButton
+                  type="button"
+                  [attr.data-testid]="'lift-' + closure.id"
+                  [disabled]="saving()"
+                  (click)="lift(closure)"
+                >
+                  {{ i18n.t('closures.lift') }}
+                </button>
+              }
+            </li>
+          }
+        </ul>
+      }
+    </mat-card-content>
+  </mat-card>
+}

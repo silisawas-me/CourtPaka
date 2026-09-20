@@ -162,11 +162,12 @@ def thai_date(date) -> str:
     return f"{date.day} {THAI_MONTHS[date.month - 1]} {date.year + 543}"
 
 
-def pick_date(page, date) -> None:
+def pick_date(page, date, toggle="mat-datepicker-toggle button") -> None:
     """Drives the calendar, because the field itself is read-only: Intl prints Thai dates but
-    cannot read one back, so typing into it would be thrown away."""
+    cannot read one back, so typing into it would be thrown away. `toggle` names which calendar,
+    for a page carrying more than one."""
     if page.locator("mat-calendar").count() == 0:
-        page.click("mat-datepicker-toggle button")
+        page.click(toggle)
         page.wait_for_selector("mat-calendar")
 
     show_month(page, date)
@@ -301,6 +302,33 @@ def ensure_bookable(browser, venue_id) -> None:
     )
     if published.status != 200:
         raise RuntimeError(f"Could not open the venue for business: {published.status}")
+
+    # And at the prices the seed sets, which is what the scripts that read a price expect.
+    # venue_pricing.py rewrites them because that is what it is about, and leaves them wherever
+    # its last check left them (PRD: 200 an hour, 300 from 18:00).
+    priced = page.request.put(
+        f"{BASE}/api/venues/{venue_id}/prices",
+        data={
+            "bands": [
+                band
+                for day in DAYS
+                for band in (
+                    {"day": day, "fromHour": 6, "toHour": 18, "bahtPerHour": 200},
+                    {"day": day, "fromHour": 18, "toHour": 22, "bahtPerHour": 300},
+                )
+            ],
+        },
+    )
+    if priced.status != 200:
+        raise RuntimeError(f"Could not price the venue: {priced.status} {priced.text()}")
+
+    # And with no court shut. court_closures.py closes courts because that is what it is about,
+    # and a court left shut is an hour with no price — which reads to every other script as a
+    # grid that has gone wrong rather than as a court somebody closed.
+    for shut in page.request.get(f"{BASE}/api/venues/{venue_id}/closures").json():
+        if shut["liftedAt"] is None:
+            page.request.post(f"{BASE}/api/venues/{venue_id}/closures/{shut['id']}/lift")
+
     page.close()
 
 

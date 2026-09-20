@@ -1,0 +1,125 @@
+/**
+ * Two things stacked: the form that shuts a court, and what is shut already. Both are lists of
+ * short rows rather than cards — this is a working screen, read while somebody stands at a
+ * counter, and the venue's other working screens read the same way.
+ */
+
+/** Courts side by side while they fit, wrapping rather than shrinking: names vary in length. */
+.courts {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+
+  legend {
+    padding: 0;
+    margin-bottom: 0.35rem;
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-body-medium);
+  }
+}
+
+.court-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+
+  input {
+    accent-color: var(--mat-sys-primary);
+  }
+}
+
+/**
+ * A day and an hour belong together, so they sit on one line and fold onto two only when there
+ * is no room. The hour is narrow because it holds at most two digits, but not fixed: the Thai
+ * label is longer than the English one.
+ */
+.when {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1rem;
+  align-items: flex-start;
+
+  .field {
+    flex: 1 1 14rem;
+  }
+
+  .hour {
+    flex: 0 1 9rem;
+  }
+}
+
+.hint {
+  margin-top: -0.5rem;
+}
+
+/** The refusal is the page's real answer, so it is given a surface of its own rather than a line. */
+.clashes {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border-radius: var(--mat-sys-corner-medium);
+  background: color-mix(in srgb, var(--mat-sys-error-container) 60%, transparent);
+
+  h2 {
+    margin: 0;
+    font: var(--mat-sys-title-medium);
+  }
+
+  p {
+    margin: 0.25rem 0 0.75rem;
+    max-width: 44ch;
+  }
+}
+
+.clash-list,
+.closure-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+}
+
+.clash,
+.closure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  font: var(--mat-sys-body-medium);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.clash-when,
+.closure-when {
+  font-weight: 500;
+}
+
+.closure-court {
+  font: var(--mat-sys-title-small);
+  flex: 0 0 auto;
+}
+
+/** A closure that was ended early stays on the list, struck through: it explains a quiet day. */
+.closure.lifted {
+  color: var(--mat-sys-on-surface-variant);
+
+  .closure-when {
+    text-decoration: line-through;
+  }
+}
+
+.closure-reason {
+  flex-basis: 100%;
+}
+
+.closure button,
+.closure .badge {
+  margin-left: auto;
+}

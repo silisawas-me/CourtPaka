@@ -49,6 +49,13 @@
           <span class="badge badge-waiting" data-testid="money-waiting">{{ waiting }}</span>
         }
       </a>
+      <!--
+        Its own door rather than a panel inside the settings, because it is its own permission:
+        staff hold CloseCourt and usually not ManageSettings (PRD US-14).
+      -->
+      <a matButton [routerLink]="['/venues', current.id, 'closures']" data-testid="closures-link">
+        {{ i18n.t('closures.title') }}
+      </a>
       <a
         matButton
         [routerLink]="['/venues', current.id, 'slip-queue']"
