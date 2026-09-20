@@ -35,6 +35,13 @@
       >
         {{ i18n.t('settings.title') }}
       </a>
+      <a
+        matButton
+        [routerLink]="['/venues', current.id, 'slip-queue']"
+        data-testid="slip-queue-link"
+      >
+        {{ i18n.t('slipQueue.title') }}
+      </a>
     </mat-card-actions>
   </mat-card>
 

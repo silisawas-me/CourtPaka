@@ -1,0 +1,186 @@
+/**
+ * The queue beside the decision. On a counter screen both are visible at once, which is what lets
+ * someone work down a list; on a phone the queue comes first and the decision follows it, because
+ * a list you have to scroll past to reach the thing you chose is worse than one you scroll to.
+ */
+.queue {
+  display: grid;
+  gap: var(--stack);
+  align-items: start;
+
+  @media (min-width: 60rem) {
+    grid-template-columns: 22rem 1fr;
+  }
+}
+
+.queue-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/**
+ * A row is a button, so it is reachable by keyboard and says so. The columns hold: who, how much,
+ * when it arrived, and what is unusual about it — in that order, because that is the order the
+ * question is asked in.
+ */
+.queue-item {
+  all: unset;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 0.75rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--mat-sys-corner-medium);
+  cursor: pointer;
+  font: var(--mat-sys-body-medium);
+
+  &:hover {
+    background: var(--mat-sys-surface-container-high);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: -2px;
+  }
+
+  /* The open one keeps its mark while the eye is on the picture next to it. */
+  &.open {
+    background: var(--mat-sys-secondary-container);
+    color: var(--mat-sys-on-secondary-container);
+
+    .muted {
+      color: inherit;
+      opacity: 0.8;
+    }
+  }
+}
+
+.queue-item-who {
+  overflow-wrap: anywhere;
+}
+
+.queue-item-baht {
+  font: var(--mat-sys-title-medium);
+  justify-self: end;
+}
+
+.queue-item-when {
+  grid-column: 1 / -1;
+}
+
+.queue-item-flags {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+/* Two different kinds of unusual: one is about time, the other about trust. */
+.badge-soon {
+  background: var(--mat-sys-tertiary-container);
+  color: var(--mat-sys-on-tertiary-container);
+}
+
+.badge-repeat {
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+}
+
+.repeat-warning {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--mat-sys-corner-medium);
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+  font: var(--mat-sys-body-medium);
+}
+
+/**
+ * The slip gets the room, capped so a tall phone photograph cannot push the buttons off the
+ * screen — the decision has to stay reachable without scrolling back up.
+ */
+.slip-frame {
+  display: block;
+  border-radius: var(--mat-sys-corner-medium);
+  overflow: hidden;
+  background: var(--mat-sys-surface-container-highest);
+  line-height: 0;
+
+  img {
+    display: block;
+    width: 100%;
+    max-height: 26rem;
+    object-fit: contain;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 2px;
+  }
+}
+
+/** Label above value: Thai labels and dates are long enough that two columns would wrap badly. */
+.facts {
+  display: grid;
+  gap: 0.25rem 0.75rem;
+  margin: 0.75rem 0 0;
+  font: var(--mat-sys-body-medium);
+
+  dt {
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  dd {
+    margin: 0 0 0.5rem;
+  }
+
+  @media (min-width: 30rem) {
+    grid-template-columns: auto 1fr;
+    align-items: baseline;
+
+    dd {
+      margin: 0;
+    }
+  }
+}
+
+.money {
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-medium);
+  padding: 0.5rem 0.75rem 0.75rem;
+  margin: 0;
+
+  legend {
+    font: var(--mat-sys-label-large);
+    color: var(--mat-sys-on-surface-variant);
+    padding-inline: 0.25rem;
+  }
+}
+
+.money-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  cursor: pointer;
+  font: var(--mat-sys-body-large);
+
+  input {
+    accent-color: var(--mat-sys-primary);
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+}
+
+.decision-actions {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Turning someone away is not the same weight of action as accepting them. */
+.reject {
+  background: var(--mat-sys-error);
+  color: var(--mat-sys-on-error);
+}
