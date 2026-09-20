@@ -60,6 +60,7 @@ public static class BookingEndpoints
         bookings.MapPost("/", CreateAsync);
         bookings.MapGet("/", MineAsync);
         bookings.MapGet("/{bookingId:guid}", GetAsync);
+        bookings.MapGet("/{bookingId:guid}/payment", PaymentAsync);
         bookings.MapPost("/{bookingId:guid}/cancel", CancelAsync);
         bookings.MapSlipEndpoints();
     }
@@ -582,6 +583,46 @@ public static class BookingEndpoints
             .FirstOrDefaultAsync(cancellationToken)
         ?? throw new InvalidOperationException(
             $"Venue {venueId} has no cancellation policy; every venue is created with one.");
+
+    /// <summary>
+    /// How to pay for this booking (PRD US-04): the venue's account, and a QR carrying the exact
+    /// amount. Its own endpoint rather than a field on every booking — a QR is only of use while
+    /// one booking is waiting to be paid for, and a history list has no business carrying the
+    /// venue's bank details on every row.
+    /// </summary>
+    private static async Task<Results<Ok<PaymentResponse>, NotFound>> PaymentAsync(
+        Guid bookingId,
+        ClaimsPrincipal principal,
+        AppDbContext database,
+        CancellationToken cancellationToken)
+    {
+        var bookerId = CallerId.Of(principal);
+
+        var paying = await database.Bookings
+            .AsNoTracking()
+            .Where(booking => booking.Id == bookingId && booking.BookerUserId == bookerId)
+            .Select(booking => new
+            {
+                booking.TotalBaht,
+                booking.HoldExpiresAt,
+                Account = booking.Venue!.Business.PromptPayId,
+                AccountName = booking.Venue!.Business.PromptPayAccountName,
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (paying is null)
+        {
+            return TypedResults.NotFound();
+        }
+
+        return TypedResults.Ok(new PaymentResponse(
+            paying.TotalBaht,
+            paying.HoldExpiresAt,
+            paying.AccountName,
+            // Null where the venue's account is not something a bank app would take. The page
+            // says so rather than drawing a code that is refused at the counter (PRD US-10).
+            PromptPay.For(paying.Account, paying.TotalBaht)));
+    }
 
     private static BookingResponse ToResponse(
         Booking booking,

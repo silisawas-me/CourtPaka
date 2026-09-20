@@ -42,6 +42,8 @@
   "availability.status.Closed": "ปิด",
   "availability.status.Free": "ว่าง",
   "availability.window": "จองล่วงหน้าได้ไม่เกิน 30 วัน",
+  "booking.pay.qrAlt": "QR พร้อมเพย์สำหรับจ่ายค่าจองนี้",
+  "booking.pay.qrHint": "สแกนด้วยแอปธนาคาร ยอดเงินอยู่ในโค้ดแล้ว ไม่ต้องพิมพ์เอง",
   "booking.pay.qrPending": "สนามยังไม่ได้ตั้งค่าบัญชีพร้อมเพย์ กรุณาโอนกับสนามโดยตรงแล้วส่งสลิปที่นี่",
   "booking.pay.replaceSlip": "ส่งสลิปใหม่",
   "booking.pay.sendSlip": "ส่งสลิป",

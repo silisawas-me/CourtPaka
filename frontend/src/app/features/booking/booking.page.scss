@@ -30,3 +30,32 @@
     pointer-events: none;
   }
 }
+
+/**
+ * The code is the thing on this card, so it gets the middle and room around it. Sized in the
+ * markup rather than by CSS alone so the space is held before the picture arrives and the card
+ * does not jump when it does.
+ */
+.qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  text-align: center;
+
+  img {
+    border-radius: var(--mat-sys-corner-small);
+    background: #fff;
+  }
+
+  p {
+    margin: 0;
+    max-width: 32ch;
+  }
+}
+
+/** Who the money is going to, which is how somebody knows they are paying the right people. */
+.qr-account {
+  font: var(--mat-sys-title-small);
+}

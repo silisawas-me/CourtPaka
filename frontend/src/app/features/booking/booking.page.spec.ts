@@ -46,14 +46,65 @@ describe('BookingPage', () => {
     httpMock.verify();
   });
 
-  function render(answer: object = booking()): void {
+  function render(answer: object = booking(), payload: string | null = null): void {
     fixture = TestBed.createComponent(BookingPage);
     fixture.componentRef.setInput('bookingId', 'b1');
     fixture.detectChanges();
 
     httpMock.expectOne('/api/bookings/b1').flush(answer);
     fixture.detectChanges();
+    answerHowToPay(payload);
   }
+
+  /**
+   * A booking with money owing also asks where to send it (PRD US-04). Answered with no payload,
+   * so nothing here waits on the QR encoder — the tests that are about the code say so.
+   */
+  function answerHowToPay(payload: string | null = null): void {
+    const asked = httpMock.match('/api/bookings/b1/payment');
+    for (const request of asked) {
+      request.flush({
+        totalBaht: 600,
+        holdExpiresAt: '2026-09-20T11:15:00Z',
+        accountName: 'บริษัท ทดสอบ จำกัด',
+        promptPayPayload: payload,
+      });
+    }
+    fixture.detectChanges();
+  }
+
+  /**
+   * The code carries the amount, so the booker does not type it — which is the whole reason the
+   * payload is built on the server and only drawn here (PRD US-04).
+   */
+  it('draws the code the server built, with the account it is going to', async () => {
+    render(booking(), '00020101021229370016A000000677010111');
+
+    // The encoder is loaded and run asynchronously, and waiting for it means waiting on real
+    // time rather than the clock the countdown tests own.
+    vi.useRealTimers();
+    await vi.waitUntil(() => {
+      fixture.detectChanges();
+      return elementOf(fixture, 'qr') !== null;
+    });
+
+    const drawn = elementOf<HTMLImageElement>(fixture, 'qr');
+    expect(drawn?.getAttribute('src')).toMatch(/^data:image\/svg\+xml;charset=utf-8,/);
+    expect(textOf(fixture, 'qr-account')).toBe('บริษัท ทดสอบ จำกัด');
+  });
+
+  it('says the venue is not set up rather than drawing a code that would be refused', () => {
+    render();
+
+    expect(elementOf(fixture, 'qr')).toBeNull();
+    expect(textOf(fixture, 'qr-pending')).toBe(TRANSLATIONS.th['booking.pay.qrPending']);
+  });
+
+  it('does not ask how to pay for a booking that is over', () => {
+    render(booking({ status: 'Cancelled' }));
+
+    httpMock.expectNone('/api/bookings/b1/payment');
+  });
 
   /** A file of the given size, which is all the page looks at before sending. */
   function file(bytes = 1024, name = 'slip.jpg'): File {
