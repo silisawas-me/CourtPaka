@@ -307,7 +307,8 @@ public static class BookingEndpoints
         // What the venue has actually sent back, per booking: the sum of the records that still
         // stand (PRD 6.2, US-18).
         var sentBack = await database.RefundRecords
-            .Where(record => bookingIds.Contains(record.BookingId) && record.VoidedAt == null)
+            .StillStanding()
+            .Where(record => bookingIds.Contains(record.BookingId))
             .GroupBy(record => record.BookingId)
             .Select(records => new
             {

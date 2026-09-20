@@ -41,14 +41,13 @@ public static class VenueBookingEndpoints
         // Reading the day is behind the permission too, not merely behind membership: it names
         // every booker by the address they signed up with, and PRD 8 gives that to the people
         // holding the permission rather than to the venue's members at large (PDPA, US-13).
-        var manage = bookings.RequireAuthorization(
-            VenuePolicies.Needs(VenuePermissions.ManageBookings));
+        bookings.RequireAuthorization(VenuePolicies.Needs(VenuePermissions.ManageBookings));
 
-        manage.MapGet("/", DayAsync);
-        manage.MapPost("/{bookingId:guid}/cancel", CancelAsync);
-        manage.MapPost("/{bookingId:guid}/no-show", NoShowAsync);
-        manage.MapPost("/{bookingId:guid}/settle-payment", SettleAsync);
-        manage.MapPost("/{bookingId:guid}/played", PlayedAfterAllAsync);
+        bookings.MapGet("/", DayAsync);
+        bookings.MapPost("/{bookingId:guid}/cancel", CancelAsync);
+        bookings.MapPost("/{bookingId:guid}/no-show", NoShowAsync);
+        bookings.MapPost("/{bookingId:guid}/settle-payment", SettleAsync);
+        bookings.MapPost("/{bookingId:guid}/played", PlayedAfterAllAsync);
 
         bookings.MapRefundEndpoints();
     }
@@ -499,7 +498,8 @@ public static class VenueBookingEndpoints
 
         var bookingIds = found.Select(row => row.Booking.Id).ToArray();
         var sentBack = await database.RefundRecords
-            .Where(record => bookingIds.Contains(record.BookingId) && record.VoidedAt == null)
+            .StillStanding()
+            .Where(record => bookingIds.Contains(record.BookingId))
             .GroupBy(record => record.BookingId)
             .Select(records => new
             {

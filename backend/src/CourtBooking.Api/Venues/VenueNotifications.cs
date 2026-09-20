@@ -79,6 +79,8 @@ public sealed class VenueNotifications(
         // What is still to be sent, not what was once owed: a booking the venue has paid back is
         // finished with, and a number nobody can clear is only a reproach (PRD 6.2, US-18).
         var money = membership.Allows(Who(Notice.RefundOwed).Permission)
+            // The same rule as Refunds.StillStanding, written out: EF cannot translate a call
+            // that builds a query when it sits inside a correlated subquery.
             ? await database.Bookings.CountAsync(
                 booking => booking.VenueId == venueId
                     && (booking.RefundDueBaht > database.RefundRecords

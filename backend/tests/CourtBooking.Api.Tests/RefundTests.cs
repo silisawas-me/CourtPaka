@@ -63,6 +63,30 @@ public sealed class RefundTests(ApiTestFixture api) : IClassFixture<ApiTestFixtu
         Assert.Equal(RefundErrorCodes.MoreThanIsOwed, await refused.ErrorCodeAsync());
     }
 
+    /// <summary>
+    /// The one that matters: a double click, a retry, or two people at the counter. Both requests
+    /// read what is owed before either has written, so without the database holding the line both
+    /// find room for the whole of it and the booking ends up with twice its debt written off
+    /// against it, in records nobody can edit (PRD BR-06).
+    /// </summary>
+    [Fact]
+    public async Task Two_people_sending_the_whole_of_it_at_once_write_it_down_once()
+    {
+        var (owner, venue, booking) = await OwedInFullAsync();
+
+        var both = await Task.WhenAll(
+            SendAsync(owner, venue.Id, booking.Id, booking.TotalBaht),
+            SendAsync(owner, venue.Id, booking.Id, booking.TotalBaht));
+
+        Assert.Single(both, answer => answer.StatusCode == HttpStatusCode.OK);
+        var refused = Assert.Single(both, answer => answer.StatusCode == HttpStatusCode.Conflict);
+        Assert.Equal(RefundErrorCodes.MoreThanIsOwed, await refused.ErrorCodeAsync());
+
+        var after = await ReadAsync(owner, venue.Id, booking.Id);
+        Assert.Equal(booking.TotalBaht, after.SentBackBaht);
+        Assert.Single(after.Records);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(-50)]
@@ -88,17 +112,67 @@ public sealed class RefundTests(ApiTestFixture api) : IClassFixture<ApiTestFixtu
         Assert.Equal(RefundErrorCodes.NotYetSent, await refused.ErrorCodeAsync());
     }
 
-    [Fact]
-    public async Task A_way_of_paying_the_venue_did_not_name_is_refused()
+    /// <summary>
+    /// Enum.TryParse takes more than the names: a number lands on whatever it numbers, a different
+    /// case is the same value to it, and a comma is a bitwise or. None of those is a way of paying
+    /// anybody, and the record would keep whichever one was sent (PRD US-18).
+    /// </summary>
+    [Theory]
+    [InlineData("Cheque")]
+    [InlineData("1")]
+    [InlineData("transfer")]
+    [InlineData("Transfer,Cash")]
+    [InlineData("")]
+    public async Task A_way_of_paying_the_venue_did_not_name_is_refused(string method)
     {
         var (owner, venue, booking) = await OwedInFullAsync();
 
         var refused = await owner.PostAsJsonAsync(
             $"/api/venues/{venue.Id}/bookings/{booking.Id}/refunds",
-            new RecordRefundRequest(100m, VenueScenario.Today, "Cheque", null));
+            new RecordRefundRequest(100m, VenueScenario.Today, method, null));
 
         Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
         Assert.Equal(RefundErrorCodes.MethodNotAllowed, await refused.ErrorCodeAsync());
+    }
+
+    [Fact]
+    public async Task A_note_longer_than_the_column_is_refused_rather_than_cut_short()
+    {
+        var (owner, venue, booking) = await OwedInFullAsync();
+        var tooLong = new string('ก', RefundRecord.NoteMaxLength + 1);
+
+        var written = await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/bookings/{booking.Id}/refunds",
+            new RecordRefundRequest(100m, VenueScenario.Today, nameof(RefundMethod.Transfer), tooLong));
+        Assert.Equal(HttpStatusCode.BadRequest, written.StatusCode);
+        Assert.Equal(RefundErrorCodes.NoteTooLong, await written.ErrorCodeAsync());
+
+        var record = Assert.Single((await RecordAsync(owner, venue.Id, booking.Id, 100m)).Records);
+        var voided = await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/bookings/{booking.Id}/refunds/{record.Id}/void",
+            new VoidRefundRequest(tooLong));
+        Assert.Equal(HttpStatusCode.BadRequest, voided.StatusCode);
+        Assert.Equal(RefundErrorCodes.NoteTooLong, await voided.ErrorCodeAsync());
+    }
+
+    /// <summary>
+    /// The counter's own day carries the same two numbers as the panel, because the row is what
+    /// the venue reads first and it has to agree with what it opens (PRD 6.2).
+    /// </summary>
+    [Fact]
+    public async Task The_venue_s_day_shows_what_has_gone_back_and_what_is_left()
+    {
+        var (owner, venue, booking) = await OwedInFullAsync();
+        await RecordAsync(owner, venue.Id, booking.Id, 100m);
+
+        var day = await VenueScenario.ReadAsync<VenueBookingResponse[]>(
+            await owner.GetAsync(
+                $"/api/venues/{venue.Id}/bookings?date={VenueScenario.Today.AddDays(1):yyyy-MM-dd}"));
+
+        var row = Assert.Single(day, seen => seen.BookingId == booking.Id);
+        Assert.Equal(booking.TotalBaht, row.RefundDueBaht);
+        Assert.Equal(100m, row.SentBackBaht);
+        Assert.Equal(booking.TotalBaht - 100m, row.OutstandingBaht);
     }
 
     [Fact]
@@ -131,6 +205,7 @@ public sealed class RefundTests(ApiTestFixture api) : IClassFixture<ApiTestFixtu
         var noReason = await owner.PostAsJsonAsync(
             $"/api/venues/{venue.Id}/bookings/{booking.Id}/refunds/{record.Id}/void",
             new VoidRefundRequest("   "));
+        Assert.Equal(HttpStatusCode.BadRequest, noReason.StatusCode);
         Assert.Equal(BookingErrorCodes.ReasonRequired, await noReason.ErrorCodeAsync());
 
         var staff = await scenario.StaffClientAsync(

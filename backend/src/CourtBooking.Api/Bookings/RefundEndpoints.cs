@@ -15,16 +15,26 @@ namespace CourtBooking.Api.Bookings;
 /// that have already happened. They are written once and never edited — a record that can be
 /// changed is not evidence — and the only thing that may happen to one afterwards is the owner
 /// voiding it with a reason, which puts the amount back on what the venue still owes.
+///
+/// Two acceptance criteria of US-18 are not here. Attaching proof of the transfer waits for the
+/// slip store to be something other than a folder on a disk (PRD 9.1), and telling the booker by
+/// email waits for US-06 to choose a provider — nothing is delivered today, so writing the send
+/// would be writing a promise. Both are named in the PR rather than left to be noticed.
 /// </summary>
 public static class RefundEndpoints
 {
     public static void MapRefundEndpoints(this RouteGroupBuilder bookings)
     {
-        var refunds = bookings.MapGroup("/{bookingId:guid}/refunds")
-            .RequireAuthorization(VenuePolicies.Needs(VenuePermissions.ManageBookings));
+        // ManageBookings comes from the group this hangs off (VenueBookingEndpoints), and it
+        // covers the GET too: the list names amounts and dates against a person (PDPA, PRD 8).
+        var refunds = bookings.MapGroup("/{bookingId:guid}/refunds");
 
         refunds.MapGet("/", ListAsync);
         refunds.MapPost("/", RecordAsync);
+
+        // Voiding is the owner's alone, but the check is in the handler rather than in the policy:
+        // the staff who can see the button need to be told which rule stopped them, and a policy
+        // answers 403 with nothing for the page to translate.
         refunds.MapPost("/{refundId:guid}/void", VoidAsync);
     }
 
@@ -68,6 +78,15 @@ public static class RefundEndpoints
                 StatusCodes.Status400BadRequest, RefundErrorCodes.MethodNotAllowed);
         }
 
+        // Baht and satang, which is what the column holds: a third decimal would be rounded on
+        // the way in, and then what was checked would not be what was written.
+        var amount = Math.Round(request.AmountBaht, 2, MidpointRounding.AwayFromZero);
+
+        if (amount <= 0)
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, RefundErrorCodes.AmountNotPositive);
+        }
+
         var note = request.Note?.Trim();
         if (note is { Length: > RefundRecord.NoteMaxLength })
         {
@@ -86,16 +105,22 @@ public static class RefundEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, RefundErrorCodes.NotYetSent);
         }
 
+        await using var transaction =
+            await database.Database.BeginTransactionAsync(cancellationToken);
+
+        // Everyone writing against this booking queues here. Without it two people — or one
+        // double click — both read the same total, both find room for the whole of it, and both
+        // write: a booking owing 1,000 ends up with 2,000 recorded against it and drops off the
+        // list of what the venue still owes, in records nobody can edit (PRD BR-06).
+        await database.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock({LockKey(bookingId)})", cancellationToken);
+
         var outstanding = Refunds.OutstandingOf(
             booking.RefundDueBaht, await SentBackAsync(database, bookingId, cancellationToken));
 
-        if (request.AmountBaht <= 0)
+        if (amount > outstanding)
         {
-            return ApiProblem.Of(StatusCodes.Status400BadRequest, RefundErrorCodes.AmountNotPositive);
-        }
-
-        if (request.AmountBaht > outstanding)
-        {
+            await transaction.RollbackAsync(cancellationToken);
             return ApiProblem.Of(
                 StatusCodes.Status409Conflict, RefundErrorCodes.MoreThanIsOwed);
         }
@@ -103,7 +128,7 @@ public static class RefundEndpoints
         database.RefundRecords.Add(new RefundRecord
         {
             BookingId = bookingId,
-            AmountBaht = request.AmountBaht,
+            AmountBaht = amount,
             RefundedOn = request.RefundedOn,
             Method = method,
             Note = string.IsNullOrEmpty(note) ? null : note,
@@ -112,10 +137,11 @@ public static class RefundEndpoints
         });
 
         await database.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         AppEvents.For(loggers).LogInformation(
             "refund_recorded {BookingId} {VenueId} {AmountBaht} {Method}",
-            bookingId, venueId, request.AmountBaht, method);
+            bookingId, venueId, amount, method);
 
         return TypedResults.Ok(await ReadAsync(database, booking, cancellationToken));
     }
@@ -182,13 +208,26 @@ public static class RefundEndpoints
         return TypedResults.Ok(await ReadAsync(database, booking, cancellationToken));
     }
 
+    /// <summary>
+    /// One number per booking, so that everybody writing against the same one waits for the
+    /// others rather than all of them reading the same total. Sharing a number with something
+    /// else only means queueing behind it, which costs a moment and nothing else.
+    /// </summary>
+    private static long LockKey(Guid bookingId)
+    {
+        Span<byte> id = stackalloc byte[16];
+        bookingId.TryWriteBytes(id);
+        return BitConverter.ToInt64(id[..8]) ^ BitConverter.ToInt64(id[8..]);
+    }
+
     /// <summary>What counts towards what has been sent back: every record that still stands.</summary>
-    internal static async Task<decimal> SentBackAsync(
+    private static async Task<decimal> SentBackAsync(
         AppDbContext database,
         Guid bookingId,
         CancellationToken cancellationToken) =>
         await database.RefundRecords
-            .Where(record => record.BookingId == bookingId && record.VoidedAt == null)
+            .StillStanding()
+            .Where(record => record.BookingId == bookingId)
             .SumAsync(record => record.AmountBaht, cancellationToken);
 
     private static Task<Booking?> FindAsync(

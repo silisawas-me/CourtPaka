@@ -73,20 +73,34 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         builder.Entity<RefundRecord>(refund =>
         {
             refund.Property(record => record.AmountBaht).HasPrecision(10, 2);
+
+            // The rule about how much is owed is the endpoint's; that an amount is money at all
+            // is the column's, so no future write path can get it wrong (PRD US-18).
+            refund.ToTable(table => table.HasCheckConstraint(
+                "CK_RefundRecords_AmountIsMoney", "\"AmountBaht\" > 0"));
             refund.Property(record => record.Note).HasMaxLength(RefundRecord.NoteMaxLength);
             refund.Property(record => record.VoidReason).HasMaxLength(RefundRecord.NoteMaxLength);
 
             // Read one booking at a time, always: what has been sent back is a sum over these.
             refund.HasIndex(record => record.BookingId);
 
+            // Nothing may take these with it. A record that disappears when its booking does is
+            // weaker evidence than one that cannot be edited, and PDPA deletion (PRD 8, S-15) is
+            // anonymising the person, not removing what the venue paid out.
             refund.HasOne(record => record.Booking)
                 .WithMany()
                 .HasForeignKey(record => record.BookingId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict);
 
             refund.HasOne(record => record.RecordedBy)
                 .WithMany()
                 .HasForeignKey(record => record.RecordedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Who reversed money is worth as much as who sent it, so it is a real key too.
+            refund.HasOne<AppUser>()
+                .WithMany()
+                .HasForeignKey(record => record.VoidedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

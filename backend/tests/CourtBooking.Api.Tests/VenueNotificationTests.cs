@@ -163,6 +163,36 @@ public sealed class VenueNotificationTests(ApiTestFixture api) : IClassFixture<A
     }
 
     [Fact]
+    public async Task Sending_the_money_back_clears_the_count_and_voiding_it_brings_it_back()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/slip-queue/{booking.Id}/reject",
+            new RejectSlipRequest("ยอดไม่ตรง", PaymentReceived: true));
+        Assert.Equal(1, (await AttentionAsync(owner, venue.Id)).BookingsWithMoneyWaiting);
+
+        var written = await VenueScenario.ReadAsync<RefundsResponse>(
+            await owner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/bookings/{booking.Id}/refunds",
+                new RecordRefundRequest(
+                    booking.TotalBaht,
+                    VenueScenario.Today,
+                    nameof(RefundMethod.Transfer),
+                    null)));
+
+        // Paid back is finished with: a number nobody can clear is only a reproach (PRD US-17).
+        Assert.Equal(0, (await AttentionAsync(owner, venue.Id)).BookingsWithMoneyWaiting);
+
+        var record = Assert.Single(written.Records);
+        await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/bookings/{booking.Id}/refunds/{record.Id}/void",
+            new VoidRefundRequest("โอนไม่สำเร็จ ธนาคารตีกลับ"));
+
+        Assert.Equal(1, (await AttentionAsync(owner, venue.Id)).BookingsWithMoneyWaiting);
+    }
+
+    [Fact]
     public async Task Answering_for_the_money_takes_the_booking_off_the_count()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();

@@ -260,14 +260,55 @@
                             <span class="muted refund-note">
                               {{ i18n.t('refunds.voided') }}: {{ record.voidReason }}
                             </span>
+                          } @else if (voiding() === record.id) {
+                            <!--
+                              The reason sits under the record it is about: one box for the list
+                              would write the last thing typed into whichever record was clicked,
+                              and none of it can be corrected afterwards (PRD US-18).
+                            -->
+                            <form class="stack refund-voiding" [formGroup]="voidForm" novalidate>
+                              <mat-form-field class="field">
+                                <mat-label>{{ i18n.t('refunds.voidReason') }}</mat-label>
+                                <input
+                                  matInput
+                                  formControlName="reason"
+                                  [attr.data-testid]="'void-reason-' + record.id"
+                                  [attr.maxlength]="noteMaxLength"
+                                />
+                                <mat-error
+                                  [appFieldError]="voidForm.controls.reason"
+                                  testId="void-reason-error"
+                                ></mat-error>
+                              </mat-form-field>
+
+                              <div class="row">
+                                <button
+                                  matButton="filled"
+                                  type="button"
+                                  [attr.data-testid]="'void-' + record.id"
+                                  [disabled]="deciding()"
+                                  (click)="voidRefund(booking, record.id)"
+                                >
+                                  {{ i18n.t('refunds.void') }}
+                                </button>
+                                <button
+                                  matButton
+                                  type="button"
+                                  data-testid="void-cancel"
+                                  (click)="voiding.set(null)"
+                                >
+                                  {{ i18n.t('common.cancel') }}
+                                </button>
+                              </div>
+                            </form>
                           } @else {
                             <button
                               matButton
                               type="button"
                               class="refund-void"
-                              [attr.data-testid]="'void-' + record.id"
+                              [attr.data-testid]="'ask-void-' + record.id"
                               [disabled]="deciding()"
-                              (click)="voidRefund(booking, record.id, voidReason.value)"
+                              (click)="askVoid(record.id)"
                             >
                               {{ i18n.t('refunds.void') }}
                             </button>
@@ -275,11 +316,6 @@
                         </li>
                       }
                     </ul>
-
-                    <mat-form-field class="field">
-                      <mat-label>{{ i18n.t('refunds.voidReason') }}</mat-label>
-                      <input matInput #voidReason [attr.maxlength]="noteMaxLength" />
-                    </mat-form-field>
                   }
 
                   @if (sent.outstandingBaht > 0) {
@@ -295,7 +331,18 @@
 
                       <mat-form-field class="field">
                         <mat-label>{{ i18n.t('refunds.on') }}</mat-label>
-                        <input matInput id="refunded-on" type="date" formControlName="refundedOn" />
+                        <input
+                          matInput
+                          readonly
+                          id="refunded-on"
+                          data-testid="refunded-on"
+                          formControlName="refundedOn"
+                          [matDatepicker]="refundedOnPicker"
+                          [max]="today"
+                          (click)="refundedOnPicker.open()"
+                        />
+                        <mat-datepicker-toggle matIconSuffix [for]="refundedOnPicker" />
+                        <mat-datepicker #refundedOnPicker />
                       </mat-form-field>
 
                       <fieldset class="reasons">

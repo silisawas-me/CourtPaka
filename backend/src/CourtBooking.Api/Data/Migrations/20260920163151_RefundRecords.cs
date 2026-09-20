@@ -30,9 +30,16 @@ namespace CourtBooking.Api.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_RefundRecords", x => x.Id);
+                    table.CheckConstraint("CK_RefundRecords_AmountIsMoney", "\"AmountBaht\" > 0");
                     table.ForeignKey(
                         name: "FK_RefundRecords_AspNetUsers_RecordedByUserId",
                         column: x => x.RecordedByUserId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_RefundRecords_AspNetUsers_VoidedByUserId",
+                        column: x => x.VoidedByUserId,
                         principalTable: "AspNetUsers",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
@@ -41,7 +48,7 @@ namespace CourtBooking.Api.Data.Migrations
                         column: x => x.BookingId,
                         principalTable: "Bookings",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateIndex(
@@ -53,6 +60,11 @@ namespace CourtBooking.Api.Data.Migrations
                 name: "IX_RefundRecords_RecordedByUserId",
                 table: "RefundRecords",
                 column: "RecordedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RefundRecords_VoidedByUserId",
+                table: "RefundRecords",
+                column: "VoidedByUserId");
         }
 
         /// <inheritdoc />

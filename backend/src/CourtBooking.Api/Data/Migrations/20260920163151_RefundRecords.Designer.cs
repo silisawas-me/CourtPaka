@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CourtBooking.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260920161042_RefundRecords")]
+    [Migration("20260920163151_RefundRecords")]
     partial class RefundRecords
     {
         /// <inheritdoc />
@@ -237,7 +237,12 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("RecordedByUserId");
 
-                    b.ToTable("RefundRecords");
+                    b.HasIndex("VoidedByUserId");
+
+                    b.ToTable("RefundRecords", t =>
+                        {
+                            t.HasCheckConstraint("CK_RefundRecords_AmountIsMoney", "\"AmountBaht\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Identity.AppUser", b =>
@@ -887,7 +892,7 @@ namespace CourtBooking.Api.Data.Migrations
                     b.HasOne("CourtBooking.Api.Bookings.Booking", "Booking")
                         .WithMany()
                         .HasForeignKey("BookingId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("CourtBooking.Api.Identity.AppUser", "RecordedBy")
@@ -895,6 +900,11 @@ namespace CourtBooking.Api.Data.Migrations
                         .HasForeignKey("RecordedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("CourtBooking.Api.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("VoidedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Booking");
 

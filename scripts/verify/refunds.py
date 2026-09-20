@@ -96,7 +96,8 @@ with sync_playwright() as p:
 
     # 4. Taking one back puts the money back on what is owed, and says why.
     record = second.value.json()["records"][0]["id"]
-    page.fill("[data-testid=asking] input[maxlength]", "โอนไม่สำเร็จ ธนาคารตีกลับ")
+    page.click(f"[data-testid=ask-void-{record}]")
+    page.fill(f"[data-testid=void-reason-{record}]", "โอนไม่สำเร็จ ธนาคารตีกลับ")
     with page.expect_response(lambda r: "/void" in r.url) as voided:
         page.click(f"[data-testid=void-{record}]")
     check("the owner can take a record back", voided.value.status == 200)

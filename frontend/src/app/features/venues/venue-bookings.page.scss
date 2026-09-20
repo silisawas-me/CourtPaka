@@ -165,3 +165,38 @@
 .refund-void {
   flex-basis: 100%;
 }
+
+/** The reason for taking a record back, asked under the record it belongs to. */
+.refund-voiding {
+  flex-basis: 100%;
+  margin-top: 0.5rem;
+}
+
+/**
+ * Owed, sent, still to send. Two columns rather than a default definition list so the amounts
+ * line up under each other and can be compared at a glance; the last one is what the venue acts
+ * on, so it is the one that carries weight.
+ */
+.money {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 1rem;
+  margin: 0 0 0.75rem;
+  font: var(--mat-sys-body-medium);
+
+  dt {
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  dd {
+    margin: 0;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  dt:last-of-type,
+  dd:last-of-type {
+    font: var(--mat-sys-title-medium);
+    color: var(--mat-sys-on-surface);
+  }
+}

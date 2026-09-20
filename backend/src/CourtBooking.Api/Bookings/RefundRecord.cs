@@ -55,6 +55,4 @@ public sealed class RefundRecord
     public Booking? Booking { get; init; }
 
     public AppUser? RecordedBy { get; init; }
-
-    public bool Stands => VoidedAt is null;
 }
