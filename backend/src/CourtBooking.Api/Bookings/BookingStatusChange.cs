@@ -29,7 +29,12 @@ public sealed class BookingStatusChange
 
     /// <summary>
     /// Why, where the state machine asks for a reason (PRD 6.1). The moves that exist so far need
-    /// none, so this is null until US-12 and US-13 bring the ones that do.
+    /// none, so this is null.
+    ///
+    /// US-13's reasons are a closed set that decides the refund (<c>CustomerRequest</c>,
+    /// <c>VenueInitiated</c>, <c>PaymentNotReceived</c>) and US-12's rejection needs free text
+    /// beside one: when those arrive this splits into a code and a note, and the transition table
+    /// says which moves may not be made without one.
     /// </summary>
     public string? Reason { get; init; }
 

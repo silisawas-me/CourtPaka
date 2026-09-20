@@ -313,13 +313,31 @@ public sealed class SlipTests(ApiTestFixture api) : IClassFixture<ApiTestFixture
         var abandoned = await HoldAsync(booker, venue.Id, courts[0], 18);
         await scenario.LapseHoldAsync(abandoned.Id);
 
-        // Booking the other court is what makes the write release the lapsed hold.
+        // Booking the other court is what makes the write release the lapsed hold. Deliberately
+        // not VenueScenario.ExpireLapsedHoldsAsync: that exercises the booker-scoped path, and
+        // this is the venue-scoped one.
         await HoldAsync(booker, venue.Id, courts[1], 18);
 
         var history = await scenario.HistoryAsync(abandoned.Id);
         var expiry = Assert.Single(history, change => change.To == BookingStatus.Expired);
         Assert.Equal(BookingStatus.Held, expiry.From);
         Assert.Null(expiry.ChangedByUserId);
+    }
+
+    [Fact]
+    public async Task Two_slips_at_once_record_one_move_between_them()
+    {
+        var (booker, booking) = await HeldBookingAsync();
+
+        // Both requests read the booking as Held; only one of them may write the move (PRD 6.1).
+        var answers = await Task.WhenAll(
+            UploadAsync(booker, booking.Id, Jpeg()),
+            UploadAsync(booker, booking.Id, Png()));
+
+        Assert.All(answers, answer => Assert.Equal(HttpStatusCode.OK, answer.StatusCode));
+
+        var history = await scenario.HistoryAsync(booking.Id);
+        Assert.Single(history, change => change.To == BookingStatus.PendingVerification);
     }
 
     [Fact]

@@ -11,15 +11,8 @@ public sealed class BookingTransitionTests
     [InlineData(BookingStatus.PendingVerification, BookingStatus.PendingVerification)]
     public void A_move_the_state_machine_allows_goes_through(BookingStatus from, BookingStatus to)
     {
-        var booking = Held();
-        booking.Status = from;
+        var recorded = BookingTransitions.Record(Guid.CreateVersion7(), from, to, Actor, At);
 
-        booking.MoveTo(to, Actor, At);
-
-        Assert.Equal(to, booking.Status);
-
-        // The move and its record travel together (PRD 6.1).
-        var recorded = booking.StatusChanges[^1];
         Assert.Equal(from, recorded.From);
         Assert.Equal(to, recorded.To);
         Assert.Equal(Actor, recorded.ChangedByUserId);
@@ -37,17 +30,7 @@ public sealed class BookingTransitionTests
         Assert.Equal(booking.BookerUserId, first.ChangedByUserId);
     }
 
-    [Fact]
-    public void A_refused_move_records_nothing()
-    {
-        var booking = Held();
-        var before = booking.StatusChanges.Count;
 
-        Assert.Throws<InvalidOperationException>(
-            () => booking.MoveTo(BookingStatus.Confirmed, Actor, At));
-
-        Assert.Equal(before, booking.StatusChanges.Count);
-    }
 
     [Theory]
     // Confirming is the venue's move, and it needs a slip checked first (US-12).
@@ -58,10 +41,8 @@ public sealed class BookingTransitionTests
     [InlineData(BookingStatus.Confirmed, BookingStatus.Rejected)]
     public void A_move_it_does_not_is_a_bug_not_a_refusal(BookingStatus from, BookingStatus to)
     {
-        var booking = Held();
-        booking.Status = from;
-
-        var wrong = Assert.Throws<InvalidOperationException>(() => booking.MoveTo(to, Actor, At));
+        var wrong = Assert.Throws<InvalidOperationException>(
+            () => BookingTransitions.Record(Guid.CreateVersion7(), from, to, Actor, At));
 
         Assert.Contains("PRD 6.1", wrong.Message);
     }

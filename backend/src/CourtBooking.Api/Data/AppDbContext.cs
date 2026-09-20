@@ -181,11 +181,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             change.Property(c => c.Reason).HasMaxLength(500);
             // A booking's history, oldest first, which is how US-12 and US-22 will read it.
             change.HasIndex(c => new { c.BookingId, c.ChangedAt });
+            // The history lives exactly as long as the booking it describes. Nothing deletes a
+            // booking — a booker asking to be forgotten is anonymised, not erased (PRD 8) — so
+            // this cascade is what happens when a venue is removed with everything under it.
             change.HasOne(c => c.Booking)
                 .WithMany(b => b.StatusChanges)
                 .HasForeignKey(c => c.BookingId)
                 .OnDelete(DeleteBehavior.Cascade);
-            // An audit row outlives the account that made the move, or it is not an audit row.
+            // The account, though, can go. The row that says who moved it may not go with it.
             change.HasOne(c => c.ChangedBy)
                 .WithMany()
                 .HasForeignKey(c => c.ChangedByUserId)

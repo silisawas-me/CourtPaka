@@ -1,3 +1,6 @@
+using CourtBooking.Api.Data;
+using Microsoft.EntityFrameworkCore;
+
 namespace CourtBooking.Api.Bookings;
 
 /// <summary>
@@ -6,6 +9,9 @@ namespace CourtBooking.Api.Bookings;
 /// The table is transcribed from the state machine rather than spread across the handlers that
 /// happen to need a move: US-12 and US-13 add a dozen of them, each with an actor, a reason and a
 /// refund, and a move nobody wrote down is how a booking ends up somewhere the rules do not cover.
+///
+/// Every move is recorded (PRD 6.1 asks for who, when and why), and the record is written by
+/// whatever makes the move — never beside it, where the two could disagree.
 ///
 /// Only the moves that exist so far are listed. Adding a story means adding its rows, not
 /// repeating an assignment.
@@ -22,36 +28,96 @@ public static class BookingTransitions
     };
 
     /// <summary>
-    /// Moves the booking and records the move, or refuses to. A move that is not in the table is a
-    /// bug in the caller, not something to explain to whoever is holding the booking.
+    /// Checks a move against the table and builds its record. Writing the record and the status
+    /// together is the caller's to do, in one transaction — which is the only way the two paths
+    /// that exist can do it, since both change the row rather than the entity.
     ///
-    /// The history row is added to the booking rather than written here, so it is saved in the
-    /// same SaveChanges as the status it describes — the two cannot end up disagreeing.
+    /// When an entity-level move arrives (US-12, US-13), the thin wrapper that sets the status and
+    /// appends the record belongs here, over this.
     /// </summary>
-    public static void MoveTo(
-        this Booking booking,
+    public static BookingStatusChange Record(
+        Guid bookingId,
+        BookingStatus? from,
         BookingStatus to,
         Guid? byUserId,
         DateTimeOffset at,
         string? reason = null)
     {
-        if (!CanMove(booking.Status, to))
+        if (from is { } current && !CanMove(current, to))
         {
             throw new InvalidOperationException(
-                $"A booking cannot go from {booking.Status} to {to} (PRD 6.1).");
+                $"A booking cannot go from {current} to {to} (PRD 6.1).");
         }
 
-        booking.StatusChanges.Add(new BookingStatusChange
+        return new BookingStatusChange
         {
-            BookingId = booking.Id,
-            From = booking.Status,
+            BookingId = bookingId,
+            From = from,
             To = to,
             ChangedAt = at,
             ChangedByUserId = byUserId,
             Reason = reason,
-        });
+        };
+    }
 
-        booking.Status = to;
+    /// <summary>
+    /// Moves every booking a query selects, and records each one, in a single transaction. The
+    /// bookings that moved are answered back so the caller can say so (PRD 8).
+    ///
+    /// The ids are read first and the update is made against those ids, so the rows recorded and
+    /// the rows changed are the same rows — asking the question twice would let them differ under
+    /// concurrency, which is the one thing an audit trail may not do.
+    /// </summary>
+    public static async Task<IReadOnlyList<Guid>> MoveAllAsync(
+        AppDbContext database,
+        IQueryable<Booking> bookings,
+        BookingStatus from,
+        BookingStatus to,
+        Guid? byUserId,
+        DateTimeOffset at,
+        CancellationToken cancellationToken)
+    {
+        var moving = await bookings
+            .Where(booking => booking.Status == from)
+            .Select(booking => booking.Id)
+            .ToListAsync(cancellationToken);
+
+        if (moving.Count == 0)
+        {
+            return [];
+        }
+
+        // One transaction, unless the caller already opened one, in which case this joins it.
+        var own = database.Database.CurrentTransaction is null
+            ? await database.Database.BeginTransactionAsync(cancellationToken)
+            : null;
+
+        try
+        {
+            await database.Bookings
+                .Where(booking => moving.Contains(booking.Id) && booking.Status == from)
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(booking => booking.Status, to),
+                    cancellationToken);
+
+            await database.BookingStatusChanges.AddRangeAsync(
+                moving.Select(id => Record(id, from, to, byUserId, at)), cancellationToken);
+            await database.SaveChangesAsync(cancellationToken);
+
+            if (own is not null)
+            {
+                await own.CommitAsync(cancellationToken);
+            }
+        }
+        finally
+        {
+            if (own is not null)
+            {
+                await own.DisposeAsync();
+            }
+        }
+
+        return moving;
     }
 
     public static bool CanMove(BookingStatus from, BookingStatus to) =>

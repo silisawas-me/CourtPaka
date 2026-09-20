@@ -102,14 +102,8 @@ public sealed class Booking
         }));
 
         // The booking coming into existence is the first thing its history records.
-        booking.StatusChanges.Add(new BookingStatusChange
-        {
-            BookingId = booking.Id,
-            From = null,
-            To = booking.Status,
-            ChangedAt = at,
-            ChangedByUserId = bookerUserId,
-        });
+        booking.StatusChanges.Add(
+            BookingTransitions.Record(booking.Id, null, booking.Status, bookerUserId, at));
 
         return booking;
     }
