@@ -1,0 +1,158 @@
+@if (loading()) {
+  <mat-progress-bar mode="indeterminate" />
+} @else if (pageError(); as key) {
+  <mat-card>
+    <mat-card-content>
+      <p class="form-error" data-testid="page-error">{{ i18n.t(key) }}</p>
+    </mat-card-content>
+    <mat-card-actions>
+      <a matButton routerLink="/book">{{ i18n.t('search.title') }}</a>
+    </mat-card-actions>
+  </mat-card>
+} @else {
+  <h1 class="page-title">{{ i18n.t('myBookings.title') }}</h1>
+
+  @if (nothingAtAll()) {
+    <mat-card>
+      <mat-card-content>
+        <p class="muted" data-testid="nothing-yet">{{ i18n.t('myBookings.nothingYet') }}</p>
+      </mat-card-content>
+      <mat-card-actions>
+        <a matButton="filled" routerLink="/book" data-testid="find-a-court">
+          {{ i18n.t('myBookings.findACourt') }}
+        </a>
+      </mat-card-actions>
+    </mat-card>
+  }
+
+  <!--
+    Ahead of them first and soonest first: the reason to open this page is almost always the next
+    one to be played. What is behind is a record and keeps out of the way below it.
+  -->
+  @for (group of groups(); track group.key) {
+    @if (group.bookings.length > 0) {
+      <section class="group" [attr.data-testid]="'group-' + group.key">
+        <h2 class="group-title">{{ i18n.t('myBookings.' + group.key) }}</h2>
+
+        @for (booking of group.bookings; track booking.id) {
+          <mat-card class="booking" [attr.data-testid]="'booking-' + booking.id">
+            <mat-card-header>
+              <mat-card-title>{{ booking.venueName }}</mat-card-title>
+              <mat-card-subtitle>
+                <span class="badge" [class.badge-on]="booking.status === 'Confirmed'">
+                  {{ i18n.t('booking.status.' + booking.status) }}
+                </span>
+              </mat-card-subtitle>
+            </mat-card-header>
+
+            <mat-card-content>
+              <p class="when">
+                {{ booking.slots[0].date | appDate: i18n.locale() }} · {{ when(booking) }}
+              </p>
+              <p class="muted">{{ courts(booking) }}</p>
+
+              <dl class="money">
+                <dt>{{ i18n.t('booking.total') }}</dt>
+                <dd>{{ booking.totalBaht }}</dd>
+
+                @if (booking.refundDueBaht > 0) {
+                  <dt>{{ i18n.t('myBookings.refundDue') }}</dt>
+                  <dd data-testid="refund-due">{{ booking.refundDueBaht }}</dd>
+                  <dt>{{ i18n.t('myBookings.refunded') }}</dt>
+                  <dd>{{ booking.refundedBaht }}</dd>
+                }
+
+                @if (booking.paymentState === 'Unconfirmed') {
+                  <dd class="muted spans" data-testid="awaiting-venue">
+                    {{ i18n.t('myBookings.awaitingVenue') }}
+                  </dd>
+                }
+              </dl>
+            </mat-card-content>
+
+            <mat-card-actions class="booking-actions">
+              <a matButton [routerLink]="['/bookings', booking.id]">
+                {{ i18n.t('myBookings.open') }}
+              </a>
+
+              @if (booking.cancellation.allowed && letting() !== booking.id) {
+                <button
+                  matButton
+                  type="button"
+                  [attr.data-testid]="'let-go-' + booking.id"
+                  (click)="ask(booking.id)"
+                >
+                  {{ i18n.t('myBookings.letGo') }}
+                </button>
+              }
+            </mat-card-actions>
+
+            <!--
+              The question is asked inside the card, not over the page: what is being given up and
+              what comes back for it have to stay readable while it is being answered.
+            -->
+            @if (letting() === booking.id) {
+              <mat-card-content class="letting" data-testid="letting-go">
+                <p class="letting-question">{{ i18n.t('myBookings.letGoQuestion') }}</p>
+
+                @if (booking.cancellation.awaitsVenue) {
+                  <p data-testid="refund-note">
+                    {{ i18n.t('myBookings.refundAwaitsVenue') }}
+                  </p>
+                } @else if (booking.cancellation.refundBaht > 0) {
+                  <p data-testid="refund-note">
+                    {{ i18n.t('myBookings.refundWillBe') }}: {{ booking.cancellation.refundBaht }}
+                  </p>
+                } @else {
+                  <!--
+                    Nothing paid and nothing owed are different sentences. Telling someone who has
+                    not transferred a satang that they get nothing back reads as a penalty.
+                  -->
+                  <p class="muted" data-testid="refund-note">
+                    {{
+                      i18n.t(
+                        booking.paymentState === 'Received'
+                          ? 'myBookings.refundNothing'
+                          : 'myBookings.refundNothingPaid'
+                      )
+                    }}
+                  </p>
+                }
+
+                @if (cancelError(); as key) {
+                  <p class="form-error" data-testid="cancel-error">{{ i18n.t(key) }}</p>
+                }
+              </mat-card-content>
+
+              <mat-card-actions class="booking-actions">
+                <button
+                  matButton="filled"
+                  type="button"
+                  class="let-go"
+                  data-testid="let-go-confirm"
+                  [disabled]="cancelling()"
+                  (click)="letGo(booking)"
+                >
+                  {{ i18n.t('myBookings.letGoConfirm') }}
+                </button>
+                <button
+                  matButton
+                  type="button"
+                  data-testid="keep"
+                  [disabled]="cancelling()"
+                  (click)="keep()"
+                >
+                  {{ i18n.t('myBookings.keep') }}
+                </button>
+              </mat-card-actions>
+
+              @if (cancelling()) {
+                <mat-progress-bar mode="indeterminate" />
+              }
+            }
+          </mat-card>
+        }
+      </section>
+    }
+  }
+}

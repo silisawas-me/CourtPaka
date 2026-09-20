@@ -1,0 +1,125 @@
+import { Component, computed, inject, signal } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { RouterLink } from '@angular/router';
+import { Booking, BookingService } from '../../core/bookings/booking.service';
+import { errorKey } from '../../core/http/api-error';
+import { AppDatePipe } from '../../core/i18n/app-date.pipe';
+import { TranslationService } from '../../core/i18n/translation.service';
+
+/**
+ * Everything a booker has taken, and the way back out of one (PRD US-05).
+ *
+ * The question this page answers is "when do I play next, and where", so what is ahead of them
+ * comes first and in the order it will happen. What is behind is a record, so it stays newest
+ * first and out of the way.
+ *
+ * Letting a booking go opens inside its own card rather than over the page: what is being given
+ * up, and what comes back for it, have to be readable while the question is being asked.
+ */
+@Component({
+  selector: 'app-my-bookings-page',
+  imports: [RouterLink, MatButtonModule, MatCardModule, MatProgressBarModule, AppDatePipe],
+  templateUrl: './my-bookings.page.html',
+  styleUrl: './my-bookings.page.scss',
+})
+export class MyBookingsPage {
+  private readonly bookings = inject(BookingService);
+
+  protected readonly i18n = inject(TranslationService);
+
+  protected readonly upcoming = signal<Booking[]>([]);
+  protected readonly past = signal<Booking[]>([]);
+  protected readonly loading = signal(true);
+  protected readonly pageError = signal<string | null>(null);
+
+  /**
+   * The two lists in the order they are read. One loop draws both, so a card gains a field in one
+   * place rather than in two that could drift apart.
+   */
+  protected readonly groups = computed(() => [
+    { key: 'upcoming', bookings: this.upcoming() },
+    { key: 'past', bookings: this.past() },
+  ]);
+
+  protected readonly nothingAtAll = computed(
+    () => !this.loading() && this.upcoming().length === 0 && this.past().length === 0,
+  );
+
+  /** Which booking is being asked about. One at a time: this gives hours up for good. */
+  protected readonly letting = signal<string | null>(null);
+  protected readonly cancelling = signal(false);
+  protected readonly cancelError = signal<string | null>(null);
+
+  constructor() {
+    this.load();
+  }
+
+  protected ask(bookingId: string): void {
+    this.letting.set(bookingId);
+    this.cancelError.set(null);
+  }
+
+  protected keep(): void {
+    this.letting.set(null);
+    this.cancelError.set(null);
+  }
+
+  protected letGo(booking: Booking): void {
+    if (this.cancelling()) {
+      return;
+    }
+
+    this.cancelling.set(true);
+    this.cancelError.set(null);
+
+    this.bookings.cancel(booking.id).subscribe({
+      next: () => {
+        this.cancelling.set(false);
+        this.letting.set(null);
+        // Read the list again rather than moving the card here: a cancelled booking belongs
+        // behind them now, and where it belongs is the server's to say (PRD US-05).
+        this.load({ quiet: true });
+      },
+      error: (failure: unknown) => {
+        this.cancelling.set(false);
+        this.cancelError.set(errorKey(failure));
+        // Usually the venue decided first, so what is on screen is already out of date.
+        this.load({ quiet: true });
+      },
+    });
+  }
+
+  /** The hours of a booking as one line, since a court-hour is read as a span, not as two. */
+  protected when(booking: Booking): string {
+    const hours = booking.slots.map((slot) => slot.hour).sort((first, next) => first - next);
+    return hours.length === 0
+      ? ''
+      : `${String(hours[0]).padStart(2, '0')}:00 – ${String(hours[hours.length - 1] + 1).padStart(2, '0')}:00`;
+  }
+
+  /** The courts a booking covers, each named once however many hours it holds. */
+  protected courts(booking: Booking): string {
+    return [...new Set(booking.slots.map((slot) => slot.courtName))].join(', ');
+  }
+
+  private load({ quiet = false } = {}): void {
+    this.loading.set(!quiet);
+    this.pageError.set(null);
+
+    this.bookings.mine().subscribe({
+      next: (history) => {
+        this.upcoming.set(history.upcoming);
+        this.past.set(history.past);
+        this.loading.set(false);
+      },
+      error: (failure: unknown) => {
+        if (!quiet) {
+          this.pageError.set(errorKey(failure));
+        }
+        this.loading.set(false);
+      },
+    });
+  }
+}

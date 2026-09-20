@@ -32,7 +32,15 @@ export class App {
   protected readonly links = computed(() => [
     { path: '/book', label: 'nav.book', testId: 'nav-book', accent: false },
     ...(this.user()
-      ? [{ path: '/venues', label: 'nav.venues', testId: 'nav-venues', accent: false }]
+      ? [
+          {
+            path: '/bookings',
+            label: 'nav.myBookings',
+            testId: 'nav-my-bookings',
+            accent: false,
+          },
+          { path: '/venues', label: 'nav.venues', testId: 'nav-venues', accent: false },
+        ]
       : [
           { path: '/login', label: 'nav.signIn', testId: 'nav-sign-in', accent: false },
           { path: '/register', label: 'nav.signUp', testId: 'nav-sign-up', accent: true },

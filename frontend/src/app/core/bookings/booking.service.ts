@@ -24,6 +24,20 @@ export type BookingStatus =
   | 'Rejected'
   | 'NoShow';
 
+/**
+ * What letting a booking go right now would come to, worked out by the server so the number shown
+ * before the button and the number given after it are the same one (PRD US-05).
+ */
+export interface CancellationOffer {
+  allowed: boolean;
+  /** Why not, when it may not be let go. Null when it may. */
+  refused: string | null;
+  refundPercent: number;
+  refundBaht: number;
+  /** The venue has yet to say whether the money arrived, so the amount is not settled. */
+  awaitsVenue: boolean;
+}
+
 export interface Booking {
   id: string;
   venueId: string;
@@ -36,6 +50,17 @@ export interface Booking {
   slots: BookingSlot[];
   /** When the booker last sent a slip, if they have (PRD US-04). */
   slipUploadedAt: string | null;
+  /** Whether the venue has the money, and what it owes back (PRD 6.2). */
+  paymentState: 'NotReceived' | 'Received' | 'Unconfirmed';
+  refundDueBaht: number;
+  refundedBaht: number;
+  cancellation: CancellationOffer;
+}
+
+/** A booker's own bookings, split by the server, which holds the clock (PRD US-05). */
+export interface BookingHistory {
+  upcoming: Booking[];
+  past: Booking[];
 }
 
 /** What a slip may be, which the server checks again from the bytes themselves. */
@@ -44,7 +69,7 @@ export const SLIP_ACCEPT = 'image/jpeg,image/png,application/pdf';
 /** Five megabytes (PRD US-04). Checked here so an obvious mistake costs no upload. */
 export const SLIP_MAX_BYTES = 5 * 1024 * 1024;
 
-/** Taking court-hours (PRD US-03). Paying for them arrives with US-04. */
+/** Taking court-hours, paying for them, and letting them go (PRD US-03, US-04, US-05). */
 @Injectable({ providedIn: 'root' })
 export class BookingService {
   private readonly http = inject(HttpClient);
@@ -55,6 +80,15 @@ export class BookingService {
 
   get(bookingId: string): Observable<Booking> {
     return this.http.get<Booking>(`/api/bookings/${bookingId}`);
+  }
+
+  /** Everything this booker has taken, already split into ahead and behind (PRD US-05). */
+  mine(): Observable<BookingHistory> {
+    return this.http.get<BookingHistory>('/api/bookings');
+  }
+
+  cancel(bookingId: string): Observable<Booking> {
+    return this.http.post<Booking>(`/api/bookings/${bookingId}/cancel`, null);
   }
 
   /** Sends the picture of the transfer, which moves the booking into the venue's queue. */
