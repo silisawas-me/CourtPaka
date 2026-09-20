@@ -248,7 +248,7 @@ public static class BookingEndpoints
         // told. Whether there is any is not decided here: the same rule has to answer for the
         // number beside the door, so it lives with it (PRD US-17).
         await notifications.MoneyMayBeWaitingAsync(
-            booking.VenueId, bookingId, refundDue, offer.Payment, cancellationToken);
+            booking.VenueId, bookingId, refundDue, offer.Payment);
 
         return TypedResults.Ok(await ReadBookingAsync(
             database, bookingId, now, cancellationToken));

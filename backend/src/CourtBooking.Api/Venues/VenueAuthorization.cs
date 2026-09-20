@@ -12,18 +12,39 @@ namespace CourtBooking.Api.Venues;
 /// </summary>
 public sealed class VenuePermissionRequirement : IAuthorizationRequirement
 {
-    private VenuePermissionRequirement(VenuePermissions permission, bool ownerOnly)
+    private VenuePermissionRequirement(
+        VenuePermissions permission,
+        bool ownerOnly,
+        bool whateverTheVenueSStatus = false)
     {
         Permission = permission;
         OwnerOnly = ownerOnly;
+        WhateverTheVenueSStatus = whateverTheVenueSStatus;
     }
 
     public VenuePermissions Permission { get; }
 
     public bool OwnerOnly { get; }
 
-    /// <summary>Any member of the venue, whatever their permissions.</summary>
-    public static VenuePermissionRequirement Member { get; } = new(VenuePermissions.None, ownerOnly: false);
+    /// <summary>
+    /// Whether this is still allowed at a venue that has been suspended or refused. Said outright
+    /// rather than inferred from asking for no permission: a venue that is frozen changes in no
+    /// way (PRD US-20), and the next thing mapped behind <see cref="Member"/> should have to
+    /// declare that it is an exception rather than inherit one.
+    /// </summary>
+    public bool WhateverTheVenueSStatus { get; }
+
+    /// <summary>Any member of the venue, whatever their permissions. Reading only.</summary>
+    public static VenuePermissionRequirement Member { get; } =
+        new(VenuePermissions.None, ownerOnly: false, whateverTheVenueSStatus: true);
+
+    /// <summary>
+    /// A member changing something about themselves rather than about the venue — what they want
+    /// in their own inbox (PRD US-17). Allowed at a frozen venue on purpose: a venue that has
+    /// been suspended is exactly where somebody might want the mail to stop.
+    /// </summary>
+    public static VenuePermissionRequirement OwnChoice { get; } =
+        new(VenuePermissions.None, ownerOnly: false, whateverTheVenueSStatus: true);
 
     /// <summary>Actions the owner may not delegate: membership, tax identity, document voiding (PRD US-14).</summary>
     public static VenuePermissionRequirement Owner { get; } = new(VenuePermissions.None, ownerOnly: true);
@@ -37,9 +58,13 @@ public sealed class VenuePermissionRequirement : IAuthorizationRequirement
 /// </summary>
 public static class VenuePolicies
 {
-    /// <summary>Any member of the venue, whatever their permissions.</summary>
+    /// <summary>Any member of the venue, whatever their permissions. For reading.</summary>
     public static Action<AuthorizationPolicyBuilder> Member =>
         policy => policy.RequireAuthenticatedUser().AddRequirements(VenuePermissionRequirement.Member);
+
+    /// <summary>A member changing what they themselves want, not what the venue is (PRD US-17).</summary>
+    public static Action<AuthorizationPolicyBuilder> OwnChoice =>
+        policy => policy.RequireAuthenticatedUser().AddRequirements(VenuePermissionRequirement.OwnChoice);
 
     public static Action<AuthorizationPolicyBuilder> OwnerOnly =>
         policy => policy.RequireAuthenticatedUser().AddRequirements(VenuePermissionRequirement.Owner);
@@ -108,7 +133,8 @@ public sealed class VenuePermissionHandler(AppDbContext database, CurrentVenue c
         var allowed = requirement switch
         {
             { OwnerOnly: true } => membership.Role == VenueRole.Owner && !readOnlyVenue,
-            { Permission: VenuePermissions.None } => true,
+            { WhateverTheVenueSStatus: true } => true,
+            { Permission: VenuePermissions.None } => !readOnlyVenue,
             var needed => membership.Allows(needed.Permission) && !readOnlyVenue,
         };
 

@@ -32,7 +32,7 @@ public static class VenueEndpoints
         venue.MapPut("/", UpdateDetailsAsync).RequireAuthorization(VenuePolicies.Settings);
         venue.MapGet("/attention", WaitingForAsync).RequireAuthorization(VenuePolicies.Member);
         venue.MapPut("/notifications", ChooseNotificationsAsync)
-            .RequireAuthorization(VenuePolicies.Member);
+            .RequireAuthorization(VenuePolicies.OwnChoice);
         venue.MapGet("/members", ListMembersAsync).RequireAuthorization(VenuePolicies.Member);
         venue.MapGet("/invitations", ListInvitationsAsync).RequireAuthorization(VenuePolicies.OwnerOnly);
         venue.MapPost("/invitations", InviteAsync).RequireAuthorization(VenuePolicies.OwnerOnly);

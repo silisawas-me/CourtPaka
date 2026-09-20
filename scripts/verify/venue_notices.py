@@ -6,6 +6,7 @@ from harness import (
     BASE,
     OWNER,
     Checks,
+    ensure_bookable,
     as_upload,
     clear_waiting,
     control,
@@ -26,6 +27,7 @@ tomorrow = venue_today() + datetime.timedelta(days=1)
 with sync_playwright() as p:
     browser = p.chromium.launch()
     venue_id = seeded_venue_id(browser.new_page())
+    ensure_bookable(browser, venue_id)
 
     # Whatever an earlier run left waiting is not this run's subject, and the switch starts on.
     staff = browser.new_page()

@@ -279,6 +279,31 @@ def real_jpeg() -> bytes:
     return base64.b64decode(encoded) + uuid.uuid4().bytes
 
 
+DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+def ensure_bookable(browser, venue_id) -> None:
+    """Puts the seeded venue back to the hours every booking script assumes: open 06:00 to 22:00,
+    every day, from today.
+
+    venue_settings.py edits those hours because they are what it is about, and leaves the venue
+    wherever its last check left it — so a script that ran afterwards would find the venue closed
+    and no free hour anywhere. Setting up repeatable state is the first rule in this directory's
+    README, and this is the state the rest of them mean."""
+    page = browser.new_page()
+    sign_in(page, OWNER)
+    published = page.request.put(
+        f"{BASE}/api/venues/{venue_id}/opening-hours",
+        data={
+            "effectiveFrom": venue_today().isoformat(),
+            "days": [{"day": day, "opensHour": 6, "closesHour": 22} for day in DAYS],
+        },
+    )
+    if published.status != 200:
+        raise RuntimeError(f"Could not open the venue for business: {published.status}")
+    page.close()
+
+
 def clear_waiting(page, venue_id, date) -> None:
     """Answers everything an earlier run left waiting at this venue, so a run starts from a venue
     with nothing on its mind. Through the API rather than the screen: it is the setup, not the

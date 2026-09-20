@@ -26,17 +26,13 @@ public sealed class VenueNotifications(
 {
     /// <summary>
     /// A slip has arrived and nobody has looked at it yet (PRD US-17).
+    ///
+    /// Takes no cancellation token, and neither does anything below it: every caller is past its
+    /// commit by the time it gets here, and a booker who closed their browser must not be what
+    /// decides whether the venue hears about work it now has.
     /// </summary>
-    public Task SlipArrivedAsync(
-        Guid venueId,
-        Guid bookingId,
-        bool seenBefore,
-        CancellationToken cancellationToken) =>
-        TellAsync(
-            seenBefore ? Notice.SlipSeenBefore : Notice.SlipWaiting,
-            venueId,
-            bookingId,
-            cancellationToken);
+    public Task SlipArrivedAsync(Guid venueId, Guid bookingId, bool seenBefore) =>
+        TellAsync(seenBefore ? Notice.SlipSeenBefore : Notice.SlipWaiting, venueId, bookingId);
 
     /// <summary>
     /// A booking's money may need somebody. Whether it does is decided here rather than by the
@@ -48,11 +44,10 @@ public sealed class VenueNotifications(
         Guid venueId,
         Guid bookingId,
         decimal refundDue,
-        PaymentState payment,
-        CancellationToken cancellationToken) =>
+        PaymentState payment) =>
         Waiting(refundDue, payment) switch
         {
-            { } notice => TellAsync(notice, venueId, bookingId, cancellationToken),
+            { } notice => TellAsync(notice, venueId, bookingId),
             _ => Task.CompletedTask,
         };
 
@@ -130,11 +125,7 @@ public sealed class VenueNotifications(
     /// A venue that is not approved is told nothing. It cannot act on any of this, and a message
     /// about work it is barred from doing is only noise.
     /// </summary>
-    private async Task TellAsync(
-        Notice notice,
-        Guid venueId,
-        Guid bookingId,
-        CancellationToken cancellationToken)
+    private async Task TellAsync(Notice notice, Guid venueId, Guid bookingId)
     {
         var (permission, canBeSilenced) = Who(notice);
 
@@ -149,7 +140,7 @@ public sealed class VenueNotifications(
                 Address = member.User!.Email,
                 Language = member.User!.Language,
             })
-            .ToListAsync(cancellationToken);
+            .ToListAsync(CancellationToken.None);
 
         var told = members
             .Where(member => member.Member.Allows(permission))
@@ -162,9 +153,6 @@ public sealed class VenueNotifications(
         {
             try
             {
-                // Not the request's token: the write this is about has already been committed,
-                // and a booker closing their browser must not be what decides whether the venue
-                // hears about money it owes.
                 await emails.SendAsync(
                     new EmailMessage(member.Address!, member.Language, subject, body),
                     CancellationToken.None);

@@ -6,6 +6,7 @@ from harness import (
     BASE,
     OWNER,
     Checks,
+    ensure_bookable,
     as_upload,
     clear_waiting,
     new_booker,
@@ -38,6 +39,7 @@ def waiting_booking(browser, venue_id, skip=0):
 with sync_playwright() as p:
     browser = p.chromium.launch()
     venue_id = seeded_venue_id(browser.new_page())
+    ensure_bookable(browser, venue_id)
 
     # Whatever an earlier run left waiting is not this run's subject.
     staff = browser.new_page()

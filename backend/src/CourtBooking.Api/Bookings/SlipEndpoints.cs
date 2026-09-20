@@ -196,8 +196,7 @@ public static class SlipEndpoints
 
         // After the commit, not inside it: a message that cannot be taken back should not be
         // sent for a write that might be (PRD US-17).
-        await notifications.SlipArrivedAsync(
-            booking.VenueId, booking.Id, sameBytes is not null, cancellationToken);
+        await notifications.SlipArrivedAsync(booking.VenueId, booking.Id, sameBytes is not null);
 
         return TypedResults.Ok(
             await BookingEndpoints.ReadBookingAsync(database, booking.Id, now, cancellationToken));

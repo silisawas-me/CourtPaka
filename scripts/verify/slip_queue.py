@@ -6,6 +6,7 @@ from harness import (
     BASE,
     OWNER,
     Checks,
+    ensure_bookable,
     as_upload,
     new_booker,
     open_seeded_venue,
@@ -43,6 +44,7 @@ with sync_playwright() as p:
     browser = p.chromium.launch()
 
     venue_id = seeded_venue_id(browser.new_page())
+    ensure_bookable(browser, venue_id)
 
     # Whatever an earlier run left waiting is not this run's subject. Clearing it through the API
     # is what lets these checks be run again.

@@ -7,6 +7,8 @@ from harness import (
     OWNER,
     SEEDED_VENUE,
     Checks,
+    ensure_bookable,
+    seeded_venue_id,
     calendar_label,
     day_is_offered,
     login,
@@ -20,6 +22,8 @@ today = venue_today()
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
+    # The hours every check below reads off the grid, whatever venue_settings.py last left behind.
+    ensure_bookable(browser, seeded_venue_id(browser.new_page()))
 
     # 1. A visitor with no account finds a venue and reads its grid.
     page = browser.new_page(viewport={"width": 390, "height": 844})
