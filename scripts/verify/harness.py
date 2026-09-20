@@ -99,6 +99,53 @@ def verify_email(page, email: str) -> None:
         raise RuntimeError(f"Could not verify {email}: {verified.status} {verified.text()}")
 
 
+def run_out_hold(booking_id: str) -> None:
+    """Makes a hold's fifteen minutes be up, in the database.
+
+    There is no endpoint for this and there should not be: "expire that booking" is not something
+    a real caller may ask for, and adding it would be adding a way to release somebody else's
+    hours. So the check reaches past the API, the same way verify_email reaches into the logs for
+    a link the API will not hand over."""
+    done = subprocess.run(
+        [
+            "docker", "compose", "exec", "-T", "db",
+            "psql", "-U", "courtbooking", "-d", "courtbooking", "-c",
+            f"""UPDATE "Bookings" SET "HoldExpiresAt" = now() - interval '1 minute'
+                WHERE "Id" = '{booking_id}' AND "Status" = 1;""",
+        ],
+        cwd=pathlib.Path(__file__).resolve().parents[2],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=True,
+    )
+    if "UPDATE 1" not in done.stdout:
+        raise RuntimeError(f"Could not run out the hold {booking_id}: {done.stdout}{done.stderr}")
+
+
+def booking_status(booking_id: str) -> int:
+    """Reads a booking's status straight from the database.
+
+    Asking the API would answer the question and change it: every read of a booker's own list
+    ends that booker's holds whose time is up, which is exactly the behaviour a check about the
+    caretaker must not lean on."""
+    done = subprocess.run(
+        [
+            "docker", "compose", "exec", "-T", "db",
+            "psql", "-U", "courtbooking", "-d", "courtbooking", "-t", "-A", "-c",
+            f"""SELECT "Status" FROM "Bookings" WHERE "Id" = '{booking_id}';""",
+        ],
+        cwd=pathlib.Path(__file__).resolve().parents[2],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=True,
+    )
+    return int(done.stdout.strip())
+
+
 def login(page, email: str, password: str = PASSWORD) -> None:
     page.fill("#email", email)
     page.fill("#password", password)

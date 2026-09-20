@@ -63,6 +63,13 @@ public sealed class Booking
 
     public BookingStatus Status { get; set; } = BookingStatus.Held;
 
+    /// <summary>
+    /// When the venue was reminded that this slip was still waiting with the hours about to be
+    /// played (PRD US-17, S-23). Set before the message goes out, so it is a claim on the job
+    /// rather than a record of it: a reminder that arrives twice is one people stop reading.
+    /// </summary>
+    public DateTimeOffset? SlipReminderSentAt { get; set; }
+
     /// <summary>Whether the venue has the money for this booking (PRD 6.2).</summary>
     public PaymentState PaymentState { get; set; } = PaymentState.NotReceived;
 

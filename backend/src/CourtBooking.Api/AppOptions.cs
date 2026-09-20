@@ -59,4 +59,18 @@ public sealed class AppOptions
     /// <summary>Uploads an hour per person (PRD 8, Security).</summary>
     [Range(1, 10_000)]
     public int UploadsPerHour { get; init; } = 10;
+
+    /// <summary>
+    /// How often the caretaker looks for holds that ran out and slips about to be played
+    /// (PRD 9.2, US-17). Shorter than the reminder window, or a reminder can be missed entirely.
+    /// </summary>
+    [Range(5, 3_600)]
+    public int CaretakerIntervalSeconds { get; init; } = 60;
+
+    /// <summary>
+    /// Off for tests, which drive the chores directly rather than waiting for a clock. Every
+    /// deployed environment leaves it on: without it, a hold on a court nobody looks at keeps
+    /// its hours forever.
+    /// </summary>
+    public bool RunCaretaker { get; init; } = true;
 }

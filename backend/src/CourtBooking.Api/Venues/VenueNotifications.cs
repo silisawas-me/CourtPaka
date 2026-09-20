@@ -52,6 +52,14 @@ public sealed class VenueNotifications(
         };
 
     /// <summary>
+    /// A slip is still waiting and the hours it paid for are about to be played (PRD US-17,
+    /// S-23). The owner's alone, and not something anybody can turn off: by now the choice is
+    /// between looking at it and a player standing at a counter nobody expected.
+    /// </summary>
+    public Task SlipStillWaitingAsync(Guid venueId, Guid bookingId) =>
+        TellAsync(Notice.SlipStillWaiting, venueId, bookingId);
+
+    /// <summary>
     /// How much is waiting, for the reader who is asking. Each number is only counted for somebody
     /// who could do something about it: a member who checks slips is not shown the money, and a
     /// member who handles money is not shown the queue.
@@ -99,6 +107,7 @@ public sealed class VenueNotifications(
     {
         SlipWaiting,
         SlipSeenBefore,
+        SlipStillWaiting,
         RefundOwed,
         PaymentUnanswered,
     }
@@ -117,11 +126,14 @@ public sealed class VenueNotifications(
     /// off: it is the one that arrives on an ordinary day, where the others mean somebody is
     /// waiting for money (PRD US-17).
     /// </summary>
-    private static (VenuePermissions Permission, bool CanBeSilenced) Who(Notice notice) =>
+    private static (VenuePermissions Permission, bool CanBeSilenced, bool OwnerOnly) Who(
+        Notice notice) =>
         notice switch
         {
-            Notice.SlipWaiting or Notice.SlipSeenBefore => (VenuePermissions.VerifySlip, true),
-            _ => (VenuePermissions.ManageBookings, false),
+            Notice.SlipWaiting or Notice.SlipSeenBefore =>
+                (VenuePermissions.VerifySlip, true, false),
+            Notice.SlipStillWaiting => (VenuePermissions.VerifySlip, false, true),
+            _ => (VenuePermissions.ManageBookings, false, false),
         };
 
     /// <summary>
@@ -134,7 +146,7 @@ public sealed class VenueNotifications(
     /// </summary>
     private async Task TellAsync(Notice notice, Guid venueId, Guid bookingId)
     {
-        var (permission, canBeSilenced) = Who(notice);
+        var (permission, canBeSilenced, ownerOnly) = Who(notice);
 
         var members = await database.VenueMemberships
             .AsNoTracking()
@@ -150,6 +162,7 @@ public sealed class VenueNotifications(
             .ToListAsync(CancellationToken.None);
 
         var told = members
+            .Where(member => !ownerOnly || member.Member.Role == VenueRole.Owner)
             .Where(member => member.Member.Allows(permission))
             .Where(member => !string.IsNullOrEmpty(member.Address))
             .ToList();
@@ -207,6 +220,12 @@ public sealed class VenueNotifications(
                 "A slip you have seen before has arrived again",
                 $"The slip sent for booking {bookingId} has the same bytes as one this venue has "
                 + "been sent before. Check it against the transfer."),
+
+            Notice.SlipStillWaiting => (
+                "A slip is still waiting, and the court is about to be played",
+                $"Booking {bookingId} is still waiting for its slip to be checked, and its first "
+                + "hour starts within the half hour. Check it, or the player arrives at a court "
+                + "nobody is expecting them on."),
 
             Notice.RefundOwed => (
                 "A booking is owed money back",

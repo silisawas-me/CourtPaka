@@ -37,6 +37,10 @@ public sealed class ApiFactory(string connectionString) : WebApplicationFactory<
         // Low enough that a test can reach the limit; see SlipTests.UploadsPerHourInTests.
         builder.UseSetting("App:UploadsPerHour", "4");
 
+        // The caretaker's chores are driven straight from the tests, so nothing runs on a clock
+        // underneath them and changes what they are looking at.
+        builder.UseSetting("App:RunCaretaker", "false");
+
         // The suite registers a user per test; at the production hashing cost that alone would take
         // longer than everything else it does. Nothing here tests the hash itself.
         builder.ConfigureLogging(logging => logging.AddProvider(Errors));
