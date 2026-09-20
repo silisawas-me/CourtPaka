@@ -1,0 +1,75 @@
+/**
+ * A page of cards rather than a table: on a phone this is read one booking at a time, and the
+ * venue-side density that suits a counter screen would make each row unreadable here.
+ */
+.page-title {
+  font: var(--mat-sys-headline-small);
+  margin: 0 0 var(--stack);
+}
+
+.group + .group {
+  margin-top: 2rem;
+}
+
+.group-title {
+  font: var(--mat-sys-title-medium);
+  color: var(--mat-sys-on-surface-variant);
+  margin: 0 0 0.75rem;
+}
+
+.booking + .booking {
+  margin-top: 0.75rem;
+}
+
+/* The date and the span are what the page is opened for, so they read before anything else. */
+.when {
+  font: var(--mat-sys-title-medium);
+  margin: 0;
+}
+
+/**
+ * Label beside value, which fits because these are short numbers — Thai labels are the long part,
+ * so the label column takes the width it needs and the numbers line up after it.
+ */
+.money {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.75rem;
+  margin: 0.75rem 0 0;
+  font: var(--mat-sys-body-medium);
+
+  dt {
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  dd {
+    margin: 0;
+  }
+}
+
+/* A line that is about the booking rather than about one number runs the whole width. */
+.spans {
+  grid-column: 1 / -1;
+}
+
+.booking-actions {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Giving hours up for good is not the same weight of action as opening them. */
+.letting {
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  padding-top: 0.75rem;
+}
+
+.letting-question {
+  font: var(--mat-sys-body-large);
+  margin: 0 0 0.5rem;
+  max-width: 32ch;
+}
+
+.let-go {
+  background: var(--mat-sys-error);
+  color: var(--mat-sys-on-error);
+}

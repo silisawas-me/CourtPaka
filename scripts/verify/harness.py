@@ -220,6 +220,9 @@ def take_first_free_hour(page, venue_id, date, skip=0):
 
     with page.expect_response(lambda response: response.url.endswith("/api/bookings")) as answer:
         page.click("[data-testid=book]")
+
+    # Confirming lands on the page that pays for the hold, and every caller was waiting for it.
+    page.wait_for_selector("[data-testid=countdown]")
     return answer.value
 
 

@@ -237,19 +237,65 @@ public sealed class VenueScenario(ApiTestFixture api)
     }
 
     /// <summary>
-    /// Moves a booking's hours into the past, so a test can see what a venue that checks the slip
-    /// only after the court was played meets (PRD 6.1).
+    /// A booking that has been paid for and is waiting for the venue to look at it (PRD US-04).
     /// </summary>
-    public async Task PlayOutAsync(Guid bookingId)
+    public async Task<(HttpClient Booker, BookingResponse Booking)> WaitingBookingAsync(
+        Guid venueId,
+        Guid courtId,
+        int hour,
+        byte[]? slip = null)
+    {
+        var booker = await SignedInClientAsync();
+        var booking = await HoldAsync(booker, venueId, Today.AddDays(1), (courtId, hour));
+
+        var sent = await UploadAsync(booker, booking.Id, slip ?? Jpeg());
+        if (sent.StatusCode != HttpStatusCode.OK)
+        {
+            throw new InvalidOperationException($"Could not send a slip: {sent.StatusCode}");
+        }
+
+        return (booker, booking);
+    }
+
+    /// <summary>Whether any of a booking's hours are still held against its court (PRD BR-04).</summary>
+    public async Task<bool> HoldsItsHoursAsync(Guid bookingId)
     {
         using var scope = api.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var shift = TimeSpan.FromDays(2);
-        await database.BookingSlots
-            .Where(slot => slot.BookingId == bookingId)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(slot => slot.StartsAt, slot => slot.StartsAt - shift)
-                .SetProperty(slot => slot.EndsAt, slot => slot.EndsAt - shift));
+        return await database.BookingSlots.AnyAsync(
+            slot => slot.BookingId == bookingId && slot.IsActive);
+    }
+
+    /// <summary>The booking as it is stored, for the fields no endpoint hands back.</summary>
+    public async Task<Booking> StoredBookingAsync(Guid bookingId)
+    {
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await database.Bookings.AsNoTracking().SingleAsync(booking => booking.Id == bookingId);
+    }
+
+    /// <summary>
+    /// Moves a booking's hours into the past, so a test can see what a venue that checks the slip
+    /// only after the court was played meets (PRD 6.1).
+    /// </summary>
+    public Task PlayOutAsync(Guid bookingId) => StartsInAsync(bookingId, TimeSpan.FromDays(-2));
+
+    /// <summary>
+    /// Moves a booking's hours so the first of them is exactly this far from now, keeping the
+    /// gaps between them. The cancellation terms are measured in how much notice was given
+    /// (PRD US-11, BR-06), so a test that stood on a calendar date instead would pass or fail by
+    /// the hour it happened to run at.
+    /// </summary>
+    public async Task StartsInAsync(Guid bookingId, TimeSpan fromNow)
+    {
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var slots = database.BookingSlots.Where(slot => slot.BookingId == bookingId);
+        var shift = await slots.MinAsync(slot => slot.StartsAt) - (DateTimeOffset.UtcNow + fromNow);
+
+        await slots.ExecuteUpdateAsync(setters => setters
+            .SetProperty(slot => slot.StartsAt, slot => slot.StartsAt - shift)
+            .SetProperty(slot => slot.EndsAt, slot => slot.EndsAt - shift));
     }
 
     /// <summary>

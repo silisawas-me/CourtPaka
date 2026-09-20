@@ -222,10 +222,21 @@ public static class VerifySlipEndpoints
             ? BookingStatus.Completed
             : decided;
 
-        var refundDue = Refunds.DueFor(landed, payment, booking.TotalBaht);
+        // A rejection gives back everything; a confirmation gives back nothing. The share is
+        // written down so that a later answer about the money lands on the same number (PRD 6.2).
+        var refundPercent = decided == BookingStatus.Rejected ? Refunds.AllOfIt : 0;
+        var refundDue = Refunds.DueFor(landed, payment, booking.TotalBaht, refundPercent);
 
         await using var transaction =
             await database.Database.BeginTransactionAsync(cancellationToken);
+
+        // A booking that was turned away stops holding its hours; they go back on sale (PRD 6.1).
+        // Before the booking row, not after: that is the order every writer takes these two
+        // tables in, and the rollback below unwinds this with it.
+        if (decided == BookingStatus.Rejected)
+        {
+            await BookedSlots.ReleaseAsync(database, bookingId, cancellationToken);
+        }
 
         // Two people can be working one queue, and the status was read a moment ago. PRD 6.1 asks
         // for the condition and the move to be decided together, so the move carries the
@@ -242,6 +253,7 @@ public static class VerifySlipEndpoints
                 set => set
                     .SetProperty(candidate => candidate.Status, landed)
                     .SetProperty(candidate => candidate.PaymentState, payment)
+                    .SetProperty(candidate => candidate.RefundPercent, refundPercent)
                     .SetProperty(candidate => candidate.RefundDueBaht, refundDue),
                 cancellationToken);
 
@@ -250,19 +262,6 @@ public static class VerifySlipEndpoints
             await transaction.RollbackAsync(cancellationToken);
             return ApiProblem.Of(
                 StatusCodes.Status409Conflict, SlipErrorCodes.NotAwaitingVerification);
-        }
-
-        // A booking that was turned away stops holding its hours; they go back on sale (PRD 6.1).
-        if (decided == BookingStatus.Rejected)
-        {
-            await database.BookingSlots
-                .Where(slot =>
-                    slot.BookingId == bookingId
-                    && slot.Booking!.VenueId == venueId
-                    && slot.IsActive)
-                .ExecuteUpdateAsync(
-                    set => set.SetProperty(slot => slot.IsActive, false),
-                    cancellationToken);
         }
 
         var recorded = new List<BookingStatusChange>

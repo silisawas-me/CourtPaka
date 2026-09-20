@@ -22,8 +22,13 @@ public static class BookingTransitions
 {
     private static readonly Dictionary<BookingStatus, BookingStatus[]> Allowed = new()
     {
-        // The booker sent a slip, or let the hold run out (PRD US-04, BR-02).
-        [BookingStatus.Held] = [BookingStatus.PendingVerification, BookingStatus.Expired],
+        // The booker sent a slip, let the hold run out, or let it go (PRD US-04, US-05, BR-02).
+        [BookingStatus.Held] =
+        [
+            BookingStatus.PendingVerification,
+            BookingStatus.Expired,
+            BookingStatus.Cancelled,
+        ],
 
         // The venue checks the slip: the money is there, or it is not (PRD US-12). A better
         // picture from the booker lands here too, which is the move to itself.
@@ -32,10 +37,14 @@ public static class BookingTransitions
             BookingStatus.PendingVerification,
             BookingStatus.Confirmed,
             BookingStatus.Rejected,
+
+            // The booker gave the hours up while the venue was still looking (PRD US-05).
+            BookingStatus.Cancelled,
         ],
 
-        // The hours were played. Nobody presses this; the clock does (PRD 6.1).
-        [BookingStatus.Confirmed] = [BookingStatus.Completed],
+        // The hours were played, or given up before they were (PRD 6.1, US-05). Nobody presses
+        // Completed; the clock does.
+        [BookingStatus.Confirmed] = [BookingStatus.Completed, BookingStatus.Cancelled],
     };
 
     /// <summary>

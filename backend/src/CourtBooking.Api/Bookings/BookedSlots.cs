@@ -30,6 +30,25 @@ public static class BookedSlots
     public static bool HasLapsed(Booking booking, DateTimeOffset now) =>
         booking.Status == BookingStatus.Held && booking.HoldExpiresAt <= now;
 
+    /// <summary>
+    /// What a booking reads as right now. PRD 9.2 names two readings that no job has to have run
+    /// for: a hold whose fifteen minutes are up is Expired, and a confirmed booking whose hours
+    /// have been played is Completed. Every question asked of a booking is asked of this.
+    ///
+    /// It needs the booking's slots in hand; a read that did not ask for them gets the stored
+    /// status, which is what it asked for.
+    /// </summary>
+    public static BookingStatus StatusAt(Booking booking, DateTimeOffset now) =>
+        HasLapsed(booking, now) ? BookingStatus.Expired
+        : HasBeenPlayed(booking, now) ? BookingStatus.Completed
+        : booking.Status;
+
+    /// <summary>Whether a confirmed booking's hours are behind it (PRD 6.1, 9.2).</summary>
+    public static bool HasBeenPlayed(Booking booking, DateTimeOffset now) =>
+        booking.Status == BookingStatus.Confirmed
+        && booking.Slots.Count > 0
+        && booking.Slots.Max(slot => slot.EndsAt) <= now;
+
     /// <summary>Holds whose fifteen minutes are up, as a query.</summary>
     public static IQueryable<Booking> Lapsed(AppDbContext database, DateTimeOffset now) =>
         database.Bookings.Where(booking =>
@@ -53,6 +72,26 @@ public static class BookedSlots
             .Where(slot => slot.IsActive)
             .Where(slot => OccupyingStatuses.Contains(slot.Booking!.Status))
             .Where(slot => !Lapsed(database, now).Any(over => over.Id == slot.BookingId));
+
+    /// <summary>
+    /// Lets go of the hours one booking claims, so they are on sale again the moment it ends
+    /// (PRD 6.1). The exclusion constraint reads only <see cref="BookingSlot.IsActive"/>, so a
+    /// booking that has ended still holds its court until this has run.
+    ///
+    /// **Call this before writing the booking row, never after.** Releasing lapsed holds has to
+    /// take the slots first — it finds out from them which holds lost one — and two writers that
+    /// take the same two tables in opposite orders are a standoff that Postgres settles by
+    /// killing one of them. Every write that touches both follows that order.
+    /// </summary>
+    public static Task<int> ReleaseAsync(
+        AppDbContext database,
+        Guid bookingId,
+        CancellationToken cancellationToken) =>
+        database.BookingSlots
+            .Where(slot => slot.BookingId == bookingId && slot.IsActive)
+            .ExecuteUpdateAsync(
+                set => set.SetProperty(slot => slot.IsActive, false),
+                cancellationToken);
 
     /// <summary>
     /// Lets go of the hours lapsed holds claim on these courts, and marks those holds

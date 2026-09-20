@@ -15,8 +15,8 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
     public async Task The_queue_holds_what_is_waiting_oldest_first()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync(courts: 2);
-        var first = await WaitingBookingAsync(venue.Id, courts[0], 18);
-        var second = await WaitingBookingAsync(venue.Id, courts[1], 19);
+        var first = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        var second = await scenario.WaitingBookingAsync(venue.Id, courts[1], 19);
 
         var queue = await QueueAsync(owner, venue.Id);
 
@@ -29,7 +29,7 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
     public async Task A_booking_about_to_be_played_is_marked_as_such()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();
-        var waiting = await WaitingBookingAsync(venue.Id, courts[0], 18);
+        var waiting = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
 
         var item = Assert.Single(await QueueAsync(owner, venue.Id));
 
@@ -43,9 +43,9 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
     public async Task A_slip_the_venue_has_seen_before_is_flagged_in_the_queue()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync(courts: 2);
-        var bytes = Jpeg();
-        await WaitingBookingAsync(venue.Id, courts[0], 18, bytes);
-        await WaitingBookingAsync(venue.Id, courts[1], 19, bytes);
+        var bytes = VenueScenario.Jpeg();
+        await scenario.WaitingBookingAsync(venue.Id, courts[0], 18, bytes);
+        await scenario.WaitingBookingAsync(venue.Id, courts[1], 19, bytes);
 
         var queue = await QueueAsync(owner, venue.Id);
 
@@ -59,7 +59,7 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
     public async Task Confirming_says_the_money_arrived_and_leaves_nothing_owed()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();
-        var waiting = await WaitingBookingAsync(venue.Id, courts[0], 18);
+        var waiting = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
 
         var confirmed = await VenueScenario.ReadAsync<BookingResponse>(
             await owner.PostAsync(
@@ -75,7 +75,7 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
     public async Task Rejecting_with_the_money_received_owes_all_of_it_back()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();
-        var waiting = await WaitingBookingAsync(venue.Id, courts[0], 18);
+        var waiting = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
 
         var rejected = await RejectAsync(
             owner, venue.Id, waiting.Booking.Id, "ยอดไม่ตรงกับที่ต้องจ่าย", paymentReceived: true);
@@ -89,7 +89,7 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
     public async Task Rejecting_because_no_money_came_owes_nothing()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();
-        var waiting = await WaitingBookingAsync(venue.Id, courts[0], 18);
+        var waiting = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
 
         var rejected = await RejectAsync(
             owner, venue.Id, waiting.Booking.Id, "หาไม่เจอในบัญชี", paymentReceived: false);
@@ -102,7 +102,7 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
     public async Task A_rejected_booking_gives_its_hours_back()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();
-        var waiting = await WaitingBookingAsync(venue.Id, courts[0], 18);
+        var waiting = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
 
         await RejectAsync(owner, venue.Id, waiting.Booking.Id, "สลิปไม่ชัด", paymentReceived: false);
 
@@ -117,7 +117,7 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
     public async Task Rejecting_has_to_say_why()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();
-        var waiting = await WaitingBookingAsync(venue.Id, courts[0], 18);
+        var waiting = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
 
         var refused = await owner.PostAsJsonAsync(
             $"/api/venues/{venue.Id}/slip-queue/{waiting.Booking.Id}/reject",
@@ -131,7 +131,7 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
     public async Task A_reason_longer_than_the_column_is_refused_rather_than_truncated()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();
-        var waiting = await WaitingBookingAsync(venue.Id, courts[0], 18);
+        var waiting = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
 
         var refused = await owner.PostAsJsonAsync(
             $"/api/venues/{venue.Id}/slip-queue/{waiting.Booking.Id}/reject",
@@ -145,7 +145,7 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
     public async Task What_the_venue_decided_and_why_is_in_the_history()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();
-        var waiting = await WaitingBookingAsync(venue.Id, courts[0], 18);
+        var waiting = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
 
         await RejectAsync(owner, venue.Id, waiting.Booking.Id, "ยอดไม่ตรง", paymentReceived: false);
 
@@ -160,7 +160,7 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
     public async Task A_booking_already_decided_cannot_be_decided_again()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();
-        var waiting = await WaitingBookingAsync(venue.Id, courts[0], 18);
+        var waiting = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
         await owner.PostAsync($"/api/venues/{venue.Id}/slip-queue/{waiting.Booking.Id}/confirm", null);
 
         var again = await owner.PostAsync(
@@ -174,7 +174,7 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
     public async Task Confirming_hours_that_have_already_been_played_completes_them()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();
-        var waiting = await WaitingBookingAsync(venue.Id, courts[0], 18);
+        var waiting = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
         await scenario.PlayOutAsync(waiting.Booking.Id);
 
         var confirmed = await VenueScenario.ReadAsync<BookingResponse>(
@@ -201,7 +201,7 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
     public async Task Two_people_deciding_at_once_leave_one_answer_and_hours_that_agree_with_it()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();
-        var waiting = await WaitingBookingAsync(venue.Id, courts[0], 18);
+        var waiting = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
         var staff = await scenario.StaffClientAsync(
             owner, venue.Id, nameof(VenuePermissions.VerifySlip));
 
@@ -239,8 +239,8 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
     public async Task The_venue_reads_the_slip_of_its_own_booking()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();
-        var bytes = Jpeg();
-        var waiting = await WaitingBookingAsync(venue.Id, courts[0], 18, bytes);
+        var bytes = VenueScenario.Jpeg();
+        var waiting = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18, bytes);
 
         var served = await owner.GetAsync(
             $"/api/venues/{venue.Id}/slip-queue/{waiting.Booking.Id}/slip");
@@ -255,7 +255,7 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
     public async Task Another_venue_cannot_see_or_decide_this_one_s_bookings()
     {
         var (_, venue, courts) = await scenario.BookableVenueAsync();
-        var waiting = await WaitingBookingAsync(venue.Id, courts[0], 18);
+        var waiting = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
         var (stranger, _, _) = await scenario.BookableVenueAsync();
 
         // The stranger owns a venue of their own, so they are a member of something — just not
@@ -277,7 +277,7 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
     public async Task Staff_without_the_permission_cannot_decide()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();
-        var waiting = await WaitingBookingAsync(venue.Id, courts[0], 18);
+        var waiting = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
         var staff = await scenario.StaffClientAsync(
             owner, venue.Id, nameof(VenuePermissions.ManageBookings));
 
@@ -291,7 +291,7 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
     public async Task Staff_with_the_permission_can()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();
-        var waiting = await WaitingBookingAsync(venue.Id, courts[0], 18);
+        var waiting = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
         var staff = await scenario.StaffClientAsync(
             owner, venue.Id, nameof(VenuePermissions.VerifySlip));
 
@@ -301,8 +301,6 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
 
         Assert.Equal(nameof(BookingStatus.Confirmed), confirmed.Status);
     }
-
-    private static byte[] Jpeg() => VenueScenario.Jpeg();
 
     private static async Task<SlipQueueItemResponse[]> QueueAsync(HttpClient client, Guid venueId) =>
         await VenueScenario.ReadAsync<SlipQueueItemResponse[]>(
@@ -319,20 +317,4 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
                 $"/api/venues/{venueId}/slip-queue/{bookingId}/reject",
                 new RejectSlipRequest(reason, paymentReceived)));
 
-    /// <summary>A booking that has been paid for and is waiting for the venue to look at it.</summary>
-    private async Task<(HttpClient Booker, BookingResponse Booking)> WaitingBookingAsync(
-        Guid venueId,
-        Guid courtId,
-        int hour,
-        byte[]? slip = null)
-    {
-        var booker = await scenario.SignedInClientAsync();
-        var booking = await VenueScenario.HoldAsync(
-            booker, venueId, VenueScenario.Today.AddDays(1), (courtId, hour));
-
-        var sent = await VenueScenario.UploadAsync(booker, booking.Id, slip ?? Jpeg());
-        Assert.Equal(HttpStatusCode.OK, sent.StatusCode);
-
-        return (booker, booking);
-    }
 }
