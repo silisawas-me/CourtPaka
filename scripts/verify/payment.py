@@ -32,7 +32,6 @@ with sync_playwright() as p:
     # 1. Holding an hour lands on the page that pays for it.
     sign_in(page, new_booker(page))
     booking = take_first_free_hour(page, venue_id, tomorrow).json()
-    page.wait_for_selector("[data-testid=countdown]")
     check("holding an hour opens the booking", f"/bookings/{booking['id']}" in page.url, page)
     check(
         "which says what is being waited for",
@@ -95,7 +94,6 @@ with sync_playwright() as p:
     second = browser.new_page(viewport={"width": 390, "height": 844})
     sign_in(second, new_booker(second))
     take_first_free_hour(second, venue_id, tomorrow, skip=1)
-    second.wait_for_selector("[data-testid=countdown]")
     duplicate = send_slip(second, as_upload("same.png", PNG, "image/png"))
     check("the same picture is still accepted", duplicate.status == 200)
     check(

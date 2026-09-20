@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using System.Security.Claims;
 using CourtBooking.Api.Data;
 using CourtBooking.Api.Http;
@@ -83,9 +84,12 @@ public static class BookingEndpoints
     }
 
     /// <summary>
-    /// Everything this booker has taken, split into what is still ahead of them and what is behind
-    /// (PRD US-05). One request: a history page that had to ask again for every booking would be
-    /// slower than the grid it came from.
+    /// Everything this booker has taken, split into what is still ahead of them and what is
+    /// behind (PRD US-05). One request: a history page that had to ask again for every booking
+    /// would be slower than the grid it came from.
+    ///
+    /// The two are read separately so the ceiling on one cannot eat the other — a booker with
+    /// hundreds behind them still sees everything they are about to play.
     /// </summary>
     private static async Task<Ok<BookingHistoryResponse>> MineAsync(
         ClaimsPrincipal principal,
@@ -95,74 +99,53 @@ public static class BookingEndpoints
     {
         var now = timeProvider.GetUtcNow();
         var bookerId = CallerId.Of(principal);
+        var ahead = Ahead(now);
 
-        // Newest first and capped: a booker who has played for years should not be handed all of
-        // it at once, and what they came to look at is at the top. Paging is its own story.
-        var mine = await database.Bookings
-            .AsNoTracking()
-            .Include(booking => booking.Slots)
-            .Include(booking => booking.CancellationPolicy!)
-            .ThenInclude(policy => policy.Tiers)
-            .Where(booking => booking.BookerUserId == bookerId)
-            .OrderByDescending(booking => booking.CreatedAt)
-            .Take(MaxHistory)
-            .ToListAsync(cancellationToken);
+        var mine = database.Bookings.Where(booking => booking.BookerUserId == bookerId);
 
-        var venueIds = mine.Select(booking => booking.VenueId).Distinct().ToArray();
+        // Soonest first, by when it will be played and not by when it was taken: someone who
+        // books Saturday today and tomorrow morning five minutes later is looking for tomorrow.
+        var upcoming = await ReadManyAsync(
+            database,
+            mine.Where(ahead).OrderBy(booking => booking.Slots.Min(slot => slot.StartsAt)),
+            now,
+            cancellationToken);
 
-        var venueNames = await database.Venues
-            .Where(venue => venueIds.Contains(venue.Id))
-            .ToDictionaryAsync(venue => venue.Id, venue => venue.Name, cancellationToken);
+        // Behind them, newest first, which is the order they happened in, backwards.
+        var past = await ReadManyAsync(
+            database,
+            mine.Where(Not(ahead)).OrderByDescending(booking => booking.CreatedAt),
+            now,
+            cancellationToken);
 
-        var courtNames = await database.Courts
-            .Where(court => venueIds.Contains(court.VenueId))
-            .ToDictionaryAsync(court => court.Id, court => court.Name, cancellationToken);
-
-        var bookingIds = mine.Select(booking => booking.Id).ToArray();
-        var slipTimes = await database.PaymentSlips
-            .Where(slip => bookingIds.Contains(slip.BookingId))
-            .GroupBy(slip => slip.BookingId)
-            .Select(slips => new
-            {
-                BookingId = slips.Key,
-                Latest = slips.Max(slip => slip.UploadedAt),
-            })
-            .ToDictionaryAsync(row => row.BookingId, row => row.Latest, cancellationToken);
-
-        var upcoming = new List<BookingResponse>();
-        var past = new List<BookingResponse>();
-
-        foreach (var booking in mine)
-        {
-            // A hold whose time is up reads as Expired here as everywhere else (PRD 9.2).
-            var status = BookedSlots.HasLapsed(booking, now) ? BookingStatus.Expired : booking.Status;
-            var response = ToResponse(
-                booking,
-                venueNames.GetValueOrDefault(booking.VenueId, string.Empty),
-                courtNames,
-                now,
-                status,
-                slipTimes.TryGetValue(booking.Id, out var uploaded) ? uploaded : null);
-
-            (Ahead(status, booking, now) ? upcoming : past).Add(response);
-        }
-
-        // Ahead of them: soonest first, because the next one to be played is the one being looked
-        // for. Behind them stays newest first, which is the order they happened in, backwards.
-        upcoming.Reverse();
-
-        return TypedResults.Ok(new BookingHistoryResponse([.. upcoming], [.. past]));
+        return TypedResults.Ok(new BookingHistoryResponse(upcoming, past));
     }
 
     /// <summary>
-    /// Whether this booking is still ahead of the booker: hours that have not been played, held by
-    /// a booking that still holds them. Everything else — cancelled, refused, lapsed, played — is
-    /// history, whatever day it falls on (PRD US-05).
+    /// Whether a booking is still ahead of the booker: hours that have not been played, held by a
+    /// booking that still holds them. Everything else — cancelled, refused, lapsed, played — is
+    /// behind them, whatever day it falls on (PRD US-05).
+    ///
+    /// Said in a form the database can read, because which list a booking belongs to has to be
+    /// settled before either is cut to length. A hold whose fifteen minutes are up is behind them
+    /// whether or not anything has written that down, which is what the clause about
+    /// <see cref="Booking.HoldExpiresAt"/> says (PRD 9.2).
     /// </summary>
-    private static bool Ahead(BookingStatus status, Booking booking, DateTimeOffset now) =>
-        status is BookingStatus.Held or BookingStatus.PendingVerification or BookingStatus.Confirmed
-        && booking.Slots.Count > 0
-        && booking.Slots.Max(slot => slot.EndsAt) > now;
+    private static Expression<Func<Booking, bool>> Ahead(DateTimeOffset now) =>
+        booking =>
+            booking.Slots.Any()
+            && booking.Slots.Max(slot => slot.EndsAt) > now
+            && (booking.Status == BookingStatus.PendingVerification
+                || booking.Status == BookingStatus.Confirmed
+                || (booking.Status == BookingStatus.Held && booking.HoldExpiresAt > now));
+
+    /// <summary>
+    /// The other half of a predicate, so that the two lists cannot disagree about which booking
+    /// belongs where. Every column involved is non-nullable, so there is no third answer for the
+    /// negation to swallow.
+    /// </summary>
+    private static Expression<Func<T, bool>> Not<T>(Expression<Func<T, bool>> predicate) =>
+        Expression.Lambda<Func<T, bool>>(Expression.Not(predicate.Body), predicate.Parameters);
 
     /// <summary>
     /// The booker lets the hours go (PRD US-05). What comes back is decided here and not by the
@@ -195,25 +178,23 @@ public static class BookingEndpoints
             return ApiProblem.Of(StatusCodes.Status404NotFound, BookingErrorCodes.NotFound);
         }
 
-        var status = BookedSlots.HasLapsed(booking, now) ? BookingStatus.Expired : booking.Status;
-        var offer = Cancellation.For(
-            booking,
-            status,
-            booking.CancellationPolicy,
-            booking.Slots.Min(slot => slot.StartsAt),
-            now);
+        var status = BookedSlots.StatusAt(booking, now);
+        var offer = Cancellation.For(booking, status, now);
 
         if (offer.Refused is { } refused)
         {
             return ApiProblem.Of(StatusCodes.Status409Conflict, refused);
         }
 
-        var payment = Cancellation.PaymentAfter(status, booking.PaymentState);
         var refundDue = Refunds.DueFor(
-            BookingStatus.Cancelled, payment, booking.TotalBaht, offer.RefundPercent);
+            BookingStatus.Cancelled, offer.Payment, booking.TotalBaht, offer.RefundPercent);
 
         await using var transaction =
             await database.Database.BeginTransactionAsync(cancellationToken);
+
+        // The hours go back on sale the moment they are given up (PRD 6.1). Before the booking
+        // row, which is the order BookedSlots.ReleaseAsync explains and every writer keeps.
+        await BookedSlots.ReleaseAsync(database, bookingId, cancellationToken);
 
         // The status was read a moment ago and the venue may have decided in between. The move
         // carries its condition, so a booking that has moved on is left alone (PRD 6.1).
@@ -231,23 +212,20 @@ public static class BookingEndpoints
         var moved = await moving.ExecuteUpdateAsync(
             set => set
                 .SetProperty(candidate => candidate.Status, BookingStatus.Cancelled)
-                .SetProperty(candidate => candidate.PaymentState, payment)
+                .SetProperty(candidate => candidate.PaymentState, offer.Payment)
                 .SetProperty(candidate => candidate.RefundPercent, offer.RefundPercent)
                 .SetProperty(candidate => candidate.RefundDueBaht, refundDue),
             cancellationToken);
 
         if (moved == 0)
         {
+            // Somebody else moved it between the read and the write — usually the venue deciding
+            // about the slip. What it may do now depends on where it has got to, so the page is
+            // told to ask again rather than being given a reason that was true a moment ago.
             await transaction.RollbackAsync(cancellationToken);
-            return ApiProblem.Of(StatusCodes.Status409Conflict, BookingErrorCodes.NotCancellable);
+            return ApiProblem.Of(
+                StatusCodes.Status409Conflict, BookingErrorCodes.ChangedMeanwhile);
         }
-
-        // The hours go back on sale the moment they are given up (PRD 6.1).
-        await database.BookingSlots
-            .Where(slot => slot.BookingId == bookingId && slot.IsActive)
-            .ExecuteUpdateAsync(
-                set => set.SetProperty(slot => slot.IsActive, false),
-                cancellationToken);
 
         database.BookingStatusChanges.Add(BookingTransitions.Record(
             bookingId, status, BookingStatus.Cancelled, bookerId, now));
@@ -277,35 +255,71 @@ public static class BookingEndpoints
         AppDbContext database,
         Guid bookingId,
         DateTimeOffset now,
+        CancellationToken cancellationToken) =>
+        (await ReadManyAsync(
+            database,
+            database.Bookings.Where(booking => booking.Id == bookingId),
+            now,
+            cancellationToken)).Single();
+
+    /// <summary>
+    /// The bookings a query selects, each as its booker sees it. Names live on the venue and its
+    /// courts rather than on the booking, so they are fetched once for the whole set instead of
+    /// once per booking.
+    /// </summary>
+    private static async Task<BookingResponse[]> ReadManyAsync(
+        AppDbContext database,
+        IQueryable<Booking> bookings,
+        DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var booking = await database.Bookings
+        var found = await bookings
             .AsNoTracking()
-            .Include(candidate => candidate.Slots)
-            .Include(candidate => candidate.CancellationPolicy!)
+            .Include(booking => booking.Slots)
+            .Include(booking => booking.CancellationPolicy!)
             .ThenInclude(policy => policy.Tiers)
-            .SingleAsync(candidate => candidate.Id == bookingId, cancellationToken);
+            .Take(MaxHistory)
+            .ToListAsync(cancellationToken);
 
-        var venueName = await database.Venues
-            .Where(venue => venue.Id == booking.VenueId)
-            .Select(venue => venue.Name)
-            .SingleAsync(cancellationToken);
+        if (found.Count == 0)
+        {
+            return [];
+        }
+
+        var venueIds = found.Select(booking => booking.VenueId).Distinct().ToArray();
+        var bookingIds = found.Select(booking => booking.Id).ToArray();
+
+        var venueNames = await database.Venues
+            .Where(venue => venueIds.Contains(venue.Id))
+            .ToDictionaryAsync(venue => venue.Id, venue => venue.Name, cancellationToken);
 
         var courtNames = await database.Courts
-            .Where(court => court.VenueId == booking.VenueId)
+            .Where(court => venueIds.Contains(court.VenueId))
             .ToDictionaryAsync(court => court.Id, court => court.Name, cancellationToken);
 
-        var slipUploadedAt = await database.PaymentSlips
-            .Where(slip => slip.BookingId == booking.Id)
-            .NewestFirst()
-            .Select(slip => (DateTimeOffset?)slip.UploadedAt)
-            .FirstOrDefaultAsync(cancellationToken);
+        // When the newest slip arrived. The tiebreak that SlipDownload.NewestFirst applies decides
+        // which slip is the current one; the latest moment is the same either way, and asking for
+        // it per booking rather than per set would be a query each.
+        var slipTimes = await database.PaymentSlips
+            .Where(slip => bookingIds.Contains(slip.BookingId))
+            .GroupBy(slip => slip.BookingId)
+            .Select(slips => new
+            {
+                BookingId = slips.Key,
+                Latest = slips.Max(slip => slip.UploadedAt),
+            })
+            .ToDictionaryAsync(row => row.BookingId, row => row.Latest, cancellationToken);
 
-        // A hold whose time is up reads as Expired whether or not anything has written that yet,
-        // the same way every other query treats one (PRD 9.2).
-        var status = BookedSlots.HasLapsed(booking, now) ? BookingStatus.Expired : booking.Status;
-
-        return ToResponse(booking, venueName, courtNames, now, status, slipUploadedAt);
+        return
+        [
+            .. found.Select(booking => ToResponse(
+                booking,
+                venueNames[booking.VenueId],
+                courtNames,
+                now,
+                BookedSlots.StatusAt(booking, now),
+                slipTimes.TryGetValue(booking.Id, out var uploaded) ? uploaded : null)),
+        ];
     }
 
     /// <summary>
@@ -443,7 +457,7 @@ public static class BookingEndpoints
 
         return TypedResults.Created(
             $"/api/bookings/{booking.Id}",
-            ToResponse(booking, venue.Name, priced.CourtNames, now));
+            ToResponse(booking, venue.Name, priced.CourtNames, now, booking.Status));
     }
 
     /// <summary>
@@ -567,13 +581,13 @@ public static class BookingEndpoints
         string venueName,
         IReadOnlyDictionary<Guid, string> courtNames,
         DateTimeOffset now,
-        BookingStatus? status = null,
+        BookingStatus status,
         DateTimeOffset? slipUploadedAt = null) =>
         new(
             booking.Id,
             booking.VenueId,
             venueName,
-            (status ?? booking.Status).ToString(),
+            status.ToString(),
             booking.CreatedAt,
             booking.HoldExpiresAt,
             booking.TotalBaht,
@@ -598,33 +612,18 @@ public static class BookingEndpoints
             // booking, which is US-18. Nothing has been written down yet, so nothing has been
             // sent back (PRD 6.2, BR-06).
             RefundedBaht: 0m,
-            Offer(booking, now, status ?? booking.Status));
+            Offer(booking, now, status));
 
-    /// <summary>
-    /// What letting this booking go would come to, for the page to show before anything is
-    /// pressed. A booking with no slots or no policy in hand cannot be offered one, which is a
-    /// read that did not ask for them rather than a booking that lacks them.
-    /// </summary>
+    /// <summary>What letting this booking go would come to, as the page reads it.</summary>
     private static CancellationOfferResponse Offer(
         Booking booking,
         DateTimeOffset now,
         BookingStatus status)
     {
-        if (booking.Slots.Count == 0)
-        {
-            return new CancellationOfferResponse(
-                false, BookingErrorCodes.NotCancellable, 0, 0m, false);
-        }
-
-        var offer = Cancellation.For(
-            booking,
-            status,
-            booking.CancellationPolicy,
-            booking.Slots.Min(slot => slot.StartsAt),
-            now);
+        var offer = Cancellation.For(booking, status, now);
 
         return new CancellationOfferResponse(
-            offer.Allowed, offer.Refused, offer.RefundPercent, offer.RefundBaht, offer.AwaitsVenue);
+            offer.Allowed, offer.RefundPercent, offer.RefundBaht, offer.AwaitsVenue);
     }
 
     /// <summary>The hours as priced, or the reason none of them can be had.</summary>

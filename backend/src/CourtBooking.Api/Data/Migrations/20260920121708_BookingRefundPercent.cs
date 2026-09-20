@@ -16,6 +16,11 @@ namespace CourtBooking.Api.Data.Migrations
                 type: "integer",
                 nullable: false,
                 defaultValue: 0);
+
+            // The bookings US-12 already turned away carry the whole amount, and their
+            // RefundDueBaht says so. Without this they would read as owing nothing the next time
+            // the amount is worked out again (PRD 6.2). 7 is BookingStatus.Rejected.
+            migrationBuilder.Sql("""UPDATE "Bookings" SET "RefundPercent" = 100 WHERE "Status" = 7;""");
         }
 
         /// <inheritdoc />

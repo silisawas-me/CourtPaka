@@ -21,13 +21,7 @@ function booking(overrides: Record<string, unknown> = {}) {
     paymentState: 'Received',
     refundDueBaht: 0,
     refundedBaht: 0,
-    cancellation: {
-      allowed: true,
-      refused: null,
-      refundPercent: 100,
-      refundBaht: 400,
-      awaitsVenue: false,
-    },
+    cancellation: { allowed: true, refundPercent: 100, refundBaht: 400, awaitsVenue: false },
     ...overrides,
   };
 }
@@ -86,6 +80,36 @@ describe('MyBookingsPage', () => {
     expect(textOf(fixture, 'booking-b1')).toContain('คอร์ท 1');
   });
 
+  it('does not join hours the booking does not hold', () => {
+    render([
+      booking({
+        slots: [
+          { courtId: 'c1', courtName: 'คอร์ท 1', date: '2026-09-22', hour: 18, bahtPerHour: 200 },
+          { courtId: 'c1', courtName: 'คอร์ท 1', date: '2026-09-22', hour: 20, bahtPerHour: 200 },
+        ],
+      }),
+    ]);
+
+    // Eighteen and twenty is not three hours; the booker paid for two.
+    expect(textOf(fixture, 'booking-b1')).toContain('18:00 – 19:00, 20:00 – 21:00');
+  });
+
+  it('says one hour once, however many courts it was taken on', () => {
+    render([
+      booking({
+        slots: [
+          { courtId: 'c1', courtName: 'คอร์ท 1', date: '2026-09-22', hour: 18, bahtPerHour: 200 },
+          { courtId: 'c2', courtName: 'คอร์ท 2', date: '2026-09-22', hour: 18, bahtPerHour: 200 },
+        ],
+      }),
+    ]);
+
+    // Two courts at six is what a group of eight looks like, not two bookings.
+    expect(textOf(fixture, 'booking-b1')).toContain('18:00 – 19:00');
+    expect(textOf(fixture, 'booking-b1')).not.toContain('18:00 – 19:00, 18:00');
+    expect(textOf(fixture, 'booking-b1')).toContain('คอร์ท 1, คอร์ท 2');
+  });
+
   it('says what would come back before anything is given up', () => {
     render([booking()]);
 
@@ -95,18 +119,26 @@ describe('MyBookingsPage', () => {
     expect(textOf(fixture, 'refund-note')).toContain(TRANSLATIONS.th['myBookings.refundWillBe']);
   });
 
+  it('says the share as well as the amount, when the terms give back only part of it', () => {
+    render([
+      booking({
+        cancellation: { allowed: true, refundPercent: 50, refundBaht: 200, awaitsVenue: false },
+      }),
+    ]);
+
+    clickOn(fixture, 'let-go-b1');
+
+    // Half of what is the question the booker is weighing, so it is said out loud.
+    expect(textOf(fixture, 'refund-note')).toContain('200');
+    expect(textOf(fixture, 'refund-note')).toContain('50%');
+  });
+
   it('says the venue has still to confirm, when that is what decides the money', () => {
     render([
       booking({
         status: 'PendingVerification',
         paymentState: 'NotReceived',
-        cancellation: {
-          allowed: true,
-          refused: null,
-          refundPercent: 100,
-          refundBaht: 0,
-          awaitsVenue: true,
-        },
+        cancellation: { allowed: true, refundPercent: 100, refundBaht: 0, awaitsVenue: true },
       }),
     ]);
 
@@ -120,13 +152,7 @@ describe('MyBookingsPage', () => {
       booking({
         status: 'Held',
         paymentState: 'NotReceived',
-        cancellation: {
-          allowed: true,
-          refused: null,
-          refundPercent: 0,
-          refundBaht: 0,
-          awaitsVenue: false,
-        },
+        cancellation: { allowed: true, refundPercent: 0, refundBaht: 0, awaitsVenue: false },
       }),
     ]);
 
@@ -138,13 +164,7 @@ describe('MyBookingsPage', () => {
   it('says plainly when money was paid and none of it comes back', () => {
     render([
       booking({
-        cancellation: {
-          allowed: true,
-          refused: null,
-          refundPercent: 0,
-          refundBaht: 0,
-          awaitsVenue: false,
-        },
+        cancellation: { allowed: true, refundPercent: 0, refundBaht: 0, awaitsVenue: false },
       }),
     ]);
 
@@ -206,13 +226,7 @@ describe('MyBookingsPage', () => {
         booking({
           status: 'Cancelled',
           refundDueBaht: 400,
-          cancellation: {
-            allowed: false,
-            refused: 'booking.not_cancellable',
-            refundPercent: 0,
-            refundBaht: 0,
-            awaitsVenue: false,
-          },
+          cancellation: { allowed: false, refundPercent: 0, refundBaht: 0, awaitsVenue: false },
         }),
       ],
     );

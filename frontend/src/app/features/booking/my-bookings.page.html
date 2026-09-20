@@ -47,9 +47,9 @@
 
             <mat-card-content>
               <p class="when">
-                {{ booking.slots[0].date | appDate: i18n.locale() }} · {{ when(booking) }}
+                {{ booking.slots[0].date | appDate: i18n.locale() }} · {{ booking.when }}
               </p>
-              <p class="muted">{{ courts(booking) }}</p>
+              <p class="muted">{{ booking.courts }}</p>
 
               <dl class="money">
                 <dt>{{ i18n.t('booking.total') }}</dt>
@@ -80,6 +80,7 @@
                   matButton
                   type="button"
                   [attr.data-testid]="'let-go-' + booking.id"
+                  [disabled]="cancelling()"
                   (click)="ask(booking.id)"
                 >
                   {{ i18n.t('myBookings.letGo') }}
@@ -102,6 +103,14 @@
                 } @else if (booking.cancellation.refundBaht > 0) {
                   <p data-testid="refund-note">
                     {{ i18n.t('myBookings.refundWillBe') }}: {{ booking.cancellation.refundBaht }}
+                    <!--
+                      The share only earns its place when it is not the whole thing: a venue with
+                      tiered terms gives back half at short notice, and half of what is the
+                      question the booker is actually weighing.
+                    -->
+                    @if (booking.cancellation.refundPercent < 100) {
+                      <span class="muted">({{ booking.cancellation.refundPercent }}%)</span>
+                    }
                   </p>
                 } @else {
                   <!--

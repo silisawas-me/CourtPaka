@@ -37,7 +37,7 @@ public static class Refunds
     /// A share of a booking in baht, to the satang — nothing at all unless the money arrived.
     /// Rounded away from zero, so a half satang goes to the booker rather than the venue.
     /// </summary>
-    public static decimal Share(decimal totalBaht, int percent, PaymentState payment) =>
+    private static decimal Share(decimal totalBaht, int percent, PaymentState payment) =>
         payment == PaymentState.Received
             ? Math.Round(totalBaht * percent / 100m, 2, MidpointRounding.AwayFromZero)
             : 0m;

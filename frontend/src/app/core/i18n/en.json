@@ -66,6 +66,7 @@
   "error.availability.date_in_the_past": "That date has passed.",
   "error.availability.date_too_far_ahead": "Bookings open 30 days ahead.",
   "error.booking.already_holding": "You already have a booking waiting to be paid for.",
+  "error.booking.changed_meanwhile": "This booking just changed. Have another look at where it stands.",
   "error.booking.duplicate_slot": "The same hour was picked twice.",
   "error.booking.hour_not_available": "That hour cannot be booked.",
   "error.booking.no_slots": "Pick at least one hour.",

@@ -44,7 +44,6 @@ with sync_playwright() as p:
 
     # 2. A hold appears among what is coming up, and can be let go for nothing.
     held = take_first_free_hour(page, venue_id, tomorrow).json()
-    page.wait_for_selector("[data-testid=countdown]")
     open_my_bookings(page)
 
     card = f"[data-testid=booking-{held['id']}]"
@@ -92,7 +91,6 @@ with sync_playwright() as p:
 
     # 4. Giving up while the venue is still looking leaves the money unsettled (PRD 6.2).
     waiting = take_first_free_hour(page, venue_id, tomorrow).json()
-    page.wait_for_selector("[data-testid=countdown]")
     sent = send_slip(page, as_upload("slip.jpg", real_jpeg(), "image/jpeg"))
     check("the slip reaches the venue", sent.status == 200)
 
@@ -110,22 +108,22 @@ with sync_playwright() as p:
     expect(page.locator("[data-testid=awaiting-venue]")).to_be_visible()
     check("and the card says so", True, page)
 
-    # 5. A booking that has been played cannot be given up, and says nothing about cancelling.
-    played = take_first_free_hour(page, venue_id, tomorrow).json()
-    page.wait_for_selector("[data-testid=countdown]")
+    # 5. A confirmed booking says what its own terms would give back before anything is pressed.
+    confirmed_booking = take_first_free_hour(page, venue_id, tomorrow).json()
     send_slip(page, as_upload("slip.jpg", real_jpeg(), "image/jpeg"))
 
     staff = browser.new_page()
     sign_in(staff, OWNER)
-    confirmed = staff.request.post(
-        f"{BASE}/api/venues/{venue_id}/slip-queue/{played['id']}/confirm")
-    check("the venue confirms it", confirmed.status == 200)
+    decided = staff.request.post(
+        f"{BASE}/api/venues/{venue_id}/slip-queue/{confirmed_booking['id']}/confirm")
+    check("the venue confirms it", decided.status == 200)
     staff.close()
 
     open_my_bookings(page)
-    page.click(f"[data-testid=let-go-{played['id']}]")
+    page.click(f"[data-testid=let-go-{confirmed_booking['id']}]")
     expect(page.locator("[data-testid=refund-note]")).to_be_visible()
     check("a confirmed booking says what its terms would give back", True, page)
+    page.click("[data-testid=keep]")
 
     # 6. Nobody else's bookings are in this list.
     stranger = browser.new_page()
@@ -134,7 +132,7 @@ with sync_playwright() as p:
     stranger.wait_for_selector("[data-testid=nothing-yet]")
     check(
         "a different booker sees none of them",
-        stranger.locator(f"[data-testid=booking-{played['id']}]").count() == 0,
+        stranger.locator(f"[data-testid=booking-{confirmed_booking['id']}]").count() == 0,
     )
 
     browser.close()

@@ -66,6 +66,7 @@
   "error.availability.date_in_the_past": "เลือกวันที่ย้อนหลังไม่ได้",
   "error.availability.date_too_far_ahead": "จองล่วงหน้าได้ไม่เกิน 30 วัน",
   "error.booking.already_holding": "คุณมีรายการที่รอชำระเงินอยู่แล้ว",
+  "error.booking.changed_meanwhile": "รายการนี้เพิ่งมีการเปลี่ยนแปลง กรุณาดูสถานะล่าสุดอีกครั้ง",
   "error.booking.duplicate_slot": "เลือกช่องเวลาเดิมซ้ำ",
   "error.booking.hour_not_available": "ช่องเวลานี้จองไม่ได้",
   "error.booking.no_slots": "เลือกอย่างน้อย 1 ช่องเวลา",

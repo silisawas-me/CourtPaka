@@ -30,8 +30,7 @@ export type BookingStatus =
  */
 export interface CancellationOffer {
   allowed: boolean;
-  /** Why not, when it may not be let go. Null when it may. */
-  refused: string | null;
+  /** The share of the booking this would give back, which a tiered policy makes worth saying. */
   refundPercent: number;
   refundBaht: number;
   /** The venue has yet to say whether the money arrived, so the amount is not settled. */

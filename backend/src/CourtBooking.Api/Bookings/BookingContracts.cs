@@ -45,8 +45,7 @@ public sealed record BookingResponse(
 /// </summary>
 public sealed record CancellationOfferResponse(
     bool Allowed,
-    /// <summary>Why not, when it may not be cancelled. Null when it may.</summary>
-    string? Refused,
+    /// <summary>The share of the booking this would give back, which a tiered policy makes worth saying.</summary>
     int RefundPercent,
     decimal RefundBaht,
     /// <summary>The venue has yet to say whether the money arrived, so the amount is not settled.</summary>
@@ -83,6 +82,12 @@ public static class BookingErrorCodes
 
     /// <summary>The hours have begun. There is nothing left to give up (PRD 6.1).</summary>
     public const string PlayHasStarted = "booking.play_has_started";
+
+    /// <summary>
+    /// It moved between being read and being written — usually the venue deciding about the slip.
+    /// What may be done with it now depends on where it has got to, so the answer is to look again.
+    /// </summary>
+    public const string ChangedMeanwhile = "booking.changed_meanwhile";
 }
 
 public static class SlipErrorCodes

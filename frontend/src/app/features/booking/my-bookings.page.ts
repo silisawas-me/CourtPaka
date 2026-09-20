@@ -3,7 +3,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
-import { Booking, BookingService } from '../../core/bookings/booking.service';
+import { Booking, BookingHistory, BookingService } from '../../core/bookings/booking.service';
 import { errorKey } from '../../core/http/api-error';
 import { AppDatePipe } from '../../core/i18n/app-date.pipe';
 import { TranslationService } from '../../core/i18n/translation.service';
@@ -29,22 +29,27 @@ export class MyBookingsPage {
 
   protected readonly i18n = inject(TranslationService);
 
-  protected readonly upcoming = signal<Booking[]>([]);
-  protected readonly past = signal<Booking[]>([]);
+  private readonly history = signal<BookingHistory>({ upcoming: [], past: [] });
+
   protected readonly loading = signal(true);
   protected readonly pageError = signal<string | null>(null);
 
   /**
-   * The two lists in the order they are read. One loop draws both, so a card gains a field in one
-   * place rather than in two that could drift apart.
+   * The two lists in the order they are read, each booking already worded. One loop draws both,
+   * so a card gains a field in one place rather than in two that could drift apart, and the
+   * wording is worked out when the list arrives rather than on every redraw.
    */
-  protected readonly groups = computed(() => [
-    { key: 'upcoming', bookings: this.upcoming() },
-    { key: 'past', bookings: this.past() },
-  ]);
+  protected readonly groups = computed(() => {
+    const history = this.history();
+    return [
+      { key: 'upcoming', bookings: history.upcoming.map(card) },
+      { key: 'past', bookings: history.past.map(card) },
+    ];
+  });
 
   protected readonly nothingAtAll = computed(
-    () => !this.loading() && this.upcoming().length === 0 && this.past().length === 0,
+    () =>
+      !this.loading() && this.history().upcoming.length === 0 && this.history().past.length === 0,
   );
 
   /** Which booking is being asked about. One at a time: this gives hours up for good. */
@@ -91,27 +96,13 @@ export class MyBookingsPage {
     });
   }
 
-  /** The hours of a booking as one line, since a court-hour is read as a span, not as two. */
-  protected when(booking: Booking): string {
-    const hours = booking.slots.map((slot) => slot.hour).sort((first, next) => first - next);
-    return hours.length === 0
-      ? ''
-      : `${String(hours[0]).padStart(2, '0')}:00 – ${String(hours[hours.length - 1] + 1).padStart(2, '0')}:00`;
-  }
-
-  /** The courts a booking covers, each named once however many hours it holds. */
-  protected courts(booking: Booking): string {
-    return [...new Set(booking.slots.map((slot) => slot.courtName))].join(', ');
-  }
-
   private load({ quiet = false } = {}): void {
     this.loading.set(!quiet);
     this.pageError.set(null);
 
     this.bookings.mine().subscribe({
       next: (history) => {
-        this.upcoming.set(history.upcoming);
-        this.past.set(history.past);
+        this.history.set(history);
         this.loading.set(false);
       },
       error: (failure: unknown) => {
@@ -122,4 +113,48 @@ export class MyBookingsPage {
       },
     });
   }
+}
+
+/** A booking with the two lines the card reads it by. */
+export interface BookingCard extends Booking {
+  when: string;
+  courts: string;
+}
+
+function card(booking: Booking): BookingCard {
+  return { ...booking, when: hours(booking), courts: courts(booking) };
+}
+
+/**
+ * The hours a booking holds, as the spans they are. Four hours in a row is one line; six o'clock
+ * and eight o'clock with a gap between them is two, because writing it as 18:00 – 21:00 would
+ * claim an hour the booker does not have.
+ */
+function hours(booking: Booking): string {
+  // One set, not one per slot: a booking can hold the same hour on several courts, which is what
+  // a group of eight playing at six o'clock looks like.
+  const taken = [...new Set(booking.slots.map((slot) => slot.hour))].sort(
+    (first, next) => first - next,
+  );
+
+  const spans: [number, number][] = [];
+  for (const hour of taken) {
+    const last = spans.at(-1);
+    if (last && last[1] === hour) {
+      last[1] = hour + 1;
+    } else {
+      spans.push([hour, hour + 1]);
+    }
+  }
+
+  return spans.map(([from, to]) => `${clock(from)} – ${clock(to)}`).join(', ');
+}
+
+/** The courts a booking covers, each named once however many hours it holds. */
+function courts(booking: Booking): string {
+  return [...new Set(booking.slots.map((slot) => slot.courtName))].join(', ');
+}
+
+function clock(hour: number): string {
+  return `${String(hour).padStart(2, '0')}:00`;
 }

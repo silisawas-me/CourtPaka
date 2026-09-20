@@ -30,7 +30,6 @@ def waiting_booking(browser, venue_id, skip=0, slip=None):
     page = browser.new_page(viewport={"width": 390, "height": 844})
     sign_in(page, new_booker(page))
     booking = take_first_free_hour(page, venue_id, tomorrow, skip=skip).json()
-    page.wait_for_selector("[data-testid=countdown]")
 
     sent = send_slip(page, slip or as_upload("slip.jpg", real_jpeg(), "image/jpeg"))
     if sent.status != 200:
