@@ -56,6 +56,19 @@ export interface Booking {
   cancellation: CancellationOffer;
 }
 
+/**
+ * How to pay for a booking that is waiting for money (PRD US-04). The payload is the string a
+ * bank app reads out of the QR — built by the server, because the amount and the account in it
+ * are rules about money, not decoration.
+ */
+export interface PaymentDetails {
+  totalBaht: number;
+  holdExpiresAt: string;
+  accountName: string;
+  /** Null when the venue's account is not one a bank app would accept. */
+  promptPayPayload: string | null;
+}
+
 /** A booker's own bookings, split by the server, which holds the clock (PRD US-05). */
 export interface BookingHistory {
   upcoming: Booking[];
@@ -79,6 +92,11 @@ export class BookingService {
 
   get(bookingId: string): Observable<Booking> {
     return this.http.get<Booking>(`/api/bookings/${bookingId}`);
+  }
+
+  /** Where to send the money for one booking, and the QR that carries the amount. */
+  payment(bookingId: string): Observable<PaymentDetails> {
+    return this.http.get<PaymentDetails>(`/api/bookings/${bookingId}/payment`);
   }
 
   /** Everything this booker has taken, already split into ahead and behind (PRD US-05). */

@@ -43,10 +43,27 @@
 
     <mat-card-content>
       <!--
-        The QR needs the venue's own PromptPay account, which no screen collects yet, so this says
-        what to do instead of showing a code that would not work.
+        The code carries the exact amount, so the booker transfers what the booking says without
+        typing it (PRD US-04). The account name is beside it, because seeing who the money is
+        going to is how somebody knows they are paying the right people.
       -->
-      <p class="muted" data-testid="qr-pending">{{ i18n.t('booking.pay.qrPending') }}</p>
+      @if (qr(); as code) {
+        <div class="qr">
+          <img
+            [src]="code"
+            [alt]="i18n.t('booking.pay.qrAlt')"
+            data-testid="qr"
+            width="220"
+            height="220"
+          />
+          @if (payment(); as how) {
+            <p class="qr-account" data-testid="qr-account">{{ how.accountName }}</p>
+            <p class="muted">{{ i18n.t('booking.pay.qrHint') }}</p>
+          }
+        </div>
+      } @else if (payment()?.promptPayPayload === null) {
+        <p class="muted" data-testid="qr-pending">{{ i18n.t('booking.pay.qrPending') }}</p>
+      }
 
       @if (held.slipUploadedAt) {
         <p data-testid="slip-sent">{{ i18n.t('booking.pay.slipSent') }}</p>

@@ -46,24 +46,23 @@ public static class DevelopmentSeeder
                 Status = VenueStatus.Approved,
                 // Made up, but the shape a real one has: the payment screen and the documents
                 // both read these, so a seeded venue with none of them is only half a venue.
-                Business = new VenueBusiness
-                {
-                    PromptPayId = "0812345678",
-                    PromptPayAccountName = "บริษัท คอร์ทปะก้า จำกัด",
-                    IsVatRegistered = true,
-                    LegalName = "บริษัท คอร์ทปะก้า จำกัด",
-                    TaxId = "0105561000000",
-                    TaxBranch = VenueBusiness.HeadOfficeBranch,
-                    BillingAddress = "123 ถนนสุขุมวิท แขวงคลองเตย เขตวัฒนา กรุงเทพมหานคร 10110",
-                    Latitude = 13.7318,
-                    Longitude = 100.5686,
-                },
+                Business = DevelopmentBusiness(),
                 AgreementVersion = options.Value.VenueAgreementVersion,
                 AgreementAcceptedAt = time.GetUtcNow(),
                 AgreementAcceptedByUserId = owner.Id,
                 CreatedAt = time.GetUtcNow(),
             };
             database.Venues.Add(venue);
+        }
+        else if (string.IsNullOrEmpty(venue.Business.PromptPayId))
+        {
+            // A venue seeded before there was anything to pay into. Filled in rather than left
+            // blank: an empty account is a payment screen with no QR on it, which reads as the
+            // feature being broken rather than as data nobody has entered.
+            venue.Business = DevelopmentBusiness();
+            venue.AgreementVersion ??= options.Value.VenueAgreementVersion;
+            venue.AgreementAcceptedAt ??= time.GetUtcNow();
+            venue.AgreementAcceptedByUserId ??= owner.Id;
         }
 
         await EnsureMembershipAsync(database, venue.Id, owner.Id, VenueRole.Owner, VenuePermissions.None, time);
@@ -79,6 +78,25 @@ public static class DevelopmentSeeder
 
         await database.SaveChangesAsync(cancellationToken);
     }
+
+
+    /// <summary>
+    /// Made up, but the shape a real one has: the payment screen and the documents both read
+    /// these, so a seeded venue without them is only half a venue (PRD US-10).
+    /// </summary>
+    private static VenueBusiness DevelopmentBusiness() =>
+        new()
+        {
+            PromptPayId = "0812345678",
+            PromptPayAccountName = "บริษัท คอร์ทปะก้า จำกัด",
+            IsVatRegistered = true,
+            LegalName = "บริษัท คอร์ทปะก้า จำกัด",
+            TaxId = "0105561000000",
+            TaxBranch = VenueBusiness.HeadOfficeBranch,
+            BillingAddress = "123 ถนนสุขุมวิท แขวงคลองเตย เขตวัฒนา กรุงเทพมหานคร 10110",
+            Latitude = 13.7318,
+            Longitude = 100.5686,
+        };
 
     private static async Task EnsureCourtsAsync(
         AppDbContext database,

@@ -65,6 +65,18 @@ public sealed record BookingResponse(
     CancellationOfferResponse Cancellation);
 
 /// <summary>
+/// How to pay for a booking that is waiting for money (PRD US-04). The payload is the string a
+/// bank app reads out of the QR; the page turns it into squares and never builds it itself,
+/// because the amount and the account in it are the server's to decide.
+/// </summary>
+public sealed record PaymentResponse(
+    decimal TotalBaht,
+    DateTimeOffset HoldExpiresAt,
+    string AccountName,
+    /// <summary>Null when the venue's account is not one a bank app would accept.</summary>
+    string? PromptPayPayload);
+
+/// <summary>
 /// What the booker would get back for cancelling, worked out by the server so that the number
 /// they are shown and the number they are given are the same one (PRD US-05, BR-06).
 /// </summary>

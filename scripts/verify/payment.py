@@ -35,6 +35,21 @@ with sync_playwright() as p:
     sign_in(page, new_booker(page))
     booking = take_first_free_hour(page, venue_id, tomorrow).json()
     check("holding an hour opens the booking", f"/bookings/{booking['id']}" in page.url, page)
+    # The QR carries the amount, so the booker never types it (US-04). Checked against what the
+    # server built rather than against the picture: a scan is not something a script can do.
+    paying = page.request.get(f"{BASE}/api/bookings/{booking['id']}/payment").json()
+    check("the booking says where to send the money", paying["promptPayPayload"] is not None)
+    check(
+        "and the amount is in the code, not left to be typed",
+        f"{paying['totalBaht']:.2f}" in paying["promptPayPayload"],
+    )
+    page.wait_for_selector("[data-testid=qr]")
+    check("the page draws it", page.locator("[data-testid=qr]").count() == 1, page)
+    check(
+        "beside the name the money is going to",
+        page.locator("[data-testid=qr-account]").inner_text().strip() != "",
+    )
+
     check(
         "which says what is being waited for",
         "รอชำระเงิน" in page.locator("[data-testid=booking-status]").inner_text(),
@@ -42,9 +57,11 @@ with sync_playwright() as p:
     countdown = page.locator("[data-testid=countdown]").inner_text()
     minutes = int(countdown.split(":")[0].split()[-1])
     check("and counts down from fifteen minutes", 13 <= minutes <= 15, page)
+    # There is a real account behind this venue now (US-10), so the fallback message is the one
+    # thing that should not be on screen.
     check(
-        "the QR is honest about not being set up yet",
-        page.locator("[data-testid=qr-pending]").count() == 1,
+        "and no longer says the venue is not set up",
+        page.locator("[data-testid=qr-pending]").count() == 0,
     )
 
     # 2. A file that is not a picture is refused, whatever it is called.

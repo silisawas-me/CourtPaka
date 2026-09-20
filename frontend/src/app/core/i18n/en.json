@@ -42,6 +42,8 @@
   "availability.status.Closed": "Closed",
   "availability.status.Free": "Free",
   "availability.window": "Bookable up to 30 days ahead",
+  "booking.pay.qrAlt": "PromptPay QR for this booking",
+  "booking.pay.qrHint": "Scan with your bank app — the amount is already in the code",
   "booking.pay.qrPending": "The venue has not set up its PromptPay account yet. Transfer to the venue directly, then send the slip here.",
   "booking.pay.replaceSlip": "Send a different slip",
   "booking.pay.sendSlip": "Send the slip",
