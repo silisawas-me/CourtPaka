@@ -39,13 +39,21 @@ public sealed class BookingStatusChange
     public required Guid? ChangedByUserId { get; init; }
 
     /// <summary>
-    /// Why, where the state machine asks for a reason (PRD 6.1). The moves that exist so far need
-    /// none, so this is null.
+    /// Which of the closed set of reasons this move was made for, where one applies (PRD 6.1).
+    /// It decides the refund, so it is also what anybody counting by reason has to count — the
+    /// venue's own report of cancellations it caused (US-15), and the check that a court being
+    /// closed left no booking behind (US-11). A column, not a prefix on <see cref="Reason"/>:
+    /// <c>LIKE</c> is not an answer to "how many, and which".
     ///
-    /// US-13's reasons are a closed set that decides the refund (<c>CustomerRequest</c>,
-    /// <c>VenueInitiated</c>, <c>PaymentNotReceived</c>) and US-12's rejection needs free text
-    /// beside one: when those arrive this splits into a code and a note, and the transition table
-    /// says which moves may not be made without one.
+    /// Null where the move needed no reason at all, and on the moves whose reason is free text
+    /// rather than a choice — a slip being rejected says why in words.
+    /// </summary>
+    public CancellationReason? Cause { get; init; }
+
+    /// <summary>
+    /// What was written beside the reason, in the venue's own words (PRD 6.1). Free text, so
+    /// nothing counts by it; it is there for whoever reads one booking's history — an admin
+    /// looking at a complaint (US-22) — rather than for a report.
     /// </summary>
     public string? Reason { get; init; }
 

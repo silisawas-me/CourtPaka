@@ -89,7 +89,8 @@ public static class BookingTransitions
         BookingStatus to,
         Guid? byUserId,
         DateTimeOffset at,
-        string? reason = null)
+        string? reason = null,
+        CancellationReason? cause = null)
     {
         if (!CanMove(from, to))
         {
@@ -97,7 +98,11 @@ public static class BookingTransitions
                 $"A booking cannot go from {from} to {to} (PRD 6.1).");
         }
 
-        if (NeedReason.Contains((from, to)) && string.IsNullOrWhiteSpace(reason))
+        // Either way of saying why counts: some moves are made for one of a closed set of
+        // reasons, and some — a slip being turned away — can only be said in words.
+        if (NeedReason.Contains((from, to))
+            && cause is null
+            && string.IsNullOrWhiteSpace(reason))
         {
             throw new InvalidOperationException(
                 $"Going from {from} to {to} has to say why (PRD 6.1).");
@@ -110,6 +115,7 @@ public static class BookingTransitions
             To = to,
             ChangedAt = at,
             ChangedByUserId = byUserId,
+            Cause = cause,
             Reason = reason,
         };
     }

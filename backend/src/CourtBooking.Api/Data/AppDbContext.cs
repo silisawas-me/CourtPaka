@@ -223,6 +223,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             change.Property(c => c.Reason).HasMaxLength(BookingStatusChange.ReasonMaxLength);
             // A booking's history, oldest first, which is how US-12 and US-22 will read it.
             change.HasIndex(c => new { c.BookingId, c.ChangedAt });
+
+            // Counting cancellations by reason is a report of its own (US-15) and a check the
+            // court-closing screen has to make (US-11), and both scan every row of a venue's
+            // history, so the reason is worth an index where it is set.
+            change.HasIndex(c => c.Cause).HasFilter("\"Cause\" IS NOT NULL");
             // The history lives exactly as long as the booking it describes. Nothing deletes a
             // booking — a booker asking to be forgotten is anonymised, not erased (PRD 8) — so
             // this cascade is what happens when a venue is removed with everything under it.

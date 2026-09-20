@@ -247,8 +247,52 @@ public sealed class VenueBookingTests(ApiTestFixture api) : IClassFixture<ApiTes
             await scenario.HistoryAsync(booking.Id),
             recorded => recorded.To == BookingStatus.Cancelled);
 
-        // The record and the money have to say the same thing (PRD 6.1).
-        Assert.Equal($"{nameof(CancellationReason.VenueInitiated)}: ไฟดับทั้งสนาม", change.Reason);
+        // The record and the money have to say the same thing (PRD 6.1), and the reason is a
+        // value rather than a prefix on the note — US-11 and US-15 count by it.
+        Assert.Equal(CancellationReason.VenueInitiated, change.Cause);
+        Assert.Equal("ไฟดับทั้งสนาม", change.Reason);
+    }
+
+    [Fact]
+    public async Task A_cancellation_with_nothing_written_beside_it_still_says_why()
+    {
+        var (owner, venue, booking) = await ConfirmedBookingAsync();
+
+        await CancelledAsync(
+            owner,
+            venue.Id,
+            booking.Id,
+            reason: nameof(CancellationReason.CustomerRequest),
+            note: null);
+
+        var change = Assert.Single(
+            await scenario.HistoryAsync(booking.Id),
+            recorded => recorded.To == BookingStatus.Cancelled);
+
+        Assert.Equal(CancellationReason.CustomerRequest, change.Cause);
+        Assert.Equal(string.Empty, change.Reason);
+    }
+
+    /// <summary>
+    /// Turning a slip away says why in words rather than by choosing one of the three, so the
+    /// column stays empty and nothing counts that move as a cancellation reason (PRD 6.1).
+    /// </summary>
+    [Fact]
+    public async Task A_slip_turned_away_leaves_the_reason_column_alone()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+
+        await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/slip-queue/{booking.Id}/reject",
+            new RejectSlipRequest("ยอดไม่ตรง", PaymentReceived: false));
+
+        var change = Assert.Single(
+            await scenario.HistoryAsync(booking.Id),
+            recorded => recorded.To == BookingStatus.Rejected);
+
+        Assert.Null(change.Cause);
+        Assert.Equal("ยอดไม่ตรง", change.Reason);
     }
 
     [Fact]
