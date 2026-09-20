@@ -14,4 +14,18 @@ public static class ApiProblem
         TypedResults.Problem(
             statusCode: statusCode,
             extensions: new Dictionary<string, object?> { [CodeProperty] = code });
+
+    /// <summary>
+    /// A refusal that has to hand something back for the screen to show — the bookings standing
+    /// in the way of a court closing (PRD US-11), where naming the rule is not enough to act on.
+    /// The extra data is named, never prose: the code still decides what the user is told.
+    /// </summary>
+    public static ProblemHttpResult Of(int statusCode, string code, string name, object? value) =>
+        TypedResults.Problem(
+            statusCode: statusCode,
+            extensions: new Dictionary<string, object?>
+            {
+                [CodeProperty] = code,
+                [name] = value,
+            });
 }

@@ -19,6 +19,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<Court> Courts => Set<Court>();
 
+    public DbSet<CourtClosure> CourtClosures => Set<CourtClosure>();
+
     public DbSet<CourtStatusChange> CourtStatusChanges => Set<CourtStatusChange>();
 
     public DbSet<OpeningHoursSchedule> OpeningHoursSchedules => Set<OpeningHoursSchedule>();
@@ -216,6 +218,30 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             // Two people may not hold the same court at the same time. The rule is the database's,
             // not the application's, so simultaneous writes cannot both pass a check (PRD BR-04,
             // 9.2). The constraint itself is written in the migration: EF has no model for one.
+        });
+
+        builder.Entity<CourtClosure>(closure =>
+        {
+            closure.Property(c => c.Reason).HasMaxLength(CourtClosure.ReasonMaxLength);
+
+            // Every read is "what is shut on this court around this time", from the grid, the
+            // settings screen and the write that takes an hour.
+            closure.HasIndex(c => new { c.CourtId, c.StartsAt });
+
+            closure.HasOne(c => c.Court)
+                .WithMany()
+                .HasForeignKey(c => c.CourtId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            closure.HasOne(c => c.CreatedBy)
+                .WithMany()
+                .HasForeignKey(c => c.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            closure.HasOne<AppUser>()
+                .WithMany()
+                .HasForeignKey(c => c.LiftedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<BookingStatusChange>(change =>
