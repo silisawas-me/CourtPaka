@@ -4,6 +4,7 @@ using CourtBooking.Api.Data;
 using CourtBooking.Api.Email;
 using CourtBooking.Api.Health;
 using CourtBooking.Api.Identity;
+using CourtBooking.Api.Jobs;
 using CourtBooking.Api.Localization;
 using CourtBooking.Api.Venues;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -134,6 +135,13 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<CurrentVenue>();
 builder.Services.AddScoped<VenueNotifications>();
 builder.Services.AddScoped<IAuthorizationHandler, VenuePermissionHandler>();
+
+// The work nobody asks for: holds that ran out on hours nobody is looking at, and slips still
+// waiting when the court is about to be played (PRD 9.2, US-17 S-23).
+if (builder.Configuration.GetValue($"{AppOptions.SectionName}:{nameof(AppOptions.RunCaretaker)}", true))
+{
+    builder.Services.AddHostedService<Caretaker>();
+}
 
 // Registration and password endpoints send email and check credentials, so they are capped per client IP.
 builder.Services.AddRateLimiter(options =>

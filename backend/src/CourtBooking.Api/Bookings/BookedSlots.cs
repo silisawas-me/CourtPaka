@@ -279,6 +279,39 @@ public static class BookedSlots
     }
 
     /// <summary>
+    /// Every hold whose time is up, wherever it is. The writes release what is in their own way
+    /// because they must, and that is enough to keep the grid honest for hours somebody asks
+    /// about; this is for the hours nobody asks about (PRD 9.2, BR-02).
+    ///
+    /// No advisory locks and no court list: releasing a slot only ever clears <c>IsActive</c>,
+    /// which the exclusion constraint reads as the row going away, so it cannot collide with
+    /// somebody taking the hour — it can only get out of their way sooner.
+    /// </summary>
+    public static async Task<IReadOnlyList<Guid>> ReleaseAllLapsedAsync(
+        AppDbContext database,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var lapsed = Lapsed(database, now);
+
+        var released = await database.BookingSlots
+            .Where(slot => slot.IsActive && lapsed.Any(over => over.Id == slot.BookingId))
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(slot => slot.IsActive, false), cancellationToken);
+
+        if (released == 0)
+        {
+            return [];
+        }
+
+        return await ExpireAsync(
+            database,
+            lapsed.Where(booking => !booking.Slots.Any(slot => slot.IsActive)),
+            now,
+            cancellationToken);
+    }
+
+    /// <summary>
     /// Ends this booker's own holds whose time is up, and lets go of the hours they claimed.
     ///
     /// The one-hold-per-booker index counts any row still marked <c>Held</c>, and it cannot ask
