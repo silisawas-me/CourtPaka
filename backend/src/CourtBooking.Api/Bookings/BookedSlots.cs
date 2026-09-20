@@ -100,7 +100,10 @@ public static class BookedSlots
 
         // Only the holds that just lost a slot, and only once there is something to say about them.
         await ExpireAsync(
-            lapsed.Where(booking => !booking.Slots.Any(slot => slot.IsActive)), cancellationToken);
+            database,
+            lapsed.Where(booking => !booking.Slots.Any(slot => slot.IsActive)),
+            now,
+            cancellationToken);
     }
 
     /// <summary>
@@ -123,21 +126,45 @@ public static class BookedSlots
             .ExecuteUpdateAsync(
                 setters => setters.SetProperty(slot => slot.IsActive, false), cancellationToken);
 
-        await ExpireAsync(mine, cancellationToken);
+        await ExpireAsync(database, mine, now, cancellationToken);
     }
 
     /// <summary>
     /// Held → Expired, in bulk. It is a move the state machine allows (PRD 6.1), asserted here
     /// once because a set-based update cannot ask the entity.
     /// </summary>
-    private static Task ExpireAsync(IQueryable<Booking> lapsed, CancellationToken cancellationToken)
+    private static async Task ExpireAsync(
+        AppDbContext database,
+        IQueryable<Booking> lapsed,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
     {
         if (!BookingTransitions.CanMove(BookingStatus.Held, BookingStatus.Expired))
         {
             throw new InvalidOperationException("Held may no longer expire; PRD 6.1 has changed.");
         }
 
-        return lapsed.ExecuteUpdateAsync(
+        // The ids first, so each expiry gets its own record (PRD 6.1). The set is whatever lapsed
+        // on the hours being asked for, which is nearly always nothing; the early return above
+        // means this only runs when something did.
+        var expiring = await lapsed.Select(booking => booking.Id).ToListAsync(cancellationToken);
+        if (expiring.Count == 0)
+        {
+            return;
+        }
+
+        database.BookingStatusChanges.AddRange(expiring.Select(bookingId => new BookingStatusChange
+        {
+            BookingId = bookingId,
+            From = BookingStatus.Held,
+            To = BookingStatus.Expired,
+            ChangedAt = now,
+            // Nobody let it lapse; the clock did.
+            ChangedByUserId = null,
+        }));
+        await database.SaveChangesAsync(cancellationToken);
+
+        await lapsed.ExecuteUpdateAsync(
             setters => setters.SetProperty(booking => booking.Status, BookingStatus.Expired),
             cancellationToken);
     }

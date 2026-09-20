@@ -60,6 +60,9 @@ public sealed class Booking
 
     public List<BookingSlot> Slots { get; init; } = [];
 
+    /// <summary>Every move this booking has made, oldest first (PRD 6.1).</summary>
+    public List<BookingStatusChange> StatusChanges { get; init; } = [];
+
     public Venue? Venue { get; init; }
 
     public AppUser? Booker { get; init; }
@@ -97,6 +100,16 @@ public sealed class Booking
             BahtPerHour = slot.BahtPerHour,
             IsActive = true,
         }));
+
+        // The booking coming into existence is the first thing its history records.
+        booking.StatusChanges.Add(new BookingStatusChange
+        {
+            BookingId = booking.Id,
+            From = null,
+            To = booking.Status,
+            ChangedAt = at,
+            ChangedByUserId = bookerUserId,
+        });
 
         return booking;
     }

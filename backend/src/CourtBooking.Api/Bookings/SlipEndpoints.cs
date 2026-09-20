@@ -135,6 +135,20 @@ public static class SlipEndpoints
             return ApiProblem.Of(StatusCodes.Status409Conflict, SlipErrorCodes.HoldExpired);
         }
 
+        // The move was made by a conditional update rather than the entity, so its record is
+        // written here — in the same transaction, which is what keeps the two from disagreeing.
+        if (!wasWaiting)
+        {
+            database.BookingStatusChanges.Add(new BookingStatusChange
+            {
+                BookingId = booking.Id,
+                From = BookingStatus.Held,
+                To = BookingStatus.PendingVerification,
+                ChangedAt = now,
+                ChangedByUserId = bookerId,
+            });
+        }
+
         database.PaymentSlips.Add(new PaymentSlip
         {
             BookingId = booking.Id,

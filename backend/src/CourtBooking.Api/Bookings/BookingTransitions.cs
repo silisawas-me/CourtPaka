@@ -22,16 +22,34 @@ public static class BookingTransitions
     };
 
     /// <summary>
-    /// Moves the booking, or refuses to. A move that is not in the table is a bug in the caller,
-    /// not something to explain to whoever is holding the booking.
+    /// Moves the booking and records the move, or refuses to. A move that is not in the table is a
+    /// bug in the caller, not something to explain to whoever is holding the booking.
+    ///
+    /// The history row is added to the booking rather than written here, so it is saved in the
+    /// same SaveChanges as the status it describes — the two cannot end up disagreeing.
     /// </summary>
-    public static void MoveTo(this Booking booking, BookingStatus to)
+    public static void MoveTo(
+        this Booking booking,
+        BookingStatus to,
+        Guid? byUserId,
+        DateTimeOffset at,
+        string? reason = null)
     {
         if (!CanMove(booking.Status, to))
         {
             throw new InvalidOperationException(
                 $"A booking cannot go from {booking.Status} to {to} (PRD 6.1).");
         }
+
+        booking.StatusChanges.Add(new BookingStatusChange
+        {
+            BookingId = booking.Id,
+            From = booking.Status,
+            To = to,
+            ChangedAt = at,
+            ChangedByUserId = byUserId,
+            Reason = reason,
+        });
 
         booking.Status = to;
     }

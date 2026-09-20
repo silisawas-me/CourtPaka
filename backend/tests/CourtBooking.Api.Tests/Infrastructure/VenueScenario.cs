@@ -168,6 +168,19 @@ public sealed class VenueScenario(ApiTestFixture api)
         await ReadAsync<AvailabilityResponse>(
             await client.GetAsync($"/api/venues/{venueId}/availability?date={date:yyyy-MM-dd}"));
 
+    /// <summary>A booking's recorded history, oldest first (PRD 6.1).</summary>
+    public async Task<BookingStatusChange[]> HistoryAsync(Guid bookingId)
+    {
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await database.BookingStatusChanges
+            .AsNoTracking()
+            .Where(change => change.BookingId == bookingId)
+            .OrderBy(change => change.ChangedAt)
+            .ThenBy(change => change.Id)
+            .ToArrayAsync();
+    }
+
     /// <summary>Takes court-hours the way a booker does, and answers what they now hold.</summary>
     public static async Task<BookingResponse> HoldAsync(
         HttpClient client,

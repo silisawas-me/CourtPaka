@@ -14,9 +14,39 @@ public sealed class BookingTransitionTests
         var booking = Held();
         booking.Status = from;
 
-        booking.MoveTo(to);
+        booking.MoveTo(to, Actor, At);
 
         Assert.Equal(to, booking.Status);
+
+        // The move and its record travel together (PRD 6.1).
+        var recorded = booking.StatusChanges[^1];
+        Assert.Equal(from, recorded.From);
+        Assert.Equal(to, recorded.To);
+        Assert.Equal(Actor, recorded.ChangedByUserId);
+        Assert.Equal(At, recorded.ChangedAt);
+    }
+
+    [Fact]
+    public void A_booking_records_coming_into_existence()
+    {
+        var booking = Held();
+
+        var first = Assert.Single(booking.StatusChanges);
+        Assert.Null(first.From);
+        Assert.Equal(BookingStatus.Held, first.To);
+        Assert.Equal(booking.BookerUserId, first.ChangedByUserId);
+    }
+
+    [Fact]
+    public void A_refused_move_records_nothing()
+    {
+        var booking = Held();
+        var before = booking.StatusChanges.Count;
+
+        Assert.Throws<InvalidOperationException>(
+            () => booking.MoveTo(BookingStatus.Confirmed, Actor, At));
+
+        Assert.Equal(before, booking.StatusChanges.Count);
     }
 
     [Theory]
@@ -31,7 +61,7 @@ public sealed class BookingTransitionTests
         var booking = Held();
         booking.Status = from;
 
-        var wrong = Assert.Throws<InvalidOperationException>(() => booking.MoveTo(to));
+        var wrong = Assert.Throws<InvalidOperationException>(() => booking.MoveTo(to, Actor, At));
 
         Assert.Contains("PRD 6.1", wrong.Message);
     }
@@ -45,6 +75,10 @@ public sealed class BookingTransitionTests
         BookingStatus status,
         string expected) =>
         Assert.Equal(expected, BookingTransitions.EventName(status));
+
+    private static readonly Guid Actor = Guid.CreateVersion7();
+
+    private static readonly DateTimeOffset At = DateTimeOffset.UtcNow;
 
     private static Booking Held() =>
         Booking.Hold(
