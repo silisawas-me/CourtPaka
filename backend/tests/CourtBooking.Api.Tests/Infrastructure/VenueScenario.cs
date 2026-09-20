@@ -305,6 +305,19 @@ public sealed class VenueScenario(ApiTestFixture api)
         return taker.Id;
     }
 
+    /// <summary>The address of each member of this venue, for checking who was written to.</summary>
+    public async Task<Dictionary<Guid, string>> MemberEmailsAsync(Guid venueId)
+    {
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        // Projected in the query: ToDictionary's selectors run once the rows are here, and by
+        // then the navigation nobody asked for is null.
+        return await database.VenueMemberships
+            .Where(member => member.VenueId == venueId)
+            .Select(member => new { member.UserId, Email = member.User!.Email! })
+            .ToDictionaryAsync(member => member.UserId, member => member.Email);
+    }
+
     /// <summary>Whether any of a booking's hours are still held against its court (PRD BR-04).</summary>
     public async Task<bool> HoldsItsHoursAsync(Guid bookingId) =>
         await HoursStillHeldAsync(bookingId) > 0;

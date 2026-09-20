@@ -30,6 +30,9 @@ public static class VenueEndpoints
         var venue = venues.MapGroup("/{venueId:guid}");
         venue.MapGet("/", Get).RequireAuthorization(VenuePolicies.Member);
         venue.MapPut("/", UpdateDetailsAsync).RequireAuthorization(VenuePolicies.Settings);
+        venue.MapGet("/attention", WaitingForAsync).RequireAuthorization(VenuePolicies.Member);
+        venue.MapPut("/notifications", ChooseNotificationsAsync)
+            .RequireAuthorization(VenuePolicies.Member);
         venue.MapGet("/members", ListMembersAsync).RequireAuthorization(VenuePolicies.Member);
         venue.MapGet("/invitations", ListInvitationsAsync).RequireAuthorization(VenuePolicies.OwnerOnly);
         venue.MapPost("/invitations", InviteAsync).RequireAuthorization(VenuePolicies.OwnerOnly);
@@ -42,6 +45,41 @@ public static class VenueEndpoints
         venue.MapVenueBookingEndpoints();
 
         return venues;
+    }
+
+    /// <summary>
+    /// What is waiting here for the person asking (PRD US-17). A number beside a door is the
+    /// whole of the in-system notice: a counter opens the page it belongs to, not an inbox.
+    /// </summary>
+    private static async Task<Ok<VenueAttentionResponse>> WaitingForAsync(
+        CurrentVenue venue,
+        VenueNotifications notifications,
+        CancellationToken cancellationToken) =>
+        TypedResults.Ok(
+            await notifications.WaitingForAsync(venue.Require(), cancellationToken));
+
+    /// <summary>
+    /// This member saying whether they want to hear each time a slip arrives here. It is the only
+    /// notice that can be turned off, and it is turned off per venue: somebody working two
+    /// counters may want to hear from one of them (PRD US-17).
+    /// </summary>
+    private static async Task<NoContent> ChooseNotificationsAsync(
+        Guid venueId,
+        NotificationPreferenceRequest request,
+        CurrentVenue venue,
+        AppDbContext database,
+        CancellationToken cancellationToken)
+    {
+        var userId = venue.Require().UserId;
+
+        await database.VenueMemberships
+            .Where(member => member.VenueId == venueId && member.UserId == userId)
+            .ExecuteUpdateAsync(
+                set => set.SetProperty(
+                    member => member.WantsSlipEmails, request.WantsSlipEmails),
+                cancellationToken);
+
+        return TypedResults.NoContent();
     }
 
     private static async Task<Results<Created<VenueResponse>, ProblemHttpResult>> CreateAsync(
@@ -113,7 +151,8 @@ public static class VenueEndpoints
             .ToListAsync(cancellationToken);
 
         return TypedResults.Ok(memberships
-            .Select(member => ToResponse(member.Venue!, member.Role, member.Permissions))
+            .Select(member => ToResponse(
+                member.Venue!, member.Role, member.Permissions, member.WantsSlipEmails))
             .ToArray());
     }
 
@@ -121,7 +160,8 @@ public static class VenueEndpoints
     {
         // Authorization already loaded the venue and the caller's membership for this request.
         var membership = currentVenue.Require();
-        return TypedResults.Ok(ToResponse(membership.Venue!, membership.Role, membership.Permissions));
+        return TypedResults.Ok(ToResponse(
+            membership.Venue!, membership.Role, membership.Permissions, membership.WantsSlipEmails));
     }
 
     private static async Task<Results<NoContent, NotFound, ProblemHttpResult>> UpdateDetailsAsync(
@@ -405,7 +445,11 @@ public static class VenueEndpoints
     private static string HashToken(string token) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
-    private static VenueResponse ToResponse(Venue venue, VenueRole role, VenuePermissions permissions) =>
+    private static VenueResponse ToResponse(
+        Venue venue,
+        VenueRole role,
+        VenuePermissions permissions,
+        bool wantsSlipEmails = true) =>
         new(
             venue.Id,
             venue.Code,
@@ -415,7 +459,8 @@ public static class VenueEndpoints
             venue.Province,
             venue.Status.ToString(),
             role.ToString(),
-            VenuePermissionSet.Describe(role == VenueRole.Owner ? VenuePermissions.All : permissions));
+            VenuePermissionSet.Describe(role == VenueRole.Owner ? VenuePermissions.All : permissions),
+            wantsSlipEmails);
 
     private static VenueMemberResponse ToResponse(VenueMembership membership) =>
         new(

@@ -38,6 +38,7 @@
 - **สถานะที่เก็บ กับ สถานะที่อ่านได้ ไม่ใช่ตัวเดียวกัน:** `BookedSlots.StatusAt` แปล hold ที่หมดเวลาเป็น `Expired` และ `Confirmed` ที่เลยเวลาจบเป็น `Completed` (PRD 9.2) — กฎต่าง ๆ ตัดสินจากตัวที่อ่านได้ แต่ conditional update ต้องเทียบกับตัวที่เก็บจริง และถ้าสองตัวต่างกันต้องเขียน audit ของก้าวที่นาฬิกาทำให้ด้วย ไม่งั้นประวัติจะขาดช่วง
 - **หนี้ที่รู้ตัวแล้ว (US-13):** เหตุผลยกเลิกเก็บเป็นข้อความ `"VenueInitiated: หมายเหตุ"` ใน `BookingStatusChange.Reason` — US-11 (ปิดคอร์ท) / US-15 / US-18 ต้องนับตามเหตุผล ซึ่ง `LIKE` ไม่ใช่คำตอบ ควรเพิ่มคอลัมน์ enum ก่อนสตอรีพวกนั้น · `booking_payment_settled` ไม่ใช่ชื่อ event ใน PRD 8 (PRD 8 ระบุเฉพาะ `booking_{status}`) ต้องยืนยันชื่อก่อน US-15
 - **Script ตรวจ flow:** `sign_in` ตั้งภาษาเป็นไทยให้ทุกครั้ง เพราะบัญชีจำภาษาไว้ข้ามรัน และ calendar อ่านเดือนจากภาษาที่ตั้งไว้ · ห้าม assert ด้วยคำที่แสดงผล ให้ถาม API หรือดู element (กฎใน `scripts/verify/README.md`)
+- **แจ้งเตือนฝั่งสนาม (US-17):** `VenueNotifications` เป็นที่เดียวที่ตัดสินว่าใครถูกบอก โดยดูจาก **สิทธิ์** ไม่ใช่รายชื่อ — สลิปใหม่ไปถึงคนที่มี `VerifySlip` ส่วนเรื่องเงินไปถึงคนที่มี `ManageBookings` (Owner มีทุกสิทธิ์จึงได้เสมอ) · ตัวเลขข้างประตู (`GET /api/venues/{id}/attention`) นับด้วยกฎเดียวกับอีเมล คนที่ทำอะไรกับมันไม่ได้จะไม่เห็นตัวเลขนั้น · ปิดได้เฉพาะอีเมล "สลิปใหม่" (`VenueMembership.WantsSlipEmails` ต่อสนาม ไม่ใช่ต่อคน) เรื่องเงินปิดไม่ได้ตาม AC · ส่งอีเมล**หลัง commit** เสมอ เพราะข้อความที่ส่งแล้วเรียกคืนไม่ได้ แต่ทรานแซกชันย้อนได้ · **ยังไม่มี job runner** ตัวเตือนล่วงหน้า 30 นาทีของ `PendingVerification` ที่ค้าง (S-23) จึงยังไม่ได้ทำ และเป็นชิ้นเดียวกับที่ job หมดอายุ hold ต้องใช้
 - **บัญชีสำหรับ dev** (seed จะทำงานเฉพาะเมื่อเปิด flag **และ** environment เป็น Development): `owner@courtpaka.local` และ `staff@courtpaka.local` รหัสผ่าน `DevPassword1` สนาม `DEV01` พร้อมคอร์ท 4 คอร์ท เวลาเปิด-ปิด 06:00–22:00 ทุกวัน และราคา 200 บาท/ชม. (18:00 เป็นต้นไป 300)
 
 ## คำสั่ง
@@ -58,7 +59,7 @@
 | Build (เหมือน CI) | `dotnet build backend -c Release -warnaserror` · `cd frontend && npm run build` |
 | Build image arm64 (UAT) | `docker buildx build --platform linux/arm64 backend` |
 | ตรวจ health | `GET /api/health/live` (process) · `GET /api/health/ready` (รวม database) |
-| ตรวจ flow จริงบนเบราว์เซอร์ | `python scripts/verify/venue_settings.py` · `venue_pricing.py` · `venue_ui.py` · `booking_grid.py` · `booking.py` · `payment.py` · `slip_queue.py` · `my_bookings.py` · `venue_bookings.py` (ต้องเปิด stack ด้วย `--profile full` ก่อน ดู `scripts/verify/README.md`) |
+| ตรวจ flow จริงบนเบราว์เซอร์ | `python scripts/verify/venue_settings.py` · `venue_pricing.py` · `venue_ui.py` · `booking_grid.py` · `booking.py` · `payment.py` · `slip_queue.py` · `my_bookings.py` · `venue_bookings.py` · `venue_notices.py` (ต้องเปิด stack ด้วย `--profile full` ก่อน ดู `scripts/verify/README.md`) |
 
 ## วิธีทำงาน
 - **ทำงานจากเป้าหมาย:** งานแต่ละชิ้นผูกกับ user story / acceptance criteria ใน `docs/prd.md` ถ้า requirement ไม่ชัด ให้ถามก่อนลงมือ
