@@ -41,6 +41,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<BookingStatusChange> BookingStatusChanges => Set<BookingStatusChange>();
 
+    public DbSet<RefundRecord> RefundRecords => Set<RefundRecord>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -66,6 +68,26 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             venue.HasIndex(v => new { v.Province, v.District });
             // The code prefixes document numbers, so two venues may never share one (PRD 7.4).
             venue.HasIndex(v => v.Code).IsUnique();
+        });
+
+        builder.Entity<RefundRecord>(refund =>
+        {
+            refund.Property(record => record.AmountBaht).HasPrecision(10, 2);
+            refund.Property(record => record.Note).HasMaxLength(RefundRecord.NoteMaxLength);
+            refund.Property(record => record.VoidReason).HasMaxLength(RefundRecord.NoteMaxLength);
+
+            // Read one booking at a time, always: what has been sent back is a sum over these.
+            refund.HasIndex(record => record.BookingId);
+
+            refund.HasOne(record => record.Booking)
+                .WithMany()
+                .HasForeignKey(record => record.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            refund.HasOne(record => record.RecordedBy)
+                .WithMany()
+                .HasForeignKey(record => record.RecordedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<VenueMembership>(member =>

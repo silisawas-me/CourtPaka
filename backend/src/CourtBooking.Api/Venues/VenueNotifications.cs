@@ -76,10 +76,15 @@ public sealed class VenueNotifications(
                 cancellationToken)
             : 0;
 
+        // What is still to be sent, not what was once owed: a booking the venue has paid back is
+        // finished with, and a number nobody can clear is only a reproach (PRD 6.2, US-18).
         var money = membership.Allows(Who(Notice.RefundOwed).Permission)
             ? await database.Bookings.CountAsync(
                 booking => booking.VenueId == venueId
-                    && (booking.RefundDueBaht > 0
+                    && (booking.RefundDueBaht > database.RefundRecords
+                            .Where(record =>
+                                record.BookingId == booking.Id && record.VoidedAt == null)
+                            .Sum(record => record.AmountBaht)
                         || booking.PaymentState == PaymentState.Unconfirmed),
                 cancellationToken)
             : 0;

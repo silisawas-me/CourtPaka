@@ -49,6 +49,8 @@ public static class VenueBookingEndpoints
         manage.MapPost("/{bookingId:guid}/no-show", NoShowAsync);
         manage.MapPost("/{bookingId:guid}/settle-payment", SettleAsync);
         manage.MapPost("/{bookingId:guid}/played", PlayedAfterAllAsync);
+
+        bookings.MapRefundEndpoints();
     }
 
     /// <summary>
@@ -495,12 +497,29 @@ public static class VenueBookingEndpoints
             .Where(court => court.VenueId == venueId)
             .ToDictionaryAsync(court => court.Id, court => court.Name, cancellationToken);
 
+        var bookingIds = found.Select(row => row.Booking.Id).ToArray();
+        var sentBack = await database.RefundRecords
+            .Where(record => bookingIds.Contains(record.BookingId) && record.VoidedAt == null)
+            .GroupBy(record => record.BookingId)
+            .Select(records => new
+            {
+                BookingId = records.Key,
+                Baht = records.Sum(record => record.AmountBaht),
+            })
+            .ToDictionaryAsync(row => row.BookingId, row => row.Baht, cancellationToken);
+
         return
         [
             .. found
                 .OrderBy(row => row.Booking.Slots.Min(slot => slot.StartsAt))
                 .ThenBy(row => row.Email)
-                .Select(row => Draw(row.Booking, row.Email, courtNames, byOwner, now)),
+                .Select(row => Draw(
+                    row.Booking,
+                    row.Email,
+                    courtNames,
+                    byOwner,
+                    sentBack.GetValueOrDefault(row.Booking.Id),
+                    now)),
         ];
     }
 
@@ -509,6 +528,7 @@ public static class VenueBookingEndpoints
         string? bookerEmail,
         IReadOnlyDictionary<Guid, string> courtNames,
         bool byOwner,
+        decimal sentBackBaht,
         DateTimeOffset now)
     {
         var status = BookedSlots.StatusAt(booking, now);
@@ -520,6 +540,8 @@ public static class VenueBookingEndpoints
             booking.PaymentState.ToString(),
             booking.TotalBaht,
             booking.RefundDueBaht,
+            sentBackBaht,
+            Refunds.OutstandingOf(booking.RefundDueBaht, sentBackBaht),
             BookingSlotResponse.Of(booking, courtNames),
             Doors(booking, status, byOwner, now));
     }

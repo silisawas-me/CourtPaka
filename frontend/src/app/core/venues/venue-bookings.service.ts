@@ -38,8 +38,35 @@ export interface VenueBooking {
   paymentState: 'NotReceived' | 'Received' | 'Unconfirmed';
   totalBaht: number;
   refundDueBaht: number;
+  /** What the venue says it has sent back, and what that leaves to send (PRD 6.2, US-18). */
+  sentBackBaht: number;
+  outstandingBaht: number;
   slots: BookingSlot[];
   can: VenueBookingActions;
+}
+
+/** How the venue got the money back to the booker (PRD US-18). */
+export type RefundMethod = 'Transfer' | 'Cash';
+
+/** One transfer, as it was written down. Nothing about it changes afterwards (PRD US-18). */
+export interface RefundRecord {
+  id: string;
+  amountBaht: number;
+  refundedOn: string;
+  method: RefundMethod;
+  note: string | null;
+  recordedAt: string;
+  /** When it was taken back, if it was. A voided record still shows. */
+  voidedAt: string | null;
+  voidReason: string | null;
+}
+
+/** What a booking owes, what has been sent back, and what is left (PRD 6.2). */
+export interface Refunds {
+  refundDueBaht: number;
+  sentBackBaht: number;
+  outstandingBaht: number;
+  records: RefundRecord[];
 }
 
 /** The counter's side of the bookings a venue has taken (PRD US-13). */
@@ -80,6 +107,35 @@ export class VenueBookingsService {
   ): Observable<VenueBooking> {
     return this.http.post<VenueBooking>(`${this.at(venueId, bookingId)}/settle-payment`, {
       paymentReceived,
+    });
+  }
+
+  /** What has been sent back for this booking, and what is still owed (PRD US-18). */
+  refunds(venueId: string, bookingId: string): Observable<Refunds> {
+    return this.http.get<Refunds>(`${this.at(venueId, bookingId)}/refunds`);
+  }
+
+  /** Writing down a transfer the venue has already made. */
+  recordRefund(
+    venueId: string,
+    bookingId: string,
+    refund: { amountBaht: number; refundedOn: string; method: RefundMethod; note?: string },
+  ): Observable<Refunds> {
+    return this.http.post<Refunds>(`${this.at(venueId, bookingId)}/refunds`, {
+      ...refund,
+      note: refund.note ?? null,
+    });
+  }
+
+  /** Taking one back, which puts the amount onto what the venue still owes. The owner's alone. */
+  voidRefund(
+    venueId: string,
+    bookingId: string,
+    refundId: string,
+    reason: string,
+  ): Observable<Refunds> {
+    return this.http.post<Refunds>(`${this.at(venueId, bookingId)}/refunds/${refundId}/void`, {
+      reason,
     });
   }
 

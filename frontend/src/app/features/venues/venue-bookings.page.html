@@ -66,6 +66,9 @@
                   <span [attr.data-testid]="'refund-due-' + booking.bookingId">
                     {{ i18n.t('myBookings.refundDue') }}: {{ booking.refundDueBaht }}
                   </span>
+                  <span [attr.data-testid]="'outstanding-' + booking.bookingId">
+                    {{ i18n.t('refunds.outstanding') }}: {{ booking.outstandingBaht }}
+                  </span>
                 }
                 @if (booking.paymentState === 'Unconfirmed') {
                   <span [attr.data-testid]="'unsettled-' + booking.bookingId">
@@ -107,6 +110,17 @@
                   (click)="ask(booking.bookingId, 'played')"
                 >
                   {{ i18n.t('venueBookings.played') }}
+                </button>
+              }
+              @if (booking.refundDueBaht > 0) {
+                <button
+                  matButton="filled"
+                  type="button"
+                  [attr.data-testid]="'refunds-' + booking.bookingId"
+                  [disabled]="deciding()"
+                  (click)="ask(booking.bookingId, 'refund')"
+                >
+                  {{ i18n.t('refunds.title') }}
                 </button>
               }
               @if (booking.can.cancel) {
@@ -213,6 +227,121 @@
                     {{ i18n.t('common.cancel') }}
                   </button>
                 </div>
+              </div>
+            }
+
+            <!--
+              Money that has already left the venue, written down after the fact (PRD US-18). The
+              form sits in the row, so what is owed is in the same glance as what is typed.
+            -->
+            @if (asked(booking.bookingId, 'refund')) {
+              <div class="asking" data-testid="asking">
+                @if (refunds(); as sent) {
+                  <dl class="money">
+                    <dt>{{ i18n.t('myBookings.refundDue') }}</dt>
+                    <dd>{{ sent.refundDueBaht }}</dd>
+                    <dt>{{ i18n.t('refunds.sentBack') }}</dt>
+                    <dd data-testid="sent-back">{{ sent.sentBackBaht }}</dd>
+                    <dt>{{ i18n.t('refunds.outstanding') }}</dt>
+                    <dd data-testid="outstanding">{{ sent.outstandingBaht }}</dd>
+                  </dl>
+
+                  @if (sent.records.length > 0) {
+                    <ul class="refund-list" data-testid="refund-list">
+                      @for (record of sent.records; track record.id) {
+                        <li class="refund" [class.voided]="record.voidedAt !== null">
+                          <span>{{ record.refundedOn | appDate: i18n.locale() }}</span>
+                          <span>{{ i18n.t('refunds.method.' + record.method) }}</span>
+                          <span class="refund-baht">{{ record.amountBaht }}</span>
+                          @if (record.note) {
+                            <span class="muted refund-note">{{ record.note }}</span>
+                          }
+                          @if (record.voidedAt !== null) {
+                            <span class="muted refund-note">
+                              {{ i18n.t('refunds.voided') }}: {{ record.voidReason }}
+                            </span>
+                          } @else {
+                            <button
+                              matButton
+                              type="button"
+                              class="refund-void"
+                              [attr.data-testid]="'void-' + record.id"
+                              [disabled]="deciding()"
+                              (click)="voidRefund(booking, record.id, voidReason.value)"
+                            >
+                              {{ i18n.t('refunds.void') }}
+                            </button>
+                          }
+                        </li>
+                      }
+                    </ul>
+
+                    <mat-form-field class="field">
+                      <mat-label>{{ i18n.t('refunds.voidReason') }}</mat-label>
+                      <input matInput #voidReason [attr.maxlength]="noteMaxLength" />
+                    </mat-form-field>
+                  }
+
+                  @if (sent.outstandingBaht > 0) {
+                    <form class="stack" [formGroup]="refundForm" novalidate>
+                      <mat-form-field class="field">
+                        <mat-label>{{ i18n.t('refunds.amount') }}</mat-label>
+                        <input matInput id="amount" type="number" formControlName="amountBaht" />
+                        <mat-error
+                          [appFieldError]="refundForm.controls.amountBaht"
+                          testId="amount-error"
+                        ></mat-error>
+                      </mat-form-field>
+
+                      <mat-form-field class="field">
+                        <mat-label>{{ i18n.t('refunds.on') }}</mat-label>
+                        <input matInput id="refunded-on" type="date" formControlName="refundedOn" />
+                      </mat-form-field>
+
+                      <fieldset class="reasons">
+                        <legend>{{ i18n.t('refunds.how') }}</legend>
+                        @for (method of refundMethods; track method) {
+                          <label class="reason-choice">
+                            <input
+                              type="radio"
+                              formControlName="method"
+                              [value]="method"
+                              [attr.data-testid]="'method-' + method"
+                            />
+                            <span>{{ i18n.t('refunds.method.' + method) }}</span>
+                          </label>
+                        }
+                      </fieldset>
+
+                      <mat-form-field class="field">
+                        <mat-label>{{ i18n.t('venueBookings.note') }}</mat-label>
+                        <input matInput id="refund-note" formControlName="note" />
+                      </mat-form-field>
+                    </form>
+
+                    <div class="row">
+                      <button
+                        matButton="filled"
+                        type="button"
+                        data-testid="record-refund"
+                        [disabled]="deciding()"
+                        (click)="recordRefund(booking)"
+                      >
+                        {{ i18n.t('refunds.record') }}
+                      </button>
+                      <button matButton type="button" data-testid="close" (click)="close()">
+                        {{ i18n.t('common.cancel') }}
+                      </button>
+                    </div>
+                  } @else {
+                    <p class="muted" data-testid="all-sent">{{ i18n.t('refunds.allSent') }}</p>
+                    <button matButton type="button" data-testid="close" (click)="close()">
+                      {{ i18n.t('common.cancel') }}
+                    </button>
+                  }
+                } @else {
+                  <mat-progress-bar mode="indeterminate" />
+                }
               </div>
             }
 

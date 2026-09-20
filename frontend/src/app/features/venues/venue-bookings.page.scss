@@ -128,3 +128,40 @@
   background: var(--mat-sys-error);
   color: var(--mat-sys-on-error);
 }
+
+/** What has been sent back, oldest first: a short list that grows by one line at a time. */
+.refund-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+}
+
+.refund {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  font: var(--mat-sys-body-medium);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  /* A record taken back stays on the page, struck through: it happened, and then it did not. */
+  &.voided {
+    text-decoration: line-through;
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+.refund-baht {
+  font: var(--mat-sys-title-medium);
+  margin-left: auto;
+}
+
+.refund-note,
+.refund-void {
+  flex-basis: 100%;
+}

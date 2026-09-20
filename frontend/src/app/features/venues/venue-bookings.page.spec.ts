@@ -12,7 +12,8 @@ function booking(overrides: Record<string, unknown> = {}) {
     paymentState: 'Received',
     totalBaht: 400,
     refundDueBaht: 0,
-    refundedBaht: 0,
+    sentBackBaht: 0,
+    outstandingBaht: 0,
     slots: [
       { courtId: 'c1', courtName: 'คอร์ท 1', date: '2026-09-21', hour: 18, bahtPerHour: 200 },
       { courtId: 'c1', courtName: 'คอร์ท 1', date: '2026-09-21', hour: 19, bahtPerHour: 200 },
@@ -277,5 +278,85 @@ describe('VenueBookingsPage', () => {
     fixture.detectChanges();
 
     expect(elementOf(fixture, 'page-error')).not.toBeNull();
+  });
+
+  it('shows what has been sent back and what is left, and writes down a transfer', () => {
+    render([booking({ status: 'Cancelled', refundDueBaht: 400, outstandingBaht: 400 })]);
+
+    clickOn(fixture, 'refunds-b1');
+    httpMock.expectOne('/api/venues/v1/bookings/b1/refunds').flush({
+      refundDueBaht: 400,
+      sentBackBaht: 0,
+      outstandingBaht: 400,
+      records: [],
+    });
+    fixture.detectChanges();
+
+    // The amount is filled in with what is still owed: sending all of it is what usually happens.
+    expect(textOf(fixture, 'outstanding')).toContain('400');
+    clickOn(fixture, 'record-refund');
+
+    const request = httpMock.expectOne('/api/venues/v1/bookings/b1/refunds');
+    expect(request.request.body.amountBaht).toBe(400);
+    expect(request.request.body.method).toBe('Transfer');
+
+    request.flush({
+      refundDueBaht: 400,
+      sentBackBaht: 400,
+      outstandingBaht: 0,
+      records: [
+        {
+          id: 'r1',
+          amountBaht: 400,
+          refundedOn: '2026-09-20',
+          method: 'Transfer',
+          note: null,
+          recordedAt: '2026-09-20T10:00:00Z',
+          voidedAt: null,
+          voidReason: null,
+        },
+      ],
+    });
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'sent-back')).toContain('400');
+    expect(textOf(fixture, 'all-sent')).toBe(TRANSLATIONS.th['refunds.allSent']);
+    // And the row itself now says there is nothing left to send.
+    expect(textOf(fixture, 'outstanding-b1')).toContain('0');
+  });
+
+  it('will not take a record back without saying why', () => {
+    render([booking({ status: 'Cancelled', refundDueBaht: 400, outstandingBaht: 0 })]);
+
+    clickOn(fixture, 'refunds-b1');
+    httpMock.expectOne('/api/venues/v1/bookings/b1/refunds').flush({
+      refundDueBaht: 400,
+      sentBackBaht: 400,
+      outstandingBaht: 0,
+      records: [
+        {
+          id: 'r1',
+          amountBaht: 400,
+          refundedOn: '2026-09-20',
+          method: 'Cash',
+          note: null,
+          recordedAt: '2026-09-20T10:00:00Z',
+          voidedAt: null,
+          voidReason: null,
+        },
+      ],
+    });
+    fixture.detectChanges();
+
+    clickOn(fixture, 'void-r1');
+
+    httpMock.expectNone('/api/venues/v1/bookings/b1/refunds/r1/void');
+    expect(textOf(fixture, 'decide-error')).toBe(TRANSLATIONS.th['error.booking.reason_required']);
+  });
+
+  it('offers no way to write down money on a booking that owes none', () => {
+    render([booking()]);
+
+    expect(elementOf(fixture, 'refunds-b1')).toBeNull();
   });
 });

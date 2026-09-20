@@ -44,4 +44,12 @@ public static class Refunds
 
     /// <summary>The whole of it. A venue that refuses hours it took money for keeps none (PRD 6.1).</summary>
     public const int AllOfIt = 100;
+
+    /// <summary>
+    /// What is still owed after what has already been sent back (PRD 6.2). This is the number a
+    /// venue acts on: what it owes is a fact about the booking, and what it still has to send is
+    /// what it has to do about it.
+    /// </summary>
+    public static decimal OutstandingOf(decimal refundDueBaht, decimal sentBackBaht) =>
+        Math.Max(0m, refundDueBaht - sentBackBaht);
 }
