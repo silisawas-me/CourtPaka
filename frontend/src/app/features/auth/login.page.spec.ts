@@ -103,4 +103,12 @@ describe('LoginPage', () => {
 
     expect(textOf(fixture, 'form-error')).toBe(TRANSLATIONS.th['error.auth.line_denied']);
   });
+
+  /* The wordmark is the page's one h1; the thing you came to do is the heading under it. */
+  it('puts the form heading under the wordmark', () => {
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelectorAll('h1').length).toBe(1);
+    expect(elementOf(fixture, 'page-title')?.tagName).toBe('H2');
+  });
 });
