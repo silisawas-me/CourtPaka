@@ -106,10 +106,15 @@ def login(page, email: str, password: str = PASSWORD) -> None:
 
 
 def sign_in(page, email: str) -> None:
-    """The whole sequence: open the page, sign in, and wait to land."""
+    """The whole sequence: open the page, sign in, and wait to land.
+
+    The language is set to Thai on the way in. An account keeps whichever one it was last left
+    on, so a script that did not say would read whatever the run before it happened to choose —
+    and the calendar, which prints its months in that language, is walked by reading them."""
     page.goto(f"{BASE}/login")
     login(page, email)
     page.wait_for_url(f"{BASE}/")
+    page.click("[data-testid=language-th]")
 
 
 # Material renders a checkbox as an <input> inside its host and a slide toggle as a
@@ -196,12 +201,27 @@ def show_month(page, date) -> bool:
     return False
 
 
+# The calendar prints its months in whatever language the account is set to, and the account
+# keeps that choice between runs — so a script that could only read one of them would pass or
+# fail by what the run before it did.
+ENGLISH_MONTHS = [
+    "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+    "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+]
+
+
 def shown_month(page) -> tuple[int, int]:
     """The month the calendar is showing, as (year, month) in the common era."""
     abbreviation, year = page.locator(
         "mat-calendar .mat-calendar-period-button"
     ).inner_text().strip().rsplit(" ", 1)
-    return int(year) - 543, THAI_MONTHS.index(abbreviation) + 1
+
+    if abbreviation in THAI_MONTHS:
+        # Thai prints the Buddhist era, which is the common era plus 543.
+        return int(year) - 543, THAI_MONTHS.index(abbreviation) + 1
+
+    shortened = abbreviation.upper()[:3]
+    return int(year), ENGLISH_MONTHS.index(shortened) + 1
 
 
 def thai_month_year(date) -> str:

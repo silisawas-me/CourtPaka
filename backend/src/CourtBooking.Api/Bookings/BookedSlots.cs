@@ -1,6 +1,7 @@
 using CourtBooking.Api.Data;
 using CourtBooking.Api.Localization;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace CourtBooking.Api.Bookings;
 
@@ -87,11 +88,143 @@ public static class BookedSlots
         AppDbContext database,
         Guid bookingId,
         CancellationToken cancellationToken) =>
-        database.BookingSlots
+        ReleaseWhereAsync(database, bookingId, _ => true, cancellationToken);
+
+    /// <summary>
+    /// Lets go of the hours a booking has not finished, keeping the ones it has. What a no-show
+    /// did not turn up for goes back on sale (PRD BR-04) — including the hour already running,
+    /// because a walk-in standing at the counter may have the rest of it (PRD US-13). Only the
+    /// hours entirely behind them stay theirs.
+    /// </summary>
+    public static Task<int> ReleaseRemainingAsync(
+        AppDbContext database,
+        Guid bookingId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken) =>
+        ReleaseWhereAsync(database, bookingId, slot => slot.EndsAt > now, cancellationToken);
+
+    /// <summary>
+    /// Lets go of the hours of one booking that a rule picks out, behind the same locks everyone
+    /// reaching for those court-hours takes. Letting go touches the same index that claiming
+    /// does, so a writer that skipped the queue would meet a claimer inside it (PRD BR-04).
+    /// </summary>
+    private static async Task<int> ReleaseWhereAsync(
+        AppDbContext database,
+        Guid bookingId,
+        Func<BookingSlot, bool> chosen,
+        CancellationToken cancellationToken)
+    {
+        var holding = await database.BookingSlots
+            .AsNoTracking()
             .Where(slot => slot.BookingId == bookingId && slot.IsActive)
+            .ToListAsync(cancellationToken);
+
+        var letting = holding.Where(chosen).ToList();
+        if (letting.Count == 0)
+        {
+            return 0;
+        }
+
+        await LockAsync(database, letting, cancellationToken);
+
+        var ids = letting.Select(slot => slot.Id).ToArray();
+        return await database.BookingSlots
+            .Where(slot => ids.Contains(slot.Id) && slot.IsActive)
             .ExecuteUpdateAsync(
                 set => set.SetProperty(slot => slot.IsActive, false),
                 cancellationToken);
+    }
+
+    /// <summary>
+    /// Claims a booking's hours again, for a venue taking back a no-show it recorded by mistake
+    /// (PRD 6.1). Answers whether it could: somebody else may have taken them in the meantime,
+    /// and the exclusion constraint is what says so rather than a query that could be stale.
+    /// </summary>
+    public static async Task<bool> TakeBackAsync(
+        AppDbContext database,
+        Guid bookingId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var hours = await database.BookingSlots
+            .AsNoTracking()
+            .Where(slot => slot.BookingId == bookingId)
+            .ToListAsync(cancellationToken);
+
+        if (hours.Count == 0)
+        {
+            return false;
+        }
+
+        // Claiming hours is writing into the same index everyone else books through, so it takes
+        // the same locks in the same order — without them two writers meet inside the index and
+        // Postgres answers with a deadlock, which is a 500 where this has a real answer.
+        await LockAsync(database, hours, cancellationToken);
+
+        // A hold whose fifteen minutes are up holds nothing (PRD 9.2), but the constraint reads
+        // only IsActive, so one left sitting there would refuse a correction the rules allow.
+        await ReleaseLapsedAsync(
+            database,
+            [.. hours.Select(slot => slot.CourtId).Distinct()],
+            hours.Min(slot => slot.StartsAt),
+            hours.Max(slot => slot.EndsAt),
+            now,
+            cancellationToken);
+
+        try
+        {
+            await database.BookingSlots
+                .Where(slot => slot.BookingId == bookingId && !slot.IsActive)
+                .ExecuteUpdateAsync(
+                    set => set.SetProperty(slot => slot.IsActive, true),
+                    cancellationToken);
+            return true;
+        }
+        // ExecuteUpdate runs its own statement, so the constraint arrives bare rather than
+        // wrapped the way SaveChanges wraps one.
+        catch (PostgresException failure) when (failure.SqlState == ExclusionViolation)
+        {
+            return false;
+        }
+        catch (DbUpdateException failure) when (failure.InnerException is PostgresException
+        {
+            SqlState: ExclusionViolation,
+        })
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Postgres raises this when the no-overlap constraint refuses a row (PRD BR-04).</summary>
+    private const string ExclusionViolation = "23P01";
+
+    /// <summary>
+    /// Queues behind anyone else reaching for these court-hours, in an order everyone agrees on,
+    /// so that two writers meet here rather than inside the exclusion constraint's index — where
+    /// Postgres breaks the tie by killing one of them (PRD BR-04).
+    /// </summary>
+    public static async Task LockAsync(
+        AppDbContext database,
+        IEnumerable<BookingSlot> slots,
+        CancellationToken cancellationToken)
+    {
+        foreach (var key in slots.Select(LockKey).Order())
+        {
+            await database.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock({key})", cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// One number per court-hour, the same for everyone asking for it. Two different hours sharing
+    /// a number only means they queue behind each other, which costs a moment and nothing else.
+    /// </summary>
+    private static long LockKey(BookingSlot slot)
+    {
+        Span<byte> id = stackalloc byte[16];
+        slot.CourtId.TryWriteBytes(id);
+        return BitConverter.ToInt64(id[..8]) ^ BitConverter.ToInt64(id[8..]) ^ slot.StartsAt.UtcTicks;
+    }
 
     /// <summary>
     /// Lets go of the hours lapsed holds claim on these courts, and marks those holds

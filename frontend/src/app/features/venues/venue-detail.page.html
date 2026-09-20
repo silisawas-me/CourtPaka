@@ -37,6 +37,13 @@
       </a>
       <a
         matButton
+        [routerLink]="['/venues', current.id, 'bookings']"
+        data-testid="venue-bookings-link"
+      >
+        {{ i18n.t('venueBookings.title') }}
+      </a>
+      <a
+        matButton
         [routerLink]="['/venues', current.id, 'slip-queue']"
         data-testid="slip-queue-link"
       >

@@ -39,6 +39,7 @@ public static class VenueEndpoints
         venue.MapCourtEndpoints();
         venue.MapPricingEndpoints();
         venue.MapVerifySlipEndpoints();
+        venue.MapVenueBookingEndpoints();
 
         return venues;
     }

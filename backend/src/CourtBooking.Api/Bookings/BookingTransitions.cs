@@ -42,9 +42,20 @@ public static class BookingTransitions
             BookingStatus.Cancelled,
         ],
 
-        // The hours were played, or given up before they were (PRD 6.1, US-05). Nobody presses
-        // Completed; the clock does.
-        [BookingStatus.Confirmed] = [BookingStatus.Completed, BookingStatus.Cancelled],
+        // The hours were played, given up before they were, or nobody turned up for them
+        // (PRD 6.1, US-05, US-13). Nobody presses Completed; the clock does.
+        [BookingStatus.Confirmed] =
+        [
+            BookingStatus.Completed,
+            BookingStatus.Cancelled,
+            BookingStatus.NoShow,
+        ],
+
+        // For a day after the hours, the venue may correct what it recorded about them (US-13).
+        [BookingStatus.Completed] = [BookingStatus.NoShow, BookingStatus.Cancelled],
+
+        // Somebody did turn up after all, and the no-show was a mistake (US-13).
+        [BookingStatus.NoShow] = [BookingStatus.Completed],
     };
 
     /// <summary>
@@ -54,7 +65,15 @@ public static class BookingTransitions
     private static readonly HashSet<(BookingStatus From, BookingStatus To)> NeedReason =
     [
         (BookingStatus.PendingVerification, BookingStatus.Rejected),
+
+        // Undoing a no-show says that what is written down is wrong, and a record that says so
+        // without saying why is worth nothing to whoever reads it later (PRD 6.1).
+        (BookingStatus.NoShow, BookingStatus.Completed),
     ];
+
+    // The venue needs a reason to cancel a booking that has been paid for, and the booker does
+    // not (PRD 6.1). That is a rule about who is asking rather than about the move, so it lives
+    // with the venue's rules in VenueDecisions and not in the table above.
 
     /// <summary>
     /// Checks a move against the table and builds its record. Writing the record and the status
@@ -112,6 +131,28 @@ public static class BookingTransitions
             To = status,
             ChangedAt = at,
             ChangedByUserId = byUserId,
+        };
+
+    /// <summary>
+    /// The venue answering, after the fact, whether the money for a booking arrived (PRD US-13,
+    /// 6.2). It moves nothing — the booking is already where it ended — so there is no move for
+    /// the table to check. It is written down because who decided it and when is the first thing
+    /// a complaint asks (PRD 6.1).
+    /// </summary>
+    public static BookingStatusChange Settled(
+        Guid bookingId,
+        BookingStatus status,
+        PaymentState payment,
+        Guid byUserId,
+        DateTimeOffset at) =>
+        new()
+        {
+            BookingId = bookingId,
+            From = status,
+            To = status,
+            ChangedAt = at,
+            ChangedByUserId = byUserId,
+            Reason = payment.ToString(),
         };
 
     /// <summary>
@@ -229,6 +270,14 @@ public static class BookingTransitions
     /// The event name for a booking that has just arrived somewhere, as PRD 8 names them:
     /// <c>booking_pending_verification</c>, <c>booking_expired</c>, and so on.
     /// </summary>
+    /// <summary>
+    /// The line a move writes to the event log, with the name inside the template rather than
+    /// beside it: a sink that groups by template has to see these as the different events they
+    /// are, which is the whole point of recording them (PRD 8).
+    /// </summary>
+    public static string EventTemplate(BookingStatus status) =>
+        EventName(status) + " {BookingId} {VenueId} {RefundDueBaht}";
+
     public static string EventName(BookingStatus status) =>
         $"booking_{string.Concat(status.ToString().Select((letter, index) =>
             char.IsUpper(letter) && index > 0 ? $"_{char.ToLowerInvariant(letter)}" : $"{char.ToLowerInvariant(letter)}"))}";
