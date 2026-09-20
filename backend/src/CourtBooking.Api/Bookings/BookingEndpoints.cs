@@ -153,7 +153,8 @@ public static class BookingEndpoints
 
         // This booker's own hold, if they left one to lapse. It has to end before the check below
         // and before the index behind it, neither of which can tell the time (PRD S-22).
-        await BookedSlots.ReleaseOwnLapsedAsync(database, bookerId, now, cancellationToken);
+        Expired(loggers, await BookedSlots.ReleaseOwnLapsedAsync(
+            database, bookerId, now, cancellationToken));
 
         // One hold at a time, so an abandoned pick cannot sit on hours nobody is paying for
         // (PRD S-22).
@@ -164,7 +165,8 @@ public static class BookingEndpoints
                 loggers, StatusCodes.Status409Conflict, BookingErrorCodes.AlreadyHolding, bookerId);
         }
 
-        var priced = await PriceSlotsAsync(database, venue.Id, slots, now, cancellationToken);
+        var priced = await PriceSlotsAsync(
+            database, venue.Id, slots, now, loggers, cancellationToken);
         if (priced.Error is { } unavailable)
         {
             return Refuse(loggers, StatusCodes.Status409Conflict, unavailable, bookerId);
@@ -259,6 +261,19 @@ public static class BookingEndpoints
     }
 
     /// <summary>
+    /// Says that holds ran out. A status change is an event whoever is watching should see, and
+    /// this is the one nobody asks for (PRD 8, 6.1).
+    /// </summary>
+    private static void Expired(ILoggerFactory loggers, IReadOnlyList<Guid> bookingIds)
+    {
+        var events = AppEvents.For(loggers);
+        foreach (var bookingId in bookingIds)
+        {
+            events.LogInformation("booking_expired {BookingId}", bookingId);
+        }
+    }
+
+    /// <summary>
     /// A booking that did not happen, and why. How often bookers are turned away, and for which
     /// reason, is the number worth watching once this is in front of people (PRD 8).
     /// </summary>
@@ -282,6 +297,7 @@ public static class BookingEndpoints
         Guid venueId,
         IReadOnlyCollection<BookingSlotRequest> slots,
         DateTimeOffset now,
+        ILoggerFactory loggers,
         CancellationToken cancellationToken)
     {
         var courts = await database.Courts
@@ -295,13 +311,14 @@ public static class BookingEndpoints
         // Hours whose hold is over go back on sale before the day is read, because the database's
         // view of them is what decides whether this booking can have them (PRD 9.2).
         var date = slots.Select(slot => slot.Date).Distinct().Single();
-        await BookedSlots.ReleaseLapsedAsync(
+        var lapsed = await BookedSlots.ReleaseLapsedAsync(
             database,
             [.. slots.Select(slot => slot.CourtId).Distinct()],
             PlatformRequirements.BangkokHour(date, 0),
             PlatformRequirements.BangkokHour(date.AddDays(1), 0),
             now,
             cancellationToken);
+        Expired(loggers, lapsed);
 
         foreach (var picked in slots.GroupBy(slot => slot.Date))
         {

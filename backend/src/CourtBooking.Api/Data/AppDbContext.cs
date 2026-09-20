@@ -39,6 +39,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<PaymentSlip> PaymentSlips => Set<PaymentSlip>();
 
+    public DbSet<BookingStatusChange> BookingStatusChanges => Set<BookingStatusChange>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -172,6 +174,27 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             // Two people may not hold the same court at the same time. The rule is the database's,
             // not the application's, so simultaneous writes cannot both pass a check (PRD BR-04,
             // 9.2). The constraint itself is written in the migration: EF has no model for one.
+        });
+
+        builder.Entity<BookingStatusChange>(change =>
+        {
+            change.Property(c => c.Reason).HasMaxLength(500);
+            // A booking's history, oldest first, which is how US-12 and US-22 will read it.
+            change.HasIndex(c => new { c.BookingId, c.ChangedAt });
+            // The history lives exactly as long as the booking it describes. Nothing deletes a
+            // booking — a booker asking to be forgotten is anonymised, not erased (PRD 8) — so
+            // this cascade is what happens when a venue is removed with everything under it.
+            change.HasOne(c => c.Booking)
+                .WithMany(b => b.StatusChanges)
+                .HasForeignKey(c => c.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Restrict, like every other reference to an account: a booker asking to be
+            // forgotten is anonymised rather than deleted (PRD 8), so the row stays and keeps
+            // pointing at the same, now anonymous, person.
+            change.HasOne(c => c.ChangedBy)
+                .WithMany()
+                .HasForeignKey(c => c.ChangedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<PaymentSlip>(slip =>

@@ -288,6 +288,78 @@ public sealed class SlipTests(ApiTestFixture api) : IClassFixture<ApiTestFixture
     }
 
     [Fact]
+    public async Task Every_move_a_booking_makes_is_recorded_with_who_and_when()
+    {
+        var (booker, booking) = await HeldBookingAsync();
+        await UploadAsync(booker, booking.Id, Jpeg());
+        // A second slip is not a move, so it must not add a row (PRD 6.1).
+        await UploadAsync(booker, booking.Id, Png());
+
+        var history = await scenario.HistoryAsync(booking.Id);
+
+        Assert.Equal(2, history.Length);
+        Assert.Null(history[0].From);
+        Assert.Equal(BookingStatus.Held, history[0].To);
+        Assert.Equal(BookingStatus.Held, history[1].From);
+        Assert.Equal(BookingStatus.PendingVerification, history[1].To);
+        Assert.All(history, change => Assert.NotNull(change.ChangedByUserId));
+    }
+
+    [Fact]
+    public async Task A_hold_running_out_is_recorded_as_nobody_s_doing()
+    {
+        var (_, venue, courts) = await scenario.BookableVenueAsync(courts: 2);
+        var booker = await scenario.SignedInClientAsync();
+        var abandoned = await HoldAsync(booker, venue.Id, courts[0], 18);
+        await scenario.LapseHoldAsync(abandoned.Id);
+
+        // Booking the other court is what makes the write release the lapsed hold. Deliberately
+        // not VenueScenario.ExpireLapsedHoldsAsync: that exercises the booker-scoped path, and
+        // this is the venue-scoped one.
+        await HoldAsync(booker, venue.Id, courts[1], 18);
+
+        var history = await scenario.HistoryAsync(abandoned.Id);
+        var expiry = Assert.Single(history, change => change.To == BookingStatus.Expired);
+        Assert.Equal(BookingStatus.Held, expiry.From);
+        Assert.Null(expiry.ChangedByUserId);
+    }
+
+    [Fact]
+    public async Task Two_slips_at_once_record_one_move_between_them()
+    {
+        var (booker, booking) = await HeldBookingAsync();
+
+        // Both requests read the booking as Held; only one of them may write the move (PRD 6.1).
+        var answers = await Task.WhenAll(
+            UploadAsync(booker, booking.Id, Jpeg()),
+            UploadAsync(booker, booking.Id, Png()));
+
+        Assert.All(answers, answer => Assert.Equal(HttpStatusCode.OK, answer.StatusCode));
+
+        var history = await scenario.HistoryAsync(booking.Id);
+        Assert.Single(history, change => change.To == BookingStatus.PendingVerification);
+    }
+
+    [Fact]
+    public async Task Two_requests_reaching_one_lapsed_hold_record_it_expiring_once()
+    {
+        var (_, venue, courts) = await scenario.BookableVenueAsync(courts: 3);
+        var booker = await scenario.SignedInClientAsync();
+        var abandoned = await HoldAsync(booker, venue.Id, courts[0], 18);
+        await scenario.LapseHoldAsync(abandoned.Id);
+
+        // The booker tries twice at once. Both requests clear their own lapsed hold on the way
+        // past, both see it as Held, and only one of them changes it — so only one of them may
+        // write that down (PRD 6.1).
+        await Task.WhenAll(
+            PostAsync(booker, venue.Id, courts[1], 18),
+            PostAsync(booker, venue.Id, courts[2], 18));
+
+        var history = await scenario.HistoryAsync(abandoned.Id);
+        Assert.Single(history, change => change.To == BookingStatus.Expired);
+    }
+
+    [Fact]
     public async Task Sending_a_slip_needs_an_account()
     {
         var (_, booking) = await HeldBookingAsync();
@@ -328,6 +400,17 @@ public sealed class SlipTests(ApiTestFixture api) : IClassFixture<ApiTestFixture
         var booker = await scenario.SignedInClientAsync();
         return (booker, await HoldAsync(booker, venue.Id, courts[0], 18));
     }
+
+    private static Task<HttpResponseMessage> PostAsync(
+        HttpClient client,
+        Guid venueId,
+        Guid courtId,
+        int hour) =>
+        client.PostAsJsonAsync(
+            "/api/bookings",
+            new CreateBookingRequest(
+                venueId,
+                [new BookingSlotRequest(courtId, VenueScenario.Today.AddDays(1), hour)]));
 
     private static Task<BookingResponse> HoldAsync(
         HttpClient client,

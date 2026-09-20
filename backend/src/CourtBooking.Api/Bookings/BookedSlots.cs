@@ -68,7 +68,7 @@ public static class BookedSlots
     /// the hours it is asking for, and two bookings at unrelated venues should not be taking locks
     /// on each other's rows. Running it twice does nothing the first run did not.
     /// </summary>
-    public static async Task ReleaseLapsedAsync(
+    public static async Task<IReadOnlyList<Guid>> ReleaseLapsedAsync(
         AppDbContext database,
         IReadOnlyCollection<Guid> courtIds,
         DateTimeOffset from,
@@ -78,7 +78,7 @@ public static class BookedSlots
     {
         if (courtIds.Count == 0)
         {
-            return;
+            return [];
         }
 
         var lapsed = Lapsed(database, now);
@@ -95,12 +95,15 @@ public static class BookedSlots
 
         if (released == 0)
         {
-            return;
+            return [];
         }
 
         // Only the holds that just lost a slot, and only once there is something to say about them.
-        await ExpireAsync(
-            lapsed.Where(booking => !booking.Slots.Any(slot => slot.IsActive)), cancellationToken);
+        return await ExpireAsync(
+            database,
+            lapsed.Where(booking => !booking.Slots.Any(slot => slot.IsActive)),
+            now,
+            cancellationToken);
     }
 
     /// <summary>
@@ -110,7 +113,7 @@ public static class BookedSlots
     /// what the time is, so a hold left to lapse would keep its booker locked out until someone
     /// happened to book those exact hours. This is what stops that (PRD S-22, BR-02).
     /// </summary>
-    public static async Task ReleaseOwnLapsedAsync(
+    public static async Task<IReadOnlyList<Guid>> ReleaseOwnLapsedAsync(
         AppDbContext database,
         Guid bookerUserId,
         DateTimeOffset now,
@@ -123,24 +126,27 @@ public static class BookedSlots
             .ExecuteUpdateAsync(
                 setters => setters.SetProperty(slot => slot.IsActive, false), cancellationToken);
 
-        await ExpireAsync(mine, cancellationToken);
+        return await ExpireAsync(database, mine, now, cancellationToken);
     }
 
     /// <summary>
-    /// Held → Expired, in bulk. It is a move the state machine allows (PRD 6.1), asserted here
-    /// once because a set-based update cannot ask the entity.
+    /// Held → Expired for a set of bookings, moved and recorded together (PRD 6.1). Answers which
+    /// ones lapsed, so the caller can say so.
     /// </summary>
-    private static Task ExpireAsync(IQueryable<Booking> lapsed, CancellationToken cancellationToken)
-    {
-        if (!BookingTransitions.CanMove(BookingStatus.Held, BookingStatus.Expired))
-        {
-            throw new InvalidOperationException("Held may no longer expire; PRD 6.1 has changed.");
-        }
-
-        return lapsed.ExecuteUpdateAsync(
-            setters => setters.SetProperty(booking => booking.Status, BookingStatus.Expired),
+    private static Task<IReadOnlyList<Guid>> ExpireAsync(
+        AppDbContext database,
+        IQueryable<Booking> lapsed,
+        DateTimeOffset now,
+        CancellationToken cancellationToken) =>
+        BookingTransitions.MoveAllAsync(
+            database,
+            lapsed,
+            BookingStatus.Held,
+            BookingStatus.Expired,
+            // Nobody let it lapse; the clock did.
+            byUserId: null,
+            now,
             cancellationToken);
-    }
 
     /// <summary>
     /// The court-hours of one Bangkok day that a booker cannot take, as an hour per court. It asks

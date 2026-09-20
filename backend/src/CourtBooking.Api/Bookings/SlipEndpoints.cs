@@ -105,34 +105,48 @@ public static class SlipEndpoints
             .Select(slip => (Guid?)slip.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
-        var wasWaiting = booking.Status == BookingStatus.PendingVerification;
-
-        if (!BookingTransitions.CanMove(booking.Status, BookingStatus.PendingVerification))
-        {
-            throw new InvalidOperationException(
-                $"A booking cannot go from {booking.Status} to PendingVerification (PRD 6.1).");
-        }
-
         await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
 
         // The hold was read a moment ago, and a hold can run out between reading it and writing.
         // PRD 6.1 asks for the condition and the move to be decided together, so the move carries
-        // the condition: it changes nothing unless the booking is still there to change.
+        // the condition: it changes nothing unless the booking is still held and still in time.
         var moved = await database.Bookings
             .Where(candidate =>
                 candidate.Id == booking.Id
-                && (candidate.Status == BookingStatus.PendingVerification
-                    || (candidate.Status == BookingStatus.Held && candidate.HoldExpiresAt > now)))
+                && candidate.Status == BookingStatus.Held
+                && candidate.HoldExpiresAt > now)
             .ExecuteUpdateAsync(
                 setters => setters.SetProperty(
                     candidate => candidate.Status, BookingStatus.PendingVerification),
                 cancellationToken);
 
-        if (moved == 0)
+        // Nothing moved: either this is a better picture for a booking already in the queue, or
+        // the hold is gone. Asking the row settles it, rather than trusting the earlier read —
+        // two uploads at once would otherwise both believe they were the one that moved it.
+        var replacing = moved == 0
+            && await database.Bookings.AnyAsync(
+                candidate =>
+                    candidate.Id == booking.Id
+                    && candidate.Status == BookingStatus.PendingVerification,
+                cancellationToken);
+
+        if (moved == 0 && !replacing)
         {
             await transaction.RollbackAsync(cancellationToken);
             await slips.DeleteAsync(stored.Name, CancellationToken.None);
             return ApiProblem.Of(StatusCodes.Status409Conflict, SlipErrorCodes.HoldExpired);
+        }
+
+        // The move was made by a conditional update rather than the entity, so its record is
+        // written here — in the same transaction, which is what keeps the two from disagreeing.
+        if (moved == 1)
+        {
+            database.BookingStatusChanges.Add(BookingTransitions.Record(
+                booking.Id,
+                BookingStatus.Held,
+                BookingStatus.PendingVerification,
+                bookerId,
+                now));
         }
 
         database.PaymentSlips.Add(new PaymentSlip
@@ -163,7 +177,7 @@ public static class SlipEndpoints
         // The name is part of the template, not a parameter: a sink that groups by template has
         // to see these as different events, which is the whole point of recording them (PRD 8).
         var events = AppEvents.For(loggers);
-        if (wasWaiting)
+        if (moved == 0)
         {
             events.LogInformation(
                 "slip_replaced {BookingId} {VenueId} {Bytes} {SameBytes}",
