@@ -11,6 +11,22 @@ public enum BookingChannel
 }
 
 /// <summary>
+/// Whether the venue has the money (PRD 6.2). It starts as not received and only a person with
+/// the venue's authority says otherwise — which is what decides whether anything is owed back.
+/// </summary>
+public enum PaymentState
+{
+    NotReceived = 1,
+    Received = 2,
+
+    /// <summary>
+    /// The booker walked away from a slip the venue had not checked yet. Nobody knows whether the
+    /// money arrived until the venue says (PRD 6.2, US-13).
+    /// </summary>
+    Unconfirmed = 3,
+}
+
+/// <summary>
 /// The booking's place in the state machine of PRD 6.1. Only the first two exist so far: paying
 /// for a hold is US-04, and everything a venue does to a booking is US-12 and US-13.
 /// </summary>
@@ -46,6 +62,16 @@ public sealed class Booking
     public required BookingChannel Channel { get; init; }
 
     public BookingStatus Status { get; set; } = BookingStatus.Held;
+
+    /// <summary>Whether the venue has the money for this booking (PRD 6.2).</summary>
+    public PaymentState PaymentState { get; set; } = PaymentState.NotReceived;
+
+    /// <summary>
+    /// What the venue owes the booker back, in baht (PRD 6.2). Zero unless the money arrived and
+    /// the booking then ended in a way that gives some of it back; recomputed whenever the status
+    /// or the payment state moves, never read from the policy after the fact (BR-05).
+    /// </summary>
+    public decimal RefundDueBaht { get; set; }
 
     public required DateTimeOffset CreatedAt { get; init; }
 

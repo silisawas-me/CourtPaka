@@ -373,26 +373,19 @@ public sealed class SlipTests(ApiTestFixture api) : IClassFixture<ApiTestFixture
     private const int UploadsPerHourInTests = 4;
 
     /// <summary>The first bytes of each shape, which is all the server reads to recognise them.</summary>
-    private static byte[] Jpeg() => [0xFF, 0xD8, 0xFF, 0xE0, .. "JFIF payload"u8];
+    private static byte[] Jpeg() => VenueScenario.Jpeg();
 
     private static byte[] Pdf() => [0x25, 0x50, 0x44, 0x46, .. "-1.7 slip"u8];
 
     private static byte[] Png() => [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, .. "IHDR"u8];
 
-    private static async Task<HttpResponseMessage> UploadAsync(
+    private static Task<HttpResponseMessage> UploadAsync(
         HttpClient client,
         Guid bookingId,
         byte[] bytes,
         string contentType = "image/jpeg",
-        string fileName = "slip.jpg")
-    {
-        using var form = new MultipartFormDataContent();
-        var file = new ByteArrayContent(bytes);
-        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
-        form.Add(file, "file", fileName);
-
-        return await client.PostAsync($"/api/bookings/{bookingId}/slip", form);
-    }
+        string fileName = "slip.jpg") =>
+        VenueScenario.UploadAsync(client, bookingId, bytes, contentType, fileName);
 
     private async Task<(HttpClient Booker, BookingResponse Booking)> HeldBookingAsync()
     {

@@ -25,9 +25,27 @@ public static class BookingTransitions
         // The booker sent a slip, or let the hold run out (PRD US-04, BR-02).
         [BookingStatus.Held] = [BookingStatus.PendingVerification, BookingStatus.Expired],
 
-        // The booker may send a better picture while the venue is still looking (PRD US-04).
-        [BookingStatus.PendingVerification] = [BookingStatus.PendingVerification],
+        // The venue checks the slip: the money is there, or it is not (PRD US-12). A better
+        // picture from the booker lands here too, which is the move to itself.
+        [BookingStatus.PendingVerification] =
+        [
+            BookingStatus.PendingVerification,
+            BookingStatus.Confirmed,
+            BookingStatus.Rejected,
+        ],
+
+        // The hours were played. Nobody presses this; the clock does (PRD 6.1).
+        [BookingStatus.Confirmed] = [BookingStatus.Completed],
     };
+
+    /// <summary>
+    /// The moves the state machine will not make without being told why (PRD 6.1). A reason is
+    /// part of the record, so a move that needs one and has none is refused before anything moves.
+    /// </summary>
+    private static readonly HashSet<(BookingStatus From, BookingStatus To)> NeedReason =
+    [
+        (BookingStatus.PendingVerification, BookingStatus.Rejected),
+    ];
 
     /// <summary>
     /// Checks a move against the table and builds its record. Writing the record and the status
@@ -49,6 +67,12 @@ public static class BookingTransitions
         {
             throw new InvalidOperationException(
                 $"A booking cannot go from {from} to {to} (PRD 6.1).");
+        }
+
+        if (NeedReason.Contains((from, to)) && string.IsNullOrWhiteSpace(reason))
+        {
+            throw new InvalidOperationException(
+                $"Going from {from} to {to} has to say why (PRD 6.1).");
         }
 
         return new BookingStatusChange
@@ -189,7 +213,7 @@ public static class BookingTransitions
         return moved;
     }
 
-    public static bool CanMove(BookingStatus from, BookingStatus to) =>
+    private static bool CanMove(BookingStatus from, BookingStatus to) =>
         Allowed.TryGetValue(from, out var next) && next.Contains(to);
 
     /// <summary>

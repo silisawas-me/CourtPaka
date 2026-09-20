@@ -24,10 +24,16 @@ public sealed class CapturedLogs : ILoggerProvider
         get
         {
             var text = Text;
-            var start = text.LastIndexOf("PostgresException", StringComparison.Ordinal);
+            // The first line of the last exception dump, which is the one that names it.
+            var start = text.LastIndexOf("An unhandled exception", StringComparison.Ordinal);
+            if (start < 0)
+            {
+                start = text.LastIndexOf("Exception:", StringComparison.Ordinal);
+            }
+
             return start < 0
-                ? text[^Math.Min(text.Length, 300)..]
-                : text[start..Math.Min(text.Length, start + 300)];
+                ? text[^Math.Min(text.Length, 400)..]
+                : text[start..Math.Min(text.Length, start + 1400)];
         }
     }
 

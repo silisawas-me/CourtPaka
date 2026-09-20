@@ -1,0 +1,255 @@
+@if (loading()) {
+  <mat-progress-bar mode="indeterminate" />
+} @else if (pageError(); as key) {
+  <mat-card>
+    <mat-card-content>
+      <p class="form-error" data-testid="page-error">{{ i18n.t(key) }}</p>
+    </mat-card-content>
+    <mat-card-actions>
+      <a matButton routerLink="/venues">{{ i18n.t('venues.title') }}</a>
+    </mat-card-actions>
+  </mat-card>
+} @else {
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('slipQueue.title') }}</mat-card-title>
+      <mat-card-subtitle data-testid="queue-count">
+        {{ i18n.t('slipQueue.waiting') }}: {{ queue().length }}
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-actions>
+      <a matButton [routerLink]="['/venues', venueId()]">{{ i18n.t('settings.backToVenue') }}</a>
+    </mat-card-actions>
+  </mat-card>
+
+  @if (queue().length === 0) {
+    <mat-card>
+      <mat-card-content>
+        <p class="muted" data-testid="queue-empty">{{ i18n.t('slipQueue.empty') }}</p>
+      </mat-card-content>
+    </mat-card>
+  } @else {
+    <div class="columns queue">
+      <!--
+        The list stays beside the decision rather than above it: the venue works down a queue, and
+        losing the queue every time a booking opens is how you lose your place in it.
+      -->
+      <mat-card class="queue-list">
+        <mat-card-content>
+          <ul class="stack" data-testid="queue">
+            @for (item of queue(); track item.bookingId) {
+              <li>
+                <button
+                  type="button"
+                  class="queue-item"
+                  [class.open]="item.bookingId === openedId()"
+                  [attr.data-testid]="'queue-item-' + item.bookingId"
+                  [attr.aria-current]="item.bookingId === openedId()"
+                  (click)="open(item.bookingId)"
+                >
+                  <span class="queue-item-who">{{ item.bookerEmail }}</span>
+                  <span class="queue-item-baht">{{ item.totalBaht }}</span>
+                  <span class="queue-item-when muted">
+                    {{ item.slipUploadedAt | appDateTime: i18n.locale() }}
+                  </span>
+                  <span class="queue-item-flags">
+                    @if (item.playsSoon) {
+                      <span class="badge badge-soon" data-testid="flag-soon">
+                        {{ i18n.t('slipQueue.playsSoon') }}
+                      </span>
+                    }
+                    @if (item.sameSlipSeenBefore) {
+                      <span class="badge badge-repeat" data-testid="flag-repeat">
+                        {{ i18n.t('slipQueue.sameSlip') }}
+                      </span>
+                    }
+                  </span>
+                </button>
+              </li>
+            }
+          </ul>
+        </mat-card-content>
+      </mat-card>
+
+      @if (opened(); as booking) {
+        <mat-card class="decision" data-testid="decision">
+          <mat-card-header>
+            <mat-card-title data-testid="decision-baht">
+              {{ i18n.t('booking.total') }}: {{ booking.totalBaht }}
+            </mat-card-title>
+            <mat-card-subtitle data-testid="decision-who">{{
+              booking.bookerEmail
+            }}</mat-card-subtitle>
+          </mat-card-header>
+
+          <mat-card-content>
+            @if (booking.sameSlipSeenBefore) {
+              <p class="repeat-warning" data-testid="same-slip-warning">
+                {{ i18n.t('slipQueue.sameSlipWarning') }}
+              </p>
+            }
+
+            <!--
+              The picture is the thing being judged, so it gets the room. It is fetched with the
+              session rather than linked, which is why it arrives as a blob.
+            -->
+            @if (slipUrl(); as url) {
+              <!--
+                A slip may be a PDF, and a PDF in an <img> is a broken-image icon and no
+                explanation. It is offered as a file to open instead, in a tab of its own where
+                nothing in it runs beside this page (PRD US-04).
+              -->
+              @if (slipIsPdf()) {
+                <a
+                  matButton="filled"
+                  class="slip-file"
+                  [href]="url"
+                  target="_blank"
+                  rel="noopener"
+                  data-testid="slip"
+                >
+                  {{ i18n.t('slipQueue.openSlip') }}
+                </a>
+              } @else {
+                <a
+                  class="slip-frame"
+                  [href]="url"
+                  target="_blank"
+                  rel="noopener"
+                  data-testid="slip"
+                >
+                  <img [src]="url" [alt]="i18n.t('slipQueue.slipAlt')" />
+                </a>
+              }
+            } @else if (slipUnavailable()) {
+              <p class="form-error" data-testid="slip-missing">
+                {{ i18n.t('slipQueue.slipMissing') }}
+              </p>
+            } @else {
+              <mat-progress-bar mode="indeterminate" />
+            }
+
+            <dl class="facts">
+              <dt>{{ i18n.t('slipQueue.uploadedAt') }}</dt>
+              <dd>{{ booking.slipUploadedAt | appDateTime: i18n.locale() }}</dd>
+              <dt>{{ i18n.t('slipQueue.playsAt') }}</dt>
+              <dd>{{ booking.startsAt | appDateTime: i18n.locale() }}</dd>
+            </dl>
+
+            @if (decideError(); as key) {
+              <p class="form-error" data-testid="decide-error">{{ i18n.t(key) }}</p>
+            }
+
+            @if (rejecting()) {
+              <form class="stack" (ngSubmit)="reject()" [formGroup]="rejection" novalidate>
+                <mat-form-field class="field">
+                  <mat-label>{{ i18n.t('slipQueue.reason') }}</mat-label>
+                  <textarea
+                    matInput
+                    id="reason"
+                    rows="2"
+                    formControlName="reason"
+                    [attr.maxlength]="reasonMaxLength"
+                  ></textarea>
+                  <mat-error
+                    [appFieldError]="rejection.controls.reason"
+                    testId="reason-error"
+                  ></mat-error>
+                </mat-form-field>
+
+                <!--
+                  Not a checkbox: this is the answer that decides whether money goes back, so both
+                  sides of it are written out and neither is the quiet default.
+                -->
+                <fieldset class="money">
+                  <legend>{{ i18n.t('slipQueue.moneyQuestion') }}</legend>
+                  <label class="money-choice">
+                    <input
+                      type="radio"
+                      formControlName="paymentReceived"
+                      [value]="false"
+                      data-testid="money-no"
+                    />
+                    <span>{{ i18n.t('slipQueue.moneyNotReceived') }}</span>
+                  </label>
+                  <label class="money-choice">
+                    <input
+                      type="radio"
+                      formControlName="paymentReceived"
+                      [value]="true"
+                      data-testid="money-yes"
+                    />
+                    <span>{{ i18n.t('slipQueue.moneyReceived') }}</span>
+                  </label>
+
+                  @if (
+                    rejection.controls.paymentReceived.invalid &&
+                    rejection.controls.paymentReceived.touched
+                  ) {
+                    <p class="form-error" data-testid="money-error">
+                      {{ i18n.t('slipQueue.moneyRequired') }}
+                    </p>
+                  }
+                </fieldset>
+
+                @if (rejection.controls.paymentReceived.value) {
+                  <p class="muted" data-testid="refund-note">
+                    {{ i18n.t('slipQueue.refundNote') }}
+                  </p>
+                }
+              </form>
+            }
+          </mat-card-content>
+
+          <mat-card-actions class="decision-actions">
+            @if (rejecting()) {
+              <button
+                matButton="filled"
+                type="button"
+                class="reject"
+                data-testid="reject-confirm"
+                [disabled]="deciding()"
+                (click)="reject()"
+              >
+                {{ i18n.t('slipQueue.rejectConfirm') }}
+              </button>
+              <button
+                matButton
+                type="button"
+                data-testid="reject-cancel"
+                [disabled]="deciding()"
+                (click)="cancelRejecting()"
+              >
+                {{ i18n.t('common.cancel') }}
+              </button>
+            } @else {
+              <button
+                matButton="filled"
+                type="button"
+                data-testid="confirm"
+                [disabled]="deciding()"
+                (click)="confirm()"
+              >
+                {{ i18n.t('slipQueue.confirm') }}
+              </button>
+              <button
+                matButton
+                type="button"
+                data-testid="reject"
+                [disabled]="deciding()"
+                (click)="startRejecting()"
+              >
+                {{ i18n.t('slipQueue.reject') }}
+              </button>
+            }
+          </mat-card-actions>
+
+          @if (deciding()) {
+            <mat-progress-bar mode="indeterminate" />
+          }
+        </mat-card>
+      }
+    </div>
+  }
+}

@@ -100,7 +100,7 @@ public static class BookingEndpoints
 
         var slipUploadedAt = await database.PaymentSlips
             .Where(slip => slip.BookingId == booking.Id)
-            .OrderByDescending(slip => slip.UploadedAt)
+            .NewestFirst()
             .Select(slip => (DateTimeOffset?)slip.UploadedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -393,7 +393,9 @@ public static class BookingEndpoints
                         slot.BahtPerHour);
                 })
                 .ToArray(),
-            slipUploadedAt);
+            slipUploadedAt,
+            booking.PaymentState.ToString(),
+            booking.RefundDueBaht);
 
     /// <summary>The hours as priced, or the reason none of them can be had.</summary>
     private readonly record struct PricedSlots(

@@ -1,16 +1,31 @@
 import { Pipe, PipeTransform } from '@angular/core';
-import { fromPlainDate } from './plain-date';
+import { fromPlainDate, VENUE_TIME_ZONE } from './plain-date';
 
 const FORMAT: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' };
+
+/**
+ * The same date, plus the time of day — for things that happened at a moment, not on a day.
+ *
+ * Read in the venue's zone, not the reader's: a booking is at six in the evening at the court,
+ * and a member of staff looking at it from another country is asking about the court's clock
+ * (PRD BR-10).
+ */
+const WITH_TIME: Intl.DateTimeFormatOptions = {
+  ...FORMAT,
+  timeZone: VENUE_TIME_ZONE,
+  hour: '2-digit',
+  minute: '2-digit',
+};
 
 /** Building a formatter costs about thirty times what using one does, so each locale keeps its own. */
 const FORMATTERS = new Map<string, Intl.DateTimeFormat>();
 
-function formatter(locale: string): Intl.DateTimeFormat {
-  let known = FORMATTERS.get(locale);
+function formatter(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = options === WITH_TIME ? `${locale}+time` : locale;
+  let known = FORMATTERS.get(key);
   if (!known) {
-    known = new Intl.DateTimeFormat(locale, FORMAT);
-    FORMATTERS.set(locale, known);
+    known = new Intl.DateTimeFormat(locale, options);
+    FORMATTERS.set(key, known);
   }
   return known;
 }
@@ -27,6 +42,20 @@ function formatter(locale: string): Intl.DateTimeFormat {
 export class AppDatePipe implements PipeTransform {
   transform(value: string, locale: string): string {
     const date = fromPlainDate(value);
-    return date === null ? '' : formatter(locale).format(date);
+    return date === null ? '' : formatter(locale, FORMAT).format(date);
+  }
+}
+
+/**
+ * A moment, as the reader expects it: the same date as {@link AppDatePipe} with the time beside
+ * it. Separate from that pipe because the API answers two different shapes — a plain date for a
+ * day a court is booked, and a full timestamp for something that happened — and reading one as
+ * the other is how a date silently renders as nothing.
+ */
+@Pipe({ name: 'appDateTime' })
+export class AppDateTimePipe implements PipeTransform {
+  transform(value: string, locale: string): string {
+    const at = new Date(value);
+    return Number.isNaN(at.getTime()) ? '' : formatter(locale, WITH_TIME).format(at);
   }
 }

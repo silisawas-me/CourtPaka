@@ -200,7 +200,7 @@ public static class SlipEndpoints
     /// The slip itself. Only the booker who sent it, for now: the venue's own view of it is US-12,
     /// and an Admin reading one during a complaint is US-22 (PRD 8, PDPA).
     /// </summary>
-    private static async Task<Results<FileStreamHttpResult, NotFound, ProblemHttpResult>> DownloadAsync(
+    private static Task<Results<FileStreamHttpResult, NotFound, ProblemHttpResult>> DownloadAsync(
         Guid bookingId,
         ClaimsPrincipal principal,
         HttpResponse response,
@@ -210,31 +210,11 @@ public static class SlipEndpoints
     {
         var bookerId = CallerId.Of(principal);
 
-        var slip = await database.PaymentSlips
-            .AsNoTracking()
-            .Where(candidate =>
-                candidate.BookingId == bookingId && candidate.Booking!.BookerUserId == bookerId)
-            .OrderByDescending(candidate => candidate.UploadedAt)
-            .ThenByDescending(candidate => candidate.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (slip is null)
-        {
-            return ApiProblem.Of(StatusCodes.Status404NotFound, SlipErrorCodes.NoSlip);
-        }
-
-        var content = await slips.OpenAsync(slip.StoredName, cancellationToken);
-        if (content is null)
-        {
-            return TypedResults.NotFound();
-        }
-
-        // Never rendered in the page's own origin. A PDF is a program as much as a document, and
-        // this one came from whoever is holding the booking; handing it to the browser as a
-        // download rather than a view means nothing in it runs next to the reader's session.
-        // nosniff is set here as well as at the proxy, because the API is reachable without one.
-        response.Headers.XContentTypeOptions = "nosniff";
-        return TypedResults.File(
-            content, slip.ContentType, fileDownloadName: slip.StoredName);
+        return SlipDownload.NewestAsync(
+            database.PaymentSlips.Where(candidate =>
+                candidate.BookingId == bookingId && candidate.Booking!.BookerUserId == bookerId),
+            slips,
+            response,
+            cancellationToken);
     }
 }

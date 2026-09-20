@@ -1,5 +1,6 @@
 """Shared plumbing for the browser checks: where the stack is, who to sign in as, how to report."""
 
+import base64
 import datetime
 import pathlib
 import re
@@ -225,6 +226,34 @@ def take_first_free_hour(page, venue_id, date, skip=0):
 # The seeded venue is the only approved one, and only an approved venue can be edited, so every
 # script drives that one rather than whichever link happens to come first.
 SEEDED_VENUE = "Development Court"
+
+
+def seeded_venue_id(page) -> str:
+    """The id of the venue every script drives, asked for rather than assumed."""
+    return page.request.get(f"{BASE}/api/venues/search?q={SEEDED_VENUE}").json()[0]["id"]
+
+
+def as_upload(name: str, content: bytes, mime: str) -> dict:
+    """Playwright takes a file from memory, so nothing is left behind in the temp directory."""
+    return {"name": name, "mimeType": mime, "buffer": content}
+
+
+def send_slip(page, upload):
+    """Puts a file into the slip control and waits for the server's answer."""
+    with page.expect_response(lambda response: response.url.endswith("/slip")) as answer:
+        control(page, "send-slip").set_input_files(upload)
+    return answer.value
+
+
+def real_jpeg() -> bytes:
+    """A one-pixel JPEG a browser can actually decode, with a tail belonging to this call alone.
+
+    A header with text after it is not decodable, so a check that the slip is on screen would pass
+    against a broken-image icon. The tail keeps two runs from sharing bytes: the duplicate-slip
+    flag is per venue and forever (PRD BR-07), so a re-run would otherwise flag a slip the check
+    did not mean to flag."""
+    encoded = pathlib.Path(__file__).with_name("slip.jpg.b64").read_text()
+    return base64.b64decode(encoded) + uuid.uuid4().bytes
 
 
 def open_seeded_venue(page) -> str:

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Web;
 using CourtBooking.Api.Data;
@@ -196,6 +197,32 @@ public sealed class VenueScenario(ApiTestFixture api)
             HttpStatusCode.Created);
 
     /// <summary>
+    /// The first bytes of a JPEG, which is all the server reads to recognise one, and a tail that
+    /// is this call's alone — two slips sharing bytes is a thing the venue is shown (PRD BR-07),
+    /// so a test that did not ask for it should not stumble into it.
+    /// </summary>
+    public static byte[] Jpeg() =>
+        [0xFF, 0xD8, 0xFF, 0xE0, .. "JFIF"u8, .. Guid.CreateVersion7().ToByteArray()];
+
+    /// <summary>Sends a slip the way the booker's page does (PRD US-04).</summary>
+    public static async Task<HttpResponseMessage> UploadAsync(
+        HttpClient client,
+        Guid bookingId,
+        byte[] bytes,
+        string contentType = "image/jpeg",
+        string fileName = "slip.jpg")
+    {
+        // Awaited rather than handed back: the form has to outlive the request, and a Task
+        // returned from here would leave it disposed before the bytes were read.
+        using var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent(bytes);
+        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        form.Add(file, "file", fileName);
+
+        return await client.PostAsync($"/api/bookings/{bookingId}/slip", form);
+    }
+
+    /// <summary>
     /// Winds a held booking's clock back so the test can see what happens once it lapses, which is
     /// otherwise fifteen minutes away.
     /// </summary>
@@ -207,6 +234,22 @@ public sealed class VenueScenario(ApiTestFixture api)
             .Where(booking => booking.Id == bookingId)
             .ExecuteUpdateAsync(setters => setters.SetProperty(
                 booking => booking.HoldExpiresAt, DateTimeOffset.UtcNow.AddMinutes(-1)));
+    }
+
+    /// <summary>
+    /// Moves a booking's hours into the past, so a test can see what a venue that checks the slip
+    /// only after the court was played meets (PRD 6.1).
+    /// </summary>
+    public async Task PlayOutAsync(Guid bookingId)
+    {
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var shift = TimeSpan.FromDays(2);
+        await database.BookingSlots
+            .Where(slot => slot.BookingId == bookingId)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(slot => slot.StartsAt, slot => slot.StartsAt - shift)
+                .SetProperty(slot => slot.EndsAt, slot => slot.EndsAt - shift));
     }
 
     /// <summary>

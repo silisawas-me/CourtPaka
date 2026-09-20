@@ -4,6 +4,7 @@ using System.Text;
 using CourtBooking.Api.Data;
 using CourtBooking.Api.Email;
 using CourtBooking.Api.Http;
+using CourtBooking.Api.Bookings;
 using CourtBooking.Api.Identity;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
@@ -37,6 +38,7 @@ public static class VenueEndpoints
 
         venue.MapCourtEndpoints();
         venue.MapPricingEndpoints();
+        venue.MapVerifySlipEndpoints();
 
         return venues;
     }

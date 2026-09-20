@@ -26,7 +26,10 @@ public sealed record BookingResponse(
     decimal TotalBaht,
     BookingSlotResponse[] Slots,
     /// <summary>When the booker last sent a slip, if they have (PRD US-04).</summary>
-    DateTimeOffset? SlipUploadedAt);
+    DateTimeOffset? SlipUploadedAt,
+    /// <summary>Whether the venue has the money, and what it owes back (PRD 6.2).</summary>
+    string PaymentState,
+    decimal RefundDueBaht);
 
 public static class BookingErrorCodes
 {
@@ -60,4 +63,29 @@ public static class SlipErrorCodes
 
     public const string NotAwaitingPayment = "slip.not_awaiting_payment";
     public const string NoSlip = "slip.none_uploaded";
+
+    /// <summary>The venue looked at something that is no longer waiting to be looked at.</summary>
+    public const string NotAwaitingVerification = "slip.not_awaiting_verification";
+
+    public const string ReasonRequired = "slip.reason_required";
+    public const string ReasonTooLong = "slip.reason_too_long";
 }
+
+/// <summary>
+/// Turning a booking away. Both answers are required: why, and whether the money arrived — the
+/// second decides what goes back (PRD 6.1, 6.2).
+/// </summary>
+public sealed record RejectSlipRequest(string Reason, bool PaymentReceived);
+
+/// <summary>
+/// One booking waiting for the venue to look at its slip (PRD US-12). It names the booker by the
+/// address they signed up with; nothing else about them is the venue's business here.
+/// </summary>
+public sealed record SlipQueueItemResponse(
+    Guid BookingId,
+    string BookerEmail,
+    decimal TotalBaht,
+    DateTimeOffset SlipUploadedAt,
+    DateTimeOffset StartsAt,
+    bool PlaysSoon,
+    bool SameSlipSeenBefore);
