@@ -34,6 +34,8 @@
 - **ดาวน์โหลดสลิป:** ทั้งฝั่งผู้จองและฝั่งสนามผ่าน `SlipDownload.NewestAsync` ตัวเดียว (ส่ง query ที่กรองสิทธิ์แล้วเข้าไป) และ "สลิปล่าสุด" คือ `NewestFirst()` (`UploadedAt` แล้ว `Id`) ที่เดียว
 - **ประวัติและการยกเลิกของผู้จอง (US-05):** `GET /api/bookings` คืนของตัวเองแยกเป็น `upcoming` / `past` โดย server เป็นคนแบ่ง (hold ที่หมดเวลาอ่านเป็น `Expired` และอยู่ฝั่ง past ตาม PRD 9.2) · `POST /api/bookings/{id}/cancel` ยกเลิกได้จาก `Held`, `PendingVerification`, `Confirmed` และต้องก่อนเวลาเริ่มเล่น · **`Cancellation.For(...)` เป็นคำตอบเดียว** ที่บอกว่ายกเลิกได้ไหมและได้คืนเท่าไร — หน้าจอแสดงตัวเลขจากตัวนี้ และตอนเขียนก็ใช้ตัวเดียวกัน ห้ามให้ client คำนวณเอง · ยกเลิกจาก `PendingVerification` ทำให้สถานะการรับเงินเป็น `Unconfirmed` และยังไม่ต้องคืนอะไรจนกว่าสนามจะยืนยัน (US-13)
 - **สัดส่วนเงินคืน:** `Booking.RefundPercent` ถูกเขียนตอนการจองจบลง (ปฏิเสธ = 100, ยกเลิก = ตามนโยบาย snapshot ณ ตอนนั้น) แล้ว `Refunds.DueFor(status, payment, total, percent)` คำนวณยอดจากตัวนั้น — เก็บสัดส่วนไว้เพราะ US-13 ให้สนามย้อนมาบอกทีหลังได้ว่าเงินเข้าจริง และต้องได้ตัวเลขเดียวกับที่ผู้จองเห็นตอนกดยกเลิก ไม่ใช่ตามนโยบายวันนี้ (BR-05)
+- **สนามจัดการการจอง (US-13):** `VenueBookingEndpoints` ใต้ `/api/venues/{venueId}/bookings` · อ่านวันได้ทุก member แต่กดอะไรต้องมี `ManageBookings` · `VenueDecisions` เป็นที่เดียวที่ตอบว่าประตูไหนเปิดและเงินเป็นยังไง — endpoint ส่งคำตอบนั้นกลับไปใน `Can` ให้หน้าจอวาดปุ่มตาม ห้ามให้ client ตัดสินเอง · เหตุผลยกเลิกเป็น enum 3 ค่า (`CustomerRequest` / `VenueInitiated` / `PaymentNotReceived`) แต่ละค่าให้ยอดคืนต่างกัน · แก้สิ่งที่บันทึกไว้หลังเล่นจบได้ภายใน `VenueDecisions.CorrectionWindow` (24 ชม.) และเป็นสิทธิ์ Owner เท่านั้น · no-show กดได้หลังเริ่มเล่น 15 นาที และคืนเฉพาะชั่วโมงที่ยังไม่ถึง (`BookedSlots.ReleaseRemainingAsync`) · ดึง no-show กลับเป็น Completed ต้องผ่าน `BookedSlots.TakeBackAsync` ซึ่งอาศัย exclusion constraint เป็นคนตอบว่าชั่วโมงถูกขายไปแล้วหรือยัง
+- **สถานะที่เก็บ กับ สถานะที่อ่านได้ ไม่ใช่ตัวเดียวกัน:** `BookedSlots.StatusAt` แปล hold ที่หมดเวลาเป็น `Expired` และ `Confirmed` ที่เลยเวลาจบเป็น `Completed` (PRD 9.2) — กฎต่าง ๆ ตัดสินจากตัวที่อ่านได้ แต่ conditional update ต้องเทียบกับตัวที่เก็บจริง และถ้าสองตัวต่างกันต้องเขียน audit ของก้าวที่นาฬิกาทำให้ด้วย ไม่งั้นประวัติจะขาดช่วง
 - **บัญชีสำหรับ dev** (seed จะทำงานเฉพาะเมื่อเปิด flag **และ** environment เป็น Development): `owner@courtpaka.local` และ `staff@courtpaka.local` รหัสผ่าน `DevPassword1` สนาม `DEV01` พร้อมคอร์ท 4 คอร์ท เวลาเปิด-ปิด 06:00–22:00 ทุกวัน และราคา 200 บาท/ชม. (18:00 เป็นต้นไป 300)
 
 ## คำสั่ง
@@ -54,7 +56,7 @@
 | Build (เหมือน CI) | `dotnet build backend -c Release -warnaserror` · `cd frontend && npm run build` |
 | Build image arm64 (UAT) | `docker buildx build --platform linux/arm64 backend` |
 | ตรวจ health | `GET /api/health/live` (process) · `GET /api/health/ready` (รวม database) |
-| ตรวจ flow จริงบนเบราว์เซอร์ | `python scripts/verify/venue_settings.py` · `venue_pricing.py` · `venue_ui.py` · `booking_grid.py` · `booking.py` · `payment.py` · `slip_queue.py` · `my_bookings.py` (ต้องเปิด stack ด้วย `--profile full` ก่อน ดู `scripts/verify/README.md`) |
+| ตรวจ flow จริงบนเบราว์เซอร์ | `python scripts/verify/venue_settings.py` · `venue_pricing.py` · `venue_ui.py` · `booking_grid.py` · `booking.py` · `payment.py` · `slip_queue.py` · `my_bookings.py` · `venue_bookings.py` (ต้องเปิด stack ด้วย `--profile full` ก่อน ดู `scripts/verify/README.md`) |
 
 ## วิธีทำงาน
 - **ทำงานจากเป้าหมาย:** งานแต่ละชิ้นผูกกับ user story / acceptance criteria ใน `docs/prd.md` ถ้า requirement ไม่ชัด ให้ถามก่อนลงมือ
