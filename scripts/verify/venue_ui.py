@@ -28,12 +28,21 @@ with sync_playwright() as p:
     page.goto(f"{BASE}/venues")
     page.wait_for_selector("[data-testid=venue-list]")
     code = f"S{int(time.time()) % 100000}"
+    # Applying moved to its own page when the form grew a tax identity (US-10).
+    page.click("[data-testid=apply-link]")
+    page.wait_for_selector("[data-testid=apply]")
     page.fill("#code", code)
     page.fill("#name", f"Second Court {code}")
     page.fill("#address-line", "9 ถนนพระราม 4")
     page.fill("#district", "ปทุมวัน")
     page.fill("#province", "กรุงเทพมหานคร")
-    page.click("form button[type=submit]")
+    page.fill("#promptpay-id", "0812345678")
+    page.fill("#promptpay-name", "บริษัท ทดสอบ จำกัด")
+    page.fill("#legal-name", "บริษัท ทดสอบ จำกัด")
+    page.fill("#tax-id", "0105561000000")
+    page.click("[data-testid=copy-address]")
+    control(page, "accepts-agreement").click()
+    page.click("[data-testid=apply]")
     # Creating a venue drops the owner on its detail page; the list is one step back.
     page.wait_for_selector("[data-testid=venue-name]")
     page.goto(f"{BASE}/venues")

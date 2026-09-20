@@ -22,6 +22,23 @@ export const STAFF_DEFAULT_PERMISSIONS: readonly VenuePermission[] = [
   'CloseCourt',
 ];
 
+/**
+ * Where the money goes and who the venue is to the Revenue Department (PRD US-10). Three
+ * different things travel together: the account US-04 puts in a QR, the tax identity US-07 and
+ * US-16 print on documents, and an optional pin on a map.
+ */
+export interface VenueBusiness {
+  promptPayId: string;
+  promptPayAccountName: string;
+  isVatRegistered: boolean;
+  legalName: string;
+  taxId: string;
+  taxBranch: string;
+  billingAddress: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
 /** Where a venue is, which is how a booker finds it (PRD US-02). */
 export interface VenueAddress {
   addressLine: string;
@@ -72,8 +89,42 @@ export class VenueService {
     return this.http.get<Venue[]>('/api/venues/mine');
   }
 
-  create(code: string, name: string, address: VenueAddress): Observable<Venue> {
-    return this.http.post<Venue>('/api/venues', { code, name, ...address });
+  /**
+   * Applying to join (PRD US-10). The agreement version goes back with the application rather
+   * than being assumed by the server: what was on screen is what is agreed to.
+   */
+  apply(application: {
+    code: string;
+    name: string;
+    address: VenueAddress;
+    business: VenueBusiness;
+    agreementVersion: string;
+  }): Observable<Venue> {
+    return this.http.post<Venue>('/api/venues', {
+      code: application.code,
+      name: application.name,
+      ...application.address,
+      business: application.business,
+      agreementVersion: application.agreementVersion,
+    });
+  }
+
+  /** Which agreement the platform is asking venues to accept (PRD US-10, Q8). */
+  agreement(): Observable<{ version: string }> {
+    return this.http.get<{ version: string }>('/api/venues/agreement');
+  }
+
+  business(venueId: string): Observable<VenueBusiness> {
+    return this.http.get<VenueBusiness>(`/api/venues/${venueId}/business`);
+  }
+
+  saveBusiness(venueId: string, business: VenueBusiness): Observable<VenueBusiness> {
+    return this.http.put<VenueBusiness>(`/api/venues/${venueId}/business`, business);
+  }
+
+  /** A venue the platform turned away, asking to be looked at again (PRD US-10). */
+  resubmit(venueId: string): Observable<Venue> {
+    return this.http.post<Venue>(`/api/venues/${venueId}/resubmit`, null);
   }
 
   get(venueId: string): Observable<Venue> {

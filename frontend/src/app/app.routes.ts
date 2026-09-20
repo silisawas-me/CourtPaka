@@ -67,6 +67,11 @@ export const routes: Routes = [
     loadComponent: () => import('./features/venues/venues.page').then((m) => m.VenuesPage),
   },
   {
+    path: 'venues/apply',
+    loadComponent: () => import('./features/venues/apply.page').then((m) => m.VenueApplyPage),
+    canActivate: [authGuard],
+  },
+  {
     path: 'venues/:venueId',
     canActivate: [authGuard],
     loadComponent: () =>

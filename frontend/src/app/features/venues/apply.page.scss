@@ -1,0 +1,35 @@
+/**
+ * One long form, read top to bottom, in cards that each hold one subject. Narrower than the
+ * page: a form is read along its labels, and a line of boxes running the width of a desktop
+ * screen makes every one of them a journey.
+ */
+:host {
+  display: block;
+  max-width: 44rem;
+}
+
+/** Two fields that belong together on one line, stacking rather than shrinking when narrow. */
+.pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1rem;
+
+  /* Each box is as tall as itself. Stretching — the flex default — makes a field next to one
+     carrying a hint grow to match it, which reads as a textarea somebody meant to be typed into. */
+  align-items: flex-start;
+
+  .field {
+    flex: 1 1 14rem;
+  }
+
+  /* A code or a branch number is a handful of characters, but its hint is a sentence, and in
+     Thai a sentence in a 10rem column is four lines. */
+  .field.short {
+    flex: 0 1 13rem;
+  }
+}
+
+.hint {
+  margin: -0.25rem 0 0;
+  max-width: 48ch;
+}

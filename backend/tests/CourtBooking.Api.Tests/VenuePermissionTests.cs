@@ -32,7 +32,7 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
         var venue = await scenario.CreateVenueAsync(first);
 
         var response = await second.PostAsJsonAsync(
-            "/api/venues", new CreateVenueRequest(venue.Code, "Another venue", "1 ถนนทดสอบ", "บางรัก", "กรุงเทพมหานคร"));
+            "/api/venues", VenueScenario.Application(venue.Code));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }

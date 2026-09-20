@@ -3,6 +3,7 @@ using CourtBooking.Api.Localization;
 using CourtBooking.Api.Venues;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace CourtBooking.Api.Data;
 
@@ -27,6 +28,7 @@ public static class DevelopmentSeeder
         var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
         var time = scope.ServiceProvider.GetRequiredService<TimeProvider>();
+        var options = scope.ServiceProvider.GetRequiredService<IOptions<AppOptions>>();
 
         var owner = await EnsureUserAsync(users, OwnerEmail);
         var staff = await EnsureUserAsync(users, StaffEmail);
@@ -42,6 +44,23 @@ public static class DevelopmentSeeder
                 District = "วัฒนา",
                 Province = "กรุงเทพมหานคร",
                 Status = VenueStatus.Approved,
+                // Made up, but the shape a real one has: the payment screen and the documents
+                // both read these, so a seeded venue with none of them is only half a venue.
+                Business = new VenueBusiness
+                {
+                    PromptPayId = "0812345678",
+                    PromptPayAccountName = "บริษัท คอร์ทปะก้า จำกัด",
+                    IsVatRegistered = true,
+                    LegalName = "บริษัท คอร์ทปะก้า จำกัด",
+                    TaxId = "0105561000000",
+                    TaxBranch = VenueBusiness.HeadOfficeBranch,
+                    BillingAddress = "123 ถนนสุขุมวิท แขวงคลองเตย เขตวัฒนา กรุงเทพมหานคร 10110",
+                    Latitude = 13.7318,
+                    Longitude = 100.5686,
+                },
+                AgreementVersion = options.Value.VenueAgreementVersion,
+                AgreementAcceptedAt = time.GetUtcNow(),
+                AgreementAcceptedByUserId = owner.Id,
                 CreatedAt = time.GetUtcNow(),
             };
             database.Venues.Add(venue);

@@ -26,6 +26,29 @@ public sealed class Venue
 
     public VenueStatus Status { get; set; } = VenueStatus.Pending;
 
+    /// <summary>
+    /// Where the money goes and who the venue is for tax (PRD US-10). Owned by the venue rather
+    /// than kept beside it, because a venue without it cannot be paid and cannot issue a
+    /// document — there is no useful state where it is absent.
+    /// </summary>
+    public required VenueBusiness Business { get; set; }
+
+    /// <summary>
+    /// Which version of the venue agreement was accepted, and when, and by whom (PRD US-10, Q8).
+    /// It includes letting the platform issue documents in the venue's name, so what was agreed
+    /// to has to be answerable later — the same reason a booker's consent is a row (PDPA).
+    /// </summary>
+    /// <remarks>
+    /// Null on a venue that joined before there was an agreement to accept. Not a default and
+    /// not a blank — nothing was accepted, and a column that said otherwise would be the one
+    /// thing this record exists to be trusted about.
+    /// </remarks>
+    public string? AgreementVersion { get; set; }
+
+    public DateTimeOffset? AgreementAcceptedAt { get; set; }
+
+    public Guid? AgreementAcceptedByUserId { get; set; }
+
     public required DateTimeOffset CreatedAt { get; init; }
 }
 

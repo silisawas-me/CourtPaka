@@ -19,6 +19,14 @@ public sealed class AppOptions
     [Required]
     public required string PrivacyPolicyVersion { get; init; }
 
+    /// <summary>
+    /// Version of the agreement a venue accepts when it applies (PRD US-10, Q8). Its wording
+    /// waits on the lawyer; the version does not, because a venue that accepted something has to
+    /// be able to say which something, whenever that question is asked.
+    /// </summary>
+    [Required]
+    public required string VenueAgreementVersion { get; init; }
+
     /// <summary>Off only for local development and tests, which run over plain HTTP.</summary>
     public bool RequireSecureCookies { get; init; } = true;
 

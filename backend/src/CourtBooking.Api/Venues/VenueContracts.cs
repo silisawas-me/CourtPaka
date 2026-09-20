@@ -1,18 +1,59 @@
 namespace CourtBooking.Api.Venues;
 
+/// <summary>
+/// Where the money goes and who the venue is for tax (PRD US-10). Coordinates are optional; a
+/// booker finds a court by district and province, and a pin nobody placed beats a wrong one.
+/// </summary>
+public sealed record VenueBusinessRequest(
+    string PromptPayId,
+    string PromptPayAccountName,
+    bool IsVatRegistered,
+    string LegalName,
+    string TaxId,
+    string TaxBranch,
+    string BillingAddress,
+    double? Latitude = null,
+    double? Longitude = null);
+
+/// <summary>
+/// Applying to join the platform (PRD US-10). The agreement version is sent back by the applicant
+/// rather than assumed, the same way a booker's consent is: what was on screen is what was
+/// agreed to, and a version that has moved on since must not be recorded as accepted.
+/// </summary>
 public sealed record CreateVenueRequest(
     string Code,
     string Name,
     string AddressLine,
     string District,
-    string Province);
+    string Province,
+    VenueBusinessRequest Business,
+    string AgreementVersion);
 
-/// <summary>The venue's public details: what it is called and where a booker will find it.</summary>
+/// <summary>
+/// The venue's details, as its owner corrects them. A venue that was turned away and edited is
+/// asking to be looked at again, so this is also how it applies a second time (PRD US-10).
+/// </summary>
 public sealed record UpdateVenueRequest(
     string Name,
     string AddressLine,
     string District,
-    string Province);
+    string Province,
+    VenueBusinessRequest Business);
+
+/// <summary>What the venue agreed to, and what the platform is asking for now (PRD US-10, Q8).</summary>
+public sealed record VenueAgreementResponse(string Version);
+
+/// <summary>The venue's own details, for the screens that edit them (PRD US-10).</summary>
+public sealed record VenueBusinessResponse(
+    string PromptPayId,
+    string PromptPayAccountName,
+    bool IsVatRegistered,
+    string LegalName,
+    string TaxId,
+    string TaxBranch,
+    string BillingAddress,
+    double? Latitude,
+    double? Longitude);
 
 public sealed record InviteMemberRequest(string Email, string[]? Permissions);
 
@@ -70,6 +111,23 @@ public static class VenueErrorCodes
     public const string InvalidEmail = "venue.invalid_email";
     public const string NotApproved = "venue.not_approved";
     public const string NotFound = "venue.not_found";
+
+    public const string InvalidPromptPayId = "venue.invalid_promptpay_id";
+    public const string InvalidPromptPayAccountName = "venue.invalid_promptpay_account_name";
+    public const string InvalidLegalName = "venue.invalid_legal_name";
+    public const string InvalidTaxId = "venue.invalid_tax_id";
+    public const string InvalidTaxBranch = "venue.invalid_tax_branch";
+    public const string InvalidBillingAddress = "venue.invalid_billing_address";
+    public const string InvalidCoordinates = "venue.invalid_coordinates";
+
+    /// <summary>
+    /// The agreement the applicant accepted is not the one being asked for. They see the current
+    /// one and accept that instead; nothing is recorded in the meantime (PRD US-10, Q8).
+    /// </summary>
+    public const string AgreementOutOfDate = "venue.agreement_out_of_date";
+
+    /// <summary>Only a venue the platform turned away has anything to ask again about.</summary>
+    public const string NotRefused = "venue.not_refused";
 }
 
 /// <summary>What a booker sees about a venue before signing in (PRD US-02).</summary>

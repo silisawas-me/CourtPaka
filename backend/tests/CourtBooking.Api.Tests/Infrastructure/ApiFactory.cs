@@ -11,6 +11,7 @@ namespace CourtBooking.Api.Tests.Infrastructure;
 public sealed class ApiFactory(string connectionString) : WebApplicationFactory<Program>
 {
     public const string PrivacyPolicyVersion = "2026-09-01";
+    public const string VenueAgreementVersion = "2026-09-01";
 
     /// <summary>A directory per test run, so nothing survives into the next one.</summary>
     public string SlipStoragePath { get; } =
@@ -25,6 +26,7 @@ public sealed class ApiFactory(string connectionString) : WebApplicationFactory<
         builder.UseSetting("ConnectionStrings:Default", connectionString);
         builder.UseSetting("App:BaseUrl", "http://localhost:8080");
         builder.UseSetting("App:PrivacyPolicyVersion", PrivacyPolicyVersion);
+        builder.UseSetting("App:VenueAgreementVersion", VenueAgreementVersion);
         builder.UseSetting("App:RequireSecureCookies", "false");
         // Tests apply migrations explicitly so each suite controls when the schema appears.
         builder.UseSetting("App:ApplyMigrationsOnStartup", "false");

@@ -15,11 +15,13 @@ public sealed class VenuePermissionRequirement : IAuthorizationRequirement
     private VenuePermissionRequirement(
         VenuePermissions permission,
         bool ownerOnly,
-        bool whateverTheVenueSStatus = false)
+        bool whateverTheVenueSStatus = false,
+        bool evenWhenTurnedAway = false)
     {
         Permission = permission;
         OwnerOnly = ownerOnly;
         WhateverTheVenueSStatus = whateverTheVenueSStatus;
+        EvenWhenTurnedAway = evenWhenTurnedAway;
     }
 
     public VenuePermissions Permission { get; }
@@ -46,8 +48,23 @@ public sealed class VenuePermissionRequirement : IAuthorizationRequirement
     public static VenuePermissionRequirement OwnChoice { get; } =
         new(VenuePermissions.None, ownerOnly: false, whateverTheVenueSStatus: true);
 
+    /// <summary>
+    /// Whether the owner of a venue the platform turned away may still do this. A refused venue
+    /// is otherwise frozen, but refusing it and then forbidding it from answering the refusal
+    /// would be a door with no handle on either side (PRD US-10). Suspended stays frozen: that
+    /// one is the platform holding a working venue still, not asking it a question.
+    /// </summary>
+    public bool EvenWhenTurnedAway { get; }
+
     /// <summary>Actions the owner may not delegate: membership, tax identity, document voiding (PRD US-14).</summary>
     public static VenuePermissionRequirement Owner { get; } = new(VenuePermissions.None, ownerOnly: true);
+
+    /// <summary>
+    /// The owner putting right what the platform turned the venue away for, and asking again
+    /// (PRD US-10). Owner's alone because it is the venue's tax identity (PRD US-14).
+    /// </summary>
+    public static VenuePermissionRequirement OwnerAnsweringRefusal { get; } =
+        new(VenuePermissions.None, ownerOnly: true, evenWhenTurnedAway: true);
 
     public static VenuePermissionRequirement Needs(VenuePermissions permission) => new(permission, ownerOnly: false);
 }
@@ -68,6 +85,12 @@ public static class VenuePolicies
 
     public static Action<AuthorizationPolicyBuilder> OwnerOnly =>
         policy => policy.RequireAuthenticatedUser().AddRequirements(VenuePermissionRequirement.Owner);
+
+    /// <summary>The owner fixing what a refusal was about, and asking again (PRD US-10).</summary>
+    public static Action<AuthorizationPolicyBuilder> OwnerAnsweringRefusal =>
+        policy => policy
+            .RequireAuthenticatedUser()
+            .AddRequirements(VenuePermissionRequirement.OwnerAnsweringRefusal);
 
     /// <summary>Courts, opening hours, prices and the cancellation policy (PRD US-11).</summary>
     public static Action<AuthorizationPolicyBuilder> Settings => Needs(VenuePermissions.ManageSettings);
@@ -130,8 +153,12 @@ public sealed class VenuePermissionHandler(AppDbContext database, CurrentVenue c
 
         var readOnlyVenue = VenueStatusRules.IsFrozen(currentVenue.Status);
 
+        var turnedAway = currentVenue.Status == VenueStatus.Rejected;
+
         var allowed = requirement switch
         {
+            { OwnerOnly: true, EvenWhenTurnedAway: true } =>
+                membership.Role == VenueRole.Owner && (!readOnlyVenue || turnedAway),
             { OwnerOnly: true } => membership.Role == VenueRole.Owner && !readOnlyVenue,
             { WhateverTheVenueSStatus: true } => true,
             { Permission: VenuePermissions.None } => !readOnlyVenue,
