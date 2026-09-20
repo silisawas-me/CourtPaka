@@ -43,7 +43,10 @@ public static class VerifySlipEndpoints
         // the venue's members at large (PDPA). A frozen venue therefore cannot open its queue at
         // all, which is meant: a venue that may not take money should not be checking payments.
         var slips = venue.MapGroup("/slip-queue")
-            .RequireAuthorization(VenuePolicies.Needs(VenuePermissions.VerifySlip));
+            // A suspension stops a venue taking money, not looking at money it was already
+            // sent: a slip in this queue is somebody's transfer, waiting (PRD US-20).
+            .RequireAuthorization(
+                VenuePolicies.NeedsEvenWhenSuspended(VenuePermissions.VerifySlip));
 
         slips.MapGet("/", QueueAsync);
         slips.MapGet("/{bookingId:guid}/slip", SlipAsync);

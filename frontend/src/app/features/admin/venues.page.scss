@@ -1,0 +1,98 @@
+/**
+ * A queue worked from the top: rows dense enough to scan, and the application itself opening
+ * inside the row it belongs to rather than on a page of its own. Deciding means comparing what
+ * a venue said with what it is asking for, and those two cannot be a navigation apart.
+ */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+/** The one that is showing carries the weight; the rest are ways back to it. */
+.filter.on {
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
+.venue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.venue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  font: var(--mat-sys-body-medium);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+/** The name is the way in, so it is the thing that looks pressable. */
+.venue-open {
+  font: var(--mat-sys-title-small);
+  padding-inline: 0;
+}
+
+.venue-when,
+.venue .badge {
+  margin-left: auto;
+}
+
+.application {
+  flex-basis: 100%;
+  margin: 0.5rem 0 0.75rem;
+  padding: 1rem;
+  border-radius: var(--mat-sys-corner-medium);
+  background: var(--mat-sys-surface-container-high);
+}
+
+/**
+ * What the venue said about itself: label above value, two columns while there is room. A tax
+ * number is read digit by digit, so it gets its own line rather than sharing one with a label.
+ */
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.75rem 1.5rem;
+  margin: 0 0 1rem;
+
+  dt {
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-body-small);
+  }
+
+  dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/** Every decision already made about this venue, oldest first. */
+.history {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0.75rem 0 0;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 0.75rem;
+    padding: 0.25rem 0;
+    font: var(--mat-sys-body-medium);
+  }
+}
+
+.history-why {
+  flex-basis: 100%;
+}

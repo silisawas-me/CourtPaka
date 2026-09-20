@@ -130,7 +130,47 @@ public static class VenueErrorCodes
 
     /// <summary>Only a venue the platform turned away has anything to ask again about.</summary>
     public const string NotRefused = "venue.not_refused";
+
+    public const string InvalidStatus = "venue.invalid_status";
+
+    /// <summary>The venue is not where that decision could be made from (PRD US-20).</summary>
+    public const string StatusCannotMoveThere = "venue.status_cannot_move_there";
+
+    public const string ReasonRequired = "venue.reason_required";
+    public const string ReasonTooLong = "venue.reason_too_long";
 }
+
+/// <summary>A decision the platform makes about a venue (PRD US-20).</summary>
+public sealed record VenueDecisionRequest(string? Reason);
+
+/// <summary>A venue as the platform's own screen lists it (PRD US-20).</summary>
+public sealed record AdminVenueResponse(
+    Guid Id,
+    string Code,
+    string Name,
+    string AddressLine,
+    string District,
+    string Province,
+    string Status,
+    DateTimeOffset CreatedAt);
+
+/// <summary>One move a venue's standing made, as the platform reads its history (PRD US-20).</summary>
+public sealed record VenueStatusChangeResponse(
+    string? From,
+    string To,
+    DateTimeOffset ChangedAt,
+    string? Reason);
+
+/// <summary>
+/// Everything needed to judge one application (PRD US-20): what the venue said about itself,
+/// what it agreed to, and everything the platform has already decided about it.
+/// </summary>
+public sealed record AdminVenueDetailResponse(
+    AdminVenueResponse Venue,
+    VenueBusinessResponse Business,
+    string? AgreementVersion,
+    DateTimeOffset? AgreementAcceptedAt,
+    VenueStatusChangeResponse[] History);
 
 /// <summary>What a booker sees about a venue before signing in (PRD US-02).</summary>
 /// <summary>

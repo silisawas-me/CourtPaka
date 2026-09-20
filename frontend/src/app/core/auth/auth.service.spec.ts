@@ -10,6 +10,7 @@ const account: CurrentUser = {
   email: 'player@example.com',
   emailConfirmed: false,
   language: 'en',
+  isPlatformAdmin: false,
 };
 
 describe('AuthService', () => {

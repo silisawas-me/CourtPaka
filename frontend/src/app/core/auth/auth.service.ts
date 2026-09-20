@@ -10,6 +10,11 @@ export interface CurrentUser {
   email: string;
   emailConfirmed: boolean;
   language: string;
+  /**
+   * Whether this person acts for the platform (PRD US-20). Used to decide which doors to draw,
+   * never to decide anything: every one of those doors asks the server again.
+   */
+  isPlatformAdmin: boolean;
 }
 
 export interface RegisterInput {

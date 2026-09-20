@@ -15,7 +15,16 @@ public sealed record ResendVerificationRequest(string Email);
 
 public sealed record ChangeLanguageRequest(string Language);
 
-public sealed record CurrentUserResponse(Guid Id, string Email, bool EmailConfirmed, string Language);
+public sealed record CurrentUserResponse(
+    Guid Id,
+    string Email,
+    bool EmailConfirmed,
+    string Language,
+    /// <summary>
+    /// Whether this person acts for the platform (PRD US-20). Said here so the app knows which
+    /// doors to draw — not so it can decide anything: every one of those doors asks again.
+    /// </summary>
+    bool IsPlatformAdmin);
 
 public sealed record PrivacyPolicyResponse(string Version);
 
