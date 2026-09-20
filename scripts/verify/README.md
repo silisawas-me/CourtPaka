@@ -44,3 +44,10 @@ Six rules worth keeping.
 | `booking.py` | Picking hours, the summary, and holding them (US-03) |
 | `payment.py` | The countdown, sending the slip, and who may read it (US-04) |
 | `slip_queue.py` | The venue looking at a slip and deciding (US-12) |
+
+7. **Ask for the state you need; do not assume the script before you left it.**
+   `venue_settings.py` edits the seeded venue's opening hours because that is what it is about,
+   and it leaves them wherever its last check left them. Every script that books an hour calls
+   `ensure_bookable()` first, which puts the venue back to 06:00–22:00 every day. This was found
+   the hard way: run in one order the suite was green, and in another every booking script failed
+   with no free hour anywhere and nothing to say why.

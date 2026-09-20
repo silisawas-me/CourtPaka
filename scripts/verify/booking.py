@@ -4,7 +4,16 @@ import datetime
 
 import uuid
 
-from harness import BASE, PASSWORD, SEEDED_VENUE, Checks, new_booker, sign_in, venue_today
+from harness import (
+    BASE,
+    PASSWORD,
+    Checks,
+    ensure_bookable,
+    new_booker,
+    seeded_venue_id,
+    sign_in,
+    venue_today,
+)
 from playwright.sync_api import expect, sync_playwright
 
 check = Checks(__file__)
@@ -36,7 +45,8 @@ with sync_playwright() as p:
     browser = p.chromium.launch()
     page = browser.new_page(viewport={"width": 390, "height": 844})
 
-    venue_id = page.request.get(f"{BASE}/api/venues/search?q={SEEDED_VENUE}").json()[0]["id"]
+    venue_id = seeded_venue_id(page)
+    ensure_bookable(browser, venue_id)
 
     # 1. A visitor with no session can pick, but is sent to sign in rather than offered a booking.
     open_grid(page, venue_id, tomorrow)

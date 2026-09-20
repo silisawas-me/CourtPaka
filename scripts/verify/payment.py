@@ -5,6 +5,7 @@ import datetime
 from harness import (
     BASE,
     Checks,
+    ensure_bookable,
     as_upload,
     new_booker,
     seeded_venue_id,
@@ -28,6 +29,7 @@ with sync_playwright() as p:
     page = browser.new_page(viewport={"width": 390, "height": 844})
 
     venue_id = seeded_venue_id(page)
+    ensure_bookable(browser, venue_id)
 
     # 1. Holding an hour lands on the page that pays for it.
     sign_in(page, new_booker(page))

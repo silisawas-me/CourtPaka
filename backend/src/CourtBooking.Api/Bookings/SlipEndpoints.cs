@@ -3,6 +3,7 @@ using CourtBooking.Api.Data;
 using CourtBooking.Api.Http;
 using CourtBooking.Api.Identity;
 using CourtBooking.Api.Observability;
+using CourtBooking.Api.Venues;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 
@@ -35,6 +36,7 @@ public static class SlipEndpoints
         ClaimsPrincipal principal,
         AppDbContext database,
         ISlipStore slips,
+        VenueNotifications notifications,
         TimeProvider timeProvider,
         ILoggerFactory loggers,
         CancellationToken cancellationToken)
@@ -191,6 +193,10 @@ public static class SlipEndpoints
             events.LogInformation(
                 "booking_pending_verification {BookingId} {VenueId}", booking.Id, booking.VenueId);
         }
+
+        // After the commit, not inside it: a message that cannot be taken back should not be
+        // sent for a write that might be (PRD US-17).
+        await notifications.SlipArrivedAsync(booking.VenueId, booking.Id, sameBytes is not null);
 
         return TypedResults.Ok(
             await BookingEndpoints.ReadBookingAsync(database, booking.Id, now, cancellationToken));

@@ -132,6 +132,7 @@ builder.Services.ConfigureApplicationCookie(options =>
 builder.Services.AddAuthorization();
 // Venue endpoints declare the permission they need inline; the handler answers it per venue (PRD US-14).
 builder.Services.AddScoped<CurrentVenue>();
+builder.Services.AddScoped<VenueNotifications>();
 builder.Services.AddScoped<IAuthorizationHandler, VenuePermissionHandler>();
 
 // Registration and password endpoints send email and check credentials, so they are capped per client IP.

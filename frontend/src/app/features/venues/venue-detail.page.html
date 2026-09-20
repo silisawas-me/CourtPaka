@@ -35,12 +35,19 @@
       >
         {{ i18n.t('settings.title') }}
       </a>
+      <!--
+        The number sits on the door it belongs to. A counter opens the page that has work on it,
+        so what it needs to know is which one that is (PRD US-17).
+      -->
       <a
         matButton
         [routerLink]="['/venues', current.id, 'bookings']"
         data-testid="venue-bookings-link"
       >
         {{ i18n.t('venueBookings.title') }}
+        @if (attention()?.bookingsWithMoneyWaiting; as waiting) {
+          <span class="badge badge-waiting" data-testid="money-waiting">{{ waiting }}</span>
+        }
       </a>
       <a
         matButton
@@ -48,8 +55,30 @@
         data-testid="slip-queue-link"
       >
         {{ i18n.t('slipQueue.title') }}
+        @if (attention()?.slipsToCheck; as waiting) {
+          <span class="badge badge-waiting" data-testid="slips-waiting">{{ waiting }}</span>
+        }
       </a>
     </mat-card-actions>
+
+    <!--
+      The one notice that can be turned off, next to the door it is about. It is per venue, not
+      per person: somebody working two counters may want to hear from one of them (PRD US-17).
+    -->
+    <mat-card-content>
+      <mat-slide-toggle
+        data-testid="slip-emails"
+        [checked]="slipEmails()"
+        (change)="chooseSlipEmails($event.checked)"
+      >
+        {{ i18n.t('venues.slipEmails') }}
+      </mat-slide-toggle>
+      <p class="muted">{{ i18n.t('venues.slipEmailsNote') }}</p>
+
+      @if (slipEmailsError(); as key) {
+        <p class="form-error" data-testid="slip-emails-error">{{ i18n.t(key) }}</p>
+      }
+    </mat-card-content>
   </mat-card>
 
   <mat-card>

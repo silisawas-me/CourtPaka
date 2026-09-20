@@ -169,6 +169,17 @@ a {
   color: var(--mat-sys-on-surface-variant);
 }
 
+/**
+ * A count of things waiting, on the door they are waiting behind (PRD US-17). It carries the
+ * error colour because it is work that has not been done, not a state to be pleased about — and
+ * a counter scanning a page of doors should find it without reading.
+ */
+.badge-waiting {
+  background: var(--mat-sys-error);
+  color: var(--mat-sys-on-error);
+  margin-left: 0.5rem;
+}
+
 .badge-on {
   background: var(--mat-sys-secondary-container);
   color: var(--mat-sys-on-secondary-container);

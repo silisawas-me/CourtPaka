@@ -64,6 +64,14 @@ public sealed class VenueMembership
 
     public required DateTimeOffset CreatedAt { get; init; }
 
+    /// <summary>
+    /// Whether this person wants an email each time a slip arrives here (PRD US-17). It is the
+    /// one notice that can be turned off, because it is the only one that comes on an ordinary
+    /// day rather than when something is stuck — and it is per venue rather than per person,
+    /// because somebody working two counters may want to hear from one of them.
+    /// </summary>
+    public bool WantsSlipEmails { get; set; } = true;
+
     public Venue? Venue { get; init; }
 
     public AppUser? User { get; init; }

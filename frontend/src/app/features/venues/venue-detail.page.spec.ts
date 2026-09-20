@@ -1,7 +1,16 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TRANSLATIONS } from '../../core/i18n/locales';
-import { check, isDisabled, isOn, pageProviders, signInAs, textOf } from '../../testing/dom';
+import {
+  check,
+  elementOf,
+  isDisabled,
+  isOn,
+  pageProviders,
+  signInAs,
+  controlOf,
+  textOf,
+} from '../../testing/dom';
 import { VenueDetailPage } from './venue-detail.page';
 
 const OWNER = {
@@ -25,6 +34,7 @@ function venueAs(role: 'Owner' | 'Staff') {
     status: 'Approved',
     role,
     permissions: role === 'Owner' ? OWNER.permissions : STAFF.permissions,
+    wantsSlipEmails: true,
   };
 }
 
@@ -44,13 +54,20 @@ describe('VenueDetailPage', () => {
 
   afterEach(() => httpMock.verify());
 
-  function render(role: 'Owner' | 'Staff', members: unknown[]): void {
+  const NOTHING_WAITING = { slipsToCheck: 0, bookingsWithMoneyWaiting: 0 };
+
+  function render(
+    role: 'Owner' | 'Staff',
+    members: unknown[],
+    attention: object = NOTHING_WAITING,
+  ): void {
     signInAs(role === 'Owner' ? OWNER.email : STAFF.email);
     fixture = TestBed.createComponent(VenueDetailPage);
     fixture.componentRef.setInput('venueId', 'v1');
     fixture.detectChanges();
     httpMock.expectOne('/api/venues/v1').flush(venueAs(role));
     httpMock.expectOne('/api/venues/v1/members').flush(members);
+    httpMock.expectOne('/api/venues/v1/attention').flush(attention);
     fixture.detectChanges();
     if (role === 'Owner') {
       httpMock.expectOne('/api/venues/v1/invitations').flush([]);
@@ -150,6 +167,7 @@ describe('VenueDetailPage', () => {
       .expectOne('/api/venues/v2')
       .flush({ ...venueAs('Owner'), id: 'v2', name: 'Second Court' });
     httpMock.expectOne('/api/venues/v2/members').flush([OWNER]);
+    httpMock.expectOne('/api/venues/v2/attention').flush(NOTHING_WAITING);
     fixture.detectChanges();
     httpMock.expectOne('/api/venues/v2/invitations').flush([]);
     fixture.detectChanges();
@@ -198,6 +216,7 @@ describe('VenueDetailPage', () => {
     fixture.detectChanges();
     httpMock.expectOne('/api/venues/v1').flush({ ...venueAs('Owner'), status: 'Suspended' });
     httpMock.expectOne('/api/venues/v1/members').flush([OWNER, STAFF]);
+    httpMock.expectOne('/api/venues/v1/attention').flush(NOTHING_WAITING);
     fixture.detectChanges();
 
     const element = fixture.nativeElement as HTMLElement;
@@ -250,5 +269,46 @@ describe('VenueDetailPage', () => {
     fixture.detectChanges();
 
     expect(textOf(fixture, 'invite-error')).toBe(TRANSLATIONS.th['error.venue.already_member']);
+  });
+
+  it('puts the number of things waiting on the door it belongs to', () => {
+    render('Owner', [OWNER], { slipsToCheck: 3, bookingsWithMoneyWaiting: 1 });
+
+    expect(textOf(fixture, 'slips-waiting')).toContain('3');
+    expect(textOf(fixture, 'money-waiting')).toContain('1');
+  });
+
+  it('says nothing where there is nothing waiting', () => {
+    render('Owner', [OWNER]);
+
+    expect(elementOf(fixture, 'slips-waiting')).toBeNull();
+    expect(elementOf(fixture, 'money-waiting')).toBeNull();
+  });
+
+  it('sends the choice about slip mail as it is switched', () => {
+    render('Owner', [OWNER]);
+
+    controlOf(fixture, '[data-testid="slip-emails"]').click();
+    fixture.detectChanges();
+
+    const request = httpMock.expectOne('/api/venues/v1/notifications');
+    expect(request.request.body).toEqual({ wantsSlipEmails: false });
+    request.flush(null, { status: 204, statusText: 'No Content' });
+  });
+
+  it('puts the switch back when the server refuses', () => {
+    render('Owner', [OWNER]);
+
+    controlOf(fixture, '[data-testid="slip-emails"]').click();
+    fixture.detectChanges();
+
+    httpMock
+      .expectOne('/api/venues/v1/notifications')
+      .flush({ code: 'venue.not_member' }, { status: 403, statusText: 'Forbidden' });
+    fixture.detectChanges();
+
+    // The switch must never say something the server does not hold.
+    expect(isOn(fixture, 'slip-emails')).toBe(true);
+    expect(elementOf(fixture, 'slip-emails-error')).not.toBeNull();
   });
 });

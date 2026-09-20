@@ -90,6 +90,7 @@ public static class VenueBookingEndpoints
         Guid bookingId,
         VenueCancelRequest request,
         CurrentVenue venue,
+        VenueNotifications notifications,
         AppDbContext database,
         TimeProvider timeProvider,
         ILoggerFactory loggers,
@@ -132,6 +133,7 @@ public static class VenueBookingEndpoints
             recorded,
             Hours.ReleaseAll,
             venue,
+            notifications,
             database,
             timeProvider,
             loggers,
@@ -146,6 +148,7 @@ public static class VenueBookingEndpoints
         Guid venueId,
         Guid bookingId,
         CurrentVenue venue,
+        VenueNotifications notifications,
         AppDbContext database,
         TimeProvider timeProvider,
         ILoggerFactory loggers,
@@ -158,6 +161,7 @@ public static class VenueBookingEndpoints
             reason: null,
             Hours.ReleaseRemaining,
             venue,
+            notifications,
             database,
             timeProvider,
             loggers,
@@ -173,6 +177,7 @@ public static class VenueBookingEndpoints
         Guid bookingId,
         PlayedAfterAllRequest request,
         CurrentVenue venue,
+        VenueNotifications notifications,
         AppDbContext database,
         TimeProvider timeProvider,
         ILoggerFactory loggers,
@@ -196,6 +201,7 @@ public static class VenueBookingEndpoints
             recorded,
             Hours.TakeBack,
             venue,
+            notifications,
             database,
             timeProvider,
             loggers,
@@ -211,6 +217,7 @@ public static class VenueBookingEndpoints
         Guid bookingId,
         SettlePaymentRequest request,
         CurrentVenue venue,
+        VenueNotifications notifications,
         AppDbContext database,
         TimeProvider timeProvider,
         ILoggerFactory loggers,
@@ -269,6 +276,11 @@ public static class VenueBookingEndpoints
             "booking_payment_settled {BookingId} {VenueId} {PaymentState} {RefundDueBaht}",
             bookingId, venueId, payment, refundDue);
 
+        // Saying the money did arrive is what turns the share into a debt, and nothing else would
+        // say so — the count beside the door does not even change, because the booking only moves
+        // from one half of it to the other (PRD US-17, BR-06).
+        await notifications.MoneyMayBeWaitingAsync(venueId, bookingId, refundDue, payment);
+
         return TypedResults.Ok(
             await OneDrawnAsync(database, venueId, bookingId, venue, now, cancellationToken));
     }
@@ -286,6 +298,7 @@ public static class VenueBookingEndpoints
         string? reason,
         Hours hours,
         CurrentVenue venue,
+        VenueNotifications notifications,
         AppDbContext database,
         TimeProvider timeProvider,
         ILoggerFactory loggers,
@@ -377,6 +390,11 @@ public static class VenueBookingEndpoints
 
         events.LogInformation(
             BookingTransitions.EventTemplate(decided), bookingId, venueId, offer.RefundBaht);
+
+        // An amount owed back is a transfer somebody has to make by hand, outside this system
+        // (BR-06), so the people who can make it are told there is one (PRD US-17).
+        await notifications.MoneyMayBeWaitingAsync(
+            venueId, bookingId, offer.RefundBaht, offer.Payment);
 
         return TypedResults.Ok(
             await OneDrawnAsync(database, venueId, bookingId, venue, now, cancellationToken));

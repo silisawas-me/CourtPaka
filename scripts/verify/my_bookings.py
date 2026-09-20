@@ -6,6 +6,7 @@ from harness import (
     BASE,
     OWNER,
     Checks,
+    ensure_bookable,
     as_upload,
     new_booker,
     real_jpeg,
@@ -31,6 +32,7 @@ with sync_playwright() as p:
     page = browser.new_page(viewport={"width": 390, "height": 844})
 
     venue_id = seeded_venue_id(page)
+    ensure_bookable(browser, venue_id)
 
     # 1. Somebody who has taken nothing is told so, and pointed at the courts.
     sign_in(page, new_booker(page))

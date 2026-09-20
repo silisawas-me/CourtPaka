@@ -289,6 +289,8 @@
   "venues.permission.ViewReports": "View reports",
   "venues.role.Owner": "Owner",
   "venues.role.Staff": "Staff",
+  "venues.slipEmails": "Email me when a slip arrives",
+  "venues.slipEmailsNote": "Only slip mail can be turned off — money left waiting is always sent.",
   "venues.status.Approved": "Approved",
   "venues.status.Pending": "Pending approval",
   "venues.status.Rejected": "Rejected",

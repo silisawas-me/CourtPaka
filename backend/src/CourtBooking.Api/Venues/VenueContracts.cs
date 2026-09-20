@@ -33,9 +33,24 @@ public sealed record VenueResponse(
     string Province,
     string Status,
     string Role,
-    string[] Permissions);
+    string[] Permissions,
+    /// <summary>
+    /// Whether this member wants to hear each time a slip arrives here (PRD US-17). It belongs to
+    /// the reader rather than to the venue, which is why it travels with role and permissions.
+    /// </summary>
+    bool WantsSlipEmails);
 
 public sealed record VenueMemberResponse(Guid UserId, string Email, string Role, string[] Permissions);
+
+/// <summary>
+/// What is waiting at this venue for the person asking (PRD US-17). Each number is counted only
+/// for somebody who could do something about it, so a member who checks slips is not shown the
+/// money and a member who handles money is not shown the queue.
+/// </summary>
+public sealed record VenueAttentionResponse(int SlipsToCheck, int BookingsWithMoneyWaiting);
+
+/// <summary>What this member wants to hear about, for the one notice that can be turned off.</summary>
+public sealed record NotificationPreferenceRequest(bool WantsSlipEmails);
 
 public sealed record VenueInvitationResponse(Guid Id, string Email, string[] Permissions, DateTimeOffset ExpiresAt);
 

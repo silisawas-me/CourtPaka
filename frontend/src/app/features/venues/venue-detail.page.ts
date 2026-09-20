@@ -6,6 +6,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { AppDatePipe } from '../../core/i18n/app-date.pipe';
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
@@ -14,6 +15,7 @@ import { TranslationService } from '../../core/i18n/translation.service';
 import {
   STAFF_DEFAULT_PERMISSIONS,
   Venue,
+  VenueAttention,
   VenueInvitation,
   VenueMember,
   VenuePermission,
@@ -37,6 +39,7 @@ import { VenueAddressPipe } from '../../shared/venue-address.pipe';
     MatFormFieldModule,
     MatInputModule,
     MatProgressBarModule,
+    MatSlideToggleModule,
     AppDatePipe,
   ],
   providers: [FORM_FIELD_DEFAULTS],
@@ -54,6 +57,13 @@ export class VenueDetailPage {
 
   protected readonly venue = signal<Venue | null>(null);
   protected readonly members = signal<VenueMember[]>([]);
+
+  /** What is waiting here for this reader, which is what the numbers beside the doors say. */
+  protected readonly attention = signal<VenueAttention | null>(null);
+
+  /** The one notice that can be turned off, and it is turned off per venue (PRD US-17). */
+  protected readonly slipEmails = signal(true);
+  protected readonly slipEmailsError = signal<string | null>(null);
   protected readonly invitations = signal<VenueInvitation[]>([]);
   protected readonly loading = signal(true);
   protected readonly pageError = signal<string | null>(null);
@@ -177,6 +187,23 @@ export class VenueDetailPage {
     });
   }
 
+  /**
+   * Says whether this member wants to hear each time a slip arrives. Sent as it is switched
+   * rather than behind a save button: there is one setting and no way to get it half-right.
+   */
+  protected chooseSlipEmails(wanted: boolean): void {
+    this.slipEmailsError.set(null);
+    this.slipEmails.set(wanted);
+
+    this.venues.chooseSlipEmails(this.venueId(), wanted).subscribe({
+      error: (failure: unknown) => {
+        // Put back what the server still holds, so the switch never says something untrue.
+        this.slipEmails.set(!wanted);
+        this.slipEmailsError.set(errorKey(failure));
+      },
+    });
+  }
+
   private load(venueId: string): void {
     this.loading.set(true);
     this.venue.set(null);
@@ -185,13 +212,20 @@ export class VenueDetailPage {
     this.pageError.set(null);
     this.memberError.set(null);
 
+    this.attention.set(null);
+
     forkJoin({
       venue: this.venues.get(venueId),
       members: this.venues.members(venueId),
+      attention: this.venues.attention(venueId),
     }).subscribe({
-      next: ({ venue, members }) => {
+      next: ({ venue, members, attention }) => {
         this.venue.set(venue);
         this.members.set(members);
+        this.attention.set(attention);
+        // Set from what the server holds rather than left at its default, so the switch never
+        // says something the venue did not choose.
+        this.slipEmails.set(venue.wantsSlipEmails);
         this.loading.set(false);
 
         // Only fetched when the invite section can be shown, so a frozen venue asks for nothing.

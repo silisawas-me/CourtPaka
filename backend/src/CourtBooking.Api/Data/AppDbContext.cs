@@ -70,6 +70,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<VenueMembership>(member =>
         {
+            // Said here as well as on the property, so the column a migration writes carries it
+            // too — otherwise a membership that already existed would be opted out of a notice
+            // nobody asked to stop (PRD US-17).
+            member.Property(m => m.WantsSlipEmails).HasDefaultValue(true);
+
             // One row per person per venue: permissions are the venue's answer about that person.
             member.HasIndex(m => new { m.VenueId, m.UserId }).IsUnique();
             member.HasOne(m => m.Venue)

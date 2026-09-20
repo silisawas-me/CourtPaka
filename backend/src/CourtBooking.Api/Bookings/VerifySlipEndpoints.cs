@@ -132,6 +132,7 @@ public static class VerifySlipEndpoints
         Guid venueId,
         Guid bookingId,
         CurrentVenue venue,
+        VenueNotifications notifications,
         AppDbContext database,
         TimeProvider timeProvider,
         ILoggerFactory loggers,
@@ -143,6 +144,7 @@ public static class VerifySlipEndpoints
             PaymentState.Received,
             reason: null,
             venue,
+            notifications,
             database,
             timeProvider,
             loggers,
@@ -157,6 +159,7 @@ public static class VerifySlipEndpoints
         Guid bookingId,
         RejectSlipRequest request,
         CurrentVenue venue,
+        VenueNotifications notifications,
         AppDbContext database,
         TimeProvider timeProvider,
         ILoggerFactory loggers,
@@ -168,6 +171,7 @@ public static class VerifySlipEndpoints
             request.PaymentReceived ? PaymentState.Received : PaymentState.NotReceived,
             request.Reason,
             venue,
+            notifications,
             database,
             timeProvider,
             loggers,
@@ -180,6 +184,7 @@ public static class VerifySlipEndpoints
         PaymentState payment,
         string? reason,
         CurrentVenue venue,
+        VenueNotifications notifications,
         AppDbContext database,
         TimeProvider timeProvider,
         ILoggerFactory loggers,
@@ -285,6 +290,10 @@ public static class VerifySlipEndpoints
         {
             events.LogInformation(Announcements[change.To], bookingId, venueId, refundDue);
         }
+
+        // Turning a booking away after the money arrived leaves the venue owing it back, and
+        // nothing else would say so (PRD US-17, BR-06).
+        await notifications.MoneyMayBeWaitingAsync(venueId, bookingId, refundDue, payment);
 
         return TypedResults.Ok(await BookingEndpoints.ReadBookingAsync(
             database, bookingId, now, cancellationToken));
