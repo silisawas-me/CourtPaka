@@ -100,6 +100,14 @@ public static class BookingTransitions
         DateTimeOffset at,
         CancellationToken cancellationToken)
     {
+        // Before anything is written. The record builder checks too, but by then the rows have
+        // already changed — a guard that fires after the fact is a rollback, not a guard.
+        if (!CanMove(from, to))
+        {
+            throw new InvalidOperationException(
+                $"A booking cannot go from {from} to {to} (PRD 6.1).");
+        }
+
         var candidates = await bookings
             .Where(booking => booking.Status == from)
             .Select(booking => booking.Id)
