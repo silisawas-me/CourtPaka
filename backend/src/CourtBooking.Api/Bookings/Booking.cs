@@ -103,7 +103,7 @@ public sealed class Booking
 
         // The booking coming into existence is the first thing its history records.
         booking.StatusChanges.Add(
-            BookingTransitions.Record(booking.Id, null, booking.Status, bookerUserId, at));
+            BookingTransitions.Created(booking.Id, booking.Status, bookerUserId, at));
 
         return booking;
     }

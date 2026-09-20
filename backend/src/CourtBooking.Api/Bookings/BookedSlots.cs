@@ -130,10 +130,6 @@ public static class BookedSlots
     }
 
     /// <summary>
-    /// Held → Expired, in bulk. It is a move the state machine allows (PRD 6.1), asserted here
-    /// once because a set-based update cannot ask the entity.
-    /// </summary>
-    /// <summary>
     /// Held → Expired for a set of bookings, moved and recorded together (PRD 6.1). Answers which
     /// ones lapsed, so the caller can say so.
     /// </summary>

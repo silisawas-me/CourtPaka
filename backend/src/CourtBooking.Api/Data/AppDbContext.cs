@@ -188,7 +188,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .WithMany(b => b.StatusChanges)
                 .HasForeignKey(c => c.BookingId)
                 .OnDelete(DeleteBehavior.Cascade);
-            // The account, though, can go. The row that says who moved it may not go with it.
+            // Restrict, like every other reference to an account: a booker asking to be
+            // forgotten is anonymised rather than deleted (PRD 8), so the row stays and keeps
+            // pointing at the same, now anonymous, person.
             change.HasOne(c => c.ChangedBy)
                 .WithMany()
                 .HasForeignKey(c => c.ChangedByUserId)

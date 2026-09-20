@@ -341,6 +341,25 @@ public sealed class SlipTests(ApiTestFixture api) : IClassFixture<ApiTestFixture
     }
 
     [Fact]
+    public async Task Two_requests_reaching_one_lapsed_hold_record_it_expiring_once()
+    {
+        var (_, venue, courts) = await scenario.BookableVenueAsync(courts: 3);
+        var booker = await scenario.SignedInClientAsync();
+        var abandoned = await HoldAsync(booker, venue.Id, courts[0], 18);
+        await scenario.LapseHoldAsync(abandoned.Id);
+
+        // The booker tries twice at once. Both requests clear their own lapsed hold on the way
+        // past, both see it as Held, and only one of them changes it — so only one of them may
+        // write that down (PRD 6.1).
+        await Task.WhenAll(
+            PostAsync(booker, venue.Id, courts[1], 18),
+            PostAsync(booker, venue.Id, courts[2], 18));
+
+        var history = await scenario.HistoryAsync(abandoned.Id);
+        Assert.Single(history, change => change.To == BookingStatus.Expired);
+    }
+
+    [Fact]
     public async Task Sending_a_slip_needs_an_account()
     {
         var (_, booking) = await HeldBookingAsync();
@@ -381,6 +400,17 @@ public sealed class SlipTests(ApiTestFixture api) : IClassFixture<ApiTestFixture
         var booker = await scenario.SignedInClientAsync();
         return (booker, await HoldAsync(booker, venue.Id, courts[0], 18));
     }
+
+    private static Task<HttpResponseMessage> PostAsync(
+        HttpClient client,
+        Guid venueId,
+        Guid courtId,
+        int hour) =>
+        client.PostAsJsonAsync(
+            "/api/bookings",
+            new CreateBookingRequest(
+                venueId,
+                [new BookingSlotRequest(courtId, VenueScenario.Today.AddDays(1), hour)]));
 
     private static Task<BookingResponse> HoldAsync(
         HttpClient client,
