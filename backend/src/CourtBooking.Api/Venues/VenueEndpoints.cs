@@ -25,11 +25,22 @@ public static class VenueEndpoints
 
         venues.MapPost("/", CreateAsync);
         venues.MapGet("/mine", ListMineAsync);
+        venues.MapGet("/agreement", AgreementAsync);
         venues.MapPost("/invitations/accept", AcceptInvitationAsync);
 
         var venue = venues.MapGroup("/{venueId:guid}");
         venue.MapGet("/", Get).RequireAuthorization(VenuePolicies.Member);
         venue.MapPut("/", UpdateDetailsAsync).RequireAuthorization(VenuePolicies.Settings);
+
+        // The venue's tax identity and where its money lands are the owner's alone (PRD US-14),
+        // and stay reachable after a refusal, because putting them right is how a venue answers
+        // one (PRD US-10).
+        venue.MapGet("/business", BusinessAsync)
+            .RequireAuthorization(VenuePolicies.OwnerAnsweringRefusal);
+        venue.MapPut("/business", UpdateBusinessAsync)
+            .RequireAuthorization(VenuePolicies.OwnerAnsweringRefusal);
+        venue.MapPost("/resubmit", ResubmitAsync)
+            .RequireAuthorization(VenuePolicies.OwnerAnsweringRefusal);
         venue.MapGet("/attention", WaitingForAsync).RequireAuthorization(VenuePolicies.Member);
         venue.MapPut("/notifications", ChooseNotificationsAsync)
             .RequireAuthorization(VenuePolicies.OwnChoice);
@@ -86,20 +97,38 @@ public static class VenueEndpoints
         return TypedResults.NoContent();
     }
 
+    /// <summary>
+    /// Which agreement the platform is asking venues to accept (PRD US-10, Q8). Asked for before
+    /// applying, and sent back with the application, so what was on screen is what is recorded.
+    /// </summary>
+    private static Ok<VenueAgreementResponse> AgreementAsync(IOptions<AppOptions> options) =>
+        TypedResults.Ok(new VenueAgreementResponse(options.Value.VenueAgreementVersion));
+
     private static async Task<Results<Created<VenueResponse>, ProblemHttpResult>> CreateAsync(
         CreateVenueRequest request,
         ClaimsPrincipal principal,
         AppDbContext database,
+        IOptions<AppOptions> options,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
         var invalid = VenueValidation.ValidateCode(request.Code)
                       ?? VenueValidation.ValidateName(request.Name)
                       ?? VenueValidation.ValidateAddress(
-                          request.AddressLine, request.District, request.Province);
+                          request.AddressLine, request.District, request.Province)
+                      ?? VenueValidation.ValidateBusiness(request.Business);
         if (invalid is not null)
         {
             return ApiProblem.Of(StatusCodes.Status400BadRequest, invalid);
+        }
+
+        // What was agreed to has to be the thing that was shown. A version that moved on while
+        // the form was open is refused rather than recorded as the new one (PRD US-10, Q8).
+        if (!string.Equals(
+                request.AgreementVersion, options.Value.VenueAgreementVersion, StringComparison.Ordinal))
+        {
+            return ApiProblem.Of(
+                StatusCodes.Status409Conflict, VenueErrorCodes.AgreementOutOfDate);
         }
 
         var now = timeProvider.GetUtcNow();
@@ -110,6 +139,10 @@ public static class VenueEndpoints
             AddressLine = request.AddressLine.Trim(),
             District = request.District.Trim(),
             Province = request.Province.Trim(),
+            Business = Written(request.Business),
+            AgreementVersion = options.Value.VenueAgreementVersion,
+            AgreementAcceptedAt = now,
+            AgreementAcceptedByUserId = CallerId.Of(principal),
             CreatedAt = now,
         };
 
@@ -193,6 +226,106 @@ public static class VenueEndpoints
 
         return updated == 1 ? TypedResults.NoContent() : TypedResults.NotFound();
     }
+
+    private static async Task<Results<Ok<VenueBusinessResponse>, NotFound>> BusinessAsync(
+        Guid venueId,
+        AppDbContext database,
+        CancellationToken cancellationToken)
+    {
+        var business = await database.Venues
+            .AsNoTracking()
+            .Where(venue => venue.Id == venueId)
+            .Select(venue => venue.Business)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        return business is null ? TypedResults.NotFound() : TypedResults.Ok(Drawn(business));
+    }
+
+    /// <summary>
+    /// Correcting where the money goes and who the venue is for tax (PRD US-10, US-14). The
+    /// platform is not told: a venue that was turned away says so itself, by asking again.
+    /// </summary>
+    private static async Task<Results<Ok<VenueBusinessResponse>, NotFound, ProblemHttpResult>>
+        UpdateBusinessAsync(
+            Guid venueId,
+            VenueBusinessRequest request,
+            AppDbContext database,
+            CancellationToken cancellationToken)
+    {
+        if (VenueValidation.ValidateBusiness(request) is { } invalid)
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, invalid);
+        }
+
+        var venue = await database.Venues
+            .SingleOrDefaultAsync(one => one.Id == venueId, cancellationToken);
+
+        if (venue is null)
+        {
+            return TypedResults.NotFound();
+        }
+
+        venue.Business = Written(request);
+        await database.SaveChangesAsync(cancellationToken);
+
+        return TypedResults.Ok(Drawn(venue.Business));
+    }
+
+    /// <summary>
+    /// A venue the platform turned away, asking to be looked at again (PRD US-10). Conditional on
+    /// still being refused, so two presses do not walk an approved venue back to waiting.
+    /// </summary>
+    private static async Task<Results<Ok<VenueResponse>, ProblemHttpResult>> ResubmitAsync(
+        Guid venueId,
+        CurrentVenue currentVenue,
+        AppDbContext database,
+        CancellationToken cancellationToken)
+    {
+        var moved = await database.Venues
+            .Where(venue => venue.Id == venueId && venue.Status == VenueStatus.Rejected)
+            .ExecuteUpdateAsync(
+                set => set.SetProperty(venue => venue.Status, VenueStatus.Pending),
+                cancellationToken);
+
+        if (moved == 0)
+        {
+            return ApiProblem.Of(
+                StatusCodes.Status409Conflict, VenueErrorCodes.NotRefused);
+        }
+
+        var membership = currentVenue.Require();
+        var venue = await database.Venues
+            .AsNoTracking()
+            .SingleAsync(one => one.Id == venueId, cancellationToken);
+
+        return TypedResults.Ok(ToResponse(venue, membership));
+    }
+
+    private static VenueBusiness Written(VenueBusinessRequest request) =>
+        new()
+        {
+            PromptPayId = request.PromptPayId.Trim(),
+            PromptPayAccountName = request.PromptPayAccountName.Trim(),
+            IsVatRegistered = request.IsVatRegistered,
+            LegalName = request.LegalName.Trim(),
+            TaxId = request.TaxId.Trim(),
+            TaxBranch = request.TaxBranch.Trim(),
+            BillingAddress = request.BillingAddress.Trim(),
+            Latitude = request.Latitude,
+            Longitude = request.Longitude,
+        };
+
+    private static VenueBusinessResponse Drawn(VenueBusiness business) =>
+        new(
+            business.PromptPayId,
+            business.PromptPayAccountName,
+            business.IsVatRegistered,
+            business.LegalName,
+            business.TaxId,
+            business.TaxBranch,
+            business.BillingAddress,
+            business.Latitude,
+            business.Longitude);
 
     private static async Task<Ok<VenueMemberResponse[]>> ListMembersAsync(
         Guid venueId,

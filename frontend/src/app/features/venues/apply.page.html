@@ -1,0 +1,210 @@
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>{{ i18n.t('apply.title') }}</mat-card-title>
+    <mat-card-subtitle>{{ i18n.t('apply.subtitle') }}</mat-card-subtitle>
+  </mat-card-header>
+
+  <mat-card-actions>
+    <a matButton routerLink="/venues">{{ i18n.t('apply.back') }}</a>
+  </mat-card-actions>
+</mat-card>
+
+@if (agreementVersion() === null && errorKey() === null) {
+  <mat-progress-bar mode="indeterminate" />
+}
+
+<form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+  <!--
+    Three groups, because three different documents are open on the desk while this is filled
+    in: the sign outside, a bank app, and a company certificate (PRD US-10).
+  -->
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('apply.court.title') }}</mat-card-title>
+      <mat-card-subtitle>{{ i18n.t('apply.court.hint') }}</mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content class="stack">
+      <div class="pair">
+        <mat-form-field class="field short">
+          <mat-label>{{ i18n.t('venues.create.code') }}</mat-label>
+          <input id="code" matInput formControlName="code" maxlength="6" autocomplete="off" />
+          <mat-hint>{{ i18n.t('venues.create.codeHint') }}</mat-hint>
+          <mat-error [appFieldError]="form.controls.code" testId="code-error"></mat-error>
+        </mat-form-field>
+
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('venues.create.name') }}</mat-label>
+          <input id="name" matInput formControlName="name" autocomplete="off" />
+          <mat-error [appFieldError]="form.controls.name" testId="name-error"></mat-error>
+        </mat-form-field>
+      </div>
+
+      <mat-form-field class="field">
+        <mat-label>{{ i18n.t('venues.create.addressLine') }}</mat-label>
+        <input id="address-line" matInput formControlName="addressLine" />
+        <mat-error
+          [appFieldError]="form.controls.addressLine"
+          testId="address-line-error"
+        ></mat-error>
+      </mat-form-field>
+
+      <div class="pair">
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('venues.create.district') }}</mat-label>
+          <input id="district" matInput formControlName="district" />
+          <mat-error [appFieldError]="form.controls.district" testId="district-error"></mat-error>
+        </mat-form-field>
+
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('venues.create.province') }}</mat-label>
+          <input id="province" matInput formControlName="province" />
+          <mat-error [appFieldError]="form.controls.province" testId="province-error"></mat-error>
+        </mat-form-field>
+      </div>
+
+      <div class="pair">
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('apply.latitude') }}</mat-label>
+          <input id="latitude" matInput type="number" formControlName="latitude" />
+        </mat-form-field>
+
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('apply.longitude') }}</mat-label>
+          <input id="longitude" matInput type="number" formControlName="longitude" />
+        </mat-form-field>
+      </div>
+
+      <p class="muted hint">{{ i18n.t('apply.pinHint') }}</p>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('apply.money.title') }}</mat-card-title>
+      <mat-card-subtitle>{{ i18n.t('apply.money.hint') }}</mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content class="stack">
+      <div class="pair">
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('apply.promptPayId') }}</mat-label>
+          <input id="promptpay-id" matInput formControlName="promptPayId" autocomplete="off" />
+          <mat-error
+            [appFieldError]="form.controls.promptPayId"
+            testId="promptpay-id-error"
+          ></mat-error>
+        </mat-form-field>
+
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('apply.promptPayAccountName') }}</mat-label>
+          <input id="promptpay-name" matInput formControlName="promptPayAccountName" />
+          <mat-error
+            [appFieldError]="form.controls.promptPayAccountName"
+            testId="promptpay-name-error"
+          ></mat-error>
+        </mat-form-field>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('apply.tax.title') }}</mat-card-title>
+      <mat-card-subtitle>{{ i18n.t('apply.tax.hint') }}</mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content class="stack">
+      <mat-checkbox formControlName="isVatRegistered" data-testid="vat-registered">
+        {{ i18n.t('apply.vatRegistered') }}
+      </mat-checkbox>
+
+      <mat-form-field class="field">
+        <mat-label>{{ i18n.t('apply.legalName') }}</mat-label>
+        <input id="legal-name" matInput formControlName="legalName" />
+        <mat-hint>{{ i18n.t('apply.legalNameHint') }}</mat-hint>
+        <mat-error [appFieldError]="form.controls.legalName" testId="legal-name-error"></mat-error>
+      </mat-form-field>
+
+      <div class="pair">
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('apply.taxId') }}</mat-label>
+          <input
+            id="tax-id"
+            matInput
+            formControlName="taxId"
+            maxlength="13"
+            inputmode="numeric"
+            autocomplete="off"
+          />
+          <mat-error [appFieldError]="form.controls.taxId" testId="tax-id-error"></mat-error>
+        </mat-form-field>
+
+        <mat-form-field class="field short">
+          <mat-label>{{ i18n.t('apply.taxBranch') }}</mat-label>
+          <input
+            id="tax-branch"
+            matInput
+            formControlName="taxBranch"
+            maxlength="5"
+            inputmode="numeric"
+            autocomplete="off"
+          />
+          <mat-hint>{{ i18n.t('apply.taxBranchHint') }}</mat-hint>
+          <mat-error
+            [appFieldError]="form.controls.taxBranch"
+            testId="tax-branch-error"
+          ></mat-error>
+        </mat-form-field>
+      </div>
+
+      <mat-form-field class="field">
+        <mat-label>{{ i18n.t('apply.billingAddress') }}</mat-label>
+        <input id="billing-address" matInput formControlName="billingAddress" />
+        <mat-error
+          [appFieldError]="form.controls.billingAddress"
+          testId="billing-address-error"
+        ></mat-error>
+      </mat-form-field>
+
+      <div class="row">
+        <button matButton type="button" data-testid="copy-address" (click)="copyAddress()">
+          {{ i18n.t('apply.sameAsCourt') }}
+        </button>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-content class="stack">
+      <!--
+        The agreement includes letting the platform issue documents in the venue's name, so what
+        it says is worth reading rather than a box to tick past (PRD US-10, Q8).
+      -->
+      <mat-checkbox formControlName="acceptsAgreement" data-testid="accepts-agreement">
+        {{ i18n.t('apply.accept') }}
+      </mat-checkbox>
+
+      @if (agreementVersion(); as version) {
+        <p class="muted hint" data-testid="agreement-version">
+          {{ i18n.t('apply.agreementVersion') }}: {{ version }}
+        </p>
+      }
+
+      @if (errorKey(); as key) {
+        <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
+      }
+
+      <div class="row">
+        <button
+          matButton="filled"
+          type="submit"
+          data-testid="apply"
+          [disabled]="submitting() || agreementVersion() === null"
+        >
+          {{ i18n.t(submitting() ? 'common.loading' : 'apply.submit') }}
+        </button>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</form>

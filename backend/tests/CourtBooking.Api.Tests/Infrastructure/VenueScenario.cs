@@ -67,8 +67,44 @@ public sealed class VenueScenario(ApiTestFixture api)
 
     public async Task<VenueResponse> CreateVenueAsync(HttpClient client) =>
         await ReadAsync<VenueResponse>(
-            await client.PostAsJsonAsync("/api/venues", new CreateVenueRequest(NewCode(), "Smash Court", "1 ถนนทดสอบ", "บางรัก", "กรุงเทพมหานคร")),
+            await client.PostAsJsonAsync("/api/venues", Application(NewCode())),
             HttpStatusCode.Created);
+
+    /// <summary>
+    /// A whole application, for a test that is about something else. The parts a test does care
+    /// about it passes itself (PRD US-10).
+    /// </summary>
+    public static CreateVenueRequest Application(
+        string code,
+        VenueBusinessRequest? business = null,
+        string? agreementVersion = null) =>
+        new(
+            code,
+            "Smash Court",
+            "1 ถนนทดสอบ",
+            "บางรัก",
+            "กรุงเทพมหานคร",
+            business ?? Business(),
+            agreementVersion ?? ApiFactory.VenueAgreementVersion);
+
+    /// <summary>Where the money goes and who the venue is for tax (PRD US-10).</summary>
+    public static VenueBusinessRequest Business(
+        string promptPayId = "0812345678",
+        string taxId = "0105561000000",
+        string taxBranch = VenueBusiness.HeadOfficeBranch,
+        bool vatRegistered = true,
+        double? latitude = 13.7318,
+        double? longitude = 100.5686) =>
+        new(
+            promptPayId,
+            "บริษัท ทดสอบ จำกัด",
+            vatRegistered,
+            "บริษัท ทดสอบ จำกัด",
+            taxId,
+            taxBranch,
+            "1 ถนนทดสอบ แขวงสีลม เขตบางรัก กรุงเทพมหานคร 10500",
+            latitude,
+            longitude);
 
     /// <summary>
     /// Checks the status the endpoint promised and hands back the body, so a test that is about

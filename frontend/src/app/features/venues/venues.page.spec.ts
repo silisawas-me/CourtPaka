@@ -1,7 +1,7 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TRANSLATIONS } from '../../core/i18n/locales';
-import { pageProviders, setInput, submitForm, textOf } from '../../testing/dom';
+import { elementOf, pageProviders, textOf } from '../../testing/dom';
 import { VenuesPage } from './venues.page';
 
 describe('VenuesPage', () => {
@@ -12,8 +12,7 @@ describe('VenuesPage', () => {
     localStorage.clear();
     await TestBed.configureTestingModule({
       imports: [VenuesPage],
-      // The page navigates to the new venue once it is created.
-      providers: pageProviders([{ path: 'venues/:venueId', children: [] }]),
+      providers: pageProviders([{ path: 'venues/apply', children: [] }]),
     }).compileComponents();
 
     httpMock = TestBed.inject(HttpTestingController);
@@ -39,56 +38,13 @@ describe('VenuesPage', () => {
     expect(textOf(fixture, 'venue-list')).toContain('Smash Court');
   });
 
-  /** A venue needs somewhere to be, because that is how a booker finds it. */
-  function fillForm(): void {
-    setInput(fixture, '#code', 'SBC');
-    setInput(fixture, '#name', 'Smash Court');
-    setInput(fixture, '#address-line', '1 ถนนทดสอบ');
-    setInput(fixture, '#district', 'บางรัก');
-    setInput(fixture, '#province', 'กรุงเทพมหานคร');
-  }
-
-  it('creates a venue with the code, name and address entered', () => {
+  it('sends people to the application rather than carrying the form itself', () => {
     httpMock.expectOne('/api/venues/mine').flush([]);
     fixture.detectChanges();
 
-    fillForm();
-    submitForm(fixture);
-
-    const request = httpMock.expectOne('/api/venues');
-    expect(request.request.body).toEqual({
-      code: 'SBC',
-      name: 'Smash Court',
-      addressLine: '1 ถนนทดสอบ',
-      district: 'บางรัก',
-      province: 'กรุงเทพมหานคร',
-    });
-    request.flush({ id: 'v1', code: 'SBC', name: 'Smash Court', status: 'Pending' });
-  });
-
-  it('translates a rejected venue code', () => {
-    httpMock.expectOne('/api/venues/mine').flush([]);
-    fixture.detectChanges();
-
-    fillForm();
-    submitForm(fixture);
-
-    httpMock
-      .expectOne('/api/venues')
-      .flush({ code: 'venue.code_already_used' }, { status: 409, statusText: 'Conflict' });
-    fixture.detectChanges();
-
-    expect(textOf(fixture, 'form-error')).toBe(TRANSLATIONS.th['error.venue.code_already_used']);
-  });
-
-  it('does not call the API for a code that is too short', () => {
-    httpMock.expectOne('/api/venues/mine').flush([]);
-    fixture.detectChanges();
-
-    setInput(fixture, '#code', 'AB');
-    setInput(fixture, '#name', 'Smash Court');
-    submitForm(fixture);
-
-    httpMock.expectNone('/api/venues');
+    // Applying grew a tax identity and a bank account, and moved to its own page.
+    expect(elementOf<HTMLAnchorElement>(fixture, 'apply-link')?.getAttribute('href')).toBe(
+      '/venues/apply',
+    );
   });
 });

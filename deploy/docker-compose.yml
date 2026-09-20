@@ -30,6 +30,7 @@ services:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
       App__BaseUrl: ${APP_BASE_URL:?set APP_BASE_URL to the public origin}
       App__PrivacyPolicyVersion: ${PRIVACY_POLICY_VERSION:?set PRIVACY_POLICY_VERSION}
+      App__VenueAgreementVersion: ${VENUE_AGREEMENT_VERSION:?set VENUE_AGREEMENT_VERSION}
       # Schema changes are applied by the deploy job before the new image starts (PRD 9.4).
       App__ApplyMigrationsOnStartup: "false"
       App__DataProtectionKeysPath: "/keys"

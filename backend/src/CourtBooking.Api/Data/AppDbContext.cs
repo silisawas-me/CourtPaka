@@ -59,6 +59,22 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<Venue>(venue =>
         {
+
+                // One venue has exactly one of each of these and they change by being corrected,
+                // not by being versioned, so they sit in the venue's own row (PRD US-10).
+                venue.ComplexProperty(one => one.Business, business =>
+                {
+                    business.Property(b => b.PromptPayId)
+                        .HasMaxLength(VenueBusiness.PromptPayIdMaxLength);
+                    business.Property(b => b.PromptPayAccountName)
+                        .HasMaxLength(VenueBusiness.AccountNameMaxLength);
+                    business.Property(b => b.LegalName)
+                        .HasMaxLength(VenueBusiness.LegalNameMaxLength);
+                    business.Property(b => b.TaxId).HasMaxLength(VenueBusiness.TaxIdLength);
+                    business.Property(b => b.TaxBranch).HasMaxLength(VenueBusiness.TaxBranchLength);
+                    business.Property(b => b.BillingAddress)
+                        .HasMaxLength(VenueBusiness.BillingAddressMaxLength);
+                });
             venue.Property(v => v.Code).HasMaxLength(6);
             venue.Property(v => v.Name).HasMaxLength(200);
             venue.Property(v => v.AddressLine).HasMaxLength(200);

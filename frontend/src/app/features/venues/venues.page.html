@@ -23,65 +23,28 @@
           }
         </div>
       }
+
+      @if (errorKey(); as key) {
+        <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
+      }
     </mat-card-content>
   </mat-card>
 
+  <!--
+    Applying is a sit-down job with a tax number in front of you, so it is its own page rather
+    than a panel beside the list. This side is the glance: which venues are mine, and where each
+    of them stands (PRD US-10).
+  -->
   <mat-card>
     <mat-card-header>
       <mat-card-title>{{ i18n.t('venues.create.title') }}</mat-card-title>
+      <mat-card-subtitle>{{ i18n.t('venues.create.subtitle') }}</mat-card-subtitle>
     </mat-card-header>
 
-    <mat-card-content>
-      <form class="stack" [formGroup]="form" (ngSubmit)="submit()" novalidate>
-        <mat-form-field class="field">
-          <mat-label>{{ i18n.t('venues.create.code') }}</mat-label>
-          <input
-            id="code"
-            matInput
-            type="text"
-            formControlName="code"
-            maxlength="6"
-            autocomplete="off"
-          />
-          <mat-hint>{{ i18n.t('venues.create.codeHint') }}</mat-hint>
-          <mat-error [appFieldError]="form.controls.code" testId="code-error"></mat-error>
-        </mat-form-field>
-
-        <mat-form-field class="field">
-          <mat-label>{{ i18n.t('venues.create.name') }}</mat-label>
-          <input id="name" matInput type="text" formControlName="name" autocomplete="off" />
-          <mat-error [appFieldError]="form.controls.name" testId="name-error"></mat-error>
-        </mat-form-field>
-
-        <mat-form-field class="field">
-          <mat-label>{{ i18n.t('venues.create.addressLine') }}</mat-label>
-          <input id="address-line" matInput type="text" formControlName="addressLine" />
-          <mat-error
-            [appFieldError]="form.controls.addressLine"
-            testId="address-line-error"
-          ></mat-error>
-        </mat-form-field>
-
-        <mat-form-field class="field">
-          <mat-label>{{ i18n.t('venues.create.district') }}</mat-label>
-          <input id="district" matInput type="text" formControlName="district" />
-          <mat-error [appFieldError]="form.controls.district" testId="district-error"></mat-error>
-        </mat-form-field>
-
-        <mat-form-field class="field">
-          <mat-label>{{ i18n.t('venues.create.province') }}</mat-label>
-          <input id="province" matInput type="text" formControlName="province" />
-          <mat-error [appFieldError]="form.controls.province" testId="province-error"></mat-error>
-        </mat-form-field>
-
-        @if (errorKey(); as key) {
-          <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
-        }
-
-        <button matButton="filled" type="submit" [disabled]="submitting()">
-          {{ i18n.t(submitting() ? 'common.loading' : 'venues.create.submit') }}
-        </button>
-      </form>
-    </mat-card-content>
+    <mat-card-actions>
+      <a matButton="filled" routerLink="/venues/apply" data-testid="apply-link">
+        {{ i18n.t('venues.create.submit') }}
+      </a>
+    </mat-card-actions>
   </mat-card>
 </div>

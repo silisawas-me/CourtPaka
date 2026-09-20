@@ -31,6 +31,65 @@ public static class VenueValidation
     public static string? ValidateName(string? name) =>
         ValidateText(name, NameMaxLength, VenueErrorCodes.InvalidName);
 
+    /// <summary>
+    /// Everything the venue has to say about itself before it can take money or issue a document
+    /// (PRD US-10, 7.2). Each part answers under its own code so the form can point at the field.
+    ///
+    /// A body with no business block at all is refused the same way, because a malformed request
+    /// has to answer 400 with a code rather than fall over on a null.
+    /// </summary>
+    public static string? ValidateBusiness(VenueBusinessRequest? business) =>
+        business is null
+            ? VenueErrorCodes.InvalidPromptPayId
+            : ValidateText(
+                  business.PromptPayId, VenueBusiness.PromptPayIdMaxLength,
+                  VenueErrorCodes.InvalidPromptPayId)
+              ?? ValidateText(
+                  business.PromptPayAccountName, VenueBusiness.AccountNameMaxLength,
+                  VenueErrorCodes.InvalidPromptPayAccountName)
+              ?? ValidateText(
+                  business.LegalName, VenueBusiness.LegalNameMaxLength,
+                  VenueErrorCodes.InvalidLegalName)
+              ?? ValidateTaxId(business.TaxId)
+              ?? ValidateTaxBranch(business.TaxBranch)
+              ?? ValidateText(
+                  business.BillingAddress, VenueBusiness.BillingAddressMaxLength,
+                  VenueErrorCodes.InvalidBillingAddress)
+              ?? ValidateCoordinates(business.Latitude, business.Longitude);
+
+    /// <summary>Thirteen digits and nothing else. The checksum is the Revenue Department's to judge.</summary>
+    public static string? ValidateTaxId(string? taxId)
+    {
+        var trimmed = taxId?.Trim();
+        return trimmed is null
+               || trimmed.Length != VenueBusiness.TaxIdLength
+               || !trimmed.All(char.IsAsciiDigit)
+            ? VenueErrorCodes.InvalidTaxId
+            : null;
+    }
+
+    public static string? ValidateTaxBranch(string? branch)
+    {
+        var trimmed = branch?.Trim();
+        return trimmed is null
+               || trimmed.Length != VenueBusiness.TaxBranchLength
+               || !trimmed.All(char.IsAsciiDigit)
+            ? VenueErrorCodes.InvalidTaxBranch
+            : null;
+    }
+
+    /// <summary>
+    /// Both or neither, and on the planet. A pin with only one half of itself is not a place.
+    /// </summary>
+    public static string? ValidateCoordinates(double? latitude, double? longitude) =>
+        (latitude, longitude) switch
+        {
+            (null, null) => null,
+            (not null, not null) when latitude is >= -90 and <= 90
+                                      && longitude is >= -180 and <= 180 => null,
+            _ => VenueErrorCodes.InvalidCoordinates,
+        };
+
     /// <summary>The rule every free-text field shares: something, once trimmed, and not too long.</summary>
     public static string? ValidateText(string? value, int maxLength, string code)
     {
