@@ -21,6 +21,41 @@ public static class CourtValidation
     public static string? ValidatePosition(int position) =>
         position is < 0 or > PositionMax ? CourtErrorCodes.InvalidPosition : null;
 
+    /// <summary>
+    /// A closure has to be a stretch of whole hours that has not already passed (PRD US-11). The
+    /// past is refused rather than accepted quietly: shutting a court for last Tuesday changes
+    /// nothing anybody can book and makes the report of why that evening was empty a lie.
+    /// </summary>
+    public static string? ValidateClosure(
+        DateOnly startsOn,
+        int startHour,
+        DateOnly endsOn,
+        int endHour,
+        DateOnly today)
+    {
+        if (startHour is < EarliestOpeningHour or > LatestOpeningHour
+            || endHour is < EarliestClosingHour or > LatestClosingHour)
+        {
+            return CourtErrorCodes.InvalidClosureRange;
+        }
+
+        var starts = startsOn.ToDateTime(TimeOnly.MinValue).AddHours(startHour);
+        var ends = endsOn.ToDateTime(TimeOnly.MinValue).AddHours(endHour);
+
+        if (ends <= starts)
+        {
+            return CourtErrorCodes.InvalidClosureRange;
+        }
+
+        // Measured by the day it ends: a closure running from last week into next week is still
+        // shutting hours somebody could otherwise book.
+        return endsOn < today ? CourtErrorCodes.InvalidClosureRange : null;
+    }
+
+    public static string? ValidateClosureReason(string? reason) =>
+        VenueValidation.ValidateText(
+            reason, CourtClosure.ReasonMaxLength, CourtErrorCodes.InvalidClosureReason);
+
     /// <summary>A setting may start today or later; what it said in the past cannot be rewritten.</summary>
     public static string? ValidateEffectiveFrom(DateOnly effectiveFrom, DateOnly today) =>
         effectiveFrom < today ? CourtErrorCodes.EffectiveDateInThePast : null;

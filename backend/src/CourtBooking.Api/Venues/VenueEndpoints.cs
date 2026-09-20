@@ -40,6 +40,7 @@ public static class VenueEndpoints
         venue.MapDelete("/members/{userId:guid}", RemoveMemberAsync).RequireAuthorization(VenuePolicies.OwnerOnly);
 
         venue.MapCourtEndpoints();
+        venue.MapClosureEndpoints();
         venue.MapPricingEndpoints();
         venue.MapVerifySlipEndpoints();
         venue.MapVenueBookingEndpoints();

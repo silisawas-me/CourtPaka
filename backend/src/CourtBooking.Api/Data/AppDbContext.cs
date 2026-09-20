@@ -19,6 +19,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<Court> Courts => Set<Court>();
 
+    public DbSet<CourtClosure> CourtClosures => Set<CourtClosure>();
+
     public DbSet<CourtStatusChange> CourtStatusChanges => Set<CourtStatusChange>();
 
     public DbSet<OpeningHoursSchedule> OpeningHoursSchedules => Set<OpeningHoursSchedule>();
@@ -218,11 +220,40 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             // 9.2). The constraint itself is written in the migration: EF has no model for one.
         });
 
+        builder.Entity<CourtClosure>(closure =>
+        {
+            closure.Property(c => c.Reason).HasMaxLength(CourtClosure.ReasonMaxLength);
+
+            // Every read is "what is shut on this court around this time", from the grid, the
+            // settings screen and the write that takes an hour.
+            closure.HasIndex(c => new { c.CourtId, c.StartsAt });
+
+            closure.HasOne(c => c.Court)
+                .WithMany()
+                .HasForeignKey(c => c.CourtId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            closure.HasOne(c => c.CreatedBy)
+                .WithMany()
+                .HasForeignKey(c => c.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            closure.HasOne<AppUser>()
+                .WithMany()
+                .HasForeignKey(c => c.LiftedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
         builder.Entity<BookingStatusChange>(change =>
         {
             change.Property(c => c.Reason).HasMaxLength(BookingStatusChange.ReasonMaxLength);
             // A booking's history, oldest first, which is how US-12 and US-22 will read it.
             change.HasIndex(c => new { c.BookingId, c.ChangedAt });
+
+            // Counting cancellations by reason is a report of its own (US-15) and a check the
+            // court-closing screen has to make (US-11), and both scan every row of a venue's
+            // history, so the reason is worth an index where it is set.
+            change.HasIndex(c => c.Cause).HasFilter("\"Cause\" IS NOT NULL");
             // The history lives exactly as long as the booking it describes. Nothing deletes a
             // booking — a booker asking to be forgotten is anonymised, not erased (PRD 8) — so
             // this cascade is what happens when a venue is removed with everything under it.

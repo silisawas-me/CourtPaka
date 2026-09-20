@@ -3,6 +3,7 @@ using System;
 using CourtBooking.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CourtBooking.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260920171747_CancellationCause")]
+    partial class CancellationCause
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -417,49 +420,6 @@ namespace CourtBooking.Api.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Courts");
-                });
-
-            modelBuilder.Entity("CourtBooking.Api.Venues.CourtClosure", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CourtId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("EndsAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset?>("LiftedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("LiftedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<DateTimeOffset>("StartsAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedByUserId");
-
-                    b.HasIndex("LiftedByUserId");
-
-                    b.HasIndex("CourtId", "StartsAt");
-
-                    b.ToTable("CourtClosures");
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.CourtStatusChange", b =>
@@ -997,30 +957,6 @@ namespace CourtBooking.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Venue");
-                });
-
-            modelBuilder.Entity("CourtBooking.Api.Venues.CourtClosure", b =>
-                {
-                    b.HasOne("CourtBooking.Api.Venues.Court", "Court")
-                        .WithMany()
-                        .HasForeignKey("CourtId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("CourtBooking.Api.Identity.AppUser", "CreatedBy")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("CourtBooking.Api.Identity.AppUser", null)
-                        .WithMany()
-                        .HasForeignKey("LiftedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Court");
-
-                    b.Navigation("CreatedBy");
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.CourtStatusChange", b =>

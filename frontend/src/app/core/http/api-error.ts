@@ -6,6 +6,12 @@ export class ApiError extends Error {
   constructor(
     readonly code: string,
     readonly status: number,
+    /**
+     * The rest of the problem body. Most refusals say everything in the code, but a few hand
+     * back something the screen has to act on rather than only report — the bookings standing in
+     * the way of a court closing (PRD US-11). Never text to show: the code still decides that.
+     */
+    readonly details: Record<string, unknown> | null = null,
   ) {
     super(code);
   }
@@ -25,11 +31,17 @@ export function errorKey(error: unknown): string {
 export const apiErrorInterceptor: HttpInterceptorFn = (request, next) =>
   next(request).pipe(
     catchError((error: HttpErrorResponse) => {
+      const body = error.error as { code?: string } | null;
       const code =
-        error.status === 429
-          ? TOO_MANY_REQUESTS_CODE
-          : ((error.error as { code?: string } | null)?.code ?? UNKNOWN_ERROR_CODE);
+        error.status === 429 ? TOO_MANY_REQUESTS_CODE : (body?.code ?? UNKNOWN_ERROR_CODE);
 
-      return throwError(() => new ApiError(code, error.status));
+      return throwError(
+        () =>
+          new ApiError(
+            code,
+            error.status,
+            body && typeof body === 'object' ? (body as Record<string, unknown>) : null,
+          ),
+      );
     }),
   );

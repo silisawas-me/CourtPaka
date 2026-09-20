@@ -114,9 +114,9 @@ public static class VenueBookingEndpoints
             reason = parsed;
         }
 
-        // Written down as the reason that was decided on, not as the string that was sent: the
-        // record and the money have to say the same thing (PRD 6.1).
-        if (Recorded(reason?.ToString(), request.Note) is not { } recorded)
+        // The reason goes to its own column as the value that was decided on, not as the
+        // string that was sent: the record and the money have to say the same thing (PRD 6.1).
+        if (Recorded(request.Note) is not { } recorded)
         {
             // The same column and the same refusal the slip queue gives, so the same code: a
             // reader who has learned what it means should not have to learn a second one.
@@ -132,6 +132,7 @@ public static class VenueBookingEndpoints
             (booking, status, now) => VenueDecisions.CancelOffer(
                 booking, status, reason, request.PaymentReceived, byOwner, now),
             recorded,
+            reason,
             Hours.ReleaseAll,
             venue,
             notifications,
@@ -160,6 +161,7 @@ public static class VenueBookingEndpoints
             BookingStatus.NoShow,
             VenueDecisions.NoShowOffer,
             reason: null,
+            cause: null,
             Hours.ReleaseRemaining,
             venue,
             notifications,
@@ -184,7 +186,7 @@ public static class VenueBookingEndpoints
         ILoggerFactory loggers,
         CancellationToken cancellationToken)
     {
-        if (Recorded(null, request.Reason) is not { } recorded)
+        if (Recorded(request.Reason) is not { } recorded)
         {
             // The same column and the same refusal the slip queue gives, so the same code: a
             // reader who has learned what it means should not have to learn a second one.
@@ -200,6 +202,7 @@ public static class VenueBookingEndpoints
             (booking, status, now) => VenueDecisions.PlayedAfterAllOffer(
                 booking, status, request.Reason, byOwner, now),
             recorded,
+            cause: null,
             Hours.TakeBack,
             venue,
             notifications,
@@ -297,6 +300,7 @@ public static class VenueBookingEndpoints
         BookingStatus decided,
         Func<Booking, BookingStatus, DateTimeOffset, Cancellation.Offer> ask,
         string? reason,
+        CancellationReason? cause,
         Hours hours,
         CurrentVenue venue,
         VenueNotifications notifications,
@@ -375,7 +379,7 @@ public static class VenueBookingEndpoints
         }
 
         database.BookingStatusChanges.Add(BookingTransitions.Record(
-            bookingId, status, decided, membership.UserId, now, reason));
+            bookingId, status, decided, membership.UserId, now, reason, cause));
 
         await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -401,21 +405,17 @@ public static class VenueBookingEndpoints
             await OneDrawnAsync(database, venueId, bookingId, venue, now, cancellationToken));
     }
 
-    /// <summary>What the venue said, kept as one line of the booking's history (PRD 6.1).</summary>
-    private static string? Recorded(string? reason, string? note)
+    /// <summary>
+    /// What the venue wrote beside the reason, kept as one line of the booking's history
+    /// (PRD 6.1). Null means it does not fit, which is a refusal, not a note to shorten.
+    /// </summary>
+    private static string? Recorded(string? note)
     {
-        var written = note?.Trim();
-        var both = (reason, string.IsNullOrEmpty(written)) switch
-        {
-            (null, true) => null,
-            (null, false) => written,
-            (_, true) => reason,
-            _ => $"{reason}: {written}",
-        };
+        var written = note?.Trim() ?? string.Empty;
 
         // Refused rather than shortened, the way the slip queue refuses one: a record trimmed
         // without saying so is a record nobody can trust (PRD 6.1).
-        return both?.Length > BookingStatusChange.ReasonMaxLength ? null : both ?? string.Empty;
+        return written.Length > BookingStatusChange.ReasonMaxLength ? null : written;
     }
 
     private static bool IsOwner(VenueMembership membership) => membership.Role == VenueRole.Owner;

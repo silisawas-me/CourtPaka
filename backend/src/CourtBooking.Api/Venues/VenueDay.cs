@@ -1,5 +1,6 @@
 using CourtBooking.Api.Bookings;
 using CourtBooking.Api.Data;
+using CourtBooking.Api.Localization;
 using Microsoft.EntityFrameworkCore;
 
 namespace CourtBooking.Api.Venues;
@@ -17,6 +18,7 @@ public sealed class VenueDay
     private readonly IReadOnlyDictionary<(Guid CourtId, int Hour), decimal?> prices;
     private readonly IReadOnlySet<(Guid CourtId, int Hour)> taken;
     private readonly IReadOnlySet<Guid> inUse;
+    private readonly IReadOnlySet<(Guid CourtId, int Hour)> shut;
 
     private VenueDay(
         DateOnly date,
@@ -24,6 +26,7 @@ public sealed class VenueDay
         int? opensHour,
         int? closesHour,
         IReadOnlySet<Guid> inUse,
+        IReadOnlySet<(Guid CourtId, int Hour)> shut,
         IReadOnlyDictionary<(Guid CourtId, int Hour), decimal?> prices,
         IReadOnlySet<(Guid CourtId, int Hour)> taken)
     {
@@ -32,6 +35,7 @@ public sealed class VenueDay
         OpensHour = opensHour;
         ClosesHour = closesHour;
         this.inUse = inUse;
+        this.shut = shut;
         this.prices = prices;
         this.taken = taken;
     }
@@ -52,12 +56,14 @@ public sealed class VenueDay
             : [];
 
     /// <summary>
-    /// What the hour costs, or null when it is not on sale — either because a court out of use
-    /// sells nothing, or because nothing prices it, which is every hour of a venue that published
-    /// its opening hours before its prices.
+    /// What the hour costs, or null when it is not on sale — because a court out of use sells
+    /// nothing, because the court is shut for that hour (PRD US-11), or because nothing prices
+    /// it, which is every hour of a venue that published its opening hours before its prices.
     /// </summary>
     public decimal? Price(Guid courtId, int hour) =>
-        inUse.Contains(courtId) ? prices.GetValueOrDefault((courtId, hour)) : null;
+        inUse.Contains(courtId) && !shut.Contains((courtId, hour))
+            ? prices.GetValueOrDefault((courtId, hour))
+            : null;
 
     /// <summary>
     /// Whether the hour can be taken, and if not, why. An hour with nothing to charge for it is not
@@ -101,11 +107,12 @@ public sealed class VenueDay
         var statusChanges = await CourtEndpoints.StatusChangesAsync(
             database, venueId, date, cancellationToken);
         var week = await CourtEndpoints.ScheduleOnAsync(database, venueId, date, cancellationToken);
+        var closures = await ClosuresOnAsync(database, venueId, date, cancellationToken);
         var prices = await PricingEndpoints.InForcePricesAsync(database, venueId, cancellationToken);
         var courtIds = courts.Select(court => court.Id).ToArray();
         var taken = await BookedSlots.OnAsync(database, courtIds, date, now, cancellationToken);
 
-        return Build(date, courts, statusChanges, week, prices?.Bands ?? [], taken);
+        return Build(date, courts, statusChanges, closures, week, prices?.Bands ?? [], taken);
     }
 
     /// <summary>The rule itself, with everything it needs already read. Pure, so it is testable.</summary>
@@ -113,6 +120,7 @@ public sealed class VenueDay
         DateOnly date,
         IReadOnlyList<Court> courts,
         IReadOnlyCollection<CourtStatusChange> statusChanges,
+        IReadOnlyCollection<CourtClosure> closures,
         OpeningHoursSchedule? week,
         IReadOnlyCollection<PriceBand> bands,
         IReadOnlySet<(Guid CourtId, int Hour)> taken)
@@ -134,6 +142,20 @@ public sealed class VenueDay
             ? Enumerable.Range(from, until - from)
             : [];
 
+        // A court shut for part of the day sells nothing for those hours and everything else
+        // as usual, so this is per court-hour rather than per court (PRD US-11).
+        var shut = new HashSet<(Guid CourtId, int Hour)>();
+        foreach (var closure in closures)
+        {
+            foreach (var hour in hours)
+            {
+                if (closure.Covers(date, hour))
+                {
+                    shut.Add((closure.CourtId, hour));
+                }
+            }
+        }
+
         var prices = new Dictionary<(Guid CourtId, int Hour), decimal?>();
         foreach (var hour in hours)
         {
@@ -144,7 +166,32 @@ public sealed class VenueDay
             }
         }
 
-        return new VenueDay(date, ordered, day?.OpensHour, day?.ClosesHour, inUse, prices, taken);
+        return new VenueDay(
+            date, ordered, day?.OpensHour, day?.ClosesHour, inUse, shut, prices, taken);
+    }
+
+    /// <summary>
+    /// The closures that could touch a day at this venue: anything still standing that overlaps
+    /// it at all. Read here rather than at each call site so the grid and the write that takes an
+    /// hour cannot disagree about which hours are shut.
+    /// </summary>
+    public static async Task<List<CourtClosure>> ClosuresOnAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateOnly date,
+        CancellationToken cancellationToken)
+    {
+        var from = PlatformRequirements.BangkokHour(date, 0);
+        var until = PlatformRequirements.BangkokHour(date.AddDays(1), 0);
+
+        return await database.CourtClosures
+            .AsNoTracking()
+            .Where(closure =>
+                closure.Court!.VenueId == venueId
+                && closure.LiftedAt == null
+                && closure.StartsAt < until
+                && closure.EndsAt > from)
+            .ToListAsync(cancellationToken);
     }
 
     private static decimal? PriceFor(IReadOnlyCollection<PriceBand> bands, DayOfWeek day, int hour) =>

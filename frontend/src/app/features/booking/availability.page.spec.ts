@@ -328,24 +328,27 @@ describe('AvailabilityPage', () => {
   });
 
   it('keeps only the newest day when two reads overlap', () => {
-    render();
+    // Started on a named day rather than the page's own default, so that neither move below can
+    // land on the day it is already showing — which is what happens when a hardcoded date here
+    // turns out to be today, and then the move fires no request at all.
+    render(day({ date: '2026-09-21' }), '2026-09-21');
 
     // Two moves in quick succession: the first answer must not win by arriving last.
-    fixture.componentRef.setInput('date', '2026-09-21');
+    fixture.componentRef.setInput('date', '2026-09-22');
     fixture.detectChanges();
     const first = expectRead();
 
-    fixture.componentRef.setInput('date', '2026-09-22');
+    fixture.componentRef.setInput('date', '2026-09-23');
     fixture.detectChanges();
     const second = expectRead();
 
     // The superseded read is cancelled, so its answer can never arrive late and win.
     expect(first.cancelled).toBe(true);
 
-    second.flush(day({ date: '2026-09-22' }));
+    second.flush(day({ date: '2026-09-23' }));
     fixture.detectChanges();
 
-    expect(textOf(fixture, 'grid-date')).toContain('22');
+    expect(textOf(fixture, 'grid-date')).toContain('23');
   });
 
   it('drops the grid it was showing when the next day cannot be read', () => {
