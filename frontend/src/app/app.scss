@@ -23,9 +23,100 @@
   color: var(--mat-sys-on-secondary-container);
 }
 
-/** A phone has no room for the nav and full language names, so the switch shows codes. */
+/** Where the accent sits in the bar: the one action for someone with no account yet. */
+.accent {
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+}
+
+.bar-links {
+  display: contents;
+}
+
+/* The menu is the phone's copy of the nav, so it is not there when the bar can hold the links. */
+.bar-menu-button {
+  display: none;
+}
+
+/**
+ * A phone has room for the brand, the language switch and one control. The links fold into a menu
+ * rather than overflowing off the edge, which is what they used to do.
+ */
 @media (max-width: 34rem) {
   .bar {
     padding-inline: 0.5rem;
+  }
+
+  .bar-links {
+    display: none;
+  }
+
+  .bar-menu-button {
+    display: inline-flex;
+  }
+}
+
+/**
+ * The panel the phone's links fold into. It sits under the bar rather than over the page: a
+ * booker who opens it has not left the page they were reading, and nothing needs a backdrop.
+ */
+.bar-menu {
+  position: sticky;
+  top: var(--mat-toolbar-standard-height, 4rem);
+  z-index: 2;
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  background: var(--mat-sys-surface-container);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  box-shadow: var(--mat-sys-level2);
+
+  a,
+  button {
+    justify-content: start;
+  }
+}
+
+/* Three bars, drawn rather than downloaded — the app ships no icon set. */
+.hamburger {
+  position: relative;
+  display: block;
+  width: 1.15rem;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    border-radius: 1px;
+    background: currentColor;
+  }
+
+  &::before {
+    top: -6px;
+  }
+
+  &::after {
+    top: 6px;
+  }
+
+  /* Open, it is a cross: the same control, saying what it will do next. */
+  &.open {
+    background: transparent;
+
+    &::before {
+      top: 0;
+      rotate: 45deg;
+    }
+
+    &::after {
+      top: 0;
+      rotate: -45deg;
+    }
   }
 }

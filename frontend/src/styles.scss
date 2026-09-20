@@ -201,6 +201,31 @@ a {
   }
 }
 
+/**
+ * A row that happens to be a link is still a row: the browser's underline and link colour made
+ * the venue results read as raw hyperlinks rather than a list.
+ */
+a.entry {
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--mat-sys-corner-small);
+  padding-inline: 0.5rem;
+  margin-inline: -0.5rem;
+
+  &:hover {
+    background: var(--mat-sys-surface-container-high);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: -2px;
+  }
+
+  .entry-name {
+    color: var(--mat-sys-primary);
+  }
+}
+
 .entry-name {
   font: var(--mat-sys-title-medium);
 }

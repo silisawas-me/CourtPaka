@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { MatAnchor, MatButton } from '@angular/material/button';
 import { MatToolbar } from '@angular/material/toolbar';
 import { Router, RouterLink, RouterOutlet } from '@angular/router';
@@ -10,6 +10,10 @@ import { TranslationService } from './core/i18n/translation.service';
   // The directives, not the modules: MatButtonModule also declares icon and fab buttons,
   // which the shell does not use but would carry into the first chunk.
   imports: [RouterOutlet, RouterLink, MatToolbar, MatButton, MatAnchor],
+  host: {
+    // Escape closes the panel wherever the focus happens to be inside it.
+    '(document:keydown.escape)': 'closeMenu()',
+  },
   selector: 'app-root',
   styleUrl: './app.scss',
   templateUrl: './app.html',
@@ -21,8 +25,33 @@ export class App {
   protected readonly i18n = inject(TranslationService);
   protected readonly languages = LANGUAGES;
   protected readonly user = this.auth.currentUser;
+  /**
+   * What the bar links to, in one list: the bar lays it out and the menu folds it up, so a link
+   * added here appears in both without either copy being the one someone forgot.
+   */
+  protected readonly links = computed(() => [
+    { path: '/book', label: 'nav.book', testId: 'nav-book', accent: false },
+    ...(this.user()
+      ? [{ path: '/venues', label: 'nav.venues', testId: 'nav-venues', accent: false }]
+      : [
+          { path: '/login', label: 'nav.signIn', testId: 'nav-sign-in', accent: false },
+          { path: '/register', label: 'nav.signUp', testId: 'nav-sign-up', accent: true },
+        ]),
+  ]);
+
+  /** Whether the phone's nav panel is open. There is no panel at all on a wider screen. */
+  protected readonly menuOpen = signal(false);
+
   protected readonly languageNotSaved = signal(false);
   protected readonly signOutIncomplete = signal(false);
+
+  protected toggleMenu(): void {
+    this.menuOpen.update((open) => !open);
+  }
+
+  protected closeMenu(): void {
+    this.menuOpen.set(false);
+  }
 
   protected switchLanguage(language: Language): void {
     this.i18n.use(language);
@@ -38,6 +67,7 @@ export class App {
   }
 
   protected signOut(): void {
+    this.closeMenu();
     this.auth.logout().subscribe(({ confirmed }) => {
       this.signOutIncomplete.set(!confirmed);
       void this.router.navigate(['/']);
