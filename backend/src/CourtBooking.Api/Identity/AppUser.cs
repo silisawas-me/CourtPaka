@@ -10,6 +10,13 @@ public sealed class AppUser : IdentityUser<Guid>
     /// <summary>UI and email language, "th" or "en" (PRD US-01, US-23).</summary>
     public string Language { get; set; } = SupportedLanguages.Default;
 
+    /// <summary>
+    /// When the platform suspended this account, or null while it may sign in (PRD US-22). The
+    /// history of why lives in <see cref="AccountStatusChange"/>; this is the one column every
+    /// sign-in reads. Bookings already made are left alone.
+    /// </summary>
+    public DateTimeOffset? SuspendedAt { get; set; }
+
     public ICollection<UserConsent> Consents { get; } = [];
 }
 

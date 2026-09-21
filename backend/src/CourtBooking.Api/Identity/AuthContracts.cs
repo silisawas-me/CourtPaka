@@ -34,6 +34,7 @@ public sealed record PrivacyPolicyResponse(string Version);
 public static class AuthErrorCodes
 {
     public const string InvalidCredentials = "auth.invalid_credentials";
+    public const string AccountSuspended = "auth.account_suspended";
     public const string InvalidVerificationToken = "auth.invalid_verification_token";
     public const string UnsupportedLanguage = "auth.unsupported_language";
     public const string WeakPassword = "auth.weak_password";

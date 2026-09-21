@@ -11,6 +11,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 {
     public DbSet<UserConsent> UserConsents => Set<UserConsent>();
 
+    public DbSet<AccountStatusChange> AccountStatusChanges => Set<AccountStatusChange>();
+
     public DbSet<Venue> Venues => Set<Venue>();
 
     public DbSet<VenueStatusChange> VenueStatusChanges => Set<VenueStatusChange>();
@@ -396,6 +398,23 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .WithMany(p => p.Tiers)
                 .HasForeignKey(t => t.PolicyId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<AccountStatusChange>(change =>
+        {
+            change.Property(c => c.Reason).HasMaxLength(AccountStatusChange.ReasonMaxLength);
+            change.HasIndex(c => new { c.UserId, c.ChangedAt });
+            // Restrict both ways, like every reference to an account: a person asking to be
+            // forgotten is anonymised, not deleted (PRD 8), and the record of why they were
+            // stopped must not go with them.
+            change.HasOne(c => c.User)
+                .WithMany()
+                .HasForeignKey(c => c.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            change.HasOne(c => c.ChangedBy)
+                .WithMany()
+                .HasForeignKey(c => c.ChangedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<UserConsent>(consent =>

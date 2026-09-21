@@ -1,0 +1,86 @@
+// The same layout as a venue's own dashboard (venue-dashboard.page.scss): one lead figure, a line
+// of the rest, and a table that scrolls in its own box on a phone.
+:host {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--stack);
+}
+
+.range-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.range-field {
+  flex: 1 1 20rem;
+}
+
+.lead-label {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+}
+
+.lead {
+  margin: 0.25rem 0 1rem;
+  font: var(--mat-sys-display-small);
+  color: var(--mat-sys-primary);
+
+  .unit {
+    font: var(--mat-sys-title-medium);
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+  margin: 0 0 0.75rem;
+
+  dt {
+    font: var(--mat-sys-label-large);
+  }
+
+  dd {
+    margin: 0.25rem 0 0;
+    font: var(--mat-sys-title-large);
+  }
+}
+
+.small {
+  font: var(--mat-sys-body-small);
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.figures-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: var(--mat-sys-body-medium);
+
+  th,
+  td {
+    padding: 0.5rem 0.75rem;
+    text-align: start;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--mat-sys-outline-variant);
+  }
+
+  thead th {
+    font: var(--mat-sys-label-large);
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  tbody th {
+    font: var(--mat-sys-body-medium);
+  }
+
+  .num {
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+  }
+}

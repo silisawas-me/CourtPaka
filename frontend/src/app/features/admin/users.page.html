@@ -1,0 +1,143 @@
+<app-admin-tabs />
+
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>{{ i18n.t('admin.users.title') }}</mat-card-title>
+  </mat-card-header>
+
+  <mat-card-content>
+    <form class="search" [formGroup]="searchForm" (ngSubmit)="search()" novalidate>
+      <mat-form-field class="search-field">
+        <mat-label>{{ i18n.t('admin.users.search') }}</mat-label>
+        <input
+          matInput
+          type="search"
+          formControlName="query"
+          data-testid="user-query"
+          autocomplete="off"
+        />
+        <mat-hint>{{ i18n.t('admin.users.searchHint') }}</mat-hint>
+        <mat-error [appFieldError]="searchForm.controls.query" testId="query-error"></mat-error>
+      </mat-form-field>
+      <button matButton="filled" type="submit" data-testid="user-search" [disabled]="searching()">
+        {{ i18n.t('admin.users.find') }}
+      </button>
+    </form>
+
+    @if (searchError(); as key) {
+      <p class="form-error" data-testid="search-error">{{ i18n.t(key) }}</p>
+    }
+  </mat-card-content>
+</mat-card>
+
+@if (searching()) {
+  <mat-progress-bar mode="indeterminate" />
+} @else if (results(); as users) {
+  <mat-card>
+    <mat-card-content>
+      @if (users.length === 0) {
+        <p class="muted" data-testid="no-users">{{ i18n.t('admin.users.none') }}</p>
+      } @else {
+        <ul class="user-list" data-testid="user-list">
+          @for (user of users; track user.id) {
+            <li class="user" [attr.data-testid]="'user-' + user.id">
+              <div class="user-line">
+                <button
+                  type="button"
+                  class="user-open"
+                  [attr.aria-expanded]="open()?.user?.id === user.id"
+                  [attr.data-testid]="'open-user-' + user.id"
+                  (click)="show(user)"
+                >
+                  {{ user.email }}
+                </button>
+                @if (user.suspendedAt) {
+                  <span class="badge badge-stopped" data-testid="suspended-badge">
+                    {{ i18n.t('admin.users.suspended') }}
+                  </span>
+                }
+                @if (!user.emailConfirmed) {
+                  <span class="badge">{{ i18n.t('admin.users.unconfirmed') }}</span>
+                }
+                @if (user.isPlatformAdmin) {
+                  <span class="badge">{{ i18n.t('admin.users.admin') }}</span>
+                }
+              </div>
+
+              @if (open(); as detail) {
+                @if (detail.user.id === user.id) {
+                  <div class="detail" [attr.data-testid]="'detail-' + user.id">
+                    @if (detail.history.length > 0) {
+                      <ul class="history">
+                        @for (change of detail.history; track change.changedAt) {
+                          <li>
+                            <span class="muted">
+                              {{ change.changedAt | appDateTime: i18n.locale() }}
+                            </span>
+                            {{
+                              i18n.t(
+                                change.suspended
+                                  ? 'admin.users.wasSuspended'
+                                  : 'admin.users.wasReinstated'
+                              )
+                            }}
+                            <span class="muted">· {{ change.changedByEmail }}</span>
+                            <div>{{ change.reason }}</div>
+                          </li>
+                        }
+                      </ul>
+                    }
+
+                    @if (!detail.user.isPlatformAdmin) {
+                      <form
+                        class="decide"
+                        #decideForm="ngForm"
+                        [formGroup]="reasonForm"
+                        (ngSubmit)="decide(detail, decideForm)"
+                        novalidate
+                      >
+                        <mat-form-field class="field">
+                          <mat-label>{{ i18n.t('admin.users.reason') }}</mat-label>
+                          <textarea
+                            matInput
+                            rows="2"
+                            formControlName="reason"
+                            data-testid="standing-reason"
+                            [attr.maxlength]="reasonMaxLength"
+                          ></textarea>
+                          <mat-error
+                            [appFieldError]="reasonForm.controls.reason"
+                            testId="reason-error"
+                          ></mat-error>
+                        </mat-form-field>
+                        <button
+                          type="submit"
+                          data-testid="standing-decide"
+                          [matButton]="detail.user.suspendedAt ? 'filled' : 'outlined'"
+                          [class.stop]="!detail.user.suspendedAt"
+                          [disabled]="deciding()"
+                        >
+                          {{
+                            i18n.t(
+                              detail.user.suspendedAt
+                                ? 'admin.users.reinstate'
+                                : 'admin.users.suspend'
+                            )
+                          }}
+                        </button>
+                      </form>
+                    }
+
+                    @if (decideError(); as key) {
+                      <p class="form-error" data-testid="decide-error">{{ i18n.t(key) }}</p>
+                    }
+                  </div>
+                }
+              }
+            </li>
+          }
+        </ul>
+      }
+    </mat-card-content>
+  </mat-card>
+}

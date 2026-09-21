@@ -82,7 +82,7 @@ builder.Services
         options.Lockout.AllowedForNewUsers = true;
     })
     .AddEntityFrameworkStores<AppDbContext>()
-    .AddSignInManager()
+    .AddSignInManager<AppSignInManager>()
     .AddDefaultTokenProviders();
 
 // Re-checks each sign-in cookie against the user row, so lockouts, deletions and password changes
@@ -240,6 +240,8 @@ var api = app.MapGroup("/api");
 api.MapAuthEndpoints();
 api.MapVenueEndpoints();
 api.MapAdminVenueEndpoints();
+api.MapAdminUserEndpoints();
+api.MapPlatformDashboardEndpoints();
 // Looking is public; booking is not (PRD US-02).
 api.MapPublicVenueEndpoints();
 api.MapBookingEndpoints();
