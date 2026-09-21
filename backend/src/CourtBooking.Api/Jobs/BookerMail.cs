@@ -277,7 +277,7 @@ public sealed class BookerMail(
         var (subject, body) = BookerLetters.Write(letter, booking.Language);
 
         await emails.SendAsync(
-            new EmailMessage(booking.Address, booking.Language, subject, body),
+            new EmailMessage(booking.Address, booking.Language, subject, body, $"booker.{due.Kind}"),
             CancellationToken.None);
 
         // Not a name PRD 8 lists, like venue_notified; written down with that debt in CLAUDE.md.

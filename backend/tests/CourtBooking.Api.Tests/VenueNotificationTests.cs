@@ -62,8 +62,8 @@ public sealed class VenueNotificationTests(ApiTestFixture api) : IClassFixture<A
         var told = Assert.Single(await SinceAsync(before, venue.Id)).Value;
 
         Assert.Equal(2, told.Count);
-        Assert.DoesNotContain("before", told[0].Subject, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("before", told[1].Subject, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(VenueLetters.TemplateOf(VenueNotice.SlipWaiting), told[0].Template);
+        Assert.Equal(VenueLetters.TemplateOf(VenueNotice.SlipSeenBefore), told[1].Template);
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public sealed class VenueNotificationTests(ApiTestFixture api) : IClassFixture<A
         // Only the everyday notice can be silenced; the ones that mean something is stuck cannot
         // (PRD US-17).
         var told = Assert.Single(Assert.Single(await SinceAsync(before, venue.Id)).Value);
-        Assert.Contains("payment", told.Subject, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(VenueLetters.TemplateOf(VenueNotice.PaymentUnanswered), told.Template);
     }
 
     [Fact]
@@ -123,7 +123,7 @@ public sealed class VenueNotificationTests(ApiTestFixture api) : IClassFixture<A
         Assert.Single(told, member => member.Value.Count == 0);
         Assert.All(
             told.Values.Where(mail => mail.Count == 1),
-            mail => Assert.Contains("payment", mail[0].Subject, StringComparison.OrdinalIgnoreCase));
+            mail => Assert.Equal(VenueLetters.TemplateOf(VenueNotice.PaymentUnanswered), mail[0].Template));
 
         // And the number follows the same rule as the mail.
         Assert.Equal(1, (await AttentionAsync(handler, venue.Id)).BookingsWithMoneyWaiting);
@@ -142,7 +142,7 @@ public sealed class VenueNotificationTests(ApiTestFixture api) : IClassFixture<A
             new RejectSlipRequest("ยอดไม่ตรง", PaymentReceived: true));
 
         var told = Assert.Single(Assert.Single(await SinceAsync(before, venue.Id)).Value);
-        Assert.Contains("owed", told.Subject, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(VenueLetters.TemplateOf(VenueNotice.RefundOwed), told.Template);
         Assert.Equal(1, (await AttentionAsync(owner, venue.Id)).BookingsWithMoneyWaiting);
     }
 
@@ -223,7 +223,7 @@ public sealed class VenueNotificationTests(ApiTestFixture api) : IClassFixture<A
         // so the message is the only thing that says a transfer is now owed (PRD US-17, BR-06).
         Assert.Equal(1, (await AttentionAsync(owner, venue.Id)).BookingsWithMoneyWaiting);
         var told = Assert.Single(Assert.Single(await SinceAsync(before, venue.Id)).Value);
-        Assert.Contains("owed", told.Subject, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(VenueLetters.TemplateOf(VenueNotice.RefundOwed), told.Template);
     }
 
     [Fact]
@@ -239,7 +239,7 @@ public sealed class VenueNotificationTests(ApiTestFixture api) : IClassFixture<A
             new VenueCancelRequest(nameof(CancellationReason.VenueInitiated), null, null));
 
         var told = Assert.Single(Assert.Single(await SinceAsync(before, venue.Id)).Value);
-        Assert.Contains("owed", told.Subject, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(VenueLetters.TemplateOf(VenueNotice.RefundOwed), told.Template);
     }
 
     [Fact]

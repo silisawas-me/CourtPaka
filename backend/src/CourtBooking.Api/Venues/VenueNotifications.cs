@@ -3,6 +3,7 @@ using CourtBooking.Api.Data;
 using CourtBooking.Api.Email;
 using CourtBooking.Api.Observability;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace CourtBooking.Api.Venues;
 
@@ -22,6 +23,7 @@ namespace CourtBooking.Api.Venues;
 public sealed class VenueNotifications(
     AppDbContext database,
     ITransactionalEmailSender emails,
+    IOptions<AppOptions> options,
     ILoggerFactory loggers)
 {
     /// <summary>
@@ -32,7 +34,7 @@ public sealed class VenueNotifications(
     /// decides whether the venue hears about work it now has.
     /// </summary>
     public Task SlipArrivedAsync(Guid venueId, Guid bookingId, bool seenBefore) =>
-        TellAsync(seenBefore ? Notice.SlipSeenBefore : Notice.SlipWaiting, venueId, bookingId);
+        TellAsync(seenBefore ? VenueNotice.SlipSeenBefore : VenueNotice.SlipWaiting, venueId, bookingId);
 
     /// <summary>
     /// A booking's money may need somebody. Whether it does is decided here rather than by the
@@ -57,7 +59,7 @@ public sealed class VenueNotifications(
     /// between looking at it and a player standing at a counter nobody expected.
     /// </summary>
     public Task SlipStillWaitingAsync(Guid venueId, Guid bookingId) =>
-        TellAsync(Notice.SlipStillWaiting, venueId, bookingId);
+        TellAsync(VenueNotice.SlipStillWaiting, venueId, bookingId);
 
     /// <summary>
     /// How much is waiting, for the reader who is asking. Each number is only counted for somebody
@@ -77,7 +79,7 @@ public sealed class VenueNotifications(
 
         var venueId = membership.VenueId;
 
-        var slips = membership.Allows(Who(Notice.SlipWaiting).Permission)
+        var slips = membership.Allows(Who(VenueNotice.SlipWaiting).Permission)
             ? await database.Bookings.CountAsync(
                 booking => booking.VenueId == venueId
                     && booking.Status == BookingStatus.PendingVerification,
@@ -86,7 +88,7 @@ public sealed class VenueNotifications(
 
         // What is still to be sent, not what was once owed: a booking the venue has paid back is
         // finished with, and a number nobody can clear is only a reproach (PRD 6.2, US-18).
-        var money = membership.Allows(Who(Notice.RefundOwed).Permission)
+        var money = membership.Allows(Who(VenueNotice.RefundOwed).Permission)
             // The same rule as Refunds.StillStanding, written out: EF cannot translate a call
             // that builds a query when it sits inside a correlated subquery.
             ? await database.Bookings.CountAsync(
@@ -102,23 +104,13 @@ public sealed class VenueNotifications(
         return new VenueAttentionResponse(slips, money);
     }
 
-    /// <summary>What a venue is told about. Everything else about a notice follows from this.</summary>
-    private enum Notice
-    {
-        SlipWaiting,
-        SlipSeenBefore,
-        SlipStillWaiting,
-        RefundOwed,
-        PaymentUnanswered,
-    }
-
     /// <summary>
     /// Whether a booking's money is waiting for somebody, and for what. The same test the count
     /// above makes, so the number and the message cannot drift apart (PRD 6.2).
     /// </summary>
-    private static Notice? Waiting(decimal refundDue, PaymentState payment) =>
-        payment == PaymentState.Unconfirmed ? Notice.PaymentUnanswered
-        : refundDue > 0 ? Notice.RefundOwed
+    private static VenueNotice? Waiting(decimal refundDue, PaymentState payment) =>
+        payment == PaymentState.Unconfirmed ? VenueNotice.PaymentUnanswered
+        : refundDue > 0 ? VenueNotice.RefundOwed
         : null;
 
     /// <summary>
@@ -127,12 +119,12 @@ public sealed class VenueNotifications(
     /// waiting for money (PRD US-17).
     /// </summary>
     private static (VenuePermissions Permission, bool CanBeSilenced, bool OwnerOnly) Who(
-        Notice notice) =>
+        VenueNotice notice) =>
         notice switch
         {
-            Notice.SlipWaiting or Notice.SlipSeenBefore =>
+            VenueNotice.SlipWaiting or VenueNotice.SlipSeenBefore =>
                 (VenuePermissions.VerifySlip, true, false),
-            Notice.SlipStillWaiting => (VenuePermissions.VerifySlip, false, true),
+            VenueNotice.SlipStillWaiting => (VenuePermissions.VerifySlip, false, true),
             _ => (VenuePermissions.ManageBookings, false, false),
         };
 
@@ -144,7 +136,7 @@ public sealed class VenueNotifications(
     /// A venue that is not approved is told nothing. It cannot act on any of this, and a message
     /// about work it is barred from doing is only noise.
     /// </summary>
-    private async Task TellAsync(Notice notice, Guid venueId, Guid bookingId)
+    private async Task TellAsync(VenueNotice notice, Guid venueId, Guid bookingId)
     {
         var (permission, canBeSilenced, ownerOnly) = Who(notice);
 
@@ -167,14 +159,18 @@ public sealed class VenueNotifications(
             .Where(member => !string.IsNullOrEmpty(member.Address))
             .ToList();
 
-        var (subject, body) = Words(notice, bookingId);
+        var link = VenueLetters.LinkFor(notice, options.Value.BaseUrl, venueId);
 
         foreach (var member in told)
         {
+            // Each reader in their own language: one venue's staff need not share one (US-23).
+            var (subject, body) = VenueLetters.Notice(notice, bookingId, link, member.Language);
+
             try
             {
                 await emails.SendAsync(
-                    new EmailMessage(member.Address!, member.Language, subject, body),
+                    new EmailMessage(
+                        member.Address!, member.Language, subject, body, VenueLetters.TemplateOf(notice)),
                     CancellationToken.None);
             }
             catch (Exception failure)
@@ -203,42 +199,4 @@ public sealed class VenueNotifications(
         var at = address.IndexOf('@', StringComparison.Ordinal);
         return at <= 1 ? "***" : $"{address[0]}***{address[at..]}";
     }
-
-    /// <summary>
-    /// What a notice says. In English until US-06 brings templates in both languages; the language
-    /// each reader chose already travels with the message. One switch with no default arm, so a
-    /// notice added later cannot quietly go out wearing another one's words.
-    /// </summary>
-    private static (string Subject, string Body) Words(Notice notice, Guid bookingId) =>
-        notice switch
-        {
-            Notice.SlipWaiting => (
-                "A slip is waiting to be checked",
-                $"A booker has sent a slip for booking {bookingId}. It is in the slip queue."),
-
-            Notice.SlipSeenBefore => (
-                "A slip you have seen before has arrived again",
-                $"The slip sent for booking {bookingId} has the same bytes as one this venue has "
-                + "been sent before. Check it against the transfer."),
-
-            Notice.SlipStillWaiting => (
-                "A slip is still waiting, and the court is about to be played",
-                $"Booking {bookingId} is still waiting for its slip to be checked, and its first "
-                + "hour starts within the half hour. Check it, or the player arrives at a court "
-                + "nobody is expecting them on."),
-
-            Notice.RefundOwed => (
-                "A booking is owed money back",
-                $"Booking {bookingId} is owed money back. The venue sends it and records that "
-                + "it did."),
-
-            Notice.PaymentUnanswered => (
-                "A booking needs an answer about its payment",
-                $"Booking {bookingId} was given up while its slip was still being checked. Until "
-                + "the venue says whether the money arrived, nobody knows what is owed."),
-
-            // Not a default: a notice added later should stop here rather than go out quietly
-            // wearing another one's words.
-            _ => throw new ArgumentOutOfRangeException(nameof(notice), notice, null),
-        };
 }

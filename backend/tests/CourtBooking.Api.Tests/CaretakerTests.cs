@@ -87,10 +87,9 @@ public sealed class CaretakerTests(ApiTestFixture api) : IClassFixture<ApiTestFi
         await SweepAsync();
 
         Assert.Equal(before + 1, CountTo(ownerAddress));
-        Assert.Contains(
-            "about to be played",
-            api.Emails.LastTo(ownerAddress).Subject,
-            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(
+            VenueLetters.TemplateOf(VenueNotice.SlipStillWaiting),
+            api.Emails.LastTo(ownerAddress).Template);
 
         // And again, and nothing more is sent: the row was claimed before the message went out.
         await SweepAsync();

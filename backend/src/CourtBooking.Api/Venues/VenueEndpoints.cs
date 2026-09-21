@@ -443,12 +443,11 @@ public static class VenueEndpoints
             $"{options.Value.BaseUrl.TrimEnd('/')}/venue-invitation",
             new Dictionary<string, string?> { ["invitationId"] = invitation.Id.ToString(), ["token"] = token });
 
+        // In the invited person's language if they already have an account, Thai otherwise.
+        var language = existing?.Language ?? SupportedLanguages.Default;
+        var (subject, body) = AccountLetters.Invitation(language, currentVenue.Require().Venue!.Name, link);
         await emailSender.SendAsync(
-            new EmailMessage(
-                email,
-                existing?.Language ?? SupportedLanguages.Default,
-                $"CourtPaka: you were invited to {currentVenue.Require().Venue!.Name}",
-                $"Accept the invitation within 7 days: {link}"),
+            new EmailMessage(email, language, subject, body, AccountLetters.InvitationTemplate),
             cancellationToken);
 
         return TypedResults.Created(
