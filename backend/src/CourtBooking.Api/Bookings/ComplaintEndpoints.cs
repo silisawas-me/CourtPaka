@@ -293,14 +293,37 @@ public static class ComplaintEndpoints
         }
 
         var byUserId = CallerId.Of(principal);
-        database.SlipViewings.Add(new SlipViewing
+
+        // The complaint is held open while the look is written: a resolve arriving now waits for
+        // this commit (its UPDATE needs the row this share-locks), and one that got there first
+        // leaves nothing to lock — so no look is ever recorded on a closed complaint, and no slip
+        // is handed over through one (PRD 8).
+        await using (var transaction = await database.Database.BeginTransactionAsync(cancellationToken))
         {
-            ComplaintId = complaintId,
-            SlipId = slipId,
-            ViewedByUserId = byUserId,
-            ViewedAt = timeProvider.GetUtcNow(),
-        });
-        await database.SaveChangesAsync(cancellationToken);
+            var held = await database.Database
+                .SqlQuery<Guid>(
+                    $"""
+                    SELECT "Id" AS "Value" FROM "Complaints"
+                    WHERE "Id" = {complaintId} AND "Status" = {(int)ComplaintStatus.Open}
+                    FOR SHARE
+                    """)
+                .ToListAsync(cancellationToken);
+
+            if (held.Count == 0)
+            {
+                return ApiProblem.Of(StatusCodes.Status409Conflict, ComplaintErrorCodes.NotOpen);
+            }
+
+            database.SlipViewings.Add(new SlipViewing
+            {
+                ComplaintId = complaintId,
+                SlipId = slipId,
+                ViewedByUserId = byUserId,
+                ViewedAt = timeProvider.GetUtcNow(),
+            });
+            await database.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
 
         AppEvents.For(loggers).LogInformation(
             "complaint_slip_viewed {ComplaintId} {SlipId} {By}", complaintId, slipId, byUserId);
@@ -342,18 +365,31 @@ public static class ComplaintEndpoints
             .Include(one => one.Booker)
             .SingleAsync(one => one.Id == complaint.BookingId, cancellationToken);
 
-        var history = await database.BookingStatusChanges
+        var moves = await database.BookingStatusChanges
             .AsNoTracking()
             .Where(change => change.BookingId == booking.Id)
-            .OrderBy(change => change.ChangedAt)
-            .Select(change => new ComplaintMoveResponse(
-                change.From.HasValue ? change.From.Value.ToString() : null,
-                change.To.ToString(),
+            .Select(change => new
+            {
+                change.From,
+                change.To,
                 change.ChangedAt,
-                change.ChangedBy!.Email,
-                change.Cause.HasValue ? change.Cause.Value.ToString() : null,
-                change.Reason))
-            .ToArrayAsync(cancellationToken);
+                ChangedByEmail = change.ChangedBy!.Email,
+                change.Cause,
+                change.Reason,
+            })
+            .ToListAsync(cancellationToken);
+
+        // In the order it happened, which the clock alone cannot say (see BookingHistory).
+        var history = BookingHistory
+            .InOrder(moves, move => move.From, move => move.To, move => move.ChangedAt)
+            .Select(move => new ComplaintMoveResponse(
+                move.From?.ToString(),
+                move.To.ToString(),
+                move.ChangedAt,
+                move.ChangedByEmail,
+                move.Cause?.ToString(),
+                move.Reason))
+            .ToArray();
 
         var sentBack = await database.RefundRecords
             .Where(record => record.BookingId == booking.Id)

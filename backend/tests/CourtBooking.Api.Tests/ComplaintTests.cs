@@ -30,6 +30,50 @@ public sealed class ComplaintTests(ApiTestFixture api) : IClassFixture<ApiTestFi
             opened.Booking.History.Select(move => move.To));
     }
 
+    /// <summary>
+    /// A slip confirmed after the hours were played is a confirm and a complete written at the
+    /// same instant. The history an admin reads must still say which came first (PRD 6.1).
+    /// </summary>
+    [Fact]
+    public async Task Moves_made_at_the_same_instant_read_in_the_order_they_happened()
+    {
+        var admin = await scenario.PlatformAdminAsync();
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        await scenario.PlayOutAsync(booking.Id);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await owner.PostAsync($"/api/venues/{venue.Id}/slip-queue/{booking.Id}/confirm", null)).StatusCode);
+
+        var opened = await OpenAsync(admin, booking.Id, "เล่นไปแล้วแต่เพิ่งยืนยัน", "Email");
+
+        Assert.Equal(
+            ["Held", "PendingVerification", "Confirmed", "Completed"],
+            opened.Booking.History.Select(move => move.To));
+    }
+
+    /// <summary>The rule on its own, with the tie handed over in the wrong order on purpose.</summary>
+    [Fact]
+    public void The_chain_decides_between_moves_that_share_a_moment()
+    {
+        var at = DateTimeOffset.UtcNow;
+        var moves = new[]
+        {
+            new Move(BookingStatus.Confirmed, BookingStatus.Completed, at.AddMinutes(5)),
+            new Move(BookingStatus.PendingVerification, BookingStatus.Confirmed, at.AddMinutes(5)),
+            new Move(null, BookingStatus.Held, at),
+            new Move(BookingStatus.Held, BookingStatus.PendingVerification, at.AddMinutes(1)),
+        };
+
+        var ordered = BookingHistory.InOrder(moves, move => move.From, move => move.To, move => move.At);
+
+        Assert.Equal(
+            [BookingStatus.Held, BookingStatus.PendingVerification, BookingStatus.Confirmed, BookingStatus.Completed],
+            ordered.Select(move => move.To));
+    }
+
+    private sealed record Move(BookingStatus? From, BookingStatus To, DateTimeOffset At);
+
     [Theory]
     [InlineData("  ", "Email", ComplaintErrorCodes.DetailsRequired)]
     [InlineData("รายละเอียด", "1", ComplaintErrorCodes.InvalidChannel)]

@@ -6,7 +6,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { catchError, map, of, Subject, switchMap } from 'rxjs';
+import { catchError, map, of, Subject, Subscription, switchMap } from 'rxjs';
 import {
   AdminService,
   Complaint,
@@ -94,6 +94,12 @@ export class AdminComplaintsPage implements OnInit {
   protected readonly slipError = signal<string | null>(null);
   protected readonly fetchingSlip = signal(false);
 
+  /** The slip request in flight, so leaving the complaint (or the page) can call it off. */
+  private slipRequest: Subscription | null = null;
+
+  /** Lists asked for, newest last; switchMap drops an older answer that arrives late. */
+  private readonly listing = new Subject<ComplaintStatus | 'All'>();
+
   private readonly numbers = computed(
     () => new Intl.NumberFormat(this.i18n.locale(), { maximumFractionDigits: 2 }),
   );
@@ -118,7 +124,27 @@ export class AdminComplaintsPage implements OnInit {
         }
       });
 
-    // A blob URL is held by the browser until it is told to let go.
+    this.listing
+      .pipe(
+        switchMap((filter) =>
+          this.admin.complaints(filter === 'All' ? undefined : filter).pipe(
+            map((list) => ({ list, failure: null as unknown })),
+            catchError((failure: unknown) => of({ list: null, failure })),
+          ),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe(({ list, failure }) => {
+        this.loading.set(false);
+        if (list) {
+          this.complaints.set(list);
+        } else {
+          this.pageError.set(errorKey(failure));
+        }
+      });
+
+    // A blob URL is held by the browser until it is told to let go, and a request still in
+    // flight would make one after the page is gone.
     this.destroyed.onDestroy(() => this.releaseSlip());
   }
 
@@ -178,9 +204,13 @@ export class AdminComplaintsPage implements OnInit {
 
     this.releaseSlip();
     this.fetchingSlip.set(true);
-    this.admin.complaintSlip(complaint.id).subscribe({
+    this.slipRequest = this.admin.complaintSlip(complaint.id).subscribe({
       next: (slip) => {
         this.fetchingSlip.set(false);
+        // Somebody's bank account: only ever shown under the complaint it was asked for.
+        if (this.current()?.id !== complaint.id) {
+          return;
+        }
         this.slipIsPdf.set(slip.type === 'application/pdf');
         this.slipUrl.set(URL.createObjectURL(slip));
         this.showing.next(complaint.id);
@@ -188,6 +218,8 @@ export class AdminComplaintsPage implements OnInit {
       error: (failure: unknown) => {
         this.fetchingSlip.set(false);
         this.slipError.set(errorKey(failure));
+        // Refused because the complaint closed meanwhile: show it as it now is.
+        this.showing.next(complaint.id);
       },
     });
   }
@@ -227,6 +259,10 @@ export class AdminComplaintsPage implements OnInit {
   }
 
   private releaseSlip(): void {
+    this.slipRequest?.unsubscribe();
+    this.slipRequest = null;
+    this.fetchingSlip.set(false);
+
     const url = this.slipUrl();
     if (url) {
       URL.revokeObjectURL(url);
@@ -238,17 +274,6 @@ export class AdminComplaintsPage implements OnInit {
   private load(): void {
     this.loading.set(true);
     this.pageError.set(null);
-
-    const filter = this.filter();
-    this.admin.complaints(filter === 'All' ? undefined : filter).subscribe({
-      next: (list) => {
-        this.loading.set(false);
-        this.complaints.set(list);
-      },
-      error: (failure: unknown) => {
-        this.loading.set(false);
-        this.pageError.set(errorKey(failure));
-      },
-    });
+    this.listing.next(this.filter());
   }
 }

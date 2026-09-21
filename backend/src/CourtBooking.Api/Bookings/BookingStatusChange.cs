@@ -61,3 +61,39 @@ public sealed class BookingStatusChange
 
     public AppUser? ChangedBy { get; init; }
 }
+
+/// <summary>Reading a booking's history in the order it happened (PRD 6.1, US-22).</summary>
+public static class BookingHistory
+{
+    /// <summary>
+    /// The moves in the order they were made. Time decides between moves made at different
+    /// moments; where several share one — a confirm and the complete the clock owed it, written in
+    /// one transaction — the chain decides: the next move is the one that starts where the last
+    /// one ended. A reader that sorted by time alone could show "Completed, then Confirmed", and
+    /// this is what an admin reads to settle a dispute.
+    /// </summary>
+    public static List<T> InOrder<T>(
+        IEnumerable<T> moves,
+        Func<T, BookingStatus?> from,
+        Func<T, BookingStatus> to,
+        Func<T, DateTimeOffset> at)
+        where T : class
+    {
+        var remaining = moves.OrderBy(at).ToList();
+        var ordered = new List<T>(remaining.Count);
+        BookingStatus? last = null;
+
+        while (remaining.Count > 0)
+        {
+            var earliest = at(remaining[0]);
+            var tied = remaining.TakeWhile(move => at(move) == earliest).ToList();
+            var next = tied.FirstOrDefault(move => from(move) == last) ?? tied[0];
+
+            ordered.Add(next);
+            remaining.Remove(next);
+            last = to(next);
+        }
+
+        return ordered;
+    }
+}

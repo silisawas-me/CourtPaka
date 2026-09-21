@@ -134,6 +134,51 @@ describe('AdminComplaintsPage', () => {
     expect(textOf(fixture, 'slip-viewings')).toContain('admin@example.com');
   });
 
+  it('never shows a slip under a complaint other than the one it was asked for', () => {
+    openDetail();
+    clickOn(fixture, 'see-slip');
+    const slip = httpMock.expectOne('/api/admin/complaints/k1/slip');
+
+    // The admin moves on while the slip is still on its way.
+    clickOn(fixture, 'complaint-k1');
+    fixture.detectChanges();
+
+    expect(slip.cancelled).toBe(true);
+    expect(elementOf(fixture, 'slip-image')).toBeNull();
+  });
+
+  it('says why the slip was refused, and shows the complaint as it now is', async () => {
+    openDetail();
+    clickOn(fixture, 'see-slip');
+    httpMock.expectOne('/api/admin/complaints/k1/slip').flush(
+      new Blob([JSON.stringify({ code: 'complaint.not_open' })], {
+        type: 'application/problem+json',
+      }),
+      { status: 409, statusText: 'Conflict' },
+    );
+    // The code inside a Blob is read asynchronously, so the page's next step comes after it.
+    const reread = await vi.waitFor(() => httpMock.expectOne('/api/admin/complaints/k1'));
+    reread.flush(complaint());
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'slip-error')).toBe(TRANSLATIONS.th['error.complaint.not_open']);
+  });
+
+  it('drops a list asked for earlier once another is asked for', () => {
+    clickOn(fixture, 'filter-Resolved');
+    const older = httpMock.expectOne(
+      (one) => one.url === '/api/admin/complaints' && one.params.get('status') === 'Resolved',
+    );
+    clickOn(fixture, 'filter-All');
+    httpMock
+      .expectOne((one) => one.url === '/api/admin/complaints' && !one.params.has('status'))
+      .flush([summary(), summary({ id: 'k2', status: 'Resolved' })]);
+    fixture.detectChanges();
+
+    expect(older.cancelled).toBe(true);
+    expect(elementOf(fixture, 'complaint-k2')).not.toBeNull();
+  });
+
   it('offers no slip on a resolved complaint', () => {
     openDetail(
       complaint({
