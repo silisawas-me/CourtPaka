@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace CourtBooking.Api.Identity;
@@ -50,7 +51,7 @@ public sealed class AppSignInManager(
     : SignInManager<AppUser>(users, contextAccessor, claimsFactory, options, logger, schemes, confirmation)
 {
     public override async Task<bool> CanSignInAsync(AppUser user) =>
-        user.SuspendedAt is null && await base.CanSignInAsync(user);
+        user.SuspendedAt is null && user.DeletedAt is null && await base.CanSignInAsync(user);
 
     /// <summary>
     /// A live session is checked against the row every revalidation interval. The security stamp
@@ -62,5 +63,48 @@ public sealed class AppSignInManager(
     {
         var user = await base.ValidateSecurityStampAsync(principal);
         return user is { SuspendedAt: null } ? user : null;
+    }
+}
+
+/// <summary>
+/// Whether an account may still act — not suspended (US-22), not deleted (PDPA, S-15) — asked of
+/// the row itself, not of the cookie, which can outlive either for a revalidation interval.
+///
+/// Inside a transaction the row is share-locked, so it is also the queue with a deletion in
+/// progress: that takes the row for update, so a write gated here either finishes first (and the
+/// deletion then sees it) or waits and is refused.
+/// </summary>
+public static class AccountGate
+{
+    public const string Closed = "auth.account_closed";
+
+    private sealed class Standing
+    {
+        public DateTimeOffset? SuspendedAt { get; init; }
+
+        public DateTimeOffset? DeletedAt { get; init; }
+    }
+
+    /// <summary>Null when the account may act; otherwise the code to refuse with.</summary>
+    public static async Task<string?> RefusalAsync(
+        Data.AppDbContext database,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var rows = await database.Database
+            .SqlQuery<Standing>(
+                $"""
+                SELECT "SuspendedAt", "DeletedAt" FROM "AspNetUsers"
+                WHERE "Id" = {userId}
+                FOR SHARE
+                """)
+            .ToListAsync(cancellationToken);
+
+        return rows.SingleOrDefault() switch
+        {
+            null or { DeletedAt: not null } => Closed,
+            { SuspendedAt: not null } => AuthErrorCodes.AccountSuspended,
+            _ => null,
+        };
     }
 }

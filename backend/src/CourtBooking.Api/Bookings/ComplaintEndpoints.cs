@@ -373,7 +373,8 @@ public static class ComplaintEndpoints
                 change.From,
                 change.To,
                 change.ChangedAt,
-                ChangedByEmail = change.ChangedBy!.Email,
+                // The booker made most of these moves; forgotten, they are nobody (PRD 8, S-15).
+                ChangedByEmail = change.ChangedBy!.DeletedAt == null ? change.ChangedBy.Email : null,
                 change.Cause,
                 change.Reason,
             })
@@ -403,7 +404,9 @@ public static class ComplaintEndpoints
             .AsNoTracking()
             .Where(viewing => viewing.ComplaintId == complaintId)
             .OrderByDescending(viewing => viewing.ViewedAt)
-            .Select(viewing => new SlipViewingResponse(viewing.ViewedBy!.Email, viewing.ViewedAt))
+            .Select(viewing => new SlipViewingResponse(
+                viewing.ViewedBy!.DeletedAt == null ? viewing.ViewedBy.Email : null,
+                viewing.ViewedAt))
             .ToArrayAsync(cancellationToken);
 
         return new ComplaintResponse(
@@ -422,7 +425,7 @@ public static class ComplaintEndpoints
                 booking.Venue!.Code,
                 booking.Venue.Name,
                 booking.Channel.ToString(),
-                booking.Booker?.Email,
+                booking.Booker is { DeletedAt: null } booker ? booker.Email : null,
                 booking.CustomerName,
                 booking.CustomerPhone,
                 BookedSlots.StatusAt(booking, now).ToString(),

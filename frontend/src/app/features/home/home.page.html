@@ -5,6 +5,9 @@
   </mat-card-header>
 
   <mat-card-content>
+    @if (deleted() && !user()) {
+      <p class="success" data-testid="account-deleted">{{ i18n.t('account.deleted') }}</p>
+    }
     @if (user(); as account) {
       <p data-testid="signed-in-as">{{ i18n.t('home.signedInAs') }} {{ account.email }}</p>
       <p data-testid="verification-state">

@@ -164,6 +164,14 @@ public static class VenueEndpoints
 
         database.VenueMemberships.Add(membership);
 
+        // The row, not the cookie: an account suspended or forgotten a moment ago must not come
+        // out of this owning a venue nobody can reach (PRD US-22, S-15).
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        if (await AccountGate.RefusalAsync(database, CallerId.Of(principal), cancellationToken) is { } closed)
+        {
+            return ApiProblem.Of(StatusCodes.Status403Forbidden, closed);
+        }
+
         try
         {
             await database.SaveChangesAsync(cancellationToken);
@@ -172,6 +180,8 @@ public static class VenueEndpoints
         {
             return ApiProblem.Of(StatusCodes.Status409Conflict, VenueErrorCodes.CodeAlreadyUsed);
         }
+
+        await transaction.CommitAsync(cancellationToken);
 
         return TypedResults.Created($"/api/venues/{venue.Id}", ToResponse(venue, membership));
     }
@@ -509,6 +519,13 @@ public static class VenueEndpoints
         database.VenueMemberships.Add(membership);
         invitation.AcceptedAt = now;
 
+        // Queued behind a deletion in progress, so a seat is never given to a forgotten account.
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        if (await AccountGate.RefusalAsync(database, user.Id, cancellationToken) is { } closed)
+        {
+            return ApiProblem.Of(StatusCodes.Status403Forbidden, closed);
+        }
+
         try
         {
             await database.SaveChangesAsync(cancellationToken);
@@ -518,6 +535,8 @@ public static class VenueEndpoints
             // Two accepts raced (a double click, a retry); the membership already exists.
             return ApiProblem.Of(StatusCodes.Status409Conflict, VenueErrorCodes.AlreadyMember);
         }
+
+        await transaction.CommitAsync(cancellationToken);
 
         return TypedResults.Ok(ToResponse(invitation.Venue!, membership));
     }

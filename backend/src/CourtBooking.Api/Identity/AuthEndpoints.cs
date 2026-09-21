@@ -26,6 +26,10 @@ public static class AuthEndpoints
         auth.MapPost("/logout", LogoutAsync).RequireAuthorization();
         auth.MapGet("/me", GetCurrentUserAsync).RequireAuthorization();
         auth.MapPut("/me/language", ChangeLanguageAsync).RequireAuthorization();
+        // Rate-limited like sign-in: it takes a password (PDPA, PRD 8).
+        auth.MapPost("/me/delete", AccountDeletion.DeleteAsync)
+            .RequireAuthorization()
+            .RequireRateLimiting(RateLimitPolicies.Auth);
 
         return auth;
     }

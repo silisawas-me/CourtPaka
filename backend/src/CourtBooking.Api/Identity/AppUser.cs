@@ -17,6 +17,12 @@ public sealed class AppUser : IdentityUser<Guid>
     /// </summary>
     public DateTimeOffset? SuspendedAt { get; set; }
 
+    /// <summary>
+    /// When the person asked to be forgotten (PDPA, PRD 8, S-15). The row stays, anonymised, so
+    /// the bookings and history that point at it still hold together; see AccountDeletion.
+    /// </summary>
+    public DateTimeOffset? DeletedAt { get; set; }
+
     public ICollection<UserConsent> Consents { get; } = [];
 }
 

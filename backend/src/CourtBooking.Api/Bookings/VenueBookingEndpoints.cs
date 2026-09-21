@@ -603,7 +603,12 @@ public static class VenueBookingEndpoints
         CancellationToken cancellationToken)
     {
         var found = await WithHours(bookings)
-            .Select(booking => new { Booking = booking, Email = booking.Booker!.Email })
+            // A booker who asked to be forgotten is shown as nobody, not as a placeholder address.
+            .Select(booking => new
+            {
+                Booking = booking,
+                Email = booking.Booker!.DeletedAt == null ? booking.Booker.Email : null,
+            })
             .ToListAsync(cancellationToken);
 
         if (found.Count == 0)
