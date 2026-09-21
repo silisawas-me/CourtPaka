@@ -51,6 +51,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<BookerNotice> BookerNotices => Set<BookerNotice>();
 
+    public DbSet<Complaint> Complaints => Set<Complaint>();
+
+    public DbSet<SlipViewing> SlipViewings => Set<SlipViewing>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -330,6 +334,54 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             // The caretaker reads the latest moves across every booking to tell bookers about
             // them (PRD US-06), and only the latest, so it asks by time alone.
             change.HasIndex(c => c.ChangedAt);
+        });
+
+        builder.Entity<Complaint>(complaint =>
+        {
+            complaint.Property(c => c.Details).HasMaxLength(Complaint.DetailsMaxLength);
+            complaint.Property(c => c.Resolution).HasMaxLength(Complaint.ResolutionMaxLength);
+
+            // Resolved means resolved by somebody, at a time, with what was done (PRD US-22).
+            complaint.ToTable(table => table.HasCheckConstraint(
+                "CK_Complaints_ResolvedSaysHow",
+                "(\"Status\" = 1 AND \"ResolvedAt\" IS NULL AND \"Resolution\" IS NULL)"
+                + " OR (\"Status\" = 2 AND \"ResolvedAt\" IS NOT NULL"
+                + " AND \"ResolvedByUserId\" IS NOT NULL AND \"Resolution\" IS NOT NULL)"));
+
+            // The queue: open first, newest first.
+            complaint.HasIndex(c => new { c.Status, c.OpenedAt });
+            complaint.HasIndex(c => c.BookingId);
+
+            // Nothing takes a complaint with it: it is the record of a dispute (PRD 8).
+            complaint.HasOne(c => c.Booking)
+                .WithMany()
+                .HasForeignKey(c => c.BookingId)
+                .OnDelete(DeleteBehavior.Restrict);
+            complaint.HasOne(c => c.OpenedBy)
+                .WithMany()
+                .HasForeignKey(c => c.OpenedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            complaint.HasOne(c => c.ResolvedBy)
+                .WithMany()
+                .HasForeignKey(c => c.ResolvedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<SlipViewing>(viewing =>
+        {
+            viewing.HasIndex(v => new { v.ComplaintId, v.ViewedAt });
+            viewing.HasOne(v => v.Complaint)
+                .WithMany()
+                .HasForeignKey(v => v.ComplaintId)
+                .OnDelete(DeleteBehavior.Restrict);
+            viewing.HasOne(v => v.Slip)
+                .WithMany()
+                .HasForeignKey(v => v.SlipId)
+                .OnDelete(DeleteBehavior.Restrict);
+            viewing.HasOne(v => v.ViewedBy)
+                .WithMany()
+                .HasForeignKey(v => v.ViewedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<BookerNotice>(notice =>

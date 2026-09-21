@@ -1,5 +1,5 @@
 import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
-import { catchError, throwError } from 'rxjs';
+import { catchError, from, of, switchMap, throwError } from 'rxjs';
 
 /** Errors from the API carry a stable code (PRD US-23); the UI turns the code into text. */
 export class ApiError extends Error {
@@ -30,18 +30,39 @@ export function errorKey(error: unknown): string {
 /** Every API failure reaches feature code as an ApiError, whatever the endpoint. */
 export const apiErrorInterceptor: HttpInterceptorFn = (request, next) =>
   next(request).pipe(
-    catchError((error: HttpErrorResponse) => {
-      const body = error.error as { code?: string } | null;
-      const code =
-        error.status === 429 ? TOO_MANY_REQUESTS_CODE : (body?.code ?? UNKNOWN_ERROR_CODE);
+    catchError((error: HttpErrorResponse) =>
+      // A request for a file (responseType 'blob') gets its refusal as a Blob too, and a code
+      // inside one is still the code: without reading it, every refusal of a slip would read as
+      // "something went wrong" (PRD US-23).
+      (error.error instanceof Blob ? from(problemIn(error.error)) : of(error.error)).pipe(
+        switchMap((body: unknown) => {
+          const problem = body as { code?: string } | null;
+          const code =
+            error.status === 429 ? TOO_MANY_REQUESTS_CODE : (problem?.code ?? UNKNOWN_ERROR_CODE);
 
-      return throwError(
-        () =>
-          new ApiError(
-            code,
-            error.status,
-            body && typeof body === 'object' ? (body as Record<string, unknown>) : null,
-          ),
-      );
-    }),
+          return throwError(
+            () =>
+              new ApiError(
+                code,
+                error.status,
+                problem && typeof problem === 'object'
+                  ? (problem as Record<string, unknown>)
+                  : null,
+              ),
+          );
+        }),
+      ),
+    ),
   );
+
+/** The problem body inside a Blob, if it is one; anything else is no body at all. */
+async function problemIn(blob: Blob): Promise<unknown> {
+  if (!blob.type.includes('json')) {
+    return null;
+  }
+  try {
+    return JSON.parse(await blob.text());
+  } catch {
+    return null;
+  }
+}

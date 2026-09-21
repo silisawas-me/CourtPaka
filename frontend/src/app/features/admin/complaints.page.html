@@ -1,0 +1,308 @@
+<app-admin-tabs />
+
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>{{ i18n.t('admin.complaints.openTitle') }}</mat-card-title>
+  </mat-card-header>
+
+  <mat-card-content>
+    <form
+      class="stack"
+      #newComplaint="ngForm"
+      [formGroup]="openForm"
+      (ngSubmit)="open(newComplaint)"
+      novalidate
+    >
+      <mat-form-field class="field">
+        <mat-label>{{ i18n.t('admin.complaints.bookingId') }}</mat-label>
+        <input
+          matInput
+          formControlName="bookingId"
+          data-testid="complaint-booking"
+          autocomplete="off"
+        />
+        <mat-error
+          [appFieldError]="openForm.controls.bookingId"
+          testId="complaint-booking-error"
+        ></mat-error>
+      </mat-form-field>
+
+      <fieldset class="channels">
+        <legend>{{ i18n.t('admin.complaints.channel') }}</legend>
+        @for (channel of channels; track channel) {
+          <label class="channel">
+            <input
+              type="radio"
+              formControlName="channel"
+              [value]="channel"
+              [attr.data-testid]="'channel-' + channel"
+            />
+            <span>{{ i18n.t('admin.complaints.channels.' + channel) }}</span>
+          </label>
+        }
+        @if (openForm.controls.channel.invalid && openForm.controls.channel.touched) {
+          <p class="form-error" data-testid="channel-error">{{ i18n.t('common.required') }}</p>
+        }
+      </fieldset>
+
+      <mat-form-field class="field">
+        <mat-label>{{ i18n.t('admin.complaints.details') }}</mat-label>
+        <textarea
+          matInput
+          rows="3"
+          formControlName="details"
+          data-testid="complaint-details"
+          [attr.maxlength]="textMaxLength"
+        ></textarea>
+        <mat-error
+          [appFieldError]="openForm.controls.details"
+          testId="complaint-details-error"
+        ></mat-error>
+      </mat-form-field>
+
+      <div class="row">
+        <button
+          matButton="filled"
+          type="submit"
+          data-testid="complaint-open"
+          [disabled]="opening()"
+        >
+          {{ i18n.t('admin.complaints.open') }}
+        </button>
+      </div>
+
+      @if (openError(); as key) {
+        <p class="form-error" data-testid="open-error">{{ i18n.t(key) }}</p>
+      }
+    </form>
+  </mat-card-content>
+</mat-card>
+
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>{{ i18n.t('admin.complaints.title') }}</mat-card-title>
+  </mat-card-header>
+
+  <mat-card-content>
+    <div class="filters">
+      @for (choice of filters; track choice) {
+        <button
+          matButton
+          type="button"
+          class="filter"
+          [class.on]="filter() === choice"
+          [attr.data-testid]="'filter-' + choice"
+          (click)="show(choice)"
+        >
+          {{ i18n.t('admin.complaints.filter.' + choice) }}
+        </button>
+      }
+    </div>
+
+    @if (loading()) {
+      <mat-progress-bar mode="indeterminate" />
+    } @else if (pageError(); as key) {
+      <p class="form-error" data-testid="page-error">{{ i18n.t(key) }}</p>
+    } @else if (complaints().length === 0) {
+      <p class="muted" data-testid="no-complaints">{{ i18n.t('admin.complaints.none') }}</p>
+    } @else {
+      <ul class="complaint-list" data-testid="complaint-list">
+        @for (item of complaints(); track item.id) {
+          <li class="complaint">
+            <button
+              type="button"
+              class="complaint-open"
+              [attr.aria-expanded]="current()?.id === item.id"
+              [attr.data-testid]="'complaint-' + item.id"
+              (click)="select(item.id)"
+            >
+              {{ item.venueName }}
+            </button>
+            <span class="muted">{{ item.openedAt | appDateTime: i18n.locale() }}</span>
+            <span class="badge" [class.badge-open]="item.status === 'Open'">
+              {{ i18n.t('admin.complaints.filter.' + item.status) }}
+            </span>
+          </li>
+        }
+      </ul>
+    }
+
+    @if (currentError(); as key) {
+      <p class="form-error" data-testid="current-error">{{ i18n.t(key) }}</p>
+    }
+  </mat-card-content>
+</mat-card>
+
+@if (current(); as c) {
+  <mat-card data-testid="complaint-detail">
+    <mat-card-header>
+      <mat-card-title>{{ c.booking.venueName }} · {{ c.booking.venueCode }}</mat-card-title>
+      <mat-card-subtitle>
+        {{ i18n.t('admin.complaints.channels.' + c.channel) }} ·
+        {{ c.openedAt | appDateTime: i18n.locale() }} · {{ c.openedByEmail }}
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content class="stack">
+      <p class="details" data-testid="detail-text">{{ c.details }}</p>
+
+      <!-- The booking the complaint is about: who, when, what it cost, and every move it made. -->
+      <dl class="booking">
+        <div>
+          <dt class="muted">{{ i18n.t('admin.complaints.who') }}</dt>
+          <dd data-testid="detail-who">
+            @if (c.booking.channel === 'Staff') {
+              {{ c.booking.customerName }}
+              @if (c.booking.customerPhone) {
+                · {{ c.booking.customerPhone }}
+              }
+              <span class="badge">{{ i18n.t('counter.badge') }}</span>
+            } @else {
+              {{ c.booking.bookerEmail }}
+            }
+          </dd>
+        </div>
+        <div>
+          <dt class="muted">{{ i18n.t('admin.complaints.status') }}</dt>
+          <dd data-testid="detail-status">
+            {{ i18n.t('booking.status.' + c.booking.status) }} ·
+            {{ i18n.t('admin.complaints.payment.' + c.booking.paymentState) }}
+          </dd>
+        </div>
+        <div>
+          <dt class="muted">{{ i18n.t('admin.complaints.money') }}</dt>
+          <dd>
+            {{ baht(c.booking.totalBaht) }} · {{ i18n.t('admin.complaints.refundDue') }}
+            {{ baht(c.booking.refundDueBaht) }} · {{ i18n.t('admin.complaints.sentBack') }}
+            {{ baht(c.booking.sentBackBaht) }}
+          </dd>
+        </div>
+        <div>
+          <dt class="muted">{{ i18n.t('admin.complaints.hours') }}</dt>
+          <dd>
+            @for (slot of c.booking.slots; track slot.startsAt + slot.courtName) {
+              <div>{{ slot.courtName }} · {{ slot.startsAt | appDateTime: i18n.locale() }}</div>
+            }
+          </dd>
+        </div>
+      </dl>
+
+      <ol class="history" data-testid="detail-history">
+        @for (move of c.booking.history; track $index) {
+          <li>
+            <span class="muted">{{ move.changedAt | appDateTime: i18n.locale() }}</span>
+            {{ i18n.t('booking.status.' + move.to) }}
+            @if (move.changedByEmail) {
+              <span class="muted">· {{ move.changedByEmail }}</span>
+            }
+            @if (move.cause) {
+              <span>· {{ i18n.t('venueBookings.reason.' + move.cause) }}</span>
+            }
+            @if (move.reason) {
+              <div class="muted">{{ move.reason }}</div>
+            }
+          </li>
+        }
+      </ol>
+
+      <!--
+        The slip: only while the complaint is open, only on a press, and the list of looks right
+        under the button — the admin pressing it can see it is on the record (PRD US-22).
+      -->
+      @if (c.status === 'Open' && c.booking.hasSlip) {
+        <div class="slip">
+          <div class="row">
+            <button
+              matButton="outlined"
+              type="button"
+              data-testid="see-slip"
+              [disabled]="fetchingSlip()"
+              (click)="seeSlip(c)"
+            >
+              {{ i18n.t('admin.complaints.seeSlip') }}
+            </button>
+            <span class="muted small">{{ i18n.t('admin.complaints.seeSlipNote') }}</span>
+          </div>
+
+          @if (slipUrl(); as url) {
+            @if (slipIsPdf()) {
+              <a
+                matButton="filled"
+                [href]="url"
+                target="_blank"
+                rel="noopener"
+                data-testid="slip-file"
+              >
+                {{ i18n.t('slipQueue.openSlip') }}
+              </a>
+            } @else {
+              <img
+                class="slip-image"
+                data-testid="slip-image"
+                [src]="url"
+                [alt]="i18n.t('slipQueue.slipAlt')"
+              />
+            }
+          }
+          @if (slipError(); as key) {
+            <p class="form-error" data-testid="slip-error">{{ i18n.t(key) }}</p>
+          }
+        </div>
+      }
+
+      @if (c.slipViewings.length > 0) {
+        <div>
+          <p class="muted small">{{ i18n.t('admin.complaints.looks') }}</p>
+          <ul class="looks" data-testid="slip-viewings">
+            @for (look of c.slipViewings; track look.viewedAt) {
+              <li class="muted small">
+                {{ look.viewedAt | appDateTime: i18n.locale() }} · {{ look.viewedByEmail }}
+              </li>
+            }
+          </ul>
+        </div>
+      }
+
+      @if (c.status === 'Resolved') {
+        <div class="resolved" data-testid="detail-resolution">
+          <p class="muted small">
+            {{ i18n.t('admin.complaints.resolvedBy') }}
+            {{ c.resolvedAt! | appDateTime: i18n.locale() }} · {{ c.resolvedByEmail }}
+          </p>
+          <p>{{ c.resolution }}</p>
+        </div>
+      } @else {
+        <form
+          class="stack"
+          #resolveDir="ngForm"
+          [formGroup]="resolveForm"
+          (ngSubmit)="resolve(c, resolveDir)"
+          novalidate
+        >
+          <mat-form-field class="field">
+            <mat-label>{{ i18n.t('admin.complaints.resolution') }}</mat-label>
+            <textarea
+              matInput
+              rows="3"
+              formControlName="resolution"
+              data-testid="resolution"
+              [attr.maxlength]="textMaxLength"
+            ></textarea>
+            <mat-error
+              [appFieldError]="resolveForm.controls.resolution"
+              testId="resolution-error"
+            ></mat-error>
+          </mat-form-field>
+          <div class="row">
+            <button matButton="filled" type="submit" data-testid="resolve" [disabled]="resolving()">
+              {{ i18n.t('admin.complaints.resolve') }}
+            </button>
+          </div>
+          @if (resolveError(); as key) {
+            <p class="form-error" data-testid="resolve-error">{{ i18n.t(key) }}</p>
+          }
+        </form>
+      }
+    </mat-card-content>
+  </mat-card>
+}

@@ -3,7 +3,7 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
 import { TranslationService } from '../../core/i18n/translation.service';
 
 /**
- * The platform's three screens, side by side (PRD US-20, US-22). The bar has one "admin" link,
+ * The platform's screens, side by side (PRD US-20, US-22). The bar has one "admin" link,
  * because a booker's bar should not grow with every screen an admin has; the rest are reached
  * from here.
  */
@@ -56,5 +56,6 @@ export class AdminTabs {
     { id: 'venues', path: '/admin/venues' },
     { id: 'dashboard', path: '/admin/dashboard' },
     { id: 'users', path: '/admin/users' },
+    { id: 'complaints', path: '/admin/complaints' },
   ];
 }
