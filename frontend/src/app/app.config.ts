@@ -4,12 +4,14 @@ import {
   inject,
   provideAppInitializer,
   provideBrowserGlobalErrorListeners,
+  isDevMode,
 } from '@angular/core';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { catchError, of } from 'rxjs';
 import { AuthService } from './core/auth/auth.service';
 import { apiErrorInterceptor } from './core/http/api-error';
 import { routes } from './app.routes';
+import { provideServiceWorker } from '@angular/service-worker';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -25,5 +27,9 @@ export const appConfig: ApplicationConfig = {
         .loadCurrentUser()
         .pipe(catchError(() => of(null))),
     ),
+    provideServiceWorker('ngsw-worker.js', {
+      enabled: !isDevMode(),
+      registrationStrategy: 'registerWhenStable:30000',
+    }),
   ],
 };

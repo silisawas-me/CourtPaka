@@ -51,3 +51,10 @@ Six rules worth keeping.
    `ensure_bookable()` first, which puts the venue back to 06:00–22:00 every day. This was found
    the hard way: run in one order the suite was green, and in another every booking script failed
    with no free hour anywhere and nothing to say why.
+
+## Service worker
+
+The production build registers a service worker (PWA, PRD 8). Requests the app makes go through
+it, and Playwright's `page.route(...)` cannot see requests a service worker makes. A script that
+stubs API answers with `page.route` must open its page with `service_workers="block"` (see
+`venue_ui.py`). `pwa.py` is the script that checks the worker itself.

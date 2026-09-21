@@ -42,7 +42,18 @@ with sync_playwright() as p:
     # 1. A booking standing in the stretch stops the closure, and says which one.
     booker = browser.new_page(viewport={"width": 390, "height": 844})
     sign_in(booker, new_booker(booker))
-    booking = take_first_free_hour(booker, venue_id, tomorrow).json()
+    # On a court with another free hour left, because the check below reads that the rest of the
+    # court's day stays on sale. The grid lists free cells court by court, hour by hour, so the
+    # first free cell of the first such court is found by counting the free cells before it.
+    grid = booker.request.get(
+        f"{BASE}/api/venues/{venue_id}/availability?date={tomorrow.isoformat()}").json()
+    skip = 0
+    for listed in grid["courts"]:
+        free = sum(1 for hour in listed["hours"] if hour["status"] == "Free")
+        if free >= 2:
+            break
+        skip += free
+    booking = take_first_free_hour(booker, venue_id, tomorrow, skip=skip).json()
     booked = booking["slots"][0]
 
     page.reload()
