@@ -1,10 +1,12 @@
 import { Component, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormGroupDirective, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { catchError, map, of, Subject, switchMap } from 'rxjs';
 import { AdminService, AdminUser, AdminUserDetail } from '../../core/admin/admin.service';
 import { errorKey } from '../../core/http/api-error';
 import { AppDateTimePipe } from '../../core/i18n/app-date.pipe';
@@ -62,6 +64,32 @@ export class AdminUsersPage {
   protected readonly searchError = signal<string | null>(null);
 
   protected readonly open = signal<AdminUserDetail | null>(null);
+
+  /** Why the account asked for could not be opened; shown above the list, not inside a row. */
+  protected readonly openError = signal<string | null>(null);
+
+  /** Accounts asked for, newest last. switchMap drops an older answer that arrives late. */
+  private readonly opening = new Subject<string>();
+
+  constructor() {
+    this.opening
+      .pipe(
+        switchMap((userId) =>
+          this.admin.user(userId).pipe(
+            map((detail) => ({ detail, failure: null as unknown })),
+            catchError((failure: unknown) => of({ detail: null, failure })),
+          ),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe(({ detail, failure }) => {
+        if (detail) {
+          this.open.set(detail);
+        } else {
+          this.openError.set(errorKey(failure));
+        }
+      });
+  }
   protected readonly deciding = signal(false);
   protected readonly decideError = signal<string | null>(null);
 
@@ -93,12 +121,12 @@ export class AdminUsersPage {
       return;
     }
 
+    // Closed first, so nothing about the last account can be pressed while the next one loads.
+    this.open.set(null);
+    this.openError.set(null);
     this.decideError.set(null);
     this.reasonForm.reset();
-    this.admin.user(user.id).subscribe({
-      next: (detail) => this.open.set(detail),
-      error: (failure: unknown) => this.decideError.set(errorKey(failure)),
-    });
+    this.opening.next(user.id);
   }
 
   /** Suspends an account that may sign in, or lets a suspended one back in. */

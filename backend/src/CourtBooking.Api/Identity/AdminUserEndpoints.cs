@@ -2,6 +2,7 @@ using System.Security.Claims;
 using CourtBooking.Api.Data;
 using CourtBooking.Api.Http;
 using CourtBooking.Api.Observability;
+using CourtBooking.Api.Venues;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -81,11 +82,14 @@ public static class AdminUserEndpoints
 
         // Addresses are stored normalised upper-case, which the unique index already covers.
         var normalized = query.ToUpperInvariant();
-        var pattern = "%" + normalized.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
+        var pattern = "%" + PublicVenueEndpoints.Like(normalized) + "%";
 
         var users = await database.Users
             .AsNoTracking()
-            .Where(user => EF.Functions.Like(user.NormalizedEmail!, pattern))
+            // The same escaping as the venue search, with the escape character named rather than
+            // assumed: without it an address with "_" in it stops being findable by it.
+            .Where(user => EF.Functions.Like(
+                user.NormalizedEmail!, pattern, PublicVenueEndpoints.LikeEscape))
             .OrderBy(user => user.NormalizedEmail)
             .Take(MaxResults)
             .ToListAsync(cancellationToken);

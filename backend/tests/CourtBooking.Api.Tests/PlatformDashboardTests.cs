@@ -57,6 +57,31 @@ public sealed class PlatformDashboardTests(ApiTestFixture api) : IClassFixture<A
         Assert.True(figures.Totals.GmvBaht >= 200m);
     }
 
+    /// <summary>
+    /// Every ending of 6.2 in one place: a cancellation keeps what it does not owe back, one
+    /// nobody has settled keeps nothing yet, and a no-show keeps all of it (PRD 6.2).
+    /// </summary>
+    [Fact]
+    public async Task GMV_follows_every_ending_that_keeps_money()
+    {
+        var admin = await scenario.PlatformAdminAsync();
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+
+        var cancelled = await ConfirmedOnlineAsync(owner, venue.Id, courts[0], 10);
+        await EndAsync(cancelled, BookingStatus.Cancelled, PaymentState.Received, refundDue: 50m);
+        var unsettled = await ConfirmedOnlineAsync(owner, venue.Id, courts[0], 11);
+        await EndAsync(unsettled, BookingStatus.Cancelled, PaymentState.Unconfirmed, refundDue: 0m);
+        var noShow = await ConfirmedOnlineAsync(owner, venue.Id, courts[0], 12);
+        await EndAsync(noShow, BookingStatus.NoShow, PaymentState.Received, refundDue: 0m);
+
+        var line = Assert.Single(
+            (await ReadAsync(admin, Tomorrow, Tomorrow)).Venues, one => one.VenueId == venue.Id);
+
+        Assert.Equal(150m + 0m + 200m, line.GmvBaht);
+        // Sold is Confirmed/Completed/NoShow; the cancelled two are not.
+        Assert.Equal(1, line.Bookings);
+    }
+
     [Fact]
     public async Task A_day_outside_the_range_is_not_counted()
     {
@@ -126,6 +151,23 @@ public sealed class PlatformDashboardTests(ApiTestFixture api) : IClassFixture<A
                     [new BookingSlotRequest(courtId, Tomorrow, hour)], "คุณสมชาย", null, "Cash")),
             HttpStatusCode.Created);
         return taken.BookingId;
+    }
+
+    private async Task EndAsync(
+        Guid bookingId,
+        BookingStatus status,
+        PaymentState payment,
+        decimal refundDue)
+    {
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        await database.Bookings
+            .Where(booking => booking.Id == bookingId)
+            .ExecuteUpdateAsync(set => set
+                .SetProperty(booking => booking.Status, status)
+                .SetProperty(booking => booking.PaymentState, payment)
+                .SetProperty(booking => booking.RefundDueBaht, refundDue));
     }
 
     private async Task PlayOnAsync(Guid bookingId, DateOnly date, int hour)

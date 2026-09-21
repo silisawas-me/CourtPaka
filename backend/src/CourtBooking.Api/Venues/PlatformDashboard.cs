@@ -105,9 +105,13 @@ public static class PlatformDashboard
             .Where(slot => slot.StartsAt >= since && slot.StartsAt < until)
             .Select(slot => slot.BookingId);
 
+        // Only the statuses that are ever counted: the rest — lapsed holds above all — are most
+        // of the rows, and the platform's range is every venue's.
         var bookings = await database.Bookings
             .AsNoTracking()
-            .Where(booking => touching.Contains(booking.Id))
+            .Where(booking =>
+                touching.Contains(booking.Id)
+                && (Sold.Contains(booking.Status) || booking.Status == BookingStatus.Cancelled))
             .Select(booking => new
             {
                 booking.VenueId,

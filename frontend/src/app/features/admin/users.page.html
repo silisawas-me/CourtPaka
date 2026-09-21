@@ -35,6 +35,9 @@
 } @else if (results(); as users) {
   <mat-card>
     <mat-card-content>
+      @if (openError(); as key) {
+        <p class="form-error" data-testid="open-error">{{ i18n.t(key) }}</p>
+      }
       @if (users.length === 0) {
         <p class="muted" data-testid="no-users">{{ i18n.t('admin.users.none') }}</p>
       } @else {

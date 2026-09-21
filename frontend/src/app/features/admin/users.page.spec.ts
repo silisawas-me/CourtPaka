@@ -116,6 +116,34 @@ describe('AdminUsersPage', () => {
     expect(elementOf(fixture, 'reason-error')).toBeNull();
   });
 
+  it('says so when an account cannot be opened, outside any row', () => {
+    searchFor('play');
+
+    clickOn(fixture, 'open-user-u1');
+    httpMock
+      .expectOne('/api/admin/users/u1')
+      .flush({ code: 'unknown' }, { status: 500, statusText: 'Server Error' });
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, 'open-error')).not.toBeNull();
+    expect(elementOf(fixture, 'detail-u1')).toBeNull();
+  });
+
+  it('drops an account asked for earlier once another is asked for', () => {
+    searchFor('play', [user(), user({ id: 'u2', email: 'other@example.com' })]);
+
+    clickOn(fixture, 'open-user-u1');
+    const first = httpMock.expectOne('/api/admin/users/u1');
+    clickOn(fixture, 'open-user-u2');
+    httpMock
+      .expectOne('/api/admin/users/u2')
+      .flush({ user: user({ id: 'u2', email: 'other@example.com' }), history: [] });
+    fixture.detectChanges();
+
+    expect(first.cancelled).toBe(true);
+    expect(elementOf(fixture, 'detail-u2')).not.toBeNull();
+  });
+
   it('offers no door on a platform admin', () => {
     searchFor('admin', [user({ isPlatformAdmin: true })]);
     open({ user: user({ isPlatformAdmin: true }), history: [] });

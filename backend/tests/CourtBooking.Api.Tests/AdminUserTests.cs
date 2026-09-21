@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using CourtBooking.Api.Bookings;
 using CourtBooking.Api.Identity;
 using CourtBooking.Api.Tests.Infrastructure;
+using Microsoft.AspNetCore.Hosting;
 
 namespace CourtBooking.Api.Tests;
 
@@ -38,17 +39,35 @@ public sealed class AdminUserTests(ApiTestFixture api) : IClassFixture<ApiTestFi
         Assert.Equal(AdminUserErrorCodes.QueryTooShort, await refused.ErrorCodeAsync());
     }
 
-    /// <summary>A literal "%" is a character to find, not a pattern to widen the search with.</summary>
-    [Fact]
-    public async Task A_wildcard_in_the_search_is_only_a_character()
+    /// <summary>
+    /// "%" and "_" are characters to find, not patterns to widen the search with — and an
+    /// address that really has one is still found by it.
+    /// </summary>
+    [Theory]
+    [InlineData("%25%25%25")]
+    [InlineData("___")]
+    public async Task A_wildcard_in_the_search_is_only_a_character(string query)
     {
         var admin = await scenario.PlatformAdminAsync();
         await scenario.SignedInClientAsync();
 
         var found = await VenueScenario.ReadAsync<AdminUserResponse[]>(
-            await admin.GetAsync("/api/admin/users?q=%25%25%25"));
+            await admin.GetAsync($"/api/admin/users?q={query}"));
 
         Assert.Empty(found);
+    }
+
+    [Fact]
+    public async Task An_address_with_an_underscore_is_found_by_it()
+    {
+        var admin = await scenario.PlatformAdminAsync();
+        var email = $"under_{Guid.NewGuid():N}@example.com";
+        await RegisterAsync(api.CreateClient(), email);
+
+        var found = await VenueScenario.ReadAsync<AdminUserResponse[]>(
+            await admin.GetAsync($"/api/admin/users?q={email[..10]}"));
+
+        Assert.Contains(found, one => one.Email == email);
     }
 
     [Fact]
@@ -95,6 +114,65 @@ public sealed class AdminUserTests(ApiTestFixture api) : IClassFixture<ApiTestFi
             "/api/auth/login", new LoginRequest(email, "NotThePassword1"));
         Assert.Equal(HttpStatusCode.Unauthorized, wrong.StatusCode);
         Assert.Equal(AuthErrorCodes.InvalidCredentials, await wrong.ErrorCodeAsync());
+    }
+
+    /// <summary>
+    /// Wrong passwords on a suspended account still count towards the lockout. Without that,
+    /// the suspended answer would be a way to try passwords forever (PRD US-01).
+    /// </summary>
+    [Fact]
+    public async Task Guessing_at_a_suspended_account_still_locks_it()
+    {
+        var admin = await scenario.PlatformAdminAsync();
+        var (userId, email) = await SomebodyAsync(admin);
+        await SuspendAsync(admin, userId, "ทดสอบ");
+
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            await api.CreateClient().PostAsJsonAsync(
+                "/api/auth/login", new LoginRequest(email, "NotThePassword1"));
+        }
+
+        var right = await api.CreateClient().PostAsJsonAsync(
+            "/api/auth/login", new LoginRequest(email, VenueScenario.Password));
+
+        // Locked, the right password earns nothing more than a wrong one would.
+        Assert.Equal(HttpStatusCode.Unauthorized, right.StatusCode);
+        Assert.Equal(AuthErrorCodes.InvalidCredentials, await right.ErrorCodeAsync());
+    }
+
+    /// <summary>
+    /// Between the suspension and the next revalidation an open session still works; holding a
+    /// court is refused in that window anyway, because booking reads the account row (US-22).
+    /// </summary>
+    [Fact]
+    public async Task A_session_not_yet_revalidated_still_cannot_book()
+    {
+        var admin = await scenario.PlatformAdminAsync();
+        var (_, venue, courts) = await scenario.BookableVenueAsync();
+
+        // A host that revalidates sessions rarely, as production does.
+        using var slow = api.Api.WithWebHostBuilder(builder =>
+            builder.UseSetting("App:SessionRevalidationSeconds", "3600"));
+        var session = slow.CreateClient();
+        var email = scenario.NewEmail();
+        await RegisterAsync(session, email);
+        await scenario.ConfirmEmailAsync(email);
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await session.PostAsJsonAsync(
+                "/api/auth/login", new LoginRequest(email, VenueScenario.Password))).StatusCode);
+
+        await SuspendAsync(admin, await IdOfAsync(admin, email), "โกงการจอง");
+
+        Assert.Equal(HttpStatusCode.OK, (await session.GetAsync("/api/auth/me")).StatusCode);
+        var refused = await session.PostAsJsonAsync(
+            "/api/bookings",
+            new CreateBookingRequest(
+                venue.Id, [new BookingSlotRequest(courts[0], VenueScenario.Today.AddDays(1), 18)]));
+
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+        Assert.Equal(AuthErrorCodes.AccountSuspended, await refused.ErrorCodeAsync());
     }
 
     /// <summary>A session already open ends too, at the next revalidation (0s in tests).</summary>
@@ -187,6 +265,15 @@ public sealed class AdminUserTests(ApiTestFixture api) : IClassFixture<ApiTestFi
         var found = await VenueScenario.ReadAsync<AdminUserResponse[]>(
             await admin.GetAsync($"/api/admin/users?q={Uri.EscapeDataString(email)}"));
         return Assert.Single(found).Id;
+    }
+
+    private static async Task RegisterAsync(HttpClient client, string email)
+    {
+        var registered = await client.PostAsJsonAsync(
+            "/api/auth/register",
+            new RegisterRequest(
+                email, VenueScenario.Password, ApiFactory.PrivacyPolicyVersion, SupportedLanguages.Thai, null));
+        Assert.Equal(HttpStatusCode.Created, registered.StatusCode);
     }
 
     private static async Task SuspendAsync(HttpClient admin, Guid userId, string reason)
