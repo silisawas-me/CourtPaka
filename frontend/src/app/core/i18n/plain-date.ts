@@ -48,3 +48,21 @@ export function fromPlainDate(value: string | null | undefined): Date | null {
 export function venueToday(): Date {
   return fromPlainDate(PLAIN_DATE.format(new Date()))!;
 }
+
+const VENUE_CLOCK = new Intl.DateTimeFormat('en-GB', {
+  timeZone: VENUE_TIME_ZONE,
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+/**
+ * The time where the venues are, as the plain date and the hour and minute on a Bangkok wall.
+ * Used to tell whether an hour is already over — the counter may sell one that has started but
+ * not one that has ended (PRD US-13) — which a browser in another zone would otherwise judge by
+ * its own clock.
+ */
+export function venueNow(at: Date = new Date()): { date: string; hour: number; minute: number } {
+  const [hour, minute] = VENUE_CLOCK.format(at).split(':').map(Number);
+  return { date: PLAIN_DATE.format(at), hour, minute };
+}

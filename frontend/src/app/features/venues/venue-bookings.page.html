@@ -23,8 +23,31 @@
 
   <mat-card-actions>
     <a matButton [routerLink]="['/venues', venueId()]">{{ i18n.t('settings.backToVenue') }}</a>
+    @if (!selling()) {
+      <button
+        matButton="filled"
+        type="button"
+        data-testid="sell-at-counter"
+        (click)="selling.set(true)"
+      >
+        {{ i18n.t('counter.open') }}
+      </button>
+    }
   </mat-card-actions>
 </mat-card>
+
+<!--
+  Selling sits on this page rather than its own, because whoever sells at the counter is already
+  looking at the day they are selling into (PRD US-13).
+-->
+@if (selling()) {
+  <app-counter-booking
+    [venueId]="venueId()"
+    [date]="day()"
+    (taken)="sold()"
+    (closed)="selling.set(false)"
+  />
+}
 
 @if (loading()) {
   <mat-progress-bar mode="indeterminate" />
@@ -53,7 +76,17 @@
             <div class="booking-line">
               <span class="booking-when">{{ hours(booking) }}</span>
               <span class="booking-courts muted">{{ courts(booking) }}</span>
-              <span class="booking-who">{{ booking.bookerEmail }}</span>
+              <span class="booking-who" [attr.data-testid]="'who-' + booking.bookingId">
+                @if (booking.channel === 'Staff') {
+                  {{ booking.customerName }}
+                  @if (booking.customerPhone) {
+                    <span class="muted">· {{ booking.customerPhone }}</span>
+                  }
+                  <span class="badge">{{ i18n.t('counter.badge') }}</span>
+                } @else {
+                  {{ booking.bookerEmail }}
+                }
+              </span>
               <span class="badge booking-status" [class.badge-on]="booking.status === 'Confirmed'">
                 {{ i18n.t('booking.status.' + booking.status) }}
               </span>

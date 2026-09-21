@@ -438,8 +438,9 @@ public sealed class VenueScenario(ApiTestFixture api)
         await BookedSlots.ReleaseOwnLapsedAsync(
             database,
             await database.Bookings
+                // Held is only ever an online booking, which always has a booker (PRD US-13).
                 .Where(booking => booking.Status == BookingStatus.Held)
-                .Select(booking => booking.BookerUserId)
+                .Select(booking => booking.BookerUserId!.Value)
                 .FirstAsync(),
             DateTimeOffset.UtcNow,
             CancellationToken.None);

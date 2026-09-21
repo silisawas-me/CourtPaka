@@ -202,6 +202,19 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             booking.Property(b => b.TotalBaht).HasPrecision(10, 2);
             booking.Property(b => b.RefundDueBaht).HasPrecision(10, 2);
+            booking.Property(b => b.CustomerName).HasMaxLength(Booking.CustomerNameMaxLength);
+            booking.Property(b => b.CustomerPhone).HasMaxLength(Booking.CustomerPhoneMaxLength);
+
+            // A booking is one of two shapes and never half of both: online, with the account
+            // that made it; or at the counter, with the customer's name and how they paid
+            // (PRD US-13). Held apart by the database rather than by every path that writes one,
+            // because a booking with neither a booker nor a customer is a booking nobody can be
+            // told about, refunded, or asked about.
+            booking.ToTable(table => table.HasCheckConstraint(
+                "CK_Bookings_BookerOrCustomer",
+                "(\"Channel\" = 1 AND \"BookerUserId\" IS NOT NULL AND \"CustomerName\" IS NULL)"
+                + " OR (\"Channel\" = 2 AND \"BookerUserId\" IS NULL"
+                + " AND \"CustomerName\" IS NOT NULL AND \"PaidAtCounter\" IS NOT NULL)"));
             // The booker's own history (US-05), and the check that they hold only one (PRD S-22).
             booking.HasIndex(b => new { b.BookerUserId, b.Status });
             booking.HasIndex(b => new { b.VenueId, b.CreatedAt });

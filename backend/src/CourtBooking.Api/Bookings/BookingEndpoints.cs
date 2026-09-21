@@ -408,62 +408,10 @@ public static class BookingEndpoints
         var policyId = await InForcePolicyIdAsync(database, venue.Id, cancellationToken);
         var booking = Booking.Hold(venue.Id, bookerId, policyId, priced.Slots, now);
 
-        for (var attempt = 0; ; attempt++)
+        if (await WriteNewAsync(database, booking, timeProvider, cancellationToken)
+            is { } refused)
         {
-            database.ChangeTracker.Clear();
-
-            await using var transaction =
-                await database.Database.BeginTransactionAsync(cancellationToken);
-
-            // Queue for the hours being taken, in one fixed order, before touching the index that
-            // guards them. Without this, bookers reaching for the same hour collide inside the
-            // exclusion constraint's index and Postgres breaks the standoff by killing one of them
-            // with a deadlock — a 500, where waiting a moment gives a real answer. The constraint
-            // is still what guarantees the rule; this only decides who asks it first.
-            await BookedSlots.LockAsync(database, booking.Slots, cancellationToken);
-
-            database.Bookings.Add(booking);
-
-            try
-            {
-                await database.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                break;
-            }
-            catch (DbUpdateException failure)
-                when (failure.InnerException is PostgresException { SqlState: ExclusionViolation })
-            {
-                // Someone took the same hour between the grid being read and this write. The whole
-                // booking is refused rather than partly made (PRD BR-04).
-                return Refuse(
-                    loggers,
-                    StatusCodes.Status409Conflict,
-                    BookingErrorCodes.SlotJustTaken,
-                    bookerId);
-            }
-            catch (DbUpdateException failure)
-                when (failure.InnerException is PostgresException { SqlState: UniqueViolation })
-            {
-                // The booker's other request won the race to hold something (PRD S-22). The read
-                // above answers this for one request at a time; the index answers it for two.
-                return Refuse(
-                    loggers,
-                    StatusCodes.Status409Conflict,
-                    BookingErrorCodes.AlreadyHolding,
-                    bookerId);
-            }
-            catch (DbUpdateException failure)
-                when (failure.InnerException is PostgresException { SqlState: Deadlock }
-                    && attempt < DeadlockRetries)
-            {
-                // The queue above should prevent this; nothing was written, so it is safe to ask
-                // again after a moment rather than fail a booking on a transient standoff.
-                await Task.Delay(
-                    TimeSpan.FromMilliseconds(
-                        Random.Shared.Next((int)RetryJitter.TotalMilliseconds) * (attempt + 1)),
-                    timeProvider,
-                    cancellationToken);
-            }
+            return Refuse(loggers, StatusCodes.Status409Conflict, refused, bookerId);
         }
 
         AppEvents.For(loggers).LogInformation(
@@ -511,7 +459,7 @@ public static class BookingEndpoints
     /// What each picked hour costs, read from the same day the grid was drawn from. An hour the
     /// grid would not have offered is refused here too, because the grid may be minutes old.
     /// </summary>
-    private static async Task<PricedSlots> PriceSlotsAsync(
+    internal static async Task<PricedSlots> PriceSlotsAsync(
         AppDbContext database,
         Guid venueId,
         IReadOnlyCollection<BookingSlotRequest> slots,
@@ -571,7 +519,7 @@ public static class BookingEndpoints
     /// default policy and policies are only ever added, so one missing is a broken invariant rather
     /// than something to explain to a booker.
     /// </summary>
-    private static async Task<Guid> InForcePolicyIdAsync(
+    internal static async Task<Guid> InForcePolicyIdAsync(
         AppDbContext database,
         Guid venueId,
         CancellationToken cancellationToken) =>
@@ -624,6 +572,69 @@ public static class BookingEndpoints
             PromptPay.For(paying.Account, paying.TotalBaht)));
     }
 
+    /// <summary>
+    /// Writes a new booking and its hours, or says why it could not. Both doors that take hours —
+    /// the booker's and the counter's — come through here, so they queue for the same hours the
+    /// same way and are refused by the same constraint in the same words (PRD BR-04, US-13).
+    /// </summary>
+    /// <returns>Null once it is written; otherwise the code it was refused with.</returns>
+    internal static async Task<string?> WriteNewAsync(
+        AppDbContext database,
+        Booking booking,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            database.ChangeTracker.Clear();
+
+            await using var transaction =
+                await database.Database.BeginTransactionAsync(cancellationToken);
+
+            // Queue for the hours being taken, in one fixed order, before touching the index that
+            // guards them. Without this, people reaching for the same hour collide inside the
+            // exclusion constraint's index and Postgres breaks the standoff by killing one of them
+            // with a deadlock — a 500, where waiting a moment gives a real answer. The constraint
+            // is still what guarantees the rule; this only decides who asks it first.
+            await BookedSlots.LockAsync(database, booking.Slots, cancellationToken);
+
+            database.Bookings.Add(booking);
+
+            try
+            {
+                await database.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return null;
+            }
+            catch (DbUpdateException failure)
+                when (failure.InnerException is PostgresException { SqlState: ExclusionViolation })
+            {
+                // Someone took the same hour between the grid being read and this write. The whole
+                // booking is refused rather than partly made (PRD BR-04).
+                return BookingErrorCodes.SlotJustTaken;
+            }
+            catch (DbUpdateException failure)
+                when (failure.InnerException is PostgresException { SqlState: UniqueViolation })
+            {
+                // The booker's other request won the race to hold something (PRD S-22). The read
+                // before this answers it for one request at a time; the index answers it for two.
+                return BookingErrorCodes.AlreadyHolding;
+            }
+            catch (DbUpdateException failure)
+                when (failure.InnerException is PostgresException { SqlState: Deadlock }
+                    && attempt < DeadlockRetries)
+            {
+                // The queue above should prevent this; nothing was written, so it is safe to ask
+                // again after a moment rather than fail a booking on a transient standoff.
+                await Task.Delay(
+                    TimeSpan.FromMilliseconds(
+                        Random.Shared.Next((int)RetryJitter.TotalMilliseconds) * (attempt + 1)),
+                    timeProvider,
+                    cancellationToken);
+            }
+        }
+    }
+
     private static BookingResponse ToResponse(
         Booking booking,
         string venueName,
@@ -662,7 +673,7 @@ public static class BookingEndpoints
     }
 
     /// <summary>The hours as priced, or the reason none of them can be had.</summary>
-    private readonly record struct PricedSlots(
+    internal readonly record struct PricedSlots(
         SlotPrice[] Slots,
         Dictionary<Guid, string> CourtNames,
         string? Error)

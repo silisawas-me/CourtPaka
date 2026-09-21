@@ -48,6 +48,16 @@ public static class VenueBookingEndpoints
             VenuePolicies.NeedsEvenWhenSuspended(VenuePermissions.ManageBookings));
 
         bookings.MapGet("/", DayAsync);
+
+        // Taking a booking is selling, which is exactly what a suspension stops (PRD US-20).
+        // Declared on the route because this repo decides which side of a suspension an endpoint
+        // is on where it is mapped: the group's policy lets a suspended venue in to finish old
+        // business, and this one says this door is new business. The handler also refuses any
+        // venue that is not approved — which is what covers one still waiting (US-10), and on its
+        // own would cover a suspended one too. Both are kept; neither is the only thing standing.
+        bookings.MapPost("/", TakeAtCounterAsync)
+            .RequireAuthorization(VenuePolicies.Needs(VenuePermissions.ManageBookings));
+
         bookings.MapPost("/{bookingId:guid}/cancel", CancelAsync);
         bookings.MapPost("/{bookingId:guid}/no-show", NoShowAsync);
         bookings.MapPost("/{bookingId:guid}/settle-payment", SettleAsync);
@@ -460,6 +470,111 @@ public static class VenueBookingEndpoints
             .Include(booking => booking.CancellationPolicy!)
             .ThenInclude(policy => policy.Tiers);
 
+    /// <summary>
+    /// A booking taken at the counter for somebody standing at it (PRD US-13). The customer needs
+    /// no account; the counter writes down their name, a phone if they give one, and how they
+    /// paid — and since they have paid, the booking starts confirmed.
+    ///
+    /// Everything that decides whether an hour can be had is the online path's own: the same
+    /// read model prices the hours, the same locks queue for them, and the same exclusion
+    /// constraint refuses one already taken. Only the clock differs — the counter may sell an hour
+    /// that has started, because the person is already standing there (PRD US-13).
+    /// </summary>
+    private static async Task<Results<Created<VenueBookingResponse>, ProblemHttpResult>>
+        TakeAtCounterAsync(
+            Guid venueId,
+            CounterBookingRequest request,
+            CurrentVenue venue,
+            AppDbContext database,
+            TimeProvider timeProvider,
+            ILoggerFactory loggers,
+            CancellationToken cancellationToken)
+    {
+        var membership = venue.Require();
+
+        // Frozen venues are already kept out by the policy. A venue still waiting to be approved
+        // is not frozen, but it is not on the platform yet either, so it cannot sell anything
+        // at a counter that it could not sell online (PRD US-10, US-20).
+        if (venue.Status != VenueStatus.Approved)
+        {
+            return ApiProblem.Of(StatusCodes.Status403Forbidden, VenueErrorCodes.NotApproved);
+        }
+
+        var name = request.CustomerName?.Trim();
+        if (string.IsNullOrEmpty(name) || name.Length > Booking.CustomerNameMaxLength)
+        {
+            return ApiProblem.Of(
+                StatusCodes.Status400BadRequest, BookingErrorCodes.InvalidCustomerName);
+        }
+
+        var phone = request.CustomerPhone?.Trim();
+        if (!string.IsNullOrEmpty(phone)
+            && (phone.Length > Booking.CustomerPhoneMaxLength
+                || !phone.All(character => char.IsAsciiDigit(character) || character is '+' or '-' or ' ')))
+        {
+            return ApiProblem.Of(
+                StatusCodes.Status400BadRequest, BookingErrorCodes.InvalidCustomerPhone);
+        }
+
+        // The names and nothing else: Enum.TryParse would take "1" and "Cash,Transfer".
+        if (request.PaidBy is not { } paidBy
+            || !Enum.GetNames<CounterPayment>().Contains(paidBy, StringComparer.Ordinal))
+        {
+            return ApiProblem.Of(
+                StatusCodes.Status400BadRequest, BookingErrorCodes.InvalidCounterPayment);
+        }
+
+        var paid = Enum.Parse<CounterPayment>(paidBy);
+        var now = timeProvider.GetUtcNow();
+        var slots = request.Slots ?? [];
+
+        if (BookingValidation.Validate(
+                slots, now, PlatformRequirements.BangkokToday(timeProvider), BookingChannel.Staff)
+            is { } invalid)
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, invalid);
+        }
+
+        var priced = await BookingEndpoints.PriceSlotsAsync(
+            database, venueId, slots, now, loggers, cancellationToken);
+        if (priced.Error is { } unavailable)
+        {
+            return ApiProblem.Of(StatusCodes.Status409Conflict, unavailable);
+        }
+
+        var policyId = await BookingEndpoints.InForcePolicyIdAsync(
+            database, venueId, cancellationToken);
+
+        var booking = Booking.AtCounter(
+            venueId,
+            name,
+            string.IsNullOrEmpty(phone) ? null : phone,
+            paid,
+            policyId,
+            priced.Slots,
+            membership.UserId,
+            now);
+
+        if (await BookingEndpoints.WriteNewAsync(database, booking, timeProvider, cancellationToken)
+            is { } refused)
+        {
+            return ApiProblem.Of(StatusCodes.Status409Conflict, refused);
+        }
+
+        AppEvents.For(loggers).LogInformation(
+            BookingTransitions.EventName(BookingStatus.Confirmed)
+            + " {BookingId} {VenueId} {Channel} {Slots} {TotalBaht}",
+            booking.Id,
+            venueId,
+            booking.Channel,
+            booking.Slots.Count,
+            booking.TotalBaht);
+
+        return TypedResults.Created(
+            $"/api/venues/{venueId}/bookings/{booking.Id}",
+            await OneDrawnAsync(database, venueId, booking.Id, venue, now, cancellationToken));
+    }
+
     private static async Task<VenueBookingResponse> OneDrawnAsync(
         AppDbContext database,
         Guid venueId,
@@ -540,6 +655,9 @@ public static class VenueBookingEndpoints
         return new VenueBookingResponse(
             booking.Id,
             bookerEmail,
+            booking.Channel.ToString(),
+            booking.CustomerName,
+            booking.CustomerPhone,
             status.ToString(),
             booking.PaymentState.ToString(),
             booking.TotalBaht,

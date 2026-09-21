@@ -21,6 +21,7 @@ import {
   VenueBookingsService,
 } from '../../core/venues/venue-bookings.service';
 import { FieldError } from '../../shared/field-error';
+import { CounterBooking } from './counter-booking';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 import { provideLocalizedDateAdapter } from '../../shared/localized-date-adapter';
 
@@ -44,6 +45,7 @@ const REFUND_METHODS: RefundMethod[] = ['Transfer', 'Cash'];
 @Component({
   selector: 'app-venue-bookings-page',
   imports: [
+    CounterBooking,
     ReactiveFormsModule,
     RouterLink,
     FieldError,
@@ -74,6 +76,9 @@ export class VenueBookingsPage {
 
   /** The day being looked at. The counter's own day, not the reader's (PRD BR-10). */
   protected readonly day = signal(plainDate(venueToday()));
+
+  /** Whether the counter is selling hours right now (PRD US-13). */
+  protected readonly selling = signal(false);
   protected readonly dayField = new FormControl(venueToday());
 
   protected readonly bookings$ = signal<VenueBooking[]>([]);
@@ -376,6 +381,15 @@ export class VenueBookingsPage {
         this.load(this.venueId(), this.day(), { quiet: true });
       },
     });
+  }
+
+  /**
+   * A booking was just taken at the counter. The day is read again rather than patched, because
+   * the new row belongs among the others in play order, and the server is what knows that order.
+   */
+  protected sold(): void {
+    this.selling.set(false);
+    this.load(this.venueId(), this.day(), { quiet: true });
   }
 
   private load(venueId: string, day: string, { quiet = false } = {}): void {
