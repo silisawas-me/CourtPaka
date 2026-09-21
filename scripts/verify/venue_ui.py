@@ -8,7 +8,9 @@ check = Checks(__file__)
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
-    page = browser.new_page(viewport={"width": 1280, "height": 900})
+    # This script stubs API answers with page.route, which cannot see requests the app's service
+    # worker makes on its behalf (PRD 8 PWA). The worker is blocked here, and pwa.py checks it.
+    page = browser.new_page(viewport={"width": 1280, "height": 900}, service_workers="block")
 
     # 1. The guard sends an anonymous visitor to login and brings them back afterwards.
     page.goto(f"{BASE}/venues")
