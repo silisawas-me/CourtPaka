@@ -158,7 +158,7 @@
               }
               <span class="badge">{{ i18n.t('counter.badge') }}</span>
             } @else {
-              {{ c.booking.bookerEmail }}
+              {{ c.booking.bookerEmail ?? i18n.t('booker.deleted') }}
             }
           </dd>
         </div>

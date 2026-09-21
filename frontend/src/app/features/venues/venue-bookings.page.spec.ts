@@ -92,6 +92,12 @@ describe('VenueBookingsPage', () => {
     expect(row).toContain('400');
   });
 
+  it('names a booker who asked to be forgotten as a deleted account, not as nobody', () => {
+    render([booking({ bookerEmail: null, channel: 'Online' })]);
+
+    expect(textOf(fixture, 'who-b1')).toContain(TRANSLATIONS.th['booker.deleted']);
+  });
+
   it('offers only the doors the server says are open', () => {
     render([
       booking({

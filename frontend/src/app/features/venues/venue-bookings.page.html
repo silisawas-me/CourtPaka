@@ -84,7 +84,8 @@
                   }
                   <span class="badge">{{ i18n.t('counter.badge') }}</span>
                 } @else {
-                  {{ booking.bookerEmail }}
+                  <!-- Null once the booker has asked to be forgotten (PDPA, S-15). -->
+                  {{ booking.bookerEmail ?? i18n.t('booker.deleted') }}
                 }
               </span>
               <span class="badge booking-status" [class.badge-on]="booking.status === 'Confirmed'">
