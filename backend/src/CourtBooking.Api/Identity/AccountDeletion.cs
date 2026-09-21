@@ -103,6 +103,23 @@ public static class AccountDeletion
         var placeholder = Placeholder(user.Id);
 
         // Staff seats go: a venue should not list somebody who no longer exists as a member.
+        // Each is written down first, as the person leaving (PRD 8's audit of permissions).
+        var seats = await database.VenueMemberships
+            .AsNoTracking()
+            .Where(member => member.UserId == user.Id)
+            .ToListAsync(cancellationToken);
+        database.MembershipChanges.AddRange(seats.Select(seat => new MembershipChange
+        {
+            VenueId = seat.VenueId,
+            UserId = user.Id,
+            Kind = MembershipChangeKind.Left,
+            Role = seat.Role,
+            PermissionsBefore = seat.Permissions,
+            ChangedByUserId = user.Id,
+            ChangedAt = now,
+        }));
+        await database.SaveChangesAsync(cancellationToken);
+
         await database.VenueMemberships
             .Where(member => member.UserId == user.Id)
             .ExecuteDeleteAsync(cancellationToken);
