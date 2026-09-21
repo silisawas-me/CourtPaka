@@ -10,7 +10,8 @@
 ## โครงสร้าง repo
 - `backend/` · .NET 10 solution `CourtBooking.slnx` · `src/CourtBooking.Api` (ASP.NET Core minimal API, EF Core + Npgsql) · `tests/CourtBooking.Api.Tests` (xUnit + Testcontainers PostgreSQL)
 - `frontend/` · Angular 22 (Vitest) · `Caddyfile` ใช้ทั้ง reverse proxy และเสิร์ฟ static
-- `docker-compose.yml` · stack สำหรับ local · `.github/workflows/ci.yml` · CI
+- `docker-compose.yml` · stack สำหรับ local · `.github/workflows/ci.yml` · CI (backend/frontend/docker + job `zap` ที่เปิด stack เต็มแล้วรัน OWASP ZAP baseline — fail เมื่อมี alert ระดับ High ตาม PRD 8 ผ่าน `scripts/ci/zap_high.py` · NuGet audit fail ที่ Critical ใน `Directory.Build.props` · `npm audit` fail ที่ High)
+- **Header ความปลอดภัยอยู่ใน `frontend/Caddyfile`:** CSP อนุญาต `style-src 'unsafe-inline'` (Material + critical CSS ที่ build inline) และ **hash ของ `onload="this.media='all'"` ที่ build ใส่ให้ stylesheet** — ถ้า Angular เปลี่ยน attribute นี้ หน้าเว็บจะไม่มีสไตล์ ต้องคำนวณ hash ใหม่ (`printf "%s" "<handler>" | openssl dgst -sha256 -binary | openssl base64`) · สลิปแสดงจาก `blob:` จึงต้องมีใน `img-src` · ถ้าเพิ่มของที่โหลดจากที่อื่น ต้องแก้ CSP ด้วย
 - `deploy/` · compose + `.env.example` + คู่มือสำหรับเครื่อง UAT/PRD · `.github/workflows/deploy.yml` · build image ขึ้น GHCR, รัน migration bundle, deploy แล้วตรวจ health (ยังไม่เคยรันจริง รอเครื่อง UAT)
 - `docs/prd.md` · PRD
 - Endpoint ของ API ทุกตัวขึ้นต้นด้วย `/api` (Caddy และ proxy ของ `ng serve` ส่งต่อตาม prefix นี้)

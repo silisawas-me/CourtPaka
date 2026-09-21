@@ -6,6 +6,17 @@
 		X-Content-Type-Options nosniff
 		X-Frame-Options DENY
 		Referrer-Policy strict-origin-when-cross-origin
+		# Everything the app loads is its own. Two allowances, each for a reason:
+		#  - style-src 'unsafe-inline': Angular Material sets styles at runtime, and the build
+		#    inlines the critical CSS into index.html.
+		#  - the one script hash: the build loads the full stylesheet with
+		#    onload="this.media='all'". Without it the page renders unstyled. If a build ever
+		#    changes that attribute, the hash has to change with it.
+		# Slips are shown from blob: URLs made in the page; nothing is framed or framable.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-hashes' 'sha256-MhtPZXr7+LpJUY5qtMutB+qWfQtMaPccfe7QXtCcEYc='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		# The app asks for none of these, so nothing embedded in it may either.
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		Cross-Origin-Opener-Policy same-origin
 		-Server
 	}
 
