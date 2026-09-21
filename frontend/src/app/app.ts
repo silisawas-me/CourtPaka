@@ -40,6 +40,7 @@ export class App {
             accent: false,
           },
           { path: '/venues', label: 'nav.venues', testId: 'nav-venues', accent: false },
+          { path: '/account', label: 'nav.account', testId: 'nav-account', accent: false },
           // Drawn only for the handful of people it is for. The endpoints behind it check
           // again, so this is about not showing a door that would not open (PRD US-20).
           ...(this.user()?.isPlatformAdmin

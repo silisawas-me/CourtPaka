@@ -97,6 +97,16 @@ export class AuthService {
     );
   }
 
+  /**
+   * Asks the server to forget this account (PDPA, PRD 8). The server signs the session out
+   * itself; this browser forgets the user once it has.
+   */
+  deleteAccount(password: string): Observable<void> {
+    return this.http
+      .post<void>('/api/auth/me/delete', { password })
+      .pipe(tap(() => this.adopt(null)));
+  }
+
   verifyEmail(userId: string, token: string): Observable<void> {
     return this.http.post<void>('/api/auth/verify-email', { userId, token });
   }

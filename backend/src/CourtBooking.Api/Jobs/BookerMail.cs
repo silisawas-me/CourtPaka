@@ -199,7 +199,8 @@ public sealed class BookerMail(
             .Select(one => new
             {
                 one.BookerUserId,
-                Address = one.Booker!.Email,
+                // Nobody to write to once the person has asked to be forgotten (PRD 8).
+                Address = one.Booker!.DeletedAt == null ? one.Booker.Email : null,
                 one.Booker!.Language,
                 VenueName = one.Venue!.Name,
                 one.TotalBaht,

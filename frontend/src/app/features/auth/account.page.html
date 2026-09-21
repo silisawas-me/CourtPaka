@@ -1,0 +1,64 @@
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>{{ i18n.t('account.title') }}</mat-card-title>
+  </mat-card-header>
+  <mat-card-content>
+    <p class="muted">{{ i18n.t('account.email') }}</p>
+    <p class="email" data-testid="account-email">{{ user()?.email }}</p>
+  </mat-card-content>
+</mat-card>
+
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>{{ i18n.t('account.delete.title') }}</mat-card-title>
+  </mat-card-header>
+
+  <mat-card-content class="stack">
+    <!-- Said before it is offered: what goes, what stays, and what has to be settled first. -->
+    <ul class="terms">
+      <li>{{ i18n.t('account.delete.goes') }}</li>
+      <li>{{ i18n.t('account.delete.stays') }}</li>
+      <li>{{ i18n.t('account.delete.first') }}</li>
+    </ul>
+
+    <form class="stack" [formGroup]="deleteForm" (ngSubmit)="deleteAccount()" novalidate>
+      <mat-checkbox formControlName="understood" data-testid="delete-understood">
+        {{ i18n.t('account.delete.understood') }}
+      </mat-checkbox>
+      @if (deleteForm.controls.understood.invalid && deleteForm.controls.understood.touched) {
+        <p class="form-error" data-testid="understood-error">{{ i18n.t('common.required') }}</p>
+      }
+
+      <mat-form-field class="field">
+        <mat-label>{{ i18n.t('account.delete.password') }}</mat-label>
+        <input
+          matInput
+          type="password"
+          formControlName="password"
+          autocomplete="current-password"
+          data-testid="delete-password"
+        />
+        <mat-error
+          [appFieldError]="deleteForm.controls.password"
+          testId="delete-password-error"
+        ></mat-error>
+      </mat-form-field>
+
+      <div class="row">
+        <button
+          matButton="outlined"
+          class="stop"
+          type="submit"
+          data-testid="delete-account"
+          [disabled]="deleting()"
+        >
+          {{ i18n.t('account.delete.confirm') }}
+        </button>
+      </div>
+
+      @if (deleteError(); as key) {
+        <p class="form-error" data-testid="delete-error">{{ i18n.t(key) }}</p>
+      }
+    </form>
+  </mat-card-content>
+</mat-card>

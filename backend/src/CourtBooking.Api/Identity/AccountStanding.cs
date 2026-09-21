@@ -50,7 +50,7 @@ public sealed class AppSignInManager(
     : SignInManager<AppUser>(users, contextAccessor, claimsFactory, options, logger, schemes, confirmation)
 {
     public override async Task<bool> CanSignInAsync(AppUser user) =>
-        user.SuspendedAt is null && await base.CanSignInAsync(user);
+        user.SuspendedAt is null && user.DeletedAt is null && await base.CanSignInAsync(user);
 
     /// <summary>
     /// A live session is checked against the row every revalidation interval. The security stamp

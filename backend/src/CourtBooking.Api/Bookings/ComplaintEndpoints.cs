@@ -422,7 +422,7 @@ public static class ComplaintEndpoints
                 booking.Venue!.Code,
                 booking.Venue.Name,
                 booking.Channel.ToString(),
-                booking.Booker?.Email,
+                booking.Booker is { DeletedAt: null } booker ? booker.Email : null,
                 booking.CustomerName,
                 booking.CustomerPhone,
                 BookedSlots.StatusAt(booking, now).ToString(),
