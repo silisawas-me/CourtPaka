@@ -43,6 +43,12 @@ namespace CourtBooking.Api.Data.Migrations
                 column: "ChangedAt");
 
             migrationBuilder.CreateIndex(
+                name: "IX_BookingSlots_StartsAt",
+                table: "BookingSlots",
+                column: "StartsAt",
+                filter: "\"IsActive\"");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_BookerNotices_BookingId",
                 table: "BookerNotices",
                 column: "BookingId");
@@ -55,11 +61,14 @@ namespace CourtBooking.Api.Data.Migrations
 
             // Everything that happened before bookers were told about anything counts as told.
             // Without this, the first sweep after deploying would mail every booker about the
-            // last day of their history at once (PRD US-06).
+            // last day of their history at once (PRD US-06). A row whose From and To match is a
+            // venue settling a payment (BookingTransitions.Settled), told as PaymentSettled.
             migrationBuilder.Sql("""
                 INSERT INTO "BookerNotices" ("Id", "BookingId", "Kind", "SourceId", "ClaimedAt")
                 SELECT gen_random_uuid(), c."BookingId",
-                       CASE c."To" WHEN 1 THEN 1 WHEN 3 THEN 2 WHEN 7 THEN 3 WHEN 6 THEN 4 ELSE 5 END,
+                       CASE WHEN c."From" = c."To" THEN 8
+                            WHEN c."To" = 1 THEN 1 WHEN c."To" = 3 THEN 2 WHEN c."To" = 7 THEN 3
+                            WHEN c."To" = 6 THEN 4 ELSE 5 END,
                        c."Id", now()
                 FROM "BookingStatusChanges" c
                 WHERE c."To" IN (1, 3, 5, 6, 7);
@@ -83,6 +92,10 @@ namespace CourtBooking.Api.Data.Migrations
             migrationBuilder.DropIndex(
                 name: "IX_BookingStatusChanges_ChangedAt",
                 table: "BookingStatusChanges");
+
+            migrationBuilder.DropIndex(
+                name: "IX_BookingSlots_StartsAt",
+                table: "BookingSlots");
         }
     }
 }

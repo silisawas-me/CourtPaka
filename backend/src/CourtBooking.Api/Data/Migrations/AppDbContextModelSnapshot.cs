@@ -149,6 +149,9 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("BookingId");
 
+                    b.HasIndex("StartsAt")
+                        .HasFilter("\"IsActive\"");
+
                     b.HasIndex("CourtId", "StartsAt");
 
                     b.ToTable("BookingSlots");

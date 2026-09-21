@@ -70,6 +70,9 @@ public sealed class BookerMail(
         var since = now - LookBack;
         var notices = database.BookerNotices;
 
+        // A row whose From and To are the same is not a move: it is the venue settling whether
+        // the money arrived (BookingTransitions.Settled), and it is told as that. Read as a move,
+        // it would tell the booker a second time that their booking was cancelled — by the venue.
         var moves = await database.BookingStatusChanges
             .AsNoTracking()
             .Where(change =>
@@ -81,7 +84,14 @@ public sealed class BookerMail(
                     || change.To == BookingStatus.Expired
                     || change.To == BookingStatus.Cancelled)
                 && !notices.Any(notice => notice.SourceId == change.Id))
-            .Select(change => new { change.Id, change.BookingId, change.To, change.ChangedAt })
+            .Select(change => new
+            {
+                change.Id,
+                change.BookingId,
+                change.To,
+                Settled = change.From == change.To,
+                change.ChangedAt,
+            })
             .ToListAsync(cancellationToken);
 
         var refunds = await database.RefundRecords
@@ -93,24 +103,36 @@ public sealed class BookerMail(
             .Select(record => new { record.Id, record.BookingId, record.RecordedAt })
             .ToListAsync(cancellationToken);
 
-        // Stored as Confirmed, starting within the two hours and not started yet. A booking that
-        // is already being played is past reminding about.
+        // The first hour of a booking stored as Confirmed, starting within the two hours. A
+        // booking that is already being played is past reminding about.
+        //
+        // Asked from the hours rather than from the bookings: a booking's stored status stays
+        // Confirmed after it is played (Completed is read, not written — PRD 9.2), so asking the
+        // bookings would walk every booking ever confirmed on every tick.
         var remindBy = now + RemindWithin;
-        var reminders = await database.Bookings
+        var reminders = await database.BookingSlots
             .AsNoTracking()
-            .Where(booking =>
-                booking.Status == BookingStatus.Confirmed
-                && booking.Channel == BookingChannel.Online
-                && booking.Slots.Min(slot => slot.StartsAt) > now
-                && booking.Slots.Min(slot => slot.StartsAt) <= remindBy
+            .Where(slot =>
+                slot.IsActive
+                && slot.StartsAt > now
+                && slot.StartsAt <= remindBy
+                && slot.Booking!.Status == BookingStatus.Confirmed
+                && slot.Booking.Channel == BookingChannel.Online
+                && !slot.Booking.Slots.Any(earlier => earlier.StartsAt < slot.StartsAt)
                 && !notices.Any(notice =>
-                    notice.SourceId == booking.Id && notice.Kind == BookerNoticeKind.AboutToPlay))
-            .Select(booking => booking.Id)
+                    notice.SourceId == slot.BookingId
+                    && notice.Kind == BookerNoticeKind.AboutToPlay))
+            .Select(slot => slot.BookingId)
+            .Distinct()
             .ToListAsync(cancellationToken);
 
         return
         [
-            .. moves.Select(move => new Due(KindOf(move.To), move.Id, move.BookingId, move.ChangedAt)),
+            .. moves.Select(move => new Due(
+                move.Settled ? BookerNoticeKind.PaymentSettled : KindOf(move.To),
+                move.Id,
+                move.BookingId,
+                move.ChangedAt)),
             .. refunds.Select(record => new Due(
                 BookerNoticeKind.RefundRecorded, record.Id, record.BookingId, record.RecordedAt)),
             .. reminders.Select(bookingId => new Due(
@@ -151,6 +173,26 @@ public sealed class BookerMail(
     /// </summary>
     private async Task<bool> TellAsync(Due due)
     {
+        try
+        {
+            return await WriteAndSendAsync(due);
+        }
+        catch (Exception failure)
+        {
+            // Claimed and not sent. The booker's own history still says what happened, so this
+            // is said out loud for somebody to follow up, and not tried again: trying again is
+            // how the same message arrives twice. Caught around the reads as well as the send, so
+            // one booking that cannot be read does not end the sweep for everybody after it.
+            loggers.CreateLogger<BookerMail>().LogError(
+                failure,
+                "Could not tell the booker of {BookingId} about {Kind}.",
+                due.BookingId, due.Kind);
+            return false;
+        }
+    }
+
+    private async Task<bool> WriteAndSendAsync(Due due)
+    {
         var booking = await database.Bookings
             .AsNoTracking()
             .Where(one => one.Id == due.BookingId)
@@ -185,7 +227,8 @@ public sealed class BookerMail(
             $"{options.Value.BaseUrl.TrimEnd('/')}/bookings/{due.BookingId}",
             booking.HoldExpiresAt,
             RefundDueBaht: booking.RefundDueBaht,
-            PaymentUnconfirmed: booking.PaymentState == PaymentState.Unconfirmed);
+            PaymentUnconfirmed: booking.PaymentState == PaymentState.Unconfirmed,
+            PaymentReceived: booking.PaymentState == PaymentState.Received);
 
         if (due.Kind is BookerNoticeKind.Rejected or BookerNoticeKind.Cancelled)
         {
@@ -232,23 +275,9 @@ public sealed class BookerMail(
 
         var (subject, body) = BookerLetters.Write(letter, booking.Language);
 
-        try
-        {
-            await emails.SendAsync(
-                new EmailMessage(booking.Address, booking.Language, subject, body),
-                CancellationToken.None);
-        }
-        catch (Exception failure)
-        {
-            // Claimed and not sent. The booker's own history still says what happened, so this
-            // is said out loud for somebody to follow up, and not tried again: trying again is
-            // how the same message arrives twice.
-            loggers.CreateLogger<BookerMail>().LogError(
-                failure,
-                "Could not tell the booker of {BookingId} about {Kind}.",
-                due.BookingId, due.Kind);
-            return false;
-        }
+        await emails.SendAsync(
+            new EmailMessage(booking.Address, booking.Language, subject, body),
+            CancellationToken.None);
 
         // Not a name PRD 8 lists, like venue_notified; written down with that debt in CLAUDE.md.
         AppEvents.For(loggers).LogInformation(

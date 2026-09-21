@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CourtBooking.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260921152201_BookerNotices")]
+    [Migration("20260921153402_BookerNotices")]
     partial class BookerNotices
     {
         /// <inheritdoc />
@@ -151,6 +151,9 @@ namespace CourtBooking.Api.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BookingId");
+
+                    b.HasIndex("StartsAt")
+                        .HasFilter("\"IsActive\"");
 
                     b.HasIndex("CourtId", "StartsAt");
 

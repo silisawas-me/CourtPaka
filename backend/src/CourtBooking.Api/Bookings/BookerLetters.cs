@@ -27,7 +27,8 @@ public sealed record BookerLetter(
     decimal RefundAmountBaht = 0,
     RefundMethod? RefundMethod = null,
     DateOnly? RefundedOn = null,
-    decimal StillOwedBaht = 0);
+    decimal StillOwedBaht = 0,
+    bool PaymentReceived = false);
 
 /// <summary>
 /// The words of every message a booker gets, in the language they chose (PRD US-06, US-23).
@@ -45,8 +46,18 @@ public static class BookerLetters
     private static readonly CultureInfo Thai = CultureInfo.GetCultureInfo("th-TH");
     private static readonly CultureInfo English = CultureInfo.GetCultureInfo("en-GB");
 
-    public static (string Subject, string Body) Write(BookerLetter letter, string language) =>
-        language == SupportedLanguages.English ? InEnglish(letter) : InThai(letter);
+    public static (string Subject, string Body) Write(BookerLetter letter, string language)
+    {
+        var (subject, body) =
+            language == SupportedLanguages.English ? InEnglish(letter) : InThai(letter);
+
+        // A subject is one header line. The venue's name is the venue's to write, and a line
+        // break in it must not become a header of its own once a real provider sends this.
+        return (OneLine(subject), body);
+    }
+
+    private static string OneLine(string text) =>
+        string.Join(' ', text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries));
 
     private static (string Subject, string Body) InThai(BookerLetter letter)
     {
@@ -113,6 +124,16 @@ public static class BookerLetters
                         ? $"ยอดที่ยังค้างคืน {Baht(letter.StillOwedBaht, Thai)} บาท"
                         : "คืนเงินครบแล้ว",
                     "ถ้ายังไม่ได้รับเงิน กรุณาติดต่อสนามโดยตรง",
+                    letter.Link)),
+
+            BookerNoticeKind.PaymentSettled => (
+                $"สนามแจ้งผลการรับเงินแล้ว: {venue}",
+                Lines(
+                    letter.PaymentReceived
+                        ? $"{venue} ยืนยันว่าได้รับเงินค่าจองที่ยกเลิกไปแล้ว"
+                        : $"{venue} แจ้งว่าไม่ได้รับเงินค่าจองที่ยกเลิกไป",
+                    when,
+                    RefundInThai(letter),
                     letter.Link)),
 
             BookerNoticeKind.AboutToPlay => (
@@ -193,6 +214,16 @@ public static class BookerLetters
                         ? $"Still to be refunded: THB {Baht(letter.StillOwedBaht, English)}"
                         : "Everything owed has now been refunded.",
                     "If the money has not reached you, please contact the venue directly.",
+                    letter.Link)),
+
+            BookerNoticeKind.PaymentSettled => (
+                $"The venue has answered about your payment: {venue}",
+                Lines(
+                    letter.PaymentReceived
+                        ? $"{venue} confirms it received the payment for the booking you cancelled."
+                        : $"{venue} says it did not receive a payment for the booking you cancelled.",
+                    when,
+                    RefundInEnglish(letter),
                     letter.Link)),
 
             BookerNoticeKind.AboutToPlay => (

@@ -111,6 +111,33 @@ public sealed class BookerMailTests(ApiTestFixture api) : IClassFixture<ApiTestF
     }
 
     /// <summary>
+    /// Cancelled while the slip was being checked, then the venue says the money did come. The
+    /// booker hears about the answer — once, and not as a second cancellation by the venue
+    /// (the settlement is written as a Cancelled → Cancelled row).
+    /// </summary>
+    [Fact]
+    public async Task A_venue_settling_the_payment_after_a_cancel_is_told_as_that()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (booker, email, booking) = await WaitingAsync(venue.Id, courts[0]);
+
+        var cancelled = await booker.PostAsync($"/api/bookings/{booking.Id}/cancel", null);
+        Assert.Equal(HttpStatusCode.OK, cancelled.StatusCode);
+        await MailAfterSweepAsync(email, 2);
+
+        var settled = await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/bookings/{booking.Id}/settle-payment",
+            new SettlePaymentRequest(PaymentReceived: true));
+        Assert.Equal(HttpStatusCode.OK, settled.StatusCode);
+        var mail = (await MailAfterSweepAsync(email, 3)).Last();
+
+        Assert.Equal(
+            [BookerNoticeKind.Held, BookerNoticeKind.Cancelled, BookerNoticeKind.PaymentSettled],
+            await KindsToldAsync(booking.Id));
+        Assert.DoesNotContain(nameof(PaymentState.Received), mail.Body);
+    }
+
+    /// <summary>
     /// The venue cancelling says why, in the venue's words, and what comes back (PRD US-06).
     /// </summary>
     [Fact]
@@ -257,6 +284,24 @@ public sealed class BookerMailTests(ApiTestFixture api) : IClassFixture<ApiTestF
             // Played at the venue's hour, not the server's: 11:00 UTC is 18:00 in Bangkok.
             Assert.Contains("18:00–19:00", body);
         }
+    }
+
+    /// <summary>The venue writes its own name; a line break in it must not become a header.</summary>
+    [Fact]
+    public void A_subject_is_always_one_line()
+    {
+        var (subject, _) = BookerLetters.Write(
+            new BookerLetter(
+                BookerNoticeKind.Confirmed,
+                "สนาม\r\nBcc: someone@example.test",
+                [],
+                400m,
+                "https://example.test/bookings/1",
+                DateTimeOffset.UtcNow),
+            SupportedLanguages.Thai);
+
+        Assert.DoesNotContain('\r', subject);
+        Assert.DoesNotContain('\n', subject);
     }
 
     // ---------------------------------------------------------------------------------------

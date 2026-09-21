@@ -243,6 +243,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             slot.Property(s => s.BahtPerHour).HasPrecision(10, 2);
             slot.HasIndex(s => new { s.CourtId, s.StartsAt });
+            // Hours about to be played, across every court: the reminder before play (US-06).
+            slot.HasIndex(s => s.StartsAt).HasFilter("\"IsActive\"");
             slot.HasOne(s => s.Booking)
                 .WithMany(b => b.Slots)
                 .HasForeignKey(s => s.BookingId)

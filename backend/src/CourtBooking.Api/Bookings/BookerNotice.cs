@@ -21,6 +21,12 @@ public enum BookerNoticeKind
 
     /// <summary>Two hours before play, for a confirmed booking only (PRD US-06, S-05).</summary>
     AboutToPlay = 7,
+
+    /// <summary>
+    /// The venue said, after a cancellation, whether the money arrived — which is what decides
+    /// what comes back (PRD 6.2, US-13). The cancellation message promised this one.
+    /// </summary>
+    PaymentSettled = 8,
 }
 
 /// <summary>
