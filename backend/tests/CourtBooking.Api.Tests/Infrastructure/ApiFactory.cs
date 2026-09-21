@@ -33,6 +33,9 @@ public sealed class ApiFactory(string connectionString) : WebApplicationFactory<
     /// <summary>What the API logged at Error, so a 500 in a test can name its cause.</summary>
     public CapturedLogs Errors { get; } = new();
 
+    /// <summary>The product events written (PRD 8), by name, so a test can check none is missing.</summary>
+    public CapturedEvents Events { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -60,7 +63,12 @@ public sealed class ApiFactory(string connectionString) : WebApplicationFactory<
 
         // The suite registers a user per test; at the production hashing cost that alone would take
         // longer than everything else it does. Nothing here tests the hash itself.
-        builder.ConfigureLogging(logging => logging.AddProvider(Errors));
+        builder.ConfigureLogging(logging =>
+        {
+            logging.AddProvider(Errors);
+            logging.AddProvider(Events);
+            logging.AddFilter<CapturedEvents>(CapturedEvents.Category, LogLevel.Information);
+        });
 
         builder.ConfigureServices(services =>
             services.Configure<PasswordHasherOptions>(options => options.IterationCount = 1));

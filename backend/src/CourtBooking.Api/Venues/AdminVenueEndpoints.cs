@@ -238,8 +238,10 @@ public static class AdminVenueEndpoints
         await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
+        // The name inside the template, not a placeholder in it: a sink that groups by template
+        // would otherwise see approvals, refusals and suspensions as one event (PRD 8).
         AppEvents.For(loggers).LogInformation(
-            "venue_{Status} {VenueId} {From}", decided.ToString().ToLowerInvariant(), venueId, from);
+            $"venue_{decided.ToString().ToLowerInvariant()}" + " {VenueId} {From}", venueId, from);
 
         // After the commit, and never before it (PRD US-17).
         await notices.StandingChangedAsync(venueId, from, decided, written);
