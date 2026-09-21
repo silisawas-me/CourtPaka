@@ -1,0 +1,210 @@
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>{{ i18n.t('dashboard.title') }}</mat-card-title>
+  </mat-card-header>
+
+  <mat-card-content>
+    <div class="range-row">
+      <mat-form-field class="range-field">
+        <mat-label>{{ i18n.t('dashboard.range') }}</mat-label>
+        <mat-date-range-input [formGroup]="range" [rangePicker]="picker">
+          <input
+            matStartDate
+            readonly
+            formControlName="start"
+            data-testid="range-start"
+            [attr.aria-label]="i18n.t('dashboard.rangeStart')"
+          />
+          <input
+            matEndDate
+            readonly
+            formControlName="end"
+            data-testid="range-end"
+            [attr.aria-label]="i18n.t('dashboard.rangeEnd')"
+            (dateChange)="picked()"
+          />
+        </mat-date-range-input>
+        <mat-datepicker-toggle matIconSuffix [for]="picker" />
+        <mat-date-range-picker #picker />
+      </mat-form-field>
+
+      <div class="row">
+        <button matButton type="button" data-testid="this-month" (click)="thisMonth()">
+          {{ i18n.t('dashboard.thisMonth') }}
+        </button>
+        <button matButton type="button" data-testid="last-month" (click)="lastMonth()">
+          {{ i18n.t('dashboard.lastMonth') }}
+        </button>
+      </div>
+    </div>
+  </mat-card-content>
+
+  <mat-card-actions>
+    <a matButton [routerLink]="['/venues', venueId()]">{{ i18n.t('settings.backToVenue') }}</a>
+  </mat-card-actions>
+</mat-card>
+
+@if (loading() && figures() === null) {
+  <mat-progress-bar mode="indeterminate" />
+} @else if (pageError(); as key) {
+  <mat-card>
+    <mat-card-content>
+      <p class="form-error" data-testid="page-error">{{ i18n.t(key) }}</p>
+    </mat-card-content>
+  </mat-card>
+} @else if (figures(); as f) {
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate" />
+  }
+
+  <mat-card>
+    <mat-card-content>
+      <!--
+        One number leads: what the venue kept in the range. Everything else is read after it, so
+        it is the only thing set large — the rest are a line of figures, not a wall of equal tiles.
+      -->
+      <p class="lead-label muted">
+        {{ i18n.t('dashboard.revenue') }} · {{ f.from | appDate: i18n.locale() }} –
+        {{ f.to | appDate: i18n.locale() }}
+      </p>
+      <p class="lead" data-testid="revenue-total">
+        {{ baht(totalBaht()) }} <span class="unit">{{ i18n.t('dashboard.baht') }}</span>
+      </p>
+
+      <dl class="figures">
+        <div>
+          <dt class="muted">{{ i18n.t('dashboard.online') }}</dt>
+          <dd data-testid="revenue-online">{{ baht(f.onlineBaht) }}</dd>
+        </div>
+        <div>
+          <dt class="muted">{{ i18n.t('dashboard.counter') }}</dt>
+          <dd data-testid="revenue-counter">{{ baht(f.staffBaht) }}</dd>
+        </div>
+        <div>
+          <dt class="muted">{{ i18n.t('dashboard.advance') }}</dt>
+          <dd data-testid="advance">{{ baht(f.advanceBaht) }}</dd>
+        </div>
+        <div>
+          <dt class="muted">{{ i18n.t('dashboard.utilization') }}</dt>
+          <dd data-testid="utilization">
+            @if (f.utilizationPercent !== null) {
+              {{ baht(f.utilizationPercent) }}%
+              <span class="muted small">({{ hours(f.bookedHours, f.sellableHours) }})</span>
+            } @else {
+              <span class="muted">{{ i18n.t('dashboard.nothingToSell') }}</span>
+            }
+          </dd>
+        </div>
+      </dl>
+      <p class="muted small">{{ i18n.t('dashboard.note') }}</p>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- What is waiting has nothing to do with the range: it is today's work, wherever it began. -->
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('dashboard.waiting') }}</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <ul class="waiting" data-testid="waiting">
+        <li class="entry">
+          <span>{{ i18n.t('dashboard.slipsToCheck') }}</span>
+          <span class="spacer"></span>
+          <a
+            matButton
+            data-testid="slips-to-check"
+            [routerLink]="['/venues', venueId(), 'slip-queue']"
+          >
+            {{ f.attention.slipsToCheck }}
+          </a>
+        </li>
+        <li class="entry">
+          <span>{{ i18n.t('dashboard.paymentsUnanswered') }}</span>
+          <span class="spacer"></span>
+          <a
+            matButton
+            data-testid="payments-unanswered"
+            [routerLink]="['/venues', venueId(), 'bookings']"
+          >
+            {{ f.attention.paymentsUnanswered }}
+          </a>
+        </li>
+        <li class="entry">
+          <span>{{ i18n.t('dashboard.refundsOutstanding') }}</span>
+          <span class="spacer"></span>
+          <a
+            matButton
+            data-testid="refunds-outstanding"
+            [routerLink]="['/venues', venueId(), 'bookings']"
+          >
+            {{ f.attention.refundsOutstanding }}
+          </a>
+        </li>
+      </ul>
+    </mat-card-content>
+  </mat-card>
+
+  @if (manyMonths()) {
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>{{ i18n.t('dashboard.byMonth') }}</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="table-scroll">
+          <table class="figures-table" data-testid="months">
+            <thead>
+              <tr>
+                <th scope="col">{{ i18n.t('dashboard.month') }}</th>
+                <th scope="col" class="num">{{ i18n.t('dashboard.online') }}</th>
+                <th scope="col" class="num">{{ i18n.t('dashboard.counter') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (month of f.months; track month.year * 100 + month.month) {
+                <tr>
+                  <th scope="row">{{ monthName(month.year, month.month) }}</th>
+                  <td class="num">{{ baht(month.onlineBaht) }}</td>
+                  <td class="num">{{ baht(month.staffBaht) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  }
+
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('dashboard.byDay') }}</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <!--
+        A table, not cards: a month is thirty rows read down one column at a time, and a figure is
+        found by its row and its column. Wide on a phone, so it scrolls in its own box.
+      -->
+      <div class="table-scroll">
+        <table class="figures-table" data-testid="days">
+          <thead>
+            <tr>
+              <th scope="col">{{ i18n.t('dashboard.day') }}</th>
+              <th scope="col" class="num">{{ i18n.t('dashboard.online') }}</th>
+              <th scope="col" class="num">{{ i18n.t('dashboard.counter') }}</th>
+              <th scope="col" class="num">{{ i18n.t('dashboard.hoursUsed') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (day of f.days; track day.date) {
+              <tr [attr.data-testid]="'day-' + day.date">
+                <th scope="row">{{ day.date | appDate: i18n.locale() }}</th>
+                <td class="num">{{ baht(day.onlineBaht) }}</td>
+                <td class="num">{{ baht(day.staffBaht) }}</td>
+                <td class="num">{{ hours(day.bookedHours, day.sellableHours) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </mat-card-content>
+  </mat-card>
+}

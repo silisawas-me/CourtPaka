@@ -55,6 +55,7 @@ public static class VenueEndpoints
         venue.MapPricingEndpoints();
         venue.MapVerifySlipEndpoints();
         venue.MapVenueBookingEndpoints();
+        venue.MapVenueDashboardEndpoints();
 
         return venues;
     }

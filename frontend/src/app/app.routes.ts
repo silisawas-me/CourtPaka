@@ -35,6 +35,12 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    path: 'venues/:venueId/dashboard',
+    loadComponent: () =>
+      import('./features/venues/venue-dashboard.page').then((m) => m.VenueDashboardPage),
+    canActivate: [authGuard],
+  },
+  {
     path: 'venues/:venueId/closures',
     loadComponent: () =>
       import('./features/venues/court-closures.page').then((m) => m.CourtClosuresPage),

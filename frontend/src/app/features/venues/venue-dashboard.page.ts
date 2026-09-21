@@ -1,0 +1,156 @@
+import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatDatepickerModule } from '@angular/material/datepicker';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { Router, RouterLink } from '@angular/router';
+import { ApiError, errorKey } from '../../core/http/api-error';
+import { AppDatePipe } from '../../core/i18n/app-date.pipe';
+import { fromPlainDate, plainDate, venueToday } from '../../core/i18n/plain-date';
+import { TranslationService } from '../../core/i18n/translation.service';
+import { Dashboard, VenueDashboardService } from '../../core/venues/venue-dashboard.service';
+import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
+import { provideLocalizedDateAdapter } from '../../shared/localized-date-adapter';
+
+/**
+ * A venue's own figures for a range of days (PRD US-15): what it kept, what is still to come,
+ * how much of what it had to sell was used, and what is waiting for somebody.
+ *
+ * The range lives in the URL (`?from=&to=`) like the booker's grid keeps its day there, so a
+ * link to last month's figures is a link to last month's figures. With neither, the server
+ * answers for this month.
+ */
+@Component({
+  selector: 'app-venue-dashboard-page',
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    MatButtonModule,
+    MatCardModule,
+    MatDatepickerModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatProgressBarModule,
+    AppDatePipe,
+  ],
+  providers: [FORM_FIELD_DEFAULTS, provideLocalizedDateAdapter()],
+  templateUrl: './venue-dashboard.page.html',
+  styleUrl: './venue-dashboard.page.scss',
+})
+export class VenueDashboardPage {
+  private readonly dashboards = inject(VenueDashboardService);
+  private readonly router = inject(Router);
+
+  protected readonly i18n = inject(TranslationService);
+
+  readonly venueId = input.required<string>();
+  readonly from = input<string>();
+  readonly to = input<string>();
+
+  protected readonly figures = signal<Dashboard | null>(null);
+  protected readonly loading = signal(true);
+  protected readonly pageError = signal<string | null>(null);
+
+  protected readonly range = new FormGroup({
+    start: new FormControl<Date | null>(null),
+    end: new FormControl<Date | null>(null),
+  });
+
+  protected readonly totalBaht = computed(() => {
+    const figures = this.figures();
+    return figures ? figures.onlineBaht + figures.staffBaht : 0;
+  });
+
+  /** A month table only says something the day table does not when there is more than one. */
+  protected readonly manyMonths = computed(() => (this.figures()?.months.length ?? 0) > 1);
+
+  /** Numbers in the reader's own grouping, without a currency sign: the column says baht. */
+  private readonly numbers = computed(
+    () => new Intl.NumberFormat(this.i18n.locale(), { maximumFractionDigits: 2 }),
+  );
+
+  constructor() {
+    effect(() => this.load(this.venueId(), this.from(), this.to()));
+  }
+
+  protected baht(amount: number): string {
+    return this.numbers().format(amount);
+  }
+
+  /** Used out of sellable, as "12 / 32". The share alone hides how small a day was. */
+  protected hours(used: number, sellable: number): string {
+    return `${this.numbers().format(used)} / ${this.numbers().format(sellable)}`;
+  }
+
+  /** "กันยายน 2569" / "September 2026": through Intl, so Thai gets the Buddhist year like dates do. */
+  private readonly months = computed(
+    () => new Intl.DateTimeFormat(this.i18n.locale(), { month: 'long', year: 'numeric' }),
+  );
+
+  protected monthName(year: number, month: number): string {
+    return this.months().format(new Date(year, month - 1, 1));
+  }
+
+  /** Both ends are picked before anything is asked, so half a range never reaches the server. */
+  protected picked(): void {
+    const { start, end } = this.range.getRawValue();
+    if (start && end) {
+      this.show(plainDate(start), plainDate(end));
+    }
+  }
+
+  protected thisMonth(): void {
+    const today = venueToday();
+    this.show(
+      plainDate(new Date(today.getFullYear(), today.getMonth(), 1)),
+      plainDate(new Date(today.getFullYear(), today.getMonth() + 1, 0)),
+    );
+  }
+
+  protected lastMonth(): void {
+    const today = venueToday();
+    this.show(
+      plainDate(new Date(today.getFullYear(), today.getMonth() - 1, 1)),
+      plainDate(new Date(today.getFullYear(), today.getMonth(), 0)),
+    );
+  }
+
+  private show(from: string, to: string): void {
+    void this.router.navigate([], {
+      queryParams: { from, to },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  private load(venueId: string, from?: string, to?: string): void {
+    this.loading.set(true);
+    this.pageError.set(null);
+
+    this.dashboards.read(venueId, from, to).subscribe({
+      next: (figures) => {
+        this.figures.set(figures);
+        this.loading.set(false);
+
+        // The range the server answered for, which is this month when none was asked.
+        this.range.setValue(
+          { start: fromPlainDate(figures.from), end: fromPlainDate(figures.to) },
+          { emitEvent: false },
+        );
+      },
+      error: (failure: unknown) => {
+        this.loading.set(false);
+        // A plain 403 carries no code: the policy refuses before any handler speaks. For a member
+        // of a working venue it means they lack ViewReports, which is worth saying in words
+        // (PRD US-14); a venue turned away by the platform is told so on its own page first.
+        this.pageError.set(
+          failure instanceof ApiError && failure.status === 403
+            ? 'dashboard.noPermission'
+            : errorKey(failure),
+        );
+      },
+    });
+  }
+}
