@@ -1,0 +1,129 @@
+<app-admin-tabs />
+
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>{{ i18n.t('admin.dashboard.title') }}</mat-card-title>
+  </mat-card-header>
+
+  <mat-card-content>
+    <div class="range-row">
+      <mat-form-field class="range-field">
+        <mat-label>{{ i18n.t('dashboard.range') }}</mat-label>
+        <mat-date-range-input [formGroup]="range" [rangePicker]="picker">
+          <input
+            matStartDate
+            readonly
+            formControlName="start"
+            data-testid="range-start"
+            [attr.aria-label]="i18n.t('dashboard.rangeStart')"
+          />
+          <input
+            matEndDate
+            readonly
+            formControlName="end"
+            data-testid="range-end"
+            [attr.aria-label]="i18n.t('dashboard.rangeEnd')"
+            (dateChange)="picked()"
+          />
+        </mat-date-range-input>
+        <mat-datepicker-toggle matIconSuffix [for]="picker" />
+        <mat-date-range-picker #picker />
+      </mat-form-field>
+
+      <div class="row">
+        <button matButton type="button" data-testid="this-month" (click)="thisMonth()">
+          {{ i18n.t('dashboard.thisMonth') }}
+        </button>
+        <button matButton type="button" data-testid="last-month" (click)="lastMonth()">
+          {{ i18n.t('dashboard.lastMonth') }}
+        </button>
+      </div>
+    </div>
+  </mat-card-content>
+</mat-card>
+
+@if (loading() && figures() === null) {
+  <mat-progress-bar mode="indeterminate" />
+} @else if (pageError(); as key) {
+  <mat-card>
+    <mat-card-content>
+      <p class="form-error" data-testid="page-error">{{ i18n.t(key) }}</p>
+    </mat-card-content>
+  </mat-card>
+} @else if (figures(); as f) {
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate" />
+  }
+
+  <mat-card>
+    <mat-card-content>
+      <p class="lead-label muted">
+        {{ i18n.t('admin.dashboard.gmv') }} · {{ f.from | appDate: i18n.locale() }} –
+        {{ f.to | appDate: i18n.locale() }}
+      </p>
+      <p class="lead" data-testid="gmv-total">
+        {{ number(f.totals.gmvBaht) }} <span class="unit">{{ i18n.t('dashboard.baht') }}</span>
+      </p>
+
+      <dl class="figures">
+        <div>
+          <dt class="muted">{{ i18n.t('admin.dashboard.bookings') }}</dt>
+          <dd data-testid="bookings-total">{{ number(f.totals.bookings) }}</dd>
+        </div>
+        <div>
+          <dt class="muted">{{ i18n.t('admin.dashboard.onlineToStaff') }}</dt>
+          <dd data-testid="channel-split">
+            {{ number(f.totals.onlineBookings) }} : {{ number(f.totals.staffBookings) }}
+          </dd>
+        </div>
+        @for (status of statuses; track status) {
+          <div>
+            <dt class="muted">{{ i18n.t('admin.venues.filter.' + status) }}</dt>
+            <dd [attr.data-testid]="'venues-' + status">
+              {{ number(f.venuesByStatus[status]) }}
+            </dd>
+          </div>
+        }
+      </dl>
+      <p class="muted small">{{ i18n.t('admin.dashboard.note') }}</p>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('admin.dashboard.byVenue') }}</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="table-scroll">
+        <table class="figures-table" data-testid="venues">
+          <thead>
+            <tr>
+              <th scope="col">{{ i18n.t('admin.dashboard.venue') }}</th>
+              <th scope="col">{{ i18n.t('admin.dashboard.status') }}</th>
+              <th scope="col" class="num">{{ i18n.t('admin.dashboard.bookings') }}</th>
+              <th scope="col" class="num">{{ i18n.t('admin.dashboard.onlineToStaff') }}</th>
+              <th scope="col" class="num">{{ i18n.t('admin.dashboard.gmv') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (line of f.venues; track line.venueId) {
+              <tr [attr.data-testid]="'venue-' + line.venueId">
+                <th scope="row">
+                  {{ line.name }} <span class="muted">{{ line.code }}</span>
+                </th>
+                <td>
+                  <span class="badge">{{ i18n.t('admin.venues.filter.' + line.status) }}</span>
+                </td>
+                <td class="num">{{ number(line.bookings) }}</td>
+                <td class="num">
+                  {{ number(line.onlineBookings) }} : {{ number(line.staffBookings) }}
+                </td>
+                <td class="num">{{ number(line.gmvBaht) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </mat-card-content>
+  </mat-card>
+}

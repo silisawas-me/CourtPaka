@@ -117,9 +117,10 @@ public static class PublicVenueEndpoints
     /// Postgres reads %, _ and \ in a LIKE pattern, so a booker typing one would otherwise match
     /// everything rather than look for the character they typed.
     /// </summary>
-    private const string LikeEscape = @"\";
+    internal const string LikeEscape = @"\";
 
-    private static string Like(string term) => term
+    /// <summary>A term a person typed, made safe to put inside a LIKE pattern.</summary>
+    internal static string Like(string term) => term
         .Replace(@"\", @"\\", StringComparison.Ordinal)
         .Replace("%", @"\%", StringComparison.Ordinal)
         .Replace("_", @"\_", StringComparison.Ordinal);

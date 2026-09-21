@@ -17,6 +17,7 @@ import {
 import { VenueStatus } from '../../core/venues/venue.service';
 import { FieldError } from '../../shared/field-error';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
+import { AdminTabs } from './admin-tabs';
 
 /** As much as the platform needs to explain itself to a venue (VenueStatusChange.ReasonMaxLength). */
 const REASON_MAX_LENGTH = 500;
@@ -41,6 +42,7 @@ const NEEDS_REASON: VenueDecision[] = ['reject', 'suspend'];
 @Component({
   selector: 'app-admin-venues-page',
   imports: [
+    AdminTabs,
     ReactiveFormsModule,
     FieldError,
     MatButtonModule,

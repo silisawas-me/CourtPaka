@@ -28,6 +28,9 @@ describe('CourtClosuresPage', () => {
   let httpMock: HttpTestingController;
 
   function render(courts: ReturnType<typeof court>[], closures: unknown[]): void {
+    // The language is remembered in storage, and a spec that ran earlier in this worker may have
+    // left English there; these assertions read the Thai words.
+    localStorage.clear();
     TestBed.configureTestingModule({
       imports: [CourtClosuresPage],
       providers: pageProviders(),

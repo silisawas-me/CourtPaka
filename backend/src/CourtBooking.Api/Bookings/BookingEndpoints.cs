@@ -368,10 +368,20 @@ public static class BookingEndpoints
 
         // An address nobody has proved they can read is not enough to hold a court (PRD US-01).
         // Signing in unverified is allowed on purpose; this is the gate that is not.
-        if (!await database.Users
+        var booker = await database.Users
             .Where(user => user.Id == bookerId)
-            .Select(user => user.EmailConfirmed)
-            .SingleOrDefaultAsync(cancellationToken))
+            .Select(user => new { user.EmailConfirmed, user.SuspendedAt })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        // A session opened before a suspension lives until the next revalidation (PRD US-22);
+        // the row is being read here anyway, so a suspended account cannot hold courts meanwhile.
+        if (booker?.SuspendedAt is not null)
+        {
+            return Refuse(
+                loggers, StatusCodes.Status403Forbidden, AuthErrorCodes.AccountSuspended, bookerId);
+        }
+
+        if (booker is not { EmailConfirmed: true })
         {
             return Refuse(
                 loggers, StatusCodes.Status403Forbidden, AuthErrorCodes.EmailNotVerified, bookerId);

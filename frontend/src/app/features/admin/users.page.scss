@@ -1,0 +1,91 @@
+:host {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--stack);
+}
+
+// The field and its button on one line on a desk; on a phone the field takes the width.
+.search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem 1rem;
+}
+
+.search-field {
+  flex: 1 1 18rem;
+}
+
+.search button {
+  margin-top: 0.5rem;
+}
+
+// Rows, like the venue queue beside it (venues.page.scss): an account is found and opened in
+// place, not browsed.
+.user-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.user {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.user-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+}
+
+// An address can be long and has no spaces to break at, so it may break anywhere.
+.user-open {
+  min-height: 2.75rem;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: start;
+  overflow-wrap: anywhere;
+  font: var(--mat-sys-body-large);
+  color: var(--mat-sys-primary);
+  cursor: pointer;
+}
+
+.badge-stopped {
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+}
+
+.detail {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.5rem 0 0.75rem;
+}
+
+.history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+  font: var(--mat-sys-body-medium);
+}
+
+.decide {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+}
+
+// Stopping somebody is the door that takes something away, so it is the one drawn in the
+// error colour — outlined, not filled, so it does not shout louder than the page.
+.stop {
+  color: var(--mat-sys-error);
+  border-color: var(--mat-sys-error);
+}

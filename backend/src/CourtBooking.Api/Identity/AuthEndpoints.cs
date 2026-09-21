@@ -203,6 +203,22 @@ public static class AuthEndpoints
             }
         }
 
+        // Identity refuses a suspended account before it looks at the password (NotAllowed), so
+        // the password is checked here — and a wrong one counts towards the lockout as usual.
+        // Only somebody who knows the password is told the account is suspended; anybody else
+        // gets the same answer as for an address with no account (PDPA, PRD 8).
+        if (result.IsNotAllowed
+            && await userManager.FindByEmailAsync(request.Email) is { SuspendedAt: not null } suspended
+            && !await userManager.IsLockedOutAsync(suspended))
+        {
+            if (await userManager.CheckPasswordAsync(suspended, request.Password))
+            {
+                return ApiProblem.Of(StatusCodes.Status403Forbidden, AuthErrorCodes.AccountSuspended);
+            }
+
+            await userManager.AccessFailedAsync(suspended);
+        }
+
         return ApiProblem.Of(StatusCodes.Status401Unauthorized, AuthErrorCodes.InvalidCredentials);
     }
 
