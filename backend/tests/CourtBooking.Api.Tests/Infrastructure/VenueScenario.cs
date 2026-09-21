@@ -342,6 +342,34 @@ public sealed class VenueScenario(ApiTestFixture api)
     }
 
     /// <summary>The address of each member of this venue, for checking who was written to.</summary>
+    /// <summary>
+    /// Somebody who acts for the platform (PRD US-20). The address is the one in configuration;
+    /// the account behind it is an ordinary one, because being an admin is not something the
+    /// account carries.
+    /// </summary>
+    public async Task<HttpClient> PlatformAdminAsync()
+    {
+        var client = api.CreateClient();
+        var email = ApiFactory.PlatformAdminEmail;
+
+        // One account, shared by every test in the run: it is named in configuration, so there
+        // is only one of it. Registering again is fine and answers 409.
+        await client.PostAsJsonAsync(
+            "/api/auth/register",
+            new RegisterRequest(
+                email, Password, ApiFactory.PrivacyPolicyVersion, SupportedLanguages.Thai, null));
+
+        // Confirmed, because an unconfirmed address is not an admin at all — which is the rule
+        // PlatformAdminTests checks on its own.
+        await ConfirmEmailAsync(email);
+
+        var login = await client.PostAsJsonAsync(
+            "/api/auth/login", new LoginRequest(email, Password));
+        Assert.Equal(HttpStatusCode.NoContent, login.StatusCode);
+
+        return client;
+    }
+
     public async Task<Dictionary<Guid, string>> MemberEmailsAsync(Guid venueId)
     {
         using var scope = api.CreateScope();

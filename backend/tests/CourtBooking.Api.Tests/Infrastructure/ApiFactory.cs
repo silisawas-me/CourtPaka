@@ -13,6 +13,19 @@ public sealed class ApiFactory(string connectionString) : WebApplicationFactory<
     public const string PrivacyPolicyVersion = "2026-09-01";
     public const string VenueAgreementVersion = "2026-09-01";
 
+    /// <summary>
+    /// The one address that acts for the platform in tests. Configuration rather than a column,
+    /// which is what makes "who is an admin" untouchable from inside the running app (PRD US-20).
+    /// </summary>
+    public const string PlatformAdminEmail = "platform@courtpaka.test";
+
+    /// <summary>
+    /// A second configured admin address that nobody has proved they read — the state a fresh
+    /// deployment is in before its operator signs up. Used only by the test that makes sure a
+    /// stranger who registers it first gets nothing for it (PRD US-20).
+    /// </summary>
+    public const string UnclaimedAdminEmail = "unclaimed-admin@courtpaka.test";
+
     /// <summary>A directory per test run, so nothing survives into the next one.</summary>
     public string SlipStoragePath { get; } =
         Path.Combine(Path.GetTempPath(), $"courtpaka-slips-{Guid.CreateVersion7():N}");
@@ -27,6 +40,8 @@ public sealed class ApiFactory(string connectionString) : WebApplicationFactory<
         builder.UseSetting("App:BaseUrl", "http://localhost:8080");
         builder.UseSetting("App:PrivacyPolicyVersion", PrivacyPolicyVersion);
         builder.UseSetting("App:VenueAgreementVersion", VenueAgreementVersion);
+        builder.UseSetting("App:PlatformAdmins:0", PlatformAdminEmail);
+        builder.UseSetting("App:PlatformAdmins:1", UnclaimedAdminEmail);
         builder.UseSetting("App:RequireSecureCookies", "false");
         // Tests apply migrations explicitly so each suite controls when the schema appears.
         builder.UseSetting("App:ApplyMigrationsOnStartup", "false");

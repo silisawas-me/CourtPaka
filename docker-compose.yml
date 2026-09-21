@@ -35,6 +35,8 @@ services:
       App__PrivacyPolicyVersion: "2026-09-01"
       # The agreement a venue accepts when it applies (PRD US-10). Wording waits on Q8.
       App__VenueAgreementVersion: "2026-09-01"
+      # Who acts for the platform here (PRD US-20). A deployment names real people instead.
+      App__PlatformAdmins__0: "admin@courtpaka.local"
       # Local stack is plain HTTP; deployed environments leave this at its secure default.
       App__RequireSecureCookies: "false"
       # Local convenience: deployments run the migration bundle from the deploy job instead (PRD 9.4).

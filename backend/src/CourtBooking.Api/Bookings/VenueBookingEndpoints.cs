@@ -41,7 +41,11 @@ public static class VenueBookingEndpoints
         // Reading the day is behind the permission too, not merely behind membership: it names
         // every booker by the address they signed up with, and PRD 8 gives that to the people
         // holding the permission rather than to the venue's members at large (PDPA, US-13).
-        bookings.RequireAuthorization(VenuePolicies.Needs(VenuePermissions.ManageBookings));
+        // Still open at a suspended venue. Bookings taken before the suspension have to be
+        // honoured or cancelled with a reason, and what is owed back still has to be sent —
+        // none of which a venue can do through a door the platform has shut (PRD US-20).
+        bookings.RequireAuthorization(
+            VenuePolicies.NeedsEvenWhenSuspended(VenuePermissions.ManageBookings));
 
         bookings.MapGet("/", DayAsync);
         bookings.MapPost("/{bookingId:guid}/cancel", CancelAsync);

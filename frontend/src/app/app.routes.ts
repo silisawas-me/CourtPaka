@@ -62,6 +62,11 @@ export const routes: Routes = [
       import('./features/booking/availability.page').then((m) => m.AvailabilityPage),
   },
   {
+    path: 'admin/venues',
+    loadComponent: () => import('./features/admin/venues.page').then((m) => m.AdminVenuesPage),
+    canActivate: [authGuard],
+  },
+  {
     path: 'venues',
     canActivate: [authGuard],
     loadComponent: () => import('./features/venues/venues.page').then((m) => m.VenuesPage),

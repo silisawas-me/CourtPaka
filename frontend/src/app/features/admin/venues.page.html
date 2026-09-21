@@ -1,0 +1,242 @@
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>{{ i18n.t('admin.venues.title') }}</mat-card-title>
+    <mat-card-subtitle>{{ i18n.t('admin.venues.subtitle') }}</mat-card-subtitle>
+  </mat-card-header>
+
+  <mat-card-content>
+    <!--
+      Waiting first, because that is what this screen is opened for. The rest are here so a
+      decision already made can be looked up, not because anybody browses them.
+    -->
+    <div class="filters">
+      @for (choice of filters; track choice) {
+        <button
+          matButton
+          type="button"
+          class="filter"
+          [class.on]="filter() === choice"
+          [attr.data-testid]="'filter-' + choice"
+          (click)="show(choice)"
+        >
+          {{ i18n.t('admin.venues.filter.' + choice) }}
+        </button>
+      }
+    </div>
+  </mat-card-content>
+</mat-card>
+
+@if (loading()) {
+  <mat-progress-bar mode="indeterminate" />
+} @else if (pageError(); as key) {
+  <mat-card>
+    <mat-card-content>
+      <p class="form-error" data-testid="page-error">{{ i18n.t(key) }}</p>
+    </mat-card-content>
+  </mat-card>
+} @else if (nothingHere()) {
+  <mat-card>
+    <mat-card-content>
+      <p class="muted" data-testid="nothing-here">{{ i18n.t('admin.venues.none') }}</p>
+    </mat-card-content>
+  </mat-card>
+} @else {
+  <mat-card>
+    <mat-card-content>
+      <ul class="venue-list" data-testid="venue-list">
+        @for (venue of venues$(); track venue.id) {
+          <li class="venue" [attr.data-testid]="'venue-' + venue.id">
+            <button
+              matButton
+              type="button"
+              class="venue-open"
+              [attr.data-testid]="'open-' + venue.id"
+              (click)="openVenue(venue)"
+            >
+              {{ venue.name }}
+            </button>
+            <span class="muted venue-code">{{ venue.code }}</span>
+            <span class="muted venue-where">{{ venue.district }} · {{ venue.province }}</span>
+            <span class="muted venue-when">
+              {{ venue.createdAt | appDateTime: i18n.locale() }}
+            </span>
+            <span class="badge" [class.badge-on]="venue.status === 'Approved'">
+              {{ i18n.t('venues.status.' + venue.status) }}
+            </span>
+
+            @if (openId() === venue.id) {
+              <div class="application" data-testid="application">
+                @if (open(); as detail) {
+                  <!--
+                    Everything the venue said about itself, beside the decision. Judging an
+                    application means reading it, and a screen that made you remember a tax
+                    number from somewhere else would get tax numbers wrong (PRD US-20).
+
+                    Each label and its value sit in one <div>, which <dl> allows: without it the
+                    multi-column grid deals labels and values out independently, and a tax number
+                    ends up under somebody else's heading.
+                  -->
+                  <dl class="facts">
+                    <div>
+                      <dt>{{ i18n.t('apply.legalName') }}</dt>
+                      <dd data-testid="legal-name">{{ detail.business.legalName }}</dd>
+                    </div>
+
+                    <div>
+                      <dt>{{ i18n.t('apply.taxId') }}</dt>
+                      <dd data-testid="tax-id">
+                        {{ detail.business.taxId }} · {{ detail.business.taxBranch }}
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt>{{ i18n.t('apply.vatRegistered') }}</dt>
+                      <dd>
+                        {{ i18n.t(detail.business.isVatRegistered ? 'common.yes' : 'common.no') }}
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt>{{ i18n.t('apply.promptPayId') }}</dt>
+                      <dd data-testid="promptpay">
+                        {{ detail.business.promptPayId }} ·
+                        {{ detail.business.promptPayAccountName }}
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt>{{ i18n.t('apply.billingAddress') }}</dt>
+                      <dd>{{ detail.business.billingAddress }}</dd>
+                    </div>
+
+                    <div>
+                      <dt>{{ i18n.t('apply.agreementVersion') }}</dt>
+                      <dd data-testid="agreement">
+                        @if (detail.agreementVersion) {
+                          {{ detail.agreementVersion }}
+                          @if (detail.agreementAcceptedAt) {
+                            · {{ detail.agreementAcceptedAt | appDateTime: i18n.locale() }}
+                          }
+                        } @else {
+                          {{ i18n.t('admin.venues.noAgreement') }}
+                        }
+                      </dd>
+                    </div>
+                  </dl>
+
+                  @if (detail.history.length > 0) {
+                    <ul class="history" data-testid="history">
+                      @for (move of detail.history; track move.changedAt) {
+                        <li>
+                          <span>{{ move.changedAt | appDateTime: i18n.locale() }}</span>
+                          <span class="badge">{{ i18n.t('venues.status.' + move.to) }}</span>
+                          @if (move.reason) {
+                            <span class="muted history-why">{{ move.reason }}</span>
+                          }
+                        </li>
+                      }
+                    </ul>
+                  }
+
+                  <!--
+                    The reason is asked for where the decision is pressed, because it is sent to
+                    the venue word for word and is the only thing they are told (PRD US-20).
+                  -->
+                  @if (asking(); as decision) {
+                    <form class="stack" [formGroup]="reasonForm" novalidate>
+                      <mat-form-field class="field">
+                        <mat-label>{{ i18n.t('admin.venues.why.' + decision) }}</mat-label>
+                        <input
+                          matInput
+                          data-testid="reason"
+                          formControlName="reason"
+                          [attr.maxlength]="reasonMaxLength"
+                        />
+                        <mat-hint>{{ i18n.t('admin.venues.whyHint') }}</mat-hint>
+                        <mat-error
+                          [appFieldError]="reasonForm.controls.reason"
+                          testId="reason-error"
+                        ></mat-error>
+                      </mat-form-field>
+
+                      <div class="row">
+                        <button
+                          matButton="filled"
+                          type="button"
+                          data-testid="confirm"
+                          [disabled]="deciding()"
+                          (click)="decide(venue.id, decision)"
+                        >
+                          {{ i18n.t('admin.venues.do.' + decision) }}
+                        </button>
+                        <button
+                          matButton
+                          type="button"
+                          data-testid="cancel"
+                          (click)="asking.set(null)"
+                        >
+                          {{ i18n.t('common.cancel') }}
+                        </button>
+                      </div>
+                    </form>
+                  } @else {
+                    <div class="row">
+                      @if (venue.status === 'Pending') {
+                        <button
+                          matButton="filled"
+                          type="button"
+                          data-testid="approve"
+                          [disabled]="deciding()"
+                          (click)="decide(venue.id, 'approve')"
+                        >
+                          {{ i18n.t('admin.venues.do.approve') }}
+                        </button>
+                        <button
+                          matButton
+                          type="button"
+                          data-testid="reject"
+                          [disabled]="deciding()"
+                          (click)="ask('reject')"
+                        >
+                          {{ i18n.t('admin.venues.do.reject') }}
+                        </button>
+                      }
+                      @if (venue.status === 'Approved') {
+                        <button
+                          matButton
+                          type="button"
+                          data-testid="suspend"
+                          [disabled]="deciding()"
+                          (click)="ask('suspend')"
+                        >
+                          {{ i18n.t('admin.venues.do.suspend') }}
+                        </button>
+                      }
+                      @if (venue.status === 'Suspended') {
+                        <button
+                          matButton="filled"
+                          type="button"
+                          data-testid="reinstate"
+                          [disabled]="deciding()"
+                          (click)="decide(venue.id, 'reinstate')"
+                        >
+                          {{ i18n.t('admin.venues.do.reinstate') }}
+                        </button>
+                      }
+                    </div>
+                  }
+
+                  @if (decideError(); as key) {
+                    <p class="form-error" data-testid="decide-error">{{ i18n.t(key) }}</p>
+                  }
+                } @else {
+                  <mat-progress-bar mode="indeterminate" />
+                }
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    </mat-card-content>
+  </mat-card>
+}

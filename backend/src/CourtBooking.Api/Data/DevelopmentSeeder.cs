@@ -15,6 +15,13 @@ public static class DevelopmentSeeder
 {
     public const string OwnerEmail = "owner@courtpaka.local";
     public const string StaffEmail = "staff@courtpaka.local";
+
+    /// <summary>
+    /// Somebody to act for the platform locally (PRD US-20). Deliberately not the venue's owner:
+    /// the two are different jobs, and a local stack where one account is both would hide every
+    /// bug where a venue can judge itself.
+    /// </summary>
+    public const string PlatformAdminEmail = "admin@courtpaka.local";
     public const string Password = "DevPassword1";
     public const string VenueCode = "DEV01";
     public const int CourtCount = 4;
@@ -32,6 +39,7 @@ public static class DevelopmentSeeder
 
         var owner = await EnsureUserAsync(users, OwnerEmail);
         var staff = await EnsureUserAsync(users, StaffEmail);
+        await EnsureUserAsync(users, PlatformAdminEmail);
 
         var venue = await database.Venues.SingleOrDefaultAsync(v => v.Code == VenueCode, cancellationToken);
         if (venue is null)

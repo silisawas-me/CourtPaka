@@ -31,6 +31,7 @@ services:
       App__BaseUrl: ${APP_BASE_URL:?set APP_BASE_URL to the public origin}
       App__PrivacyPolicyVersion: ${PRIVACY_POLICY_VERSION:?set PRIVACY_POLICY_VERSION}
       App__VenueAgreementVersion: ${VENUE_AGREEMENT_VERSION:?set VENUE_AGREEMENT_VERSION}
+      App__PlatformAdmins__0: ${PLATFORM_ADMIN_EMAIL:?set PLATFORM_ADMIN_EMAIL}
       # Schema changes are applied by the deploy job before the new image starts (PRD 9.4).
       App__ApplyMigrationsOnStartup: "false"
       App__DataProtectionKeysPath: "/keys"

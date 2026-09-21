@@ -16,12 +16,14 @@ public sealed class VenuePermissionRequirement : IAuthorizationRequirement
         VenuePermissions permission,
         bool ownerOnly,
         bool whateverTheVenueSStatus = false,
-        bool evenWhenTurnedAway = false)
+        bool evenWhenTurnedAway = false,
+        bool evenWhenSuspended = false)
     {
         Permission = permission;
         OwnerOnly = ownerOnly;
         WhateverTheVenueSStatus = whateverTheVenueSStatus;
         EvenWhenTurnedAway = evenWhenTurnedAway;
+        EvenWhenSuspended = evenWhenSuspended;
     }
 
     public VenuePermissions Permission { get; }
@@ -56,6 +58,15 @@ public sealed class VenuePermissionRequirement : IAuthorizationRequirement
     /// </summary>
     public bool EvenWhenTurnedAway { get; }
 
+    /// <summary>
+    /// Whether this still works at a suspended venue. A suspension stops a venue selling; it does
+    /// not undo what it already sold. Bookings taken before it still have to be honoured or
+    /// cancelled with a reason, and slips already sent still have to be looked at, so the doors
+    /// that do those things stay open while the ones that would take new money do not
+    /// (PRD US-20). Said per endpoint, because the difference between the two is the whole rule.
+    /// </summary>
+    public bool EvenWhenSuspended { get; }
+
     /// <summary>Actions the owner may not delegate: membership, tax identity, document voiding (PRD US-14).</summary>
     public static VenuePermissionRequirement Owner { get; } = new(VenuePermissions.None, ownerOnly: true);
 
@@ -67,6 +78,13 @@ public sealed class VenuePermissionRequirement : IAuthorizationRequirement
         new(VenuePermissions.None, ownerOnly: true, evenWhenTurnedAway: true);
 
     public static VenuePermissionRequirement Needs(VenuePermissions permission) => new(permission, ownerOnly: false);
+
+    /// <summary>
+    /// A permission that keeps working while the venue is suspended, for the work a suspension
+    /// does not cancel: finishing what was already sold (PRD US-20).
+    /// </summary>
+    public static VenuePermissionRequirement NeedsEvenWhenSuspended(VenuePermissions permission) =>
+        new(permission, ownerOnly: false, evenWhenSuspended: true);
 }
 
 /// <summary>
@@ -97,6 +115,16 @@ public static class VenuePolicies
 
     public static Action<AuthorizationPolicyBuilder> Needs(VenuePermissions permission) =>
         policy => policy.RequireAuthenticatedUser().AddRequirements(VenuePermissionRequirement.Needs(permission));
+
+    /// <summary>
+    /// For the doors a suspended venue still has to be able to open: honouring or cancelling
+    /// what it already sold, and checking slips already sent (PRD US-20).
+    /// </summary>
+    public static Action<AuthorizationPolicyBuilder> NeedsEvenWhenSuspended(
+        VenuePermissions permission) =>
+        policy => policy
+            .RequireAuthenticatedUser()
+            .AddRequirements(VenuePermissionRequirement.NeedsEvenWhenSuspended(permission));
 }
 
 /// <summary>
@@ -154,6 +182,7 @@ public sealed class VenuePermissionHandler(AppDbContext database, CurrentVenue c
         var readOnlyVenue = VenueStatusRules.IsFrozen(currentVenue.Status);
 
         var turnedAway = currentVenue.Status == VenueStatus.Rejected;
+        var suspended = currentVenue.Status == VenueStatus.Suspended;
 
         var allowed = requirement switch
         {
@@ -162,6 +191,8 @@ public sealed class VenuePermissionHandler(AppDbContext database, CurrentVenue c
             { OwnerOnly: true } => membership.Role == VenueRole.Owner && !readOnlyVenue,
             { WhateverTheVenueSStatus: true } => true,
             { Permission: VenuePermissions.None } => !readOnlyVenue,
+            { EvenWhenSuspended: true } needed =>
+                membership.Allows(needed.Permission) && (!readOnlyVenue || suspended),
             var needed => membership.Allows(needed.Permission) && !readOnlyVenue,
         };
 

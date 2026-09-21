@@ -135,6 +135,14 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<CurrentVenue>();
 builder.Services.AddScoped<VenueNotifications>();
 builder.Services.AddScoped<IAuthorizationHandler, VenuePermissionHandler>();
+builder.Services.AddScoped<VenueStandingNotices>();
+
+// The one permission that is not about a venue: acting for the platform on one (PRD US-20).
+builder.Services.AddScoped<IAuthorizationHandler, PlatformAdminHandler>();
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy(
+        PlatformAdmins.PolicyName,
+        policy => policy.RequireAuthenticatedUser().AddRequirements(new PlatformAdminRequirement()));
 
 // The work nobody asks for: holds that ran out on hours nobody is looking at, and slips still
 // waiting when the court is about to be played (PRD 9.2, US-17 S-23).
@@ -230,6 +238,7 @@ var api = app.MapGroup("/api");
 
 api.MapAuthEndpoints();
 api.MapVenueEndpoints();
+api.MapAdminVenueEndpoints();
 // Looking is public; booking is not (PRD US-02).
 api.MapPublicVenueEndpoints();
 api.MapBookingEndpoints();

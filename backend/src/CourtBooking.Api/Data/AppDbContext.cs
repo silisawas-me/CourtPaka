@@ -13,6 +13,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<Venue> Venues => Set<Venue>();
 
+    public DbSet<VenueStatusChange> VenueStatusChanges => Set<VenueStatusChange>();
+
     public DbSet<VenueMembership> VenueMemberships => Set<VenueMembership>();
 
     public DbSet<VenueInvitation> VenueInvitations => Set<VenueInvitation>();
@@ -257,6 +259,24 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             closure.HasOne<AppUser>()
                 .WithMany()
                 .HasForeignKey(c => c.LiftedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<VenueStatusChange>(change =>
+        {
+            change.Property(c => c.Reason).HasMaxLength(VenueStatusChange.ReasonMaxLength);
+
+            // A venue's own history, oldest first, which is how the platform reads it.
+            change.HasIndex(c => new { c.VenueId, c.ChangedAt });
+
+            change.HasOne(c => c.Venue)
+                .WithMany()
+                .HasForeignKey(c => c.VenueId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            change.HasOne(c => c.ChangedBy)
+                .WithMany()
+                .HasForeignKey(c => c.ChangedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

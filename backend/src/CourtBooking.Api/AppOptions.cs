@@ -64,6 +64,16 @@ public sealed class AppOptions
     [Required]
     public required string SlipStoragePath { get; init; }
 
+    /// <summary>
+    /// The addresses that act for the platform rather than for a venue (PRD US-20, US-22).
+    ///
+    /// Configuration rather than a column, on purpose: there is no endpoint that grants this, so
+    /// no path through the running application turns a booker into an admin. Empty is a valid
+    /// deployment — one with nobody who can approve a venue, which is worth failing loudly about
+    /// at the first application rather than quietly allowing anyone through.
+    /// </summary>
+    public string[] PlatformAdmins { get; init; } = [];
+
     /// <summary>Uploads an hour per person (PRD 8, Security).</summary>
     [Range(1, 10_000)]
     public int UploadsPerHour { get; init; } = 10;

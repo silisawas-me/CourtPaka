@@ -214,13 +214,19 @@ public static class AuthEndpoints
 
     private static async Task<Results<Ok<CurrentUserResponse>, NotFound>> GetCurrentUserAsync(
         ClaimsPrincipal principal,
-        UserManager<AppUser> userManager)
+        UserManager<AppUser> userManager,
+        IOptions<AppOptions> options)
     {
         // Read through to the row: verification state gates booking, so a stale copy is not good enough.
         var user = await userManager.GetUserAsync(principal);
         return user is null
             ? TypedResults.NotFound()
-            : TypedResults.Ok(new CurrentUserResponse(user.Id, user.Email!, user.EmailConfirmed, user.Language));
+            : TypedResults.Ok(new CurrentUserResponse(
+                user.Id,
+                user.Email!,
+                user.EmailConfirmed,
+                user.Language,
+                PlatformAdmins.Includes(user, options.Value)));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult, NotFound>> ChangeLanguageAsync(
