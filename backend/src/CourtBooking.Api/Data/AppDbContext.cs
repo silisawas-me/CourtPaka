@@ -47,6 +47,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<RefundRecord> RefundRecords => Set<RefundRecord>();
 
+    public DbSet<BookerNotice> BookerNotices => Set<BookerNotice>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -103,6 +105,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
             // Read one booking at a time, always: what has been sent back is a sum over these.
             refund.HasIndex(record => record.BookingId);
+
+            // And across every booking, newest only, when the caretaker tells bookers (US-06).
+            refund.HasIndex(record => record.RecordedAt);
 
             // Nothing may take these with it. A record that disappears when its booking does is
             // weaker evidence than one that cannot be edited, and PDPA deletion (PRD 8, S-15) is
@@ -317,6 +322,21 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .WithMany()
                 .HasForeignKey(c => c.ChangedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // The caretaker reads the latest moves across every booking to tell bookers about
+            // them (PRD US-06), and only the latest, so it asks by time alone.
+            change.HasIndex(c => c.ChangedAt);
+        });
+
+        builder.Entity<BookerNotice>(notice =>
+        {
+            // The claim: one message per thing it is about, whoever tries to send it (PRD US-06).
+            notice.HasIndex(n => new { n.SourceId, n.Kind }).IsUnique();
+            notice.HasIndex(n => n.BookingId);
+            notice.HasOne(n => n.Booking)
+                .WithMany()
+                .HasForeignKey(n => n.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<PaymentSlip>(slip =>

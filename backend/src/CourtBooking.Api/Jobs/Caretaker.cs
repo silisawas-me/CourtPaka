@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 namespace CourtBooking.Api.Jobs;
 
 /// <summary>
-/// The work nobody asks for (PRD 9.2, US-17 S-23).
+/// The work nobody asks for (PRD 9.2, US-17 S-23, US-06).
 ///
 /// Until this existed, a hold only ran out when somebody happened to read the hours it was
 /// sitting on — so a hold on a quiet court could keep those hours, and its booker locked out of
@@ -46,7 +46,21 @@ public sealed class Caretaker(
     {
         await DoAsync("holds that ran out", HoldsThatRanOutAsync, stopping);
         await DoAsync("slips about to be played", SlipsAboutToBePlayedAsync, stopping);
+
+        // Last, so a hold this sweep let go of is told about in the same sweep.
+        await DoAsync("telling bookers", TellBookersAsync, stopping);
     }
+
+    /// <summary>
+    /// What happened to each booker's bookings since the last sweep, and the reminder before
+    /// play (PRD US-06). A message arrives at most one interval after the thing it is about.
+    /// </summary>
+    private async Task TellBookersAsync(
+        AppDbContext database,
+        IServiceProvider services,
+        CancellationToken stopping) =>
+        await services.GetRequiredService<BookerMail>()
+            .SendDueAsync(timeProvider.GetUtcNow(), stopping);
 
     /// <summary>
     /// Hours held by a booking whose fifteen minutes are up, given back (PRD BR-02, 9.2). The
