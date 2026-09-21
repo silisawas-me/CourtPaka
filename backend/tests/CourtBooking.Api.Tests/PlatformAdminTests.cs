@@ -108,10 +108,12 @@ public sealed class PlatformAdminTests(ApiTestFixture api) : IClassFixture<ApiTe
         var read = await VenueScenario.ReadAsync<AdminVenueDetailResponse>(
             await admin.GetAsync($"/api/admin/venues/{venue.Id}"));
 
-        Assert.Equal(2, read.History.Length);
-        Assert.Equal(nameof(VenueStatus.Approved), read.History[0].To);
-        Assert.Equal(nameof(VenueStatus.Suspended), read.History[1].To);
-        Assert.Equal("ร้องเรียนเรื่องเงิน", read.History[1].Reason);
+        // The venue applying is the first row; then the two decisions.
+        Assert.Equal(3, read.History.Length);
+        Assert.Equal((null, nameof(VenueStatus.Pending)), (read.History[0].From, read.History[0].To));
+        Assert.Equal(nameof(VenueStatus.Approved), read.History[1].To);
+        Assert.Equal(nameof(VenueStatus.Suspended), read.History[2].To);
+        Assert.Equal("ร้องเรียนเรื่องเงิน", read.History[2].Reason);
 
         // Everything needed to judge the application is on this one answer (PRD US-20).
         Assert.False(string.IsNullOrEmpty(read.Business.TaxId));

@@ -6,6 +6,7 @@ using CourtBooking.Api.Email;
 using CourtBooking.Api.Http;
 using CourtBooking.Api.Bookings;
 using CourtBooking.Api.Identity;
+using CourtBooking.Api.Observability;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
@@ -111,6 +112,7 @@ public static class VenueEndpoints
         AppDbContext database,
         IOptions<AppOptions> options,
         TimeProvider timeProvider,
+        ILoggerFactory loggers,
         CancellationToken cancellationToken)
     {
         var invalid = VenueValidation.ValidateCode(request.Code)
@@ -164,6 +166,17 @@ public static class VenueEndpoints
 
         database.VenueMemberships.Add(membership);
 
+        // The first row of the venue's standing: it applied. Nobody decided this, the venue asked,
+        // so there is no admin to name (VenueStatusChange.ChangedByUserId, PRD US-10, US-20).
+        database.VenueStatusChanges.Add(new VenueStatusChange
+        {
+            VenueId = venue.Id,
+            From = null,
+            To = VenueStatus.Pending,
+            ChangedAt = now,
+            ChangedByUserId = null,
+        });
+
         // The row, not the cookie: an account suspended or forgotten a moment ago must not come
         // out of this owning a venue nobody can reach (PRD US-22, S-15).
         await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
@@ -182,6 +195,9 @@ public static class VenueEndpoints
         }
 
         await transaction.CommitAsync(cancellationToken);
+
+        AppEvents.For(loggers).LogInformation(
+            "venue_applied {VenueId} {Resubmitted}", venue.Id, false);
 
         return TypedResults.Created($"/api/venues/{venue.Id}", ToResponse(venue, membership));
     }
@@ -290,8 +306,14 @@ public static class VenueEndpoints
         Guid venueId,
         CurrentVenue currentVenue,
         AppDbContext database,
+        TimeProvider timeProvider,
+        ILoggerFactory loggers,
         CancellationToken cancellationToken)
     {
+        // The move and its record together, like every other change of standing: a venue that
+        // asked again without a row saying so would read, later, as never having been refused.
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+
         var moved = await database.Venues
             .Where(venue => venue.Id == venueId && venue.Status == VenueStatus.Rejected)
             .ExecuteUpdateAsync(
@@ -303,6 +325,20 @@ public static class VenueEndpoints
             return ApiProblem.Of(
                 StatusCodes.Status409Conflict, VenueErrorCodes.NotRefused);
         }
+
+        database.VenueStatusChanges.Add(new VenueStatusChange
+        {
+            VenueId = venueId,
+            From = VenueStatus.Rejected,
+            To = VenueStatus.Pending,
+            ChangedAt = timeProvider.GetUtcNow(),
+            ChangedByUserId = null,
+        });
+        await database.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        AppEvents.For(loggers).LogInformation(
+            "venue_applied {VenueId} {Resubmitted}", venueId, true);
 
         var membership = currentVenue.Require();
         var venue = await database.Venues

@@ -28,6 +28,9 @@ public sealed class ApiTestFixture : IAsyncLifetime
     /// <summary>What the API logged at Error, so a test that meets a 500 can say why.</summary>
     public CapturedLogs Errors => _root.Errors;
 
+    /// <summary>The product events the API wrote (PRD 8), by name.</summary>
+    public CapturedEvents Events => _root.Events;
+
     public async Task InitializeAsync()
     {
         await _container.StartAsync();
