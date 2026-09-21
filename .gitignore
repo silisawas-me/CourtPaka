@@ -32,3 +32,4 @@ __pycache__/
 
 # Slips uploaded by a locally run API (docker compose keeps its own volume).
 .local/
+scripts/load/accounts.json
