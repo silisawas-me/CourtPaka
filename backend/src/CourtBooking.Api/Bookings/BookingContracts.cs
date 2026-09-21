@@ -104,6 +104,16 @@ public static class BookingErrorCodes
     public const string DuplicateSlot = "booking.duplicate_slot";
     public const string MoreThanOneDay = "booking.more_than_one_day";
     public const string StartsTooSoon = "booking.starts_too_soon";
+
+    /// <summary>
+    /// The counter may book an hour that has started, but not one that is already over
+    /// (PRD US-13): that is recording a game, not selling one.
+    /// </summary>
+    public const string HourAlreadyOver = "booking.hour_already_over";
+
+    public const string InvalidCustomerName = "booking.invalid_customer_name";
+    public const string InvalidCustomerPhone = "booking.invalid_customer_phone";
+    public const string InvalidCounterPayment = "booking.invalid_counter_payment";
     public const string HourNotAvailable = "booking.hour_not_available";
 
     /// <summary>Someone else took one of the hours between reading the grid and confirming.</summary>
@@ -206,13 +216,28 @@ public sealed record SettlePaymentRequest(bool PaymentReceived);
 public sealed record PlayedAfterAllRequest(string Reason);
 
 /// <summary>
-/// One of the venue's bookings for a day, as its counter reads it (PRD US-13). It names the
-/// booker by the address they signed up with, which is what the venue needs to find them, and
+/// A booking taken at the counter for somebody standing at it (PRD US-13). The slots are the same
+/// shape the online booking sends, so the grid that picks them is the same grid.
+/// </summary>
+public sealed record CounterBookingRequest(
+    BookingSlotRequest[]? Slots,
+    string? CustomerName,
+    string? CustomerPhone,
+    string? PaidBy);
+
+/// <summary>
+/// One of the venue's bookings for a day, as its counter reads it (PRD US-13). It names an online
+/// booker by the address they signed up with, a counter customer by the name they gave, which is what the venue needs to find them, and
 /// nothing else about them.
 /// </summary>
 public sealed record VenueBookingResponse(
     Guid BookingId,
     string? BookerEmail,
+    /// <summary>Online or at the counter, so the row can say who it is for (PRD US-13).</summary>
+    string Channel,
+    /// <summary>For a counter booking, the name and phone the customer gave; null otherwise.</summary>
+    string? CustomerName,
+    string? CustomerPhone,
     string Status,
     string PaymentState,
     decimal TotalBaht,

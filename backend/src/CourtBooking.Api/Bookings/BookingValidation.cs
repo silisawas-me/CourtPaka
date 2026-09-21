@@ -22,10 +22,15 @@ public static class BookingValidation
     /// </summary>
     public const int MaxSlots = 24;
 
+    /// <param name="channel">
+    /// Online needs the lead time (PRD S-25). The counter does not: somebody standing at it can
+    /// walk onto a court whose hour has already started, as long as it has not ended (PRD US-13).
+    /// </param>
     public static string? Validate(
         IReadOnlyCollection<BookingSlotRequest> slots,
         DateTimeOffset now,
-        DateOnly today)
+        DateOnly today,
+        BookingChannel channel = BookingChannel.Online)
     {
         if (slots.Count == 0 || slots.Any(slot => slot is null))
         {
@@ -64,7 +69,16 @@ public static class BookingValidation
                 return outsideWindow;
             }
 
-            if (PlatformRequirements.BangkokHour(slot.Date, slot.Hour) - now < LeadTime)
+            var starts = PlatformRequirements.BangkokHour(slot.Date, slot.Hour);
+
+            if (channel == BookingChannel.Staff)
+            {
+                if (starts.AddHours(1) <= now)
+                {
+                    return BookingErrorCodes.HourAlreadyOver;
+                }
+            }
+            else if (starts - now < LeadTime)
             {
                 return BookingErrorCodes.StartsTooSoon;
             }

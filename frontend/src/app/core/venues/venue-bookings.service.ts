@@ -30,10 +30,25 @@ export interface CancelChoice {
   refundBaht: number;
 }
 
+/** How somebody paid at the counter (PRD US-13). */
+export type CounterPayment = 'Cash' | 'Transfer';
+
+/** A booking taken at the counter for somebody standing at it (PRD US-13). */
+export interface CounterBookingRequest {
+  slots: { courtId: string; date: string; hour: number }[];
+  customerName: string;
+  customerPhone: string | null;
+  paidBy: CounterPayment;
+}
+
 /** One of the venue's bookings for a day, as its counter reads it (PRD US-13). */
 export interface VenueBooking {
   bookingId: string;
   bookerEmail: string | null;
+  /** Online, or taken at the counter — which decides who the row is for. */
+  channel: 'Online' | 'Staff';
+  customerName: string | null;
+  customerPhone: string | null;
   status: BookingStatus;
   paymentState: 'NotReceived' | 'Received' | 'Unconfirmed';
   totalBaht: number;
@@ -73,6 +88,11 @@ export interface Refunds {
 @Injectable({ providedIn: 'root' })
 export class VenueBookingsService {
   private readonly http = inject(HttpClient);
+
+  /** Selling hours to somebody standing at the counter; it starts confirmed (PRD US-13). */
+  takeAtCounter(venueId: string, booking: CounterBookingRequest): Observable<VenueBooking> {
+    return this.http.post<VenueBooking>(`/api/venues/${venueId}/bookings`, booking);
+  }
 
   day(venueId: string, date: string): Observable<VenueBooking[]> {
     return this.http.get<VenueBooking[]>(`/api/venues/${venueId}/bookings`, {

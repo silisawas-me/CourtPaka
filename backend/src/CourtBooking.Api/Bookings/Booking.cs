@@ -11,6 +11,16 @@ public enum BookingChannel
 }
 
 /// <summary>
+/// How somebody paid at the counter (PRD US-13). The money is already in the venue's hands by the
+/// time the booking is written, which is why a counter booking starts confirmed.
+/// </summary>
+public enum CounterPayment
+{
+    Cash = 1,
+    Transfer = 2,
+}
+
+/// <summary>
 /// Whether the venue has the money (PRD 6.2). It starts as not received and only a person with
 /// the venue's authority says otherwise — which is what decides whether anything is owed back.
 /// </summary>
@@ -57,9 +67,26 @@ public sealed class Booking
 
     public required Guid VenueId { get; init; }
 
-    public required Guid BookerUserId { get; init; }
+    /// <summary>
+    /// The account that booked, for a booking made online. Null for one taken at the counter: the
+    /// customer standing there does not need an account, and the PRD says so (US-13). The two
+    /// shapes are held apart by a check constraint, so neither can be written half-filled.
+    /// </summary>
+    public Guid? BookerUserId { get; init; }
 
     public required BookingChannel Channel { get; init; }
+
+    /// <summary>Who the counter booked for, in the words the customer gave (PRD US-13).</summary>
+    public string? CustomerName { get; init; }
+
+    /// <summary>Optional, and only ever used by the venue to reach the customer (PRD US-13).</summary>
+    public string? CustomerPhone { get; init; }
+
+    /// <summary>How a counter booking was paid for; null for one made online.</summary>
+    public CounterPayment? PaidAtCounter { get; init; }
+
+    public const int CustomerNameMaxLength = 200;
+    public const int CustomerPhoneMaxLength = 20;
 
     public BookingStatus Status { get; set; } = BookingStatus.Held;
 
@@ -146,6 +173,60 @@ public sealed class Booking
         // The booking coming into existence is the first thing its history records.
         booking.StatusChanges.Add(
             BookingTransitions.Created(booking.Id, booking.Status, bookerUserId, at));
+
+        return booking;
+    }
+
+    /// <summary>
+    /// A booking taken at the counter for somebody standing there (PRD US-13). It starts
+    /// confirmed with the money received, because both have already happened: there is no hold
+    /// to wait on and no slip to check. The staff member who took it is on the first row of its
+    /// history, which is where "who" lives for every other move a booking makes.
+    ///
+    /// It holds no account. The customer does not need one, and the channel is recorded so the
+    /// commission rules can tell the two apart later (PRD S-13).
+    /// </summary>
+    public static Booking AtCounter(
+        Guid venueId,
+        string customerName,
+        string? customerPhone,
+        CounterPayment paid,
+        Guid cancellationPolicyId,
+        IEnumerable<SlotPrice> slots,
+        Guid takenByUserId,
+        DateTimeOffset at)
+    {
+        var booking = new Booking
+        {
+            VenueId = venueId,
+            Channel = BookingChannel.Staff,
+            CustomerName = customerName,
+            CustomerPhone = customerPhone,
+            PaidAtCounter = paid,
+            Status = BookingStatus.Confirmed,
+            PaymentState = PaymentState.Received,
+            CreatedAt = at,
+
+            // Nothing is held, so nothing lapses. Set to the moment it was made rather than left
+            // in the future, so no reader that forgets to check the status can mistake it for a
+            // live hold.
+            HoldExpiresAt = at,
+            CancellationPolicyId = cancellationPolicyId,
+            TotalBaht = slots.Sum(slot => slot.BahtPerHour),
+        };
+
+        booking.Slots.AddRange(slots.Select(slot => new BookingSlot
+        {
+            BookingId = booking.Id,
+            CourtId = slot.CourtId,
+            StartsAt = slot.StartsAt,
+            EndsAt = slot.StartsAt.AddHours(1),
+            BahtPerHour = slot.BahtPerHour,
+            IsActive = true,
+        }));
+
+        booking.StatusChanges.Add(
+            BookingTransitions.Created(booking.Id, booking.Status, takenByUserId, at));
 
         return booking;
     }
