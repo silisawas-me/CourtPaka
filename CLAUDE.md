@@ -80,6 +80,7 @@
 | Test frontend | `cd frontend && npm test -- --watch=false` |
 | Build (เหมือน CI) | `dotnet build backend -c Release -warnaserror` · `cd frontend && npm run build` |
 | Build image arm64 (UAT) | `docker buildx build --platform linux/arm64 backend` |
+| Load test (PRD 8) | ดู `scripts/load/README.md` — k6 ผ่าน docker · บัญชีทดสอบจาก `scripts/load/provision_accounts.py` (local เท่านั้น) · ผลจริงต้องวัดบนเครื่อง PRD |
 | ตรวจ health | `GET /api/health/live` (process) · `GET /api/health/ready` (รวม database) |
 | ตรวจ flow จริงบนเบราว์เซอร์ | `python scripts/verify/venue_settings.py` · `venue_pricing.py` · `venue_ui.py` · `booking_grid.py` · `booking.py` · `payment.py` · `slip_queue.py` · `court_closures.py` · `caretaker.py` · `platform_admin.py` · `my_bookings.py` · `venue_bookings.py` · `venue_notices.py` · `counter_booking.py` · `booker_mail.py` · `venue_dashboard.py` · `platform_users.py` · `admin_complaints.py` · `account_deletion.py` · `pwa.py` (ต้องเปิด stack ด้วย `--profile full` ก่อน ดู `scripts/verify/README.md`) |
 
