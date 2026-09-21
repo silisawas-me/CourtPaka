@@ -66,6 +66,17 @@ public sealed class VenueDay
             : null;
 
     /// <summary>
+    /// Whether the venue had this court-hour to sell at all: the court in use, the venue open,
+    /// and the court not shut (PRD US-15). Unlike <see cref="Price"/> it does not ask what the
+    /// hour costs — the prices on hand are today's, and a report about last month must not
+    /// depend on them.
+    /// </summary>
+    public bool IsSellable(Guid courtId, int hour) =>
+        inUse.Contains(courtId)
+        && OpensHour <= hour && hour < ClosesHour
+        && !shut.Contains((courtId, hour));
+
+    /// <summary>
     /// Whether the hour can be taken, and if not, why. An hour with nothing to charge for it is not
     /// for sale, whatever the court is doing.
     /// </summary>
@@ -123,7 +134,8 @@ public sealed class VenueDay
         IReadOnlyCollection<CourtClosure> closures,
         OpeningHoursSchedule? week,
         IReadOnlyCollection<PriceBand> bands,
-        IReadOnlySet<(Guid CourtId, int Hour)> taken)
+        IReadOnlySet<(Guid CourtId, int Hour)> taken,
+        bool asItWas = false)
     {
         var day = week?.Days.SingleOrDefault(entry => entry.Day == date.DayOfWeek);
         var ordered = courts
@@ -149,7 +161,9 @@ public sealed class VenueDay
         {
             foreach (var hour in hours)
             {
-                if (closure.Covers(date, hour))
+                // The grid asks what is shut from now on; a report about the past asks what was
+                // shut then, which includes the hours before a closure was lifted (US-15).
+                if (asItWas ? closure.CoveredAt(date, hour) : closure.Covers(date, hour))
                 {
                     shut.Add((closure.CourtId, hour));
                 }

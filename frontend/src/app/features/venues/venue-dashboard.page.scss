@@ -1,0 +1,111 @@
+// minmax(0, 1fr), not the default auto: a grid track otherwise grows to the widest thing in it,
+// and the day table is wider than a phone — it has its own scroll box and must stay inside it.
+:host {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--stack);
+}
+
+// The range and the two shortcuts share a line on a desk and stack on a phone, where the range
+// field needs the whole width to show two Thai dates with their Buddhist years.
+.range-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.range-field {
+  flex: 1 1 20rem;
+}
+
+.lead-label {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+}
+
+// The one figure set large. A bigger token rather than a heavier weight: the app ships 400 and
+// 500 only.
+.lead {
+  margin: 0.25rem 0 1rem;
+  font: var(--mat-sys-display-small);
+  color: var(--mat-sys-primary);
+
+  .unit {
+    font: var(--mat-sys-title-medium);
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+// A line of figures that wraps, each label over its number. Not equal tiles: four readings of
+// different things, sized by what they say.
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+  margin: 0 0 0.75rem;
+
+  dt {
+    font: var(--mat-sys-label-large);
+  }
+
+  dd {
+    margin: 0.25rem 0 0;
+    font: var(--mat-sys-title-large);
+  }
+}
+
+.small {
+  font: var(--mat-sys-body-small);
+}
+
+.waiting {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  .entry {
+    align-items: center;
+    flex-wrap: nowrap;
+  }
+
+  // The label takes what is left and wraps inside itself, so a long English label does not push
+  // its count onto a line of its own.
+  .entry > span:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.figures-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: var(--mat-sys-body-medium);
+
+  th,
+  td {
+    padding: 0.5rem 0.75rem;
+    text-align: start;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--mat-sys-outline-variant);
+  }
+
+  thead th {
+    font: var(--mat-sys-label-large);
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  tbody th {
+    font: var(--mat-sys-body-medium);
+  }
+
+  // Figures line up on their last digit so a column can be read down.
+  .num {
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+  }
+}

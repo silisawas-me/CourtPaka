@@ -65,4 +65,16 @@ public sealed class CourtClosure
         var at = PlatformRequirements.BangkokHour(date, hour);
         return Stands && StartsAt <= at && at < EndsAt;
     }
+
+    /// <summary>
+    /// Whether this closure shut a given hour as things were then, rather than as they are now
+    /// (PRD US-15). A lift ends a closure from the moment it is pressed; the hours before it were
+    /// shut, and a report about them has to say so — which <see cref="Covers"/>, being the rule
+    /// for what can be sold from now on, does not.
+    /// </summary>
+    public bool CoveredAt(DateOnly date, int hour)
+    {
+        var at = PlatformRequirements.BangkokHour(date, hour);
+        return StartsAt <= at && at < EndsAt && (LiftedAt is null || at < LiftedAt);
+    }
 }
