@@ -24,6 +24,7 @@ public sealed class AuditTrailTests(ApiTestFixture api) : IClassFixture<ApiTestF
     [InlineData("CourtStatusChanges")]
     [InlineData("UserConsents")]
     [InlineData("SlipViewings")]
+    [InlineData("MembershipChanges")]
     public async Task A_history_row_cannot_be_changed_or_removed(string table)
     {
         await EveryHistoryHasARowAsync();

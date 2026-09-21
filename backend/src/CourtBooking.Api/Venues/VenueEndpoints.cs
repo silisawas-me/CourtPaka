@@ -166,6 +166,17 @@ public static class VenueEndpoints
 
         database.VenueMemberships.Add(membership);
 
+        database.MembershipChanges.Add(new MembershipChange
+        {
+            VenueId = venue.Id,
+            UserId = membership.UserId,
+            Kind = MembershipChangeKind.Joined,
+            Role = VenueRole.Owner,
+            PermissionsAfter = membership.Permissions,
+            ChangedByUserId = membership.UserId,
+            ChangedAt = now,
+        });
+
         // The first row of the venue's standing: it applied. Nobody decided this, the venue asked,
         // so there is no admin to name (VenueStatusChange.ChangedByUserId, PRD US-10, US-20).
         database.VenueStatusChanges.Add(new VenueStatusChange
@@ -553,6 +564,16 @@ public static class VenueEndpoints
 
         database.VenueMemberships.Add(membership);
         invitation.AcceptedAt = now;
+        database.MembershipChanges.Add(new MembershipChange
+        {
+            VenueId = invitation.VenueId,
+            UserId = user.Id,
+            Kind = MembershipChangeKind.Joined,
+            Role = VenueRole.Staff,
+            PermissionsAfter = invitation.Permissions,
+            ChangedByUserId = user.Id,
+            ChangedAt = now,
+        });
 
         // Queued behind a deletion in progress, so a seat is never given to a forgotten account.
         await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
@@ -580,7 +601,9 @@ public static class VenueEndpoints
         Guid venueId,
         Guid userId,
         ChangePermissionsRequest request,
+        CurrentVenue currentVenue,
         AppDbContext database,
+        TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
         if (!VenuePermissionSet.TryParse(request.Permissions, out var permissions))
@@ -602,7 +625,23 @@ public static class VenueEndpoints
             return ApiProblem.Of(StatusCodes.Status409Conflict, VenueErrorCodes.OwnerCannotBeChanged);
         }
 
-        membership.Permissions = permissions;
+        // Written down with the change, in the same save, only when something changed (PRD 8).
+        if (membership.Permissions != permissions)
+        {
+            database.MembershipChanges.Add(new MembershipChange
+            {
+                VenueId = venueId,
+                UserId = userId,
+                Kind = MembershipChangeKind.PermissionsChanged,
+                Role = membership.Role,
+                PermissionsBefore = membership.Permissions,
+                PermissionsAfter = permissions,
+                ChangedByUserId = currentVenue.Require().UserId,
+                ChangedAt = timeProvider.GetUtcNow(),
+            });
+            membership.Permissions = permissions;
+        }
+
         await database.SaveChangesAsync(cancellationToken);
         return TypedResults.NoContent();
     }
@@ -610,7 +649,9 @@ public static class VenueEndpoints
     private static async Task<Results<NoContent, ProblemHttpResult, NotFound>> RemoveMemberAsync(
         Guid venueId,
         Guid userId,
+        CurrentVenue currentVenue,
         AppDbContext database,
+        TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
         var membership = await database.VenueMemberships
@@ -627,6 +668,16 @@ public static class VenueEndpoints
         }
 
         database.VenueMemberships.Remove(membership);
+        database.MembershipChanges.Add(new MembershipChange
+        {
+            VenueId = venueId,
+            UserId = userId,
+            Kind = MembershipChangeKind.Removed,
+            Role = membership.Role,
+            PermissionsBefore = membership.Permissions,
+            ChangedByUserId = currentVenue.Require().UserId,
+            ChangedAt = timeProvider.GetUtcNow(),
+        });
         await database.SaveChangesAsync(cancellationToken);
         return TypedResults.NoContent();
     }

@@ -55,6 +55,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<SlipViewing> SlipViewings => Set<SlipViewing>();
 
+    public DbSet<MembershipChange> MembershipChanges => Set<MembershipChange>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -364,6 +366,24 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             complaint.HasOne(c => c.ResolvedBy)
                 .WithMany()
                 .HasForeignKey(c => c.ResolvedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<MembershipChange>(change =>
+        {
+            // A venue's roster over time, read one venue at a time (PRD 8, US-14).
+            change.HasIndex(c => new { c.VenueId, c.ChangedAt });
+            change.HasOne(c => c.Venue)
+                .WithMany()
+                .HasForeignKey(c => c.VenueId)
+                .OnDelete(DeleteBehavior.Restrict);
+            change.HasOne(c => c.User)
+                .WithMany()
+                .HasForeignKey(c => c.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            change.HasOne(c => c.ChangedBy)
+                .WithMany()
+                .HasForeignKey(c => c.ChangedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
