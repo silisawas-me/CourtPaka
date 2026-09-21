@@ -153,8 +153,11 @@ public sealed class VenueScenario(ApiTestFixture api)
 
     public string ReadInvitationToken(string email)
     {
+        // The link is on a line of its own, with words before and after it in either language.
         var body = api.Emails.LastTo(email).Body;
-        var url = new Uri(body[body.IndexOf("http", StringComparison.Ordinal)..].Trim());
+        var link = body[body.IndexOf("http", StringComparison.Ordinal)..]
+            .Split((char[])['\n', '\r', ' '], 2)[0];
+        var url = new Uri(link);
         return HttpUtility.ParseQueryString(url.Query)["token"]!;
     }
 

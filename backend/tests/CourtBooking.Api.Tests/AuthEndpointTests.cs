@@ -35,7 +35,7 @@ public sealed class AuthEndpointTests(ApiTestFixture api)
 
         var email = await RegisterAsync(client);
 
-        Assert.Contains("verify", _api.Emails.LastTo(email).Subject, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(AccountLetters.VerifyTemplate, _api.Emails.LastTo(email).Template);
         await LoginAsync(client, email);
         var me = await GetCurrentUserAsync(client);
         Assert.False(me.EmailConfirmed);
@@ -119,7 +119,7 @@ public sealed class AuthEndpointTests(ApiTestFixture api)
 
         // Same status as a fresh registration; the address owner is told by email instead.
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        Assert.Contains("already exists", _api.Emails.LastTo(email).Subject, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(AccountLetters.AccountExistsTemplate, _api.Emails.LastTo(email).Template);
 
         // The original password still works, so the second attempt did not touch the account.
         await LoginAsync(client, email);
@@ -180,7 +180,7 @@ public sealed class AuthEndpointTests(ApiTestFixture api)
 
         Assert.Equal(HttpStatusCode.Unauthorized, lockedOut.StatusCode);
         Assert.Equal(AuthErrorCodes.InvalidCredentials, await lockedOut.ErrorCodeAsync());
-        Assert.Contains("locked", _api.Emails.LastTo(email).Subject, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(AccountLetters.LockedTemplate, _api.Emails.LastTo(email).Template);
     }
 
     [Fact]
@@ -337,7 +337,10 @@ public sealed class AuthEndpointTests(ApiTestFixture api)
 
     private static (Guid UserId, string Token) ReadVerificationLink(string body)
     {
-        var url = new Uri(body[body.IndexOf("http", StringComparison.Ordinal)..].Trim());
+        // The link is on a line of its own, with words before and after it in either language.
+        var link = body[body.IndexOf("http", StringComparison.Ordinal)..]
+            .Split((char[])['\n', '\r', ' '], 2)[0];
+        var url = new Uri(link);
         var query = HttpUtility.ParseQueryString(url.Query);
         return (Guid.Parse(query["userId"]!), query["token"]!);
     }

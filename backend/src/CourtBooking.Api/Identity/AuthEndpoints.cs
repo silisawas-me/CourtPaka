@@ -196,13 +196,10 @@ public static class AuthEndpoints
             var user = await userManager.FindByEmailAsync(request.Email);
             if (user is not null)
             {
+                var (subject, body) = AccountLetters.Locked(user.Language);
                 await emailSender.SendAsync(
                     new EmailMessage(
-                        user.Email!,
-                        user.Language,
-                        "CourtPaka: your account is temporarily locked",
-                        "Too many failed sign-in attempts locked your account for 15 minutes. "
-                            + "If this was not you, change your password once it unlocks."),
+                        user.Email!, user.Language, subject, body, AccountLetters.LockedTemplate),
                     cancellationToken);
             }
         }
@@ -288,12 +285,9 @@ public static class AuthEndpoints
                 ["token"] = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(rawToken)),
             });
 
+        var (subject, body) = AccountLetters.Verify(user.Language, link);
         await emailSender.SendAsync(
-            new EmailMessage(
-                user.Email!,
-                user.Language,
-                "CourtPaka: verify your email",
-                $"Confirm your address to finish signing up: {link}"),
+            new EmailMessage(user.Email!, user.Language, subject, body, AccountLetters.VerifyTemplate),
             cancellationToken);
     }
 
@@ -306,13 +300,11 @@ public static class AuthEndpoints
         CancellationToken cancellationToken)
     {
         var owner = await userManager.FindByEmailAsync(email);
+        var language = owner?.Language ?? fallbackLanguage;
+        var (subject, body) = AccountLetters.AccountExists(language);
 
         await emailSender.SendAsync(
-            new EmailMessage(
-                email,
-                owner?.Language ?? fallbackLanguage,
-                "CourtPaka: account already exists",
-                "Someone tried to register with this address. If it was you, sign in or reset your password."),
+            new EmailMessage(email, language, subject, body, AccountLetters.AccountExistsTemplate),
             cancellationToken);
     }
 

@@ -43,12 +43,13 @@ public sealed class VenueStandingNotices(
 
         foreach (var owner in owners.Where(one => !string.IsNullOrEmpty(one.Address)))
         {
-            var (subject, body) = Words(owner.VenueName, from, to, reason);
+            var (subject, body) = VenueLetters.Standing(owner.VenueName, from, to, reason, owner.Language);
 
             try
             {
                 await emails.SendAsync(
-                    new EmailMessage(owner.Address!, owner.Language, subject, body),
+                    new EmailMessage(
+                        owner.Address!, owner.Language, subject, body, VenueLetters.StandingTemplate),
                     CancellationToken.None);
             }
             catch (Exception failure)
@@ -62,42 +63,4 @@ public sealed class VenueStandingNotices(
             }
         }
     }
-
-    /// <summary>
-    /// What the venue is told. The reason is theirs to read, so it goes in whole — an
-    /// explanation the venue cannot see is not an explanation (PRD US-20).
-    /// </summary>
-    private static (string Subject, string Body) Words(
-        string venueName,
-        VenueStatus from,
-        VenueStatus to,
-        string? reason) =>
-        (from, to) switch
-        {
-            (_, VenueStatus.Approved) when from == VenueStatus.Suspended => (
-                $"{venueName} is open for bookings again",
-                "The suspension on this venue has been lifted. Bookers can find it and book it "
-                + "again from now."),
-
-            (_, VenueStatus.Approved) => (
-                $"{venueName} has been approved",
-                "This venue is now on the platform. Bookers can find it and book it. Check the "
-                + "courts, opening hours and prices before the first booking arrives."),
-
-            (_, VenueStatus.Rejected) => (
-                $"{venueName} was not approved",
-                $"This venue was not approved. The reason given: {reason}\n\n"
-                + "The details can be corrected and the venue submitted again."),
-
-            (_, VenueStatus.Suspended) => (
-                $"{venueName} has been suspended",
-                $"This venue has been suspended. The reason given: {reason}\n\n"
-                + "Bookers can no longer find it and no new booking can be made. Bookings "
-                + "already confirmed still stand: they have to be honoured, or cancelled with a "
-                + "reason. Slips already sent can still be checked."),
-
-            _ => (
-                $"{venueName} has moved to {to}",
-                $"This venue moved from {from} to {to}."),
-        };
 }
