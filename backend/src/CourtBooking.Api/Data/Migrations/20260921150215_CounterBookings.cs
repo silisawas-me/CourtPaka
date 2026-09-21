@@ -48,6 +48,18 @@ namespace CourtBooking.Api.Data.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // A counter booking has nobody to point BookerUserId at, so there is no schema without
+            // the column being nullable that can still hold it. Refuse rather than delete bookings
+            // (and their audit rows) to make the column fit; roll back the app image instead.
+            migrationBuilder.Sql("""
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM "Bookings" WHERE "BookerUserId" IS NULL) THEN
+                        RAISE EXCEPTION 'CounterBookings cannot be rolled back: counter bookings exist. Redeploy the previous image and keep this schema.';
+                    END IF;
+                END $$;
+                """);
+
             migrationBuilder.DropCheckConstraint(
                 name: "CK_Bookings_BookerOrCustomer",
                 table: "Bookings");

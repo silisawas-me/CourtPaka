@@ -216,11 +216,6 @@ public sealed record SettlePaymentRequest(bool PaymentReceived);
 public sealed record PlayedAfterAllRequest(string Reason);
 
 /// <summary>
-/// One of the venue's bookings for a day, as its counter reads it (PRD US-13). It names the
-/// booker by the address they signed up with, which is what the venue needs to find them, and
-/// nothing else about them.
-/// </summary>
-/// <summary>
 /// A booking taken at the counter for somebody standing at it (PRD US-13). The slots are the same
 /// shape the online booking sends, so the grid that picks them is the same grid.
 /// </summary>
@@ -230,6 +225,11 @@ public sealed record CounterBookingRequest(
     string? CustomerPhone,
     string? PaidBy);
 
+/// <summary>
+/// One of the venue's bookings for a day, as its counter reads it (PRD US-13). It names an online
+/// booker by the address they signed up with, a counter customer by the name they gave, which is what the venue needs to find them, and
+/// nothing else about them.
+/// </summary>
 public sealed record VenueBookingResponse(
     Guid BookingId,
     string? BookerEmail,
