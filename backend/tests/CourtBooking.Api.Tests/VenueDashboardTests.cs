@@ -15,9 +15,11 @@ public sealed class VenueDashboardTests(ApiTestFixture api) : IClassFixture<ApiT
 {
     private readonly VenueScenario scenario = new(api);
 
-    private static readonly DateOnly Today = VenueScenario.Today;
-    private static readonly DateOnly Yesterday = Today.AddDays(-1);
-    private static readonly DateOnly Tomorrow = Today.AddDays(1);
+    // Read each time rather than once for the class: the helpers that make bookings read the
+    // date again too, and a run that crosses Bangkok midnight must not ask about the old tomorrow.
+    private static DateOnly Today => VenueScenario.Today;
+    private static DateOnly Yesterday => Today.AddDays(-1);
+    private static DateOnly Tomorrow => Today.AddDays(1);
 
     [Fact]
     public async Task Revenue_is_what_was_kept_on_the_day_it_was_played_by_channel()
@@ -100,6 +102,64 @@ public sealed class VenueDashboardTests(ApiTestFixture api) : IClassFixture<ApiT
         Assert.Equal(0m, figures.AdvanceBaht);
     }
 
+    /// <summary>
+    /// Cancelled while the slip was being checked: until the venue says whether the money came,
+    /// nobody knows what it kept, so it keeps nothing yet (PRD 6.2).
+    /// </summary>
+    [Fact]
+    public async Task A_cancellation_nobody_has_settled_is_not_revenue()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (booker, waiting) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        var cancelled = await booker.PostAsync($"/api/bookings/{waiting.Id}/cancel", null);
+        Assert.Equal(HttpStatusCode.OK, cancelled.StatusCode);
+
+        var figures = await ReadAsync(owner, venue.Id, Tomorrow, Tomorrow);
+
+        Assert.Equal(0m, figures.OnlineBaht);
+        Assert.Equal(1, figures.Attention.PaymentsUnanswered);
+    }
+
+    /// <summary>
+    /// Part of a cancelled booking goes back and the rest stays: kept is the booking less what it
+    /// owes, whatever share the terms give (PRD 6.2).
+    /// </summary>
+    [Fact]
+    public async Task A_cancellation_that_gives_part_back_keeps_the_rest()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var booking = await ConfirmedOnlineAsync(owner, venue.Id, courts[0], 18);
+        await SetRefundAsync(booking, BookingStatus.Cancelled, refundDue: 50m);
+
+        var figures = await ReadAsync(owner, venue.Id, Tomorrow, Tomorrow);
+
+        Assert.Equal(150m, figures.OnlineBaht);
+    }
+
+    /// <summary>
+    /// Being played right now is neither: not revenue until it is over, not advance once it has
+    /// started (PRD US-15).
+    /// </summary>
+    [Fact]
+    public async Task A_booking_being_played_is_neither_revenue_nor_advance()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var booker = await scenario.SignedInClientAsync();
+        var booking = await VenueScenario.HoldAsync(
+            booker, venue.Id, Tomorrow, (courts[0], 18), (courts[0], 19));
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await VenueScenario.UploadAsync(booker, booking.Id, VenueScenario.Jpeg())).StatusCode);
+        await owner.PostAsync($"/api/venues/{venue.Id}/slip-queue/{booking.Id}/confirm", null);
+        await scenario.StartsInAsync(booking.Id, TimeSpan.FromMinutes(-30));
+
+        var day = await ServiceDayAsync(booking.Id);
+        var figures = await ReadAsync(owner, venue.Id, day, day);
+
+        Assert.Equal(0m, figures.OnlineBaht);
+        Assert.Equal(0m, figures.AdvanceBaht);
+    }
+
     [Fact]
     public async Task A_no_show_keeps_what_was_paid()
     {
@@ -144,6 +204,73 @@ public sealed class VenueDashboardTests(ApiTestFixture api) : IClassFixture<ApiT
         var figures = await ReadAsync(owner, venue.Id, Tomorrow, Tomorrow);
 
         Assert.Equal(28, figures.SellableHours);
+    }
+
+    /// <summary>
+    /// A closure lifted early shut the hours before the lift. The grid rightly forgets it; the
+    /// report must not (PRD US-15).
+    /// </summary>
+    [Fact]
+    public async Task A_closure_lifted_early_still_shut_the_hours_before_the_lift()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync(courts: 2);
+        var closed = await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/courts/{courts[1]}/closures",
+            new CloseCourtRequest(Tomorrow, 6, Tomorrow.AddDays(1), 22, "ซ่อมพื้น"));
+        Assert.Equal(HttpStatusCode.OK, closed.StatusCode);
+        await LiftAtAsync(courts[1], PlatformRequirements.BangkokHour(Tomorrow, 12));
+
+        var figures = await ReadAsync(owner, venue.Id, Tomorrow, Tomorrow.AddDays(1));
+
+        // Tomorrow 06:00–12:00 was shut on the second court; the day after, nothing was.
+        Assert.Equal(32 - 6, figures.Days[0].SellableHours);
+        Assert.Equal(32, figures.Days[1].SellableHours);
+    }
+
+    /// <summary>Each day is read with the opening hours in force on it (PRD US-11, US-15).</summary>
+    [Fact]
+    public async Task Opening_hours_changed_part_way_through_are_read_day_by_day()
+    {
+        var (owner, venue, _) = await scenario.BookableVenueAsync();
+        await VenueScenario.SetHoursAsync(owner, venue.Id, Tomorrow.AddDays(1), opens: 8, closes: 20);
+
+        var figures = await ReadAsync(owner, venue.Id, Tomorrow, Tomorrow.AddDays(1));
+
+        Assert.Equal(16, figures.Days[0].SellableHours);
+        Assert.Equal(12, figures.Days[1].SellableHours);
+    }
+
+    [Fact]
+    public async Task A_court_taken_out_of_use_part_way_through_sells_nothing_after()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync(courts: 2);
+        var changed = await owner.PutAsJsonAsync(
+            $"/api/venues/{venue.Id}/courts/{courts[1]}/status",
+            new ChangeCourtStatusRequest(false, Tomorrow.AddDays(1)));
+        Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+
+        var figures = await ReadAsync(owner, venue.Id, Tomorrow, Tomorrow.AddDays(1));
+
+        Assert.Equal(32, figures.Days[0].SellableHours);
+        Assert.Equal(16, figures.Days[1].SellableHours);
+    }
+
+    /// <summary>One venue's bookings are nowhere in another's figures (PRD 8).</summary>
+    [Fact]
+    public async Task Another_venue_s_bookings_are_not_counted_here()
+    {
+        var (owner, venue, _) = await scenario.BookableVenueAsync();
+        var (otherOwner, other, otherCourts) = await scenario.BookableVenueAsync();
+        var elsewhere = await ConfirmedOnlineAsync(otherOwner, other.Id, otherCourts[0], 18);
+        await PlayOnAsync(elsewhere, Yesterday, 10);
+        await CounterAsync(otherOwner, other.Id, otherCourts[0], 19);
+
+        var mine = await ReadAsync(owner, venue.Id, Yesterday, Tomorrow);
+        var theirs = await ReadAsync(otherOwner, other.Id, Yesterday, Tomorrow);
+
+        Assert.Equal((0m, 0m, 0m, 0), (mine.OnlineBaht, mine.StaffBaht, mine.AdvanceBaht, mine.BookedHours));
+        Assert.Equal(200m, theirs.OnlineBaht);
+        Assert.Equal(200m, theirs.AdvanceBaht);
     }
 
     /// <summary>
@@ -276,6 +403,32 @@ public sealed class VenueDashboardTests(ApiTestFixture api) : IClassFixture<ApiT
             .ExecuteUpdateAsync(set => set
                 .SetProperty(slot => slot.StartsAt, starts)
                 .SetProperty(slot => slot.EndsAt, starts.AddHours(1)));
+    }
+
+    /// <summary>
+    /// Ends a booking with part of it owed back, in the database: which share a set of terms gives
+    /// is Cancellation's to test; what the dashboard does with the amount is this class's.
+    /// </summary>
+    private async Task SetRefundAsync(Guid bookingId, BookingStatus status, decimal refundDue)
+    {
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        await database.Bookings
+            .Where(booking => booking.Id == bookingId)
+            .ExecuteUpdateAsync(set => set
+                .SetProperty(booking => booking.Status, status)
+                .SetProperty(booking => booking.RefundDueBaht, refundDue));
+    }
+
+    private async Task LiftAtAsync(Guid courtId, DateTimeOffset at)
+    {
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        await database.CourtClosures
+            .Where(closure => closure.CourtId == courtId)
+            .ExecuteUpdateAsync(set => set.SetProperty(closure => closure.LiftedAt, at));
     }
 
     private async Task NoShowInTheDatabaseAsync(Guid bookingId)

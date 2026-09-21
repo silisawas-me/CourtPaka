@@ -176,17 +176,25 @@ public static class VenueDashboard
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
+        // Found from the hours in the range, which the (CourtId, StartsAt) index answers, rather
+        // than from every booking the venue has ever had. A booking whose first hour is before
+        // the range but has a later one inside it is found too, and dropped below.
+        var touching = database.BookingSlots
+            .Where(slot =>
+                slot.Court!.VenueId == venueId
+                && slot.StartsAt >= since
+                && slot.StartsAt < until)
+            .Select(slot => slot.BookingId);
+
         var bookings = await database.Bookings
             .AsNoTracking()
             .Where(booking =>
-                booking.VenueId == venueId
+                touching.Contains(booking.Id)
                 && booking.PaymentState == PaymentState.Received
                 && (booking.Status == BookingStatus.Confirmed
                     || booking.Status == BookingStatus.Completed
                     || booking.Status == BookingStatus.NoShow
-                    || booking.Status == BookingStatus.Cancelled)
-                && booking.Slots.Min(slot => slot.StartsAt) >= since
-                && booking.Slots.Min(slot => slot.StartsAt) < until)
+                    || booking.Status == BookingStatus.Cancelled))
             .Select(booking => new
             {
                 booking.Status,
@@ -200,7 +208,7 @@ public static class VenueDashboard
 
         var byDay = new Dictionary<DateOnly, (decimal Online, decimal Staff)>();
 
-        foreach (var booking in bookings)
+        foreach (var booking in bookings.Where(one => one.FirstStart >= since && one.FirstStart < until))
         {
             // Confirmed is only kept once it has been played: stored Confirmed reads as Completed
             // after its last hour (PRD 9.2), and before that it is advance money, not revenue.
@@ -238,6 +246,7 @@ public static class VenueDashboard
             CancellationToken cancellationToken)
     {
         // The timelines once for the whole range, then each day is drawn from them in memory.
+        // Lifted closures are read too: the hours before the lift were shut (US-15).
         var courts = await database.Courts
             .AsNoTracking()
             .Where(court => court.VenueId == venueId)
@@ -249,7 +258,6 @@ public static class VenueDashboard
             .AsNoTracking()
             .Where(closure =>
                 closure.Court!.VenueId == venueId
-                && closure.LiftedAt == null
                 && closure.StartsAt < until
                 && closure.EndsAt > since)
             .ToListAsync(cancellationToken);
@@ -282,7 +290,8 @@ public static class VenueDashboard
                 closures,
                 VenueTimeline.OpeningHoursOn(schedules, date),
                 bands: [],
-                taken: new HashSet<(Guid, int)>());
+                taken: new HashSet<(Guid, int)>(),
+                asItWas: true);
 
             sellable[date] = day.Courts.Sum(court => day.Hours.Count(hour => day.IsSellable(court.Id, hour)));
             booked[date] = usedByDay[date]
@@ -338,7 +347,9 @@ public static class VenueDashboard
         // The same rule as Refunds.StillStanding, written out: EF cannot translate a call that
         // builds a query when it sits inside a correlated subquery.
         var outstanding = await mine.CountAsync(
-            booking => booking.RefundDueBaht > database.RefundRecords
+            // Most bookings owe nothing, and asking that first spares them the sum.
+            booking => booking.RefundDueBaht > 0
+                && booking.RefundDueBaht > database.RefundRecords
                 .Where(record => record.BookingId == booking.Id && record.VoidedAt == null)
                 .Sum(record => record.AmountBaht),
             cancellationToken);

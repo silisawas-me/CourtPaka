@@ -1,4 +1,5 @@
-import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, computed, inject, input, signal } from '@angular/core';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -7,6 +8,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Router, RouterLink } from '@angular/router';
+import { catchError, map, of, switchMap, tap } from 'rxjs';
 import { ApiError, errorKey } from '../../core/http/api-error';
 import { AppDatePipe } from '../../core/i18n/app-date.pipe';
 import { fromPlainDate, plainDate, venueToday } from '../../core/i18n/plain-date';
@@ -72,8 +74,38 @@ export class VenueDashboardPage {
     () => new Intl.NumberFormat(this.i18n.locale(), { maximumFractionDigits: 2 }),
   );
 
+  /** What is being asked for: the venue and the range the URL holds. */
+  private readonly asked = computed(() => ({
+    venueId: this.venueId(),
+    from: this.from(),
+    to: this.to(),
+  }));
+
   constructor() {
-    effect(() => this.load(this.venueId(), this.from(), this.to()));
+    // switchMap, so pressing "last month" and then "this month" quickly cannot let the slower,
+    // older answer land last and show last month under a URL that says this one.
+    toObservable(this.asked)
+      .pipe(
+        tap(() => {
+          this.loading.set(true);
+          this.pageError.set(null);
+        }),
+        switchMap(({ venueId, from, to }) =>
+          this.dashboards.read(venueId, from, to).pipe(
+            map((figures) => ({ figures, failure: null as unknown })),
+            catchError((failure: unknown) => of({ figures: null, failure })),
+          ),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe(({ figures, failure }) => {
+        this.loading.set(false);
+        if (figures) {
+          this.showFigures(figures);
+        } else {
+          this.fail(failure);
+        }
+      });
   }
 
   protected baht(amount: number): string {
@@ -125,32 +157,24 @@ export class VenueDashboardPage {
     });
   }
 
-  private load(venueId: string, from?: string, to?: string): void {
-    this.loading.set(true);
-    this.pageError.set(null);
+  private showFigures(figures: Dashboard): void {
+    this.figures.set(figures);
 
-    this.dashboards.read(venueId, from, to).subscribe({
-      next: (figures) => {
-        this.figures.set(figures);
-        this.loading.set(false);
+    // The range the server answered for, which is this month when none was asked.
+    this.range.setValue(
+      { start: fromPlainDate(figures.from), end: fromPlainDate(figures.to) },
+      { emitEvent: false },
+    );
+  }
 
-        // The range the server answered for, which is this month when none was asked.
-        this.range.setValue(
-          { start: fromPlainDate(figures.from), end: fromPlainDate(figures.to) },
-          { emitEvent: false },
-        );
-      },
-      error: (failure: unknown) => {
-        this.loading.set(false);
-        // A plain 403 carries no code: the policy refuses before any handler speaks. For a member
-        // of a working venue it means they lack ViewReports, which is worth saying in words
-        // (PRD US-14); a venue turned away by the platform is told so on its own page first.
-        this.pageError.set(
-          failure instanceof ApiError && failure.status === 403
-            ? 'dashboard.noPermission'
-            : errorKey(failure),
-        );
-      },
-    });
+  private fail(failure: unknown): void {
+    // A plain 403 carries no code: the policy refuses before any handler speaks. For a member
+    // of a working venue it means they lack ViewReports, which is worth saying in words
+    // (PRD US-14); a venue turned away by the platform is told so on its own page first.
+    this.pageError.set(
+      failure instanceof ApiError && failure.status === 403
+        ? 'dashboard.noPermission'
+        : errorKey(failure),
+    );
   }
 }

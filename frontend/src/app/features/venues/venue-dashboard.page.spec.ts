@@ -95,6 +95,23 @@ describe('VenueDashboardPage', () => {
     request.flush(figures());
   });
 
+  it('drops an older answer once a newer range is asked for', () => {
+    fixture = TestBed.createComponent(VenueDashboardPage);
+    fixture.componentRef.setInput('venueId', 'v1');
+    fixture.componentRef.setInput('from', '2026-08-01');
+    fixture.componentRef.setInput('to', '2026-08-31');
+    fixture.detectChanges();
+    const older = httpMock.expectOne((one) => one.params.get('from') === '2026-08-01');
+
+    fixture.componentRef.setInput('from', '2026-09-01');
+    fixture.componentRef.setInput('to', '2026-09-30');
+    fixture.detectChanges();
+    const newer = httpMock.expectOne((one) => one.params.get('from') === '2026-09-01');
+
+    expect(older.cancelled).toBe(true);
+    newer.flush(figures({ from: '2026-09-01', to: '2026-09-30' }));
+  });
+
   it('lists every day of the range', () => {
     render();
 
