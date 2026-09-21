@@ -136,6 +136,7 @@ builder.Services.AddScoped<CurrentVenue>();
 builder.Services.AddScoped<VenueNotifications>();
 builder.Services.AddScoped<IAuthorizationHandler, VenuePermissionHandler>();
 builder.Services.AddScoped<VenueStandingNotices>();
+builder.Services.AddScoped<BookerMail>();
 
 // The one permission that is not about a venue: acting for the platform on one (PRD US-20).
 builder.Services.AddScoped<IAuthorizationHandler, PlatformAdminHandler>();

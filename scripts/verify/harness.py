@@ -99,6 +99,35 @@ def verify_email(page, email: str) -> None:
         raise RuntimeError(f"Could not verify {email}: {verified.status} {verified.text()}")
 
 
+def logged_mail(email: str) -> list[str]:
+    """Every message the Development sender logged to this address, oldest first, each as its
+    header line and body. Entries in the log start at column 0 ("info: ..."), and everything a
+    message says is indented under it, so a message runs until the next unindented line."""
+    logs = subprocess.run(
+        ["docker", "compose", "logs", "--no-log-prefix", "api"],
+        cwd=pathlib.Path(__file__).resolve().parents[2],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=True,
+    ).stdout
+
+    messages: list[str] = []
+    current: list[str] | None = None
+    for line in logs.splitlines():
+        if current is not None and line and not line[0].isspace():
+            messages.append("\n".join(current))
+            current = None
+        if f"Email to {email} [" in line:
+            current = [line.strip()]
+        elif current is not None:
+            current.append(line.strip())
+    if current is not None:
+        messages.append("\n".join(current))
+    return messages
+
+
 def run_out_hold(booking_id: str) -> None:
     """Makes a hold's fifteen minutes be up, in the database.
 
