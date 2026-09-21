@@ -1,0 +1,140 @@
+:host {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--stack);
+}
+
+// The same quiet filter row as the venue queue beside it (venues.page.scss).
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.filter.on {
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
+.channels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+
+  legend {
+    width: 100%;
+    margin-bottom: 0.25rem;
+    font: var(--mat-sys-label-large);
+  }
+}
+
+// Each choice is a whole label, so the target is the words and not only the dot.
+.channel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  font: var(--mat-sys-body-large);
+}
+
+.complaint-list,
+.looks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.complaint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.complaint-open {
+  min-height: 2.75rem;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: start;
+  font: var(--mat-sys-body-large);
+  color: var(--mat-sys-primary);
+  cursor: pointer;
+}
+
+// Open is the one waiting for somebody, so it is the one that stands out.
+.badge-open {
+  background: var(--mat-sys-tertiary-container);
+  color: var(--mat-sys-on-tertiary-container);
+}
+
+// What the person said, kept as they wrote it, line breaks and all.
+.details {
+  margin: 0;
+  white-space: pre-line;
+  font: var(--mat-sys-body-large);
+}
+
+.booking {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+
+  dt {
+    font: var(--mat-sys-label-large);
+  }
+
+  dd {
+    margin: 0.125rem 0 0;
+    font: var(--mat-sys-body-medium);
+    overflow-wrap: anywhere;
+  }
+}
+
+.history {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding-inline-start: 1.25rem;
+  font: var(--mat-sys-body-medium);
+}
+
+.slip {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.slip-image {
+  max-width: 100%;
+  max-height: 32rem;
+  object-fit: contain;
+  border-radius: var(--mat-sys-corner-small);
+  border: 1px solid var(--mat-sys-outline-variant);
+}
+
+.small {
+  font: var(--mat-sys-body-small);
+}
+
+// The answer is set apart from the record it answers, so the two are not read as one.
+.resolved {
+  display: grid;
+  gap: 0.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+
+  p {
+    margin: 0;
+    white-space: pre-line;
+  }
+}

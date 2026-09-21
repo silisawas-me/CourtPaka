@@ -55,6 +55,63 @@ export interface AdminUserDetail {
   history: AccountStatusChange[];
 }
 
+/** How a complaint reached the platform (PRD US-22). */
+export type ComplaintChannel = 'Email' | 'Phone' | 'Line' | 'Other';
+export type ComplaintStatus = 'Open' | 'Resolved';
+
+export interface ComplaintSummary {
+  id: string;
+  bookingId: string;
+  venueName: string;
+  channel: ComplaintChannel;
+  status: ComplaintStatus;
+  openedAt: string;
+  resolvedAt: string | null;
+}
+
+export interface ComplaintMove {
+  from: string | null;
+  to: string;
+  changedAt: string;
+  changedByEmail: string | null;
+  cause: string | null;
+  reason: string | null;
+}
+
+/** The booking a complaint is about, as much as an admin needs to judge it (PRD US-22). */
+export interface ComplaintBooking {
+  bookingId: string;
+  venueId: string;
+  venueCode: string;
+  venueName: string;
+  channel: 'Online' | 'Staff';
+  bookerEmail: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  status: string;
+  paymentState: string;
+  totalBaht: number;
+  refundDueBaht: number;
+  sentBackBaht: number;
+  slots: { courtName: string; startsAt: string; endsAt: string }[];
+  history: ComplaintMove[];
+  hasSlip: boolean;
+}
+
+export interface Complaint {
+  id: string;
+  details: string;
+  channel: ComplaintChannel;
+  status: ComplaintStatus;
+  openedAt: string;
+  openedByEmail: string | null;
+  resolvedAt: string | null;
+  resolvedByEmail: string | null;
+  resolution: string | null;
+  booking: ComplaintBooking;
+  slipViewings: { viewedByEmail: string | null; viewedAt: string }[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class AdminService {
   private readonly http = inject(HttpClient);
@@ -76,6 +133,38 @@ export class AdminService {
 
   user(userId: string): Observable<AdminUserDetail> {
     return this.http.get<AdminUserDetail>(`/api/admin/users/${userId}`);
+  }
+
+  complaints(status?: ComplaintStatus): Observable<ComplaintSummary[]> {
+    return this.http.get<ComplaintSummary[]>('/api/admin/complaints', {
+      params: status ? { status } : {},
+    });
+  }
+
+  complaint(complaintId: string): Observable<Complaint> {
+    return this.http.get<Complaint>(`/api/admin/complaints/${complaintId}`);
+  }
+
+  openComplaint(
+    bookingId: string,
+    details: string,
+    channel: ComplaintChannel,
+  ): Observable<Complaint> {
+    return this.http.post<Complaint>('/api/admin/complaints', { bookingId, details, channel });
+  }
+
+  resolveComplaint(complaintId: string, resolution: string): Observable<Complaint> {
+    return this.http.post<Complaint>(`/api/admin/complaints/${complaintId}/resolve`, {
+      resolution,
+    });
+  }
+
+  /**
+   * The booking's slip, through an open complaint. Every call is recorded as a look at somebody's
+   * bank account (PRD US-22), so the page asks for it only when an admin presses for it.
+   */
+  complaintSlip(complaintId: string): Observable<Blob> {
+    return this.http.get(`/api/admin/complaints/${complaintId}/slip`, { responseType: 'blob' });
   }
 
   /** Suspending and letting back in both say why: both are decisions about a person (PRD 8). */

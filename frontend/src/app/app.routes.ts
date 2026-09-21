@@ -74,6 +74,12 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    path: 'admin/complaints',
+    loadComponent: () =>
+      import('./features/admin/complaints.page').then((m) => m.AdminComplaintsPage),
+    canActivate: [authGuard],
+  },
+  {
     path: 'admin/users',
     loadComponent: () => import('./features/admin/users.page').then((m) => m.AdminUsersPage),
     canActivate: [authGuard],
