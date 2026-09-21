@@ -205,6 +205,19 @@ public static class RefundEndpoints
         AppEvents.For(loggers).LogInformation(
             "refund_voided {BookingId} {VenueId} {RefundId}", bookingId, venueId, refundId);
 
+        // The void is allowed — a record of money that never went is worse than a debt — but a
+        // debt to somebody who has since asked to be forgotten is one nobody can pay without the
+        // platform stepping in, so it is said out loud for it (PDPA, PRD 8, S-15).
+        if (await database.Bookings.AnyAsync(
+                one => one.Id == bookingId && one.Booker != null && one.Booker.DeletedAt != null,
+                cancellationToken))
+        {
+            loggers.CreateLogger("CourtBooking.Refunds").LogWarning(
+                "Refund {RefundId} on booking {BookingId} was voided after its booker deleted the "
+                + "account; the amount is owed to somebody nobody can reach.",
+                refundId, bookingId);
+        }
+
         return TypedResults.Ok(await ReadAsync(database, booking, cancellationToken));
     }
 

@@ -528,5 +528,7 @@
   "error.account.owns_a_venue": "You own a venue, so the account cannot be deleted yet. Please contact the CourtPaka team about the venue first.",
   "error.account.is_platform_admin": "A platform admin account cannot be deleted here",
   "error.account.has_upcoming_bookings": "You still have bookings to play. Cancel them or wait until they are played, then delete the account.",
-  "error.account.has_money_pending": "A venue still owes you money or has not confirmed a payment. Once that is settled you can delete the account."
+  "error.account.has_money_pending": "A venue still owes you money or has not confirmed a payment. Once that is settled you can delete the account.",
+  "error.account.locked_out": "Too many wrong passwords. The account is locked for 15 minutes.",
+  "error.auth.account_closed": "This account has been closed. Please sign in again."
 }

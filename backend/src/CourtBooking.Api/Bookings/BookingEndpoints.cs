@@ -601,6 +601,15 @@ public static class BookingEndpoints
             await using var transaction =
                 await database.Database.BeginTransactionAsync(cancellationToken);
 
+            // A booker who was suspended or asked to be forgotten a moment ago may still hold a
+            // session; the row is what says, and share-locking it queues this behind a deletion
+            // in progress (PRD US-22, S-15). Counter bookings have no booker to ask about.
+            if (booking.BookerUserId is { } bookerUserId
+                && await AccountGate.RefusalAsync(database, bookerUserId, cancellationToken) is { } closed)
+            {
+                return closed;
+            }
+
             // Queue for the hours being taken, in one fixed order, before touching the index that
             // guards them. Without this, people reaching for the same hour collide inside the
             // exclusion constraint's index and Postgres breaks the standoff by killing one of them

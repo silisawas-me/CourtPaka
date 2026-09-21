@@ -4,6 +4,7 @@ using CourtBooking.Api.Bookings;
 using CourtBooking.Api.Data;
 using CourtBooking.Api.Identity;
 using CourtBooking.Api.Tests.Infrastructure;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -147,6 +148,165 @@ public sealed class AccountDeletionTests(ApiTestFixture api) : IClassFixture<Api
 
         var after = await scenario.GetMembersAsync(owner, venue.Id);
         Assert.Equal(before.Length - 1, after.Length);
+    }
+
+    [Fact]
+    public async Task A_platform_admin_cannot_delete_their_account_here()
+    {
+        var admin = await scenario.PlatformAdminAsync();
+
+        var refused = await DeleteAsync(admin, VenueScenario.Password);
+
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Equal(AccountDeletionErrorCodes.IsPlatformAdmin, await refused.ErrorCodeAsync());
+    }
+
+    /// <summary>The venue has not said whether the money came: nobody could tell them after.</summary>
+    [Fact]
+    public async Task Not_while_the_venue_has_not_answered_about_their_payment()
+    {
+        var (_, venue, courts) = await scenario.BookableVenueAsync();
+        var (booker, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        Assert.Equal(
+            HttpStatusCode.OK, (await booker.PostAsync($"/api/bookings/{booking.Id}/cancel", null)).StatusCode);
+
+        var refused = await DeleteAsync(booker, VenueScenario.Password);
+
+        Assert.Equal(AccountDeletionErrorCodes.HasMoneyPending, await refused.ErrorCodeAsync());
+    }
+
+    /// <summary>
+    /// Played, but still inside the day a venue may correct it — which could leave money owed
+    /// back to somebody nobody can reach (US-13, VenueDecisions.CorrectionWindow).
+    /// </summary>
+    [Fact]
+    public async Task Not_while_a_venue_may_still_correct_what_they_played()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (booker, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        await owner.PostAsync($"/api/venues/{venue.Id}/slip-queue/{booking.Id}/confirm", null);
+        await scenario.StartsInAsync(booking.Id, TimeSpan.FromHours(-2));
+
+        var refused = await DeleteAsync(booker, VenueScenario.Password);
+
+        Assert.Equal(AccountDeletionErrorCodes.HasUpcomingBookings, await refused.ErrorCodeAsync());
+    }
+
+    [Fact]
+    public async Task A_hold_that_ran_out_does_not_keep_anybody()
+    {
+        var (_, venue, courts) = await scenario.BookableVenueAsync();
+        var booker = await scenario.SignedInClientAsync();
+        var held = await VenueScenario.HoldAsync(
+            booker, venue.Id, VenueScenario.Today.AddDays(1), (courts[0], 18));
+        await scenario.LapseHoldAsync(held.Id);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await DeleteAsync(booker, VenueScenario.Password)).StatusCode);
+    }
+
+    /// <summary>Guessing the password here locks the account like the sign-in page does.</summary>
+    [Fact]
+    public async Task Guessing_the_password_locks_it()
+    {
+        var client = await scenario.SignedInClientAsync();
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            await DeleteAsync(client, "NotThePassword1");
+        }
+
+        var locked = await DeleteAsync(client, VenueScenario.Password);
+
+        Assert.Equal(HttpStatusCode.Forbidden, locked.StatusCode);
+        Assert.Equal(AccountDeletionErrorCodes.LockedOut, await locked.ErrorCodeAsync());
+    }
+
+    /// <summary>
+    /// Another device still holds a session until it revalidates. Whatever it tries to write that
+    /// would need the person again is refused by the row in the meantime (S-15).
+    /// </summary>
+    [Fact]
+    public async Task A_session_left_open_elsewhere_cannot_book_or_open_a_venue()
+    {
+        var (_, venue, courts) = await scenario.BookableVenueAsync();
+        using var slow = api.Api.WithWebHostBuilder(builder =>
+            builder.UseSetting("App:SessionRevalidationSeconds", "3600"));
+        var email = scenario.NewEmail();
+        var elsewhere = slow.CreateClient();
+        Assert.Equal(
+            HttpStatusCode.Created,
+            (await elsewhere.PostAsJsonAsync(
+                "/api/auth/register",
+                new RegisterRequest(
+                    email, VenueScenario.Password, ApiFactory.PrivacyPolicyVersion,
+                    SupportedLanguages.Thai, null))).StatusCode);
+        await scenario.ConfirmEmailAsync(email);
+        await elsewhere.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, VenueScenario.Password));
+        var here = slow.CreateClient();
+        await here.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, VenueScenario.Password));
+
+        Assert.Equal(HttpStatusCode.NoContent, (await DeleteAsync(here, VenueScenario.Password)).StatusCode);
+
+        var booking = await elsewhere.PostAsJsonAsync(
+            "/api/bookings",
+            new CreateBookingRequest(
+                venue.Id, [new BookingSlotRequest(courts[0], VenueScenario.Today.AddDays(1), 18)]));
+        var applying = await elsewhere.PostAsJsonAsync(
+            "/api/venues", VenueScenario.Application(scenario.NewCode()));
+
+        Assert.NotEqual(HttpStatusCode.Created, booking.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, applying.StatusCode);
+        Assert.Equal(AccountGate.Closed, await applying.ErrorCodeAsync());
+    }
+
+    /// <summary>The booker's own moves in a complaint's history name nobody either (PRD 8).</summary>
+    [Fact]
+    public async Task A_complaint_history_names_nobody_for_a_forgotten_booker()
+    {
+        var admin = await scenario.PlatformAdminAsync();
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (booker, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        await owner.PostAsync($"/api/venues/{venue.Id}/slip-queue/{booking.Id}/confirm", null);
+        await scenario.PlayOutAsync(booking.Id);
+        Assert.Equal(HttpStatusCode.NoContent, (await DeleteAsync(booker, VenueScenario.Password)).StatusCode);
+
+        var complaint = await VenueScenario.ReadAsync<ComplaintResponse>(
+            await admin.PostAsJsonAsync(
+                "/api/admin/complaints",
+                new OpenComplaintRequest(booking.Id.ToString(), "ทดสอบ", "Email")),
+            HttpStatusCode.Created);
+
+        Assert.Null(complaint.Booking.BookerEmail);
+        Assert.DoesNotContain(
+            complaint.Booking.History, move => move.ChangedByEmail?.Contains("deleted") == true);
+    }
+
+    [Fact]
+    public async Task A_forgotten_account_is_not_found_by_search()
+    {
+        var admin = await scenario.PlatformAdminAsync();
+        var (client, _) = await scenario.SignedInClientWithEmailAsync();
+        await DeleteAsync(client, VenueScenario.Password);
+
+        var found = await VenueScenario.ReadAsync<AdminUserResponse[]>(
+            await admin.GetAsync("/api/admin/users?q=deleted-"));
+
+        Assert.Empty(found);
+    }
+
+    /// <summary>An accepted invitation was the last copy of the address (PDPA, PRD 8).</summary>
+    [Fact]
+    public async Task The_invitation_that_brought_them_in_no_longer_holds_the_address()
+    {
+        var (owner, venue, _) = await scenario.BookableVenueAsync();
+        var (staff, email) = await scenario.SignedInClientWithEmailAsync();
+        await scenario.InviteAndAcceptAsync(owner, staff, venue.Id, email);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await DeleteAsync(staff, VenueScenario.Password)).StatusCode);
+
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.False(await database.VenueInvitations.AnyAsync(
+            invitation => invitation.NormalizedEmail == email.ToUpperInvariant()));
     }
 
     // ---------------------------------------------------------------------------------------

@@ -88,6 +88,8 @@ public static class AdminUserEndpoints
             .AsNoTracking()
             // The same escaping as the venue search, with the escape character named rather than
             // assumed: without it an address with "_" in it stops being findable by it.
+            // A forgotten account is not somebody to find: its placeholder names nobody (S-15).
+            .Where(user => user.DeletedAt == null)
             .Where(user => EF.Functions.Like(
                 user.NormalizedEmail!, pattern, PublicVenueEndpoints.LikeEscape))
             .OrderBy(user => user.NormalizedEmail)
