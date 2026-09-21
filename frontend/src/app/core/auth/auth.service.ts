@@ -37,6 +37,34 @@ export class AuthService {
   readonly currentUser = this.user.asReadonly();
   readonly ready = this.loaded.asReadonly();
 
+  /**
+   * The first look at the session cookie, started when the app boots and shared by whoever asks
+   * before it answers. The app does not wait for it to render: a public page (the court grid,
+   * PRD 8's LCP target) would otherwise pay a round trip to learn nothing it needs. Pages that do
+   * need it wait through {@link whenReady}; a failure reads as signed out rather than as no app.
+   */
+  private readonly firstLook$ = this.http.get<CurrentUser>('/api/auth/me').pipe(
+    map((user): CurrentUser | null => user),
+    catchError(() => of(null)),
+    tap((user) => {
+      // A sign-in or sign-out that finished first knows better than this older answer.
+      if (!this.loaded()) {
+        this.adopt(user);
+      }
+    }),
+    shareReplay({ bufferSize: 1, refCount: false }),
+  );
+
+  /** Starts the first look without waiting for it. Called once, as the app boots. */
+  lookForSession(): void {
+    this.firstLook$.subscribe();
+  }
+
+  /** The signed-in account once the first look has answered (at once if it already has). */
+  whenReady(): Observable<CurrentUser | null> {
+    return this.loaded() ? of(this.user()) : this.firstLook$.pipe(map(() => this.user()));
+  }
+
   /** Static server config; fetched once per app load and shared by every caller. */
   private readonly policyVersion$ = this.http
     .get<{ version: string }>('/api/auth/privacy-policy')
