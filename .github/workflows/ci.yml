@@ -110,3 +110,31 @@ jobs:
           push: false
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=min,scope=web
+
+  # PRD 8: an OWASP ZAP baseline scan of the running stack, and no High alert allowed. The stack is
+  # the local one (Development settings, plain HTTP) behind the same Caddyfile the deployments
+  # use, which is where the headers the scan reads are set.
+  zap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Start the stack
+        run: docker compose --profile full up -d --build --wait
+
+      # -I: never fail on a warning. ZAP marks every rule WARN, so "no High" is decided below.
+      - name: ZAP baseline scan
+        run: |
+          mkdir -p zap && chmod 777 zap
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t http://localhost:8080 -J report.json -I
+
+      - name: Fail on High alerts
+        run: python3 scripts/ci/zap_high.py zap/report.json
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: zap-report
+          path: zap/report.json
