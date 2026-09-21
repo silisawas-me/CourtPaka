@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using CourtBooking.Api.Bookings;
+using CourtBooking.Api.Identity;
 using CourtBooking.Api.Tests.Infrastructure;
 using CourtBooking.Api.Venues;
 
@@ -251,6 +252,47 @@ public sealed class PlatformAdminTests(ApiTestFixture api) : IClassFixture<ApiTe
         Assert.Equal(
             HttpStatusCode.Forbidden,
             (await applicant.GetAsync("/api/admin/venues")).StatusCode);
+    }
+
+    /// <summary>
+    /// The hole this closes. A configured address with no account behind it yet — a fresh
+    /// deployment before its operator signs up — could be registered by anybody who guessed it,
+    /// and registration takes whatever address it is given. Without the confirmation check that
+    /// stranger was the platform the moment they signed in, and could read every venue's tax
+    /// identity and take every venue offline (PRD US-20, security review of #27).
+    /// </summary>
+    [Fact]
+    public async Task An_admin_address_nobody_has_proved_they_read_is_not_an_admin()
+    {
+        var stranger = api.CreateClient();
+        var address = ApiFactory.UnclaimedAdminEmail;
+
+        var registered = await stranger.PostAsJsonAsync(
+            "/api/auth/register",
+            new RegisterRequest(
+                address, "Str4ngerPassword!", ApiFactory.PrivacyPolicyVersion,
+                SupportedLanguages.Thai, null));
+        Assert.Equal(HttpStatusCode.Created, registered.StatusCode);
+
+        // Signing in unverified is allowed on purpose (PRD US-01), so this succeeds.
+        var signedIn = await stranger.PostAsJsonAsync(
+            "/api/auth/login", new LoginRequest(address, "Str4ngerPassword!"));
+        Assert.Equal(HttpStatusCode.NoContent, signedIn.StatusCode);
+
+        // And that is all it gets.
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await stranger.GetAsync("/api/admin/venues")).StatusCode);
+
+        var me = await VenueScenario.ReadAsync<CurrentUserResponse>(
+            await stranger.GetAsync("/api/auth/me"));
+        Assert.False(me.IsPlatformAdmin);
+
+        // Whoever can read the inbox confirms it, and only then does the address count.
+        await scenario.ConfirmEmailAsync(address);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await stranger.GetAsync("/api/admin/venues")).StatusCode);
     }
 
     [Fact]

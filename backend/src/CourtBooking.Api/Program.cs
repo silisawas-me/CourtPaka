@@ -138,7 +138,7 @@ builder.Services.AddScoped<IAuthorizationHandler, VenuePermissionHandler>();
 builder.Services.AddScoped<VenueStandingNotices>();
 
 // The one permission that is not about a venue: acting for the platform on one (PRD US-20).
-builder.Services.AddSingleton<IAuthorizationHandler, PlatformAdminHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, PlatformAdminHandler>();
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy(
         PlatformAdmins.PolicyName,

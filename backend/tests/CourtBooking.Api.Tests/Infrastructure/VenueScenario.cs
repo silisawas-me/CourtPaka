@@ -359,6 +359,10 @@ public sealed class VenueScenario(ApiTestFixture api)
             new RegisterRequest(
                 email, Password, ApiFactory.PrivacyPolicyVersion, SupportedLanguages.Thai, null));
 
+        // Confirmed, because an unconfirmed address is not an admin at all — which is the rule
+        // PlatformAdminTests checks on its own.
+        await ConfirmEmailAsync(email);
+
         var login = await client.PostAsJsonAsync(
             "/api/auth/login", new LoginRequest(email, Password));
         Assert.Equal(HttpStatusCode.NoContent, login.StatusCode);

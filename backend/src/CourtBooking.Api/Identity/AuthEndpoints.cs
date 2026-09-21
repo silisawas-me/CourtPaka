@@ -226,7 +226,7 @@ public static class AuthEndpoints
                 user.Email!,
                 user.EmailConfirmed,
                 user.Language,
-                PlatformAdmins.Includes(principal, options.Value)));
+                PlatformAdmins.Includes(user, options.Value)));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult, NotFound>> ChangeLanguageAsync(
