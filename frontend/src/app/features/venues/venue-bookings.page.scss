@@ -1,3 +1,13 @@
+/*
+ * This page is a grid item of the shell, and a grid item is as wide as its widest content
+ * unless it is told otherwise. The board inside it is a whole day of hours, so without this the
+ * page — and every card on it — grows past the phone it is being read on.
+ */
+:host {
+  display: block;
+  min-width: 0;
+}
+
 /**
  * A day as rows, not as cards. This is read across a counter while somebody waits, so what
  * matters is how quickly the eye finds the hour and the name — air between cards would make the
@@ -199,4 +209,31 @@
     font: var(--mat-sys-title-medium);
     color: var(--mat-sys-on-surface);
   }
+}
+
+/*
+ * The day in four numbers, above the floor it counts. A row of pairs rather than cards: the
+ * counter reads them at a glance beside the board, and four cards would take the whole screen.
+ */
+.today {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin: 0;
+
+  dt {
+    font: var(--mat-sys-label-medium);
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  dd {
+    margin: 0;
+    font: var(--mat-sys-title-medium);
+  }
+}
+
+/* What is known about whether this person is coming, under the line that names them. */
+.booking-arrival {
+  margin: 0.125rem 0 0;
+  font: var(--mat-sys-label-medium);
 }

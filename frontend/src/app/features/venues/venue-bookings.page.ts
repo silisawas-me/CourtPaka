@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, input, signal } from '@angular/core';
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -21,7 +21,9 @@ import {
   VenueBookingsService,
 } from '../../core/venues/venue-bookings.service';
 import { FieldError } from '../../shared/field-error';
+import { Availability, PublicVenueService } from '../../core/venues/public-venue.service';
 import { CounterBooking } from './counter-booking';
+import { DayBoard } from './day-board';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 import { provideLocalizedDateAdapter } from '../../shared/localized-date-adapter';
 
@@ -46,6 +48,7 @@ const REFUND_METHODS: RefundMethod[] = ['Transfer', 'Cash'];
   selector: 'app-venue-bookings-page',
   imports: [
     CounterBooking,
+    DayBoard,
     ReactiveFormsModule,
     RouterLink,
     FieldError,
@@ -63,6 +66,8 @@ const REFUND_METHODS: RefundMethod[] = ['Transfer', 'Cash'];
 })
 export class VenueBookingsPage {
   private readonly bookings = inject(VenueBookingsService);
+  private readonly venues = inject(PublicVenueService);
+  private readonly destroyed = inject(DestroyRef);
   private readonly forms = inject(FormBuilder);
 
   protected readonly i18n = inject(TranslationService);
@@ -82,6 +87,13 @@ export class VenueBookingsPage {
   protected readonly dayField = new FormControl(venueToday());
 
   protected readonly bookings$ = signal<VenueBooking[]>([]);
+
+  /**
+   * The hours this venue sells on the day being looked at, which is what the board is drawn on.
+   * The same answer the booker's grid is drawn from — a counter and a booker are looking at one
+   * floor (PRD US-02, US-25).
+   */
+  protected readonly grid = signal<Availability | null>(null);
   protected readonly loading = signal(true);
   protected readonly pageError = signal<string | null>(null);
 
@@ -93,6 +105,62 @@ export class VenueBookingsPage {
   protected readonly nothingToday = computed(
     () => !this.loading() && this.bookings$().length === 0,
   );
+
+  /** Now, but only while the day on screen is today: on any other day a live line is a lie. */
+  protected readonly liveNow = computed(() =>
+    this.day() === plainDate(venueToday()) ? this.clock() : null,
+  );
+
+  /** Ticked every minute so the line and the counts move without the page being reloaded. */
+  private readonly clock = signal(new Date());
+
+  protected readonly todayCount = computed(() => this.bookings$().length);
+
+  /** What the day took: everything the venue has the money for, less what it owes back. */
+  protected readonly todayTaken = computed(() =>
+    this.bookings$()
+      .filter((booking) => booking.paymentState === 'Received')
+      .reduce((sum, booking) => sum + booking.totalBaht - booking.refundDueBaht, 0),
+  );
+
+  /** What is still to come in: hours sold and not paid for, plus money owed back and not sent. */
+  protected readonly todayOwed = computed(() =>
+    this.bookings$().reduce(
+      (sum, booking) =>
+        sum +
+        booking.outstandingBaht +
+        (booking.paymentState === 'NotReceived' ? booking.totalBaht : 0),
+      0,
+    ),
+  );
+
+  /**
+   * How much of the floor was sold, as hours out of the hours there were to sell. Counted from
+   * the same grid the board is drawn on, so a court taken off sale is not counted as unsold
+   * (PRD US-11, US-15's rule, for one day).
+   */
+  protected readonly todayUsed = computed(() => {
+    const grid = this.grid();
+    if (!grid) {
+      return '—';
+    }
+
+    const sellable = grid.courts.reduce(
+      (count, court) => count + court.hours.filter((hour) => hour.status !== 'Closed').length,
+      0,
+    );
+    if (sellable === 0) {
+      return '—';
+    }
+
+    const sold = new Set(
+      this.bookings$()
+        .filter((booking) => booking.status !== 'Cancelled' && booking.status !== 'Expired')
+        .flatMap((booking) => booking.slots.map((slot) => `${slot.courtId}@${slot.hour}`)),
+    ).size;
+
+    return `${Math.round((sold / sellable) * 100)}%`;
+  });
 
   /** Turning a paid booking away needs one of three reasons, and may carry a note (PRD 6.1). */
   protected readonly cancelForm = this.forms.group({
@@ -147,6 +215,12 @@ export class VenueBookingsPage {
     // The day and the venue both come from outside, and the venue only after the first pass, so
     // reading them here is what waits for both.
     effect(() => this.load(this.venueId(), this.day()));
+
+    // The live line and the counts move with the clock rather than with a reload. A minute is
+    // as fine as the board is drawn: an hour is a column, so a second-by-second line would move
+    // less than a pixel and cost a change detection every second.
+    const tick = setInterval(() => this.clock.set(new Date()), 60_000);
+    this.destroyed.onDestroy(() => clearInterval(tick));
   }
 
   protected pick(chosen: Date | null): void {
@@ -387,6 +461,53 @@ export class VenueBookingsPage {
    * A booking was just taken at the counter. The day is read again rather than patched, because
    * the new row belongs among the others in play order, and the server is what knows that order.
    */
+  /** A block on the board was pressed: put that row where the counter is looking. */
+  protected reveal(bookingId: string): void {
+    document
+      .querySelector(`[data-testid="booking-${bookingId}"]`)
+      ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+
+  /** An empty hour was pressed: open the counter's own form at it (PRD US-13, US-25). */
+  protected sellAt(_at: { courtId: string; hour: number }): void {
+    this.selling.set(true);
+  }
+
+  /** They rang to say they are coming (PRD US-24). */
+  protected confirmArrival(booking: VenueBooking): void {
+    this.decide(this.bookings.confirmArrival(this.venueId(), booking.bookingId));
+  }
+
+  /** They are at the desk. */
+  protected checkIn(booking: VenueBooking): void {
+    this.decide(this.bookings.checkIn(this.venueId(), booking.bookingId));
+  }
+
+  /**
+   * One booking came back changed. It replaces its own row rather than reloading the day: the
+   * counter may be halfway through reading it.
+   */
+  private decide(answer: Observable<VenueBooking>): void {
+    if (this.deciding()) {
+      return;
+    }
+
+    this.deciding.set(true);
+    this.decideError.set(null);
+    answer.subscribe({
+      next: (changed) => {
+        this.deciding.set(false);
+        this.bookings$.update((day) =>
+          day.map((row) => (row.bookingId === changed.bookingId ? changed : row)),
+        );
+      },
+      error: (failure: unknown) => {
+        this.deciding.set(false);
+        this.decideError.set(errorKey(failure));
+      },
+    });
+  }
+
   protected sold(): void {
     this.selling.set(false);
     this.load(this.venueId(), this.day(), { quiet: true });
@@ -395,6 +516,16 @@ export class VenueBookingsPage {
   private load(venueId: string, day: string, { quiet = false } = {}): void {
     this.loading.set(!quiet);
     this.pageError.set(null);
+
+    // The floor the board is drawn on, asked for once per day rather than after every decision:
+    // which courts a venue has and which hours it sells do not change because somebody paid.
+    // It fails quietly — a day's bookings are readable without the board.
+    if (!quiet) {
+      this.venues.availability(venueId, day).subscribe({
+        next: (grid) => this.grid.set(grid),
+        error: () => this.grid.set(null),
+      });
+    }
 
     this.bookings.day(venueId, day).subscribe({
       next: (day) => {

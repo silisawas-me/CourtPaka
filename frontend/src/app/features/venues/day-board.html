@@ -1,0 +1,60 @@
+@if (rows().length > 0) {
+  <div class="board-scroll">
+    <div class="board" data-testid="day-board">
+      <!--
+        The hours across the top, then a row per court. A table would make each hour a cell of its
+        own and a booking would have to be split across them; here a block is one element as wide
+        as the hours it holds, which is what the counter is looking at.
+      -->
+      <div class="board-hours" [style.--hours]="hours().length">
+        <span class="board-corner"></span>
+        @for (hour of hours(); track hour) {
+          <span class="board-hour">{{ hour }}:00</span>
+        }
+      </div>
+
+      @for (row of rows(); track row.courtId) {
+        <div class="board-row" [style.--hours]="hours().length">
+          <span class="board-court">{{ row.name }}</span>
+
+          @for (cell of row.cells; track $index) {
+            @if (isBlock(cell)) {
+              <button
+                type="button"
+                class="board-block"
+                [class.playing]="cell.reads === 'playing'"
+                [class.confirmed]="cell.reads === 'confirmed'"
+                [class.waiting]="cell.reads === 'waiting'"
+                [style.--span]="cell.hours"
+                [attr.data-testid]="'board-block-' + cell.bookingId"
+                (click)="opened.emit(cell.bookingId)"
+              >
+                <span class="board-who">{{ cell.who }}</span>
+                <span class="board-note">{{ cell.note }}</span>
+              </button>
+            } @else if (cell.kind === 'closed') {
+              <span
+                class="board-cell closed"
+                [attr.data-testid]="'board-closed-' + row.courtId + '-' + cell.hour"
+                [attr.aria-label]="i18n.t('board.closed')"
+              ></span>
+            } @else {
+              <button
+                type="button"
+                class="board-cell free"
+                [attr.data-testid]="'board-free-' + row.courtId + '-' + cell.hour"
+                [attr.aria-label]="i18n.t('board.sell') + ' ' + row.name + ' ' + cell.hour + ':00'"
+                (click)="picked.emit({ courtId: row.courtId, hour: cell.hour })"
+              ></button>
+            }
+          }
+        </div>
+      }
+
+      @if (liveAt(); as at) {
+        <!-- Where the clock is, so the counter reads the floor without doing the arithmetic. -->
+        <span class="board-live" data-testid="board-live" [style.--at.%]="at"></span>
+      }
+    </div>
+  </div>
+}

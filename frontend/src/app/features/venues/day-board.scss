@@ -1,0 +1,134 @@
+/*
+ * The day as a floor plan: courts down the side, hours across the top, bookings as blocks over
+ * the hours they hold. Every row is one grid of the same tracks, so a block three hours wide
+ * lines up with the hours above it without any measuring.
+ */
+:host {
+  display: block;
+  /* A grid item is as wide as its content unless it is told otherwise, and this one's content is
+     a day of hours — without this the board pushes the whole page wider than the phone. */
+  min-width: 0;
+}
+
+/* A day of sixteen hours does not fit a phone, and squeezing it would make the blocks unreadable. */
+.board-scroll {
+  min-width: 0;
+  overflow-x: auto;
+  margin-inline: -0.5rem;
+  padding-inline: 0.5rem;
+}
+
+.board {
+  position: relative;
+  min-width: 100%;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.board-hours,
+.board-row {
+  display: grid;
+  /* The court's name, then one track per hour. Wide enough for "18:00" and a name beside it. */
+  grid-template-columns: minmax(7rem, max-content) repeat(var(--hours), minmax(3.25rem, 1fr));
+  gap: 0.25rem;
+  align-items: stretch;
+}
+
+.board-hour {
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+  text-align: center;
+}
+
+.board-court {
+  display: flex;
+  align-items: center;
+  font: var(--mat-sys-body-medium);
+  white-space: nowrap;
+}
+
+.board-cell,
+.board-block {
+  min-height: 2.75rem;
+  border: 0;
+  border-radius: var(--mat-sys-corner-small);
+  padding: 0.25rem 0.5rem;
+  text-align: start;
+  font: inherit;
+}
+
+/* An hour nobody has taken: faint, but a button, because pressing it sells that hour. */
+.board-cell.free {
+  background: color-mix(in srgb, var(--mat-sys-surface-variant) 55%, transparent);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--mat-sys-surface-variant);
+  }
+}
+
+/*
+ * An hour the venue has taken off sale (PRD US-11). Hatched rather than merely grey: a counter
+ * glancing at the floor has to tell "nobody booked it" from "it cannot be booked", and two greys
+ * side by side do not carry that.
+ */
+.board-cell.closed {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--mat-sys-surface-variant) 0 6px,
+    color-mix(in srgb, var(--mat-sys-surface-variant) 50%, transparent) 6px 12px
+  );
+}
+
+.board-block {
+  grid-column: span var(--span);
+  display: grid;
+  align-content: center;
+  gap: 0.125rem;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+/* Being played on right now. The one thing on the floor that is happening. */
+.board-block.playing {
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+}
+
+/* Somebody is expected: paid for, not here yet. */
+.board-block.confirmed {
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
+/* Still waiting on something — a slip to be looked at, a person to say they are coming. */
+.board-block.waiting {
+  background: var(--mat-sys-tertiary-container);
+  color: var(--mat-sys-on-tertiary-container);
+}
+
+.board-who {
+  font: var(--mat-sys-body-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-note {
+  font: var(--mat-sys-label-small);
+  opacity: 0.85;
+}
+
+/*
+ * The clock, drawn across the whole floor. It sits over the hour tracks only — the court names
+ * are outside the day — so it starts where they end.
+ */
+.board-live {
+  position: absolute;
+  top: 1.25rem;
+  bottom: 0;
+  left: calc(7rem + 0.25rem + (100% - 7.25rem) * var(--at) / 100);
+  width: 2px;
+  background: var(--mat-sys-error);
+  pointer-events: none;
+}

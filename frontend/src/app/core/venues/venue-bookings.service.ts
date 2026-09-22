@@ -11,8 +11,18 @@ export type CancellationReason = 'CustomerRequest' | 'VenueInitiated' | 'Payment
  * works these out from the same rules the writes go through, so the page draws buttons from this
  * rather than from rules of its own (PRD US-13).
  */
+/**
+ * Whether the person is coming, and then whether they came (PRD US-24). It is not the booking's
+ * status: a booking that is paid for says nothing about somebody walking through the door.
+ */
+export type BookingArrival = 'Unconfirmed' | 'Reminded' | 'Confirmed' | 'Arrived';
+
 export interface VenueBookingActions {
   cancel: boolean;
+  /** Writing down that they said they are coming (PRD US-24). */
+  confirmArrival: boolean;
+  /** Taking them in at the desk. */
+  checkIn: boolean;
   noShow: boolean;
   settlePayment: boolean;
   playedAfterAll: boolean;
@@ -52,6 +62,11 @@ export interface VenueBooking {
   customerName: string | null;
   customerPhone: string | null;
   status: BookingStatus;
+  /** Whether they are coming, and then whether they came (PRD US-24). */
+  arrival: BookingArrival;
+  arrivedAt: string | null;
+  /** When being late turns into not having come, which is the venue's own wait (PRD US-24). */
+  graceEndsAt: string;
   paymentState: 'NotReceived' | 'Received' | 'Unconfirmed';
   totalBaht: number;
   refundDueBaht: number;
@@ -112,6 +127,16 @@ export class VenueBookingsService {
       paymentReceived: answers.paymentReceived ?? null,
       note: answers.note ?? null,
     });
+  }
+
+  /** They rang to say they are on their way, and the counter wrote it down (PRD US-24). */
+  confirmArrival(venueId: string, bookingId: string): Observable<VenueBooking> {
+    return this.http.post<VenueBooking>(`${this.at(venueId, bookingId)}/confirm-arrival`, null);
+  }
+
+  /** They are at the desk. */
+  checkIn(venueId: string, bookingId: string): Observable<VenueBooking> {
+    return this.http.post<VenueBooking>(`${this.at(venueId, bookingId)}/check-in`, null);
   }
 
   noShow(venueId: string, bookingId: string): Observable<VenueBooking> {

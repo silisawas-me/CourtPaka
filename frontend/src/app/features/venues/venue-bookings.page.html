@@ -49,6 +49,43 @@
   />
 }
 
+@if (!loading() && !pageError() && grid()) {
+  <mat-card>
+    <mat-card-content class="stack">
+      <!--
+        The floor, then the list. Both are the same day's bookings: the board is for the glance
+        across the counter, the list for the row somebody is asking about (PRD US-25).
+      -->
+      <app-day-board
+        [day]="grid()"
+        [bookings]="bookings$()"
+        [now]="liveNow()"
+        (opened)="reveal($event)"
+        (picked)="sellAt($event)"
+      />
+
+      <dl class="today" data-testid="today-numbers">
+        <div>
+          <dt>{{ i18n.t('board.bookings') }}</dt>
+          <dd data-testid="today-bookings">{{ todayCount() }}</dd>
+        </div>
+        <div>
+          <dt>{{ i18n.t('board.used') }}</dt>
+          <dd data-testid="today-used">{{ todayUsed() }}</dd>
+        </div>
+        <div>
+          <dt>{{ i18n.t('board.taken') }}</dt>
+          <dd data-testid="today-taken">{{ todayTaken() }}</dd>
+        </div>
+        <div>
+          <dt>{{ i18n.t('board.owed') }}</dt>
+          <dd data-testid="today-owed">{{ todayOwed() }}</dd>
+        </div>
+      </dl>
+    </mat-card-content>
+  </mat-card>
+}
+
 @if (loading()) {
   <mat-progress-bar mode="indeterminate" />
 } @else if (pageError(); as key) {
@@ -115,7 +152,33 @@
               </p>
             }
 
+            <p class="booking-arrival muted" [attr.data-testid]="'arrival-' + booking.bookingId">
+              {{ i18n.t('board.arrival.' + booking.arrival) }}
+            </p>
+
             <div class="row booking-doors">
+              @if (booking.can.confirmArrival) {
+                <button
+                  matButton="tonal"
+                  type="button"
+                  [attr.data-testid]="'confirm-arrival-' + booking.bookingId"
+                  [disabled]="deciding()"
+                  (click)="confirmArrival(booking)"
+                >
+                  {{ i18n.t('board.confirmArrival') }}
+                </button>
+              }
+              @if (booking.can.checkIn) {
+                <button
+                  matButton="filled"
+                  type="button"
+                  [attr.data-testid]="'check-in-' + booking.bookingId"
+                  [disabled]="deciding()"
+                  (click)="checkIn(booking)"
+                >
+                  {{ i18n.t('board.checkIn') }}
+                </button>
+              }
               @if (booking.can.settlePayment) {
                 <button
                   matButton="filled"
