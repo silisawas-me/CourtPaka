@@ -89,6 +89,7 @@
 | Load test (PRD 8) | ดู `scripts/load/README.md` — k6 ผ่าน docker · บัญชีทดสอบจาก `scripts/load/provision_accounts.py` (local เท่านั้น) · ผลจริงต้องวัดบนเครื่อง PRD |
 | ตรวจ health | `GET /api/health/live` (process) · `GET /api/health/ready` (รวม database) |
 | ตรวจ flow จริงบนเบราว์เซอร์ | `python scripts/verify/line_login.py` · `venue_settings.py` · `venue_pricing.py` · `venue_ui.py` · `booking_grid.py` · `booking.py` · `payment.py` · `slip_queue.py` · `court_closures.py` · `caretaker.py` · `platform_admin.py` · `my_bookings.py` · `venue_bookings.py` · `venue_notices.py` · `counter_booking.py` · `booker_mail.py` · `venue_dashboard.py` · `platform_users.py` · `admin_complaints.py` · `account_deletion.py` · `pwa.py` (ต้องเปิด stack ด้วย `--profile full` ก่อน ดู `scripts/verify/README.md`) |
+| วาดรูปสนามของหน้า sign-in ใหม่ | `python scripts/gen_court.py` แล้ววางผลลัพธ์ทั้งก้อน **และ viewBox ที่บรรทัดท้าย** ลงใน `frontend/src/app/shared/court-art.ts` (ห้ามแก้พิกัดด้วยมือ) |
 
 ## วิธีทำงาน
 - **ทำงานจากเป้าหมาย:** งานแต่ละชิ้นผูกกับ user story / acceptance criteria ใน `docs/prd.md` ถ้า requirement ไม่ชัด ให้ถามก่อนลงมือ

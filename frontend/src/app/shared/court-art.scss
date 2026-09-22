@@ -1,0 +1,129 @@
+/*
+ * The frame the picture hangs in. The page that uses it decides where that frame goes — a backdrop
+ * behind a whole screen, or a strip above a form — so nothing here places itself.
+ */
+:host {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  pointer-events: none;
+  /* The hall floor: one flat colour behind the drawing, which saves drawing it as a path. */
+  background: var(--court-floor);
+  /* The drawing never affects, and is never affected by, the form standing next to it. */
+  contain: layout paint;
+
+  /*
+   * The green is mixed between the brand green and the light one from the same palette, in oklch —
+   * mixing the dark green with a near-white surface in sRGB is what made the floor look dusty.
+   */
+  --court-floor: color-mix(in oklch, var(--mat-sys-primary) 44%, var(--mat-sys-primary-fixed-dim));
+  --court-shade: color-mix(in oklch, var(--mat-sys-primary) 62%, var(--mat-sys-on-surface));
+  --court-paint: var(--mat-sys-on-primary);
+  --court-blue: var(--mat-sys-tertiary);
+  --court-blue-lit: color-mix(in oklch, var(--court-blue) 52%, var(--mat-sys-surface));
+  --court-blue-cap: color-mix(in oklch, var(--court-blue) 38%, var(--mat-sys-surface));
+  --court-blue-deep: color-mix(in oklch, var(--court-blue) 72%, var(--mat-sys-on-surface));
+}
+
+/*
+ * Which part of the court the frame shows. The page sets these where it knows the shape of the
+ * frame; the picture itself has no opinion about it.
+ */
+.plan {
+  width: 100%;
+  height: 100%;
+  transform: translate(var(--court-shift-x, 0), var(--court-shift-y, 0)) scale(var(--court-zoom, 1));
+}
+
+/* Flat colour throughout: no gradients, which is what keeps the picture reading as a drawing. */
+.paint {
+  fill: var(--court-paint);
+}
+
+/*
+ * The corner of the hall the light does not reach. It lies over the paint, not under it, so the
+ * lines that run into it go grey the way they do on a real floor.
+ */
+.shade {
+  fill: var(--court-shade);
+  fill-opacity: 0.55;
+}
+
+/*
+ * Everything standing up throws its shadow the same way, with a hard edge. Opacity goes on the
+ * fill rather than the element: group opacity costs an offscreen layer the size of the picture.
+ */
+.cast {
+  fill: var(--court-shade);
+  fill-opacity: 0.26;
+}
+
+/*
+ * The net's weave inside its own shadow, in light rather than dark: it is the thing that says the
+ * shadow belongs to a net and not to a wall.
+ */
+.cast-mesh {
+  fill: none;
+  stroke: var(--court-paint);
+  stroke-opacity: 0.2;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.shuttle-mark {
+  fill: var(--court-shade);
+  fill-opacity: 0.22;
+}
+
+/* A post is a round thing: a dark side, a lit side, a cap on top and a foot on the floor. */
+.posts {
+  fill: var(--court-blue);
+}
+
+.post-lit {
+  fill: var(--court-blue-lit);
+}
+
+.post-caps {
+  fill: var(--court-blue-cap);
+}
+
+.post-caps .foot {
+  fill: var(--court-blue-deep);
+}
+
+/* Dark cloth with light strings across it, which is what a net looks like from the side. */
+.net-face {
+  fill: color-mix(in oklch, var(--court-blue) 44%, var(--court-shade));
+  fill-opacity: 0.58;
+}
+
+.net-mesh {
+  fill: none;
+  stroke: color-mix(in oklch, var(--court-paint) 82%, var(--court-blue));
+  stroke-opacity: 0.8;
+  stroke-width: 1.1;
+  /* One pixel of string however far the picture is scaled up. */
+  vector-effect: non-scaling-stroke;
+}
+
+.tape,
+.tape-ends {
+  fill: var(--court-paint);
+}
+
+.shuttle .skirt {
+  fill: var(--court-paint);
+}
+
+.shuttle .feather {
+  fill: none;
+  stroke: color-mix(in oklch, var(--court-blue) 22%, transparent);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Cork first: light, like the real thing, with just enough edge to read against the mat. */
+.shuttle .cork {
+  fill: color-mix(in oklch, var(--court-blue) 76%, var(--mat-sys-surface));
+}

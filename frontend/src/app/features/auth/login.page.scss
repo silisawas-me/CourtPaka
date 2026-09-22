@@ -1,116 +1,148 @@
 /*
- * Two halves: the welcome and the form. Side by side once there is room, stacked on a phone with
- * the welcome shrunk to a band — the form is what someone came for, so it never gets pushed under
- * the fold to make space for a mascot.
+ * The sign-in screen is a picture of a court with the form standing on it: the court fills the
+ * window, the card keeps to one side of it, and the alpaca stands on the card's top edge.
  */
-.auth {
-  display: grid;
-  gap: 1rem;
-  align-items: stretch;
-
-  @media (min-width: 56rem) {
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
-    /* Fills what is left under the header, so the page reads as a screen rather than a fragment. */
-    min-height: min(38rem, calc(100vh - 10rem));
-  }
+/*
+ * The shell's own spacing sits on this element, not inside it, so the bleed starts here — or a
+ * strip of page shows between the bar and the court. Two stacks above: the shell pads by one and
+ * the grid it is puts another between the router outlet's empty row and this one.
+ */
+:host {
+  display: block;
+  /* A stretched grid item grows into a negative margin instead of moving, so it is told not to. */
+  align-self: start;
+  margin-block: calc(var(--stack) * -2) calc(var(--shell-bottom) * -1);
 }
 
-.auth-brand {
-  border-radius: var(--mat-sys-corner-large);
-  background:
-    radial-gradient(
-      120% 90% at 80% 0%,
-      color-mix(in srgb, var(--mat-sys-tertiary) 28%, transparent),
-      transparent 60%
-    ),
-    var(--mat-sys-primary);
-  color: var(--mat-sys-on-primary);
-  padding: 1.5rem;
+.auth {
+  position: relative;
+  /* Out of the shell's measure: this screen is the page, not a block on it. */
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
+  min-height: calc(100vh - var(--mat-toolbar-mobile-height, 3.5rem));
   display: grid;
   align-content: center;
-  overflow: hidden;
-}
-
-.auth-brand-inner {
-  display: grid;
   justify-items: center;
-  text-align: center;
-  gap: 0.5rem;
+  gap: 1.25rem;
+  padding: 2rem var(--page-gutter) 3rem;
 }
 
-.auth-mascot {
-  width: 9rem;
+/* A strip of court above the form, which is all a phone has room to show of it. */
+app-court-art {
+  width: 100%;
+  height: 11rem;
+  margin-bottom: -2.5rem;
+  border-radius: var(--mat-sys-corner-large);
+  /* The strip is shallow, and the crop would otherwise land across the shuttle. */
+  --court-shift-y: 9%;
+}
 
-  @media (min-width: 56rem) {
-    width: 13rem;
+@media (min-width: 56rem) {
+  .auth {
+    min-height: calc(100vh - var(--mat-toolbar-standard-height, 4rem));
+    /* The form keeps to the right edge of the picture, whatever language it is in. */
+    justify-items: end;
+    padding-right: max(2rem, 6vw);
   }
-}
 
-.auth-wordmark {
-  font: var(--mat-sys-display-small);
-  margin: 0.25rem 0 0;
-  letter-spacing: -0.01em;
-}
-
-.auth-tagline {
-  font: var(--mat-sys-body-medium);
-  margin: 0;
-  max-width: 28ch;
-  opacity: 0.9;
-}
-
-/*
- * The three things this account is for. They are the reason to sign in, so they are only worth the
- * room on a screen that has it — on a phone the form takes the space instead.
- */
-.auth-points {
-  display: none;
-
-  @media (min-width: 56rem) {
-    display: grid;
-    gap: 0.4rem;
-    margin: 1rem 0 0;
-    padding: 0;
-    list-style: none;
-    font: var(--mat-sys-body-medium);
-    text-align: start;
-
-    li {
-      display: grid;
-      grid-template-columns: 1.25rem 1fr;
-      align-items: baseline;
-      gap: 0.5rem;
-      opacity: 0.92;
-    }
-
-    /* A shuttlecock rather than a tick: the list is about playing, not about features. */
-    li::before {
-      content: '';
-      width: 0.6rem;
-      height: 0.6rem;
-      border-radius: 50% 50% 40% 40%;
-      background: var(--mat-sys-on-primary);
-      opacity: 0.75;
-      justify-self: center;
-    }
+  /*
+   * The court becomes the backdrop of the whole screen, nudged off centre and scaled back up so
+   * the far post clears the form and the edge of the drawing stays out of frame.
+   */
+  app-court-art {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    height: auto;
+    margin: 0;
+    border-radius: 0;
+    --court-shift-x: -5%;
+    --court-shift-y: 0;
+    --court-zoom: 1.14;
   }
 }
 
 .auth-card {
-  align-self: center;
-  width: 100%;
+  position: relative;
+  width: min(100%, 26rem);
+  margin-top: 2.5rem;
+  padding: 0 0.5rem 0.5rem;
+  border-radius: var(--mat-sys-corner-extra-large);
+}
+
+/* The alpaca stands on the card's top edge rather than inside it. */
+.auth-mascot {
+  display: block;
+  width: 6.5rem;
+  margin: -4rem auto 0;
+}
+
+.auth-wordmark {
+  font: var(--mat-sys-title-medium);
+  color: var(--mat-sys-primary);
+  text-align: center;
+  margin: 0.25rem 0 0;
+  letter-spacing: -0.01em;
+}
+
+.auth-card mat-card-header {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  padding: 0.25rem 1rem 1.25rem;
+}
+
+/* The title is an h2 carrying the directive, so this matches the attribute rather than a tag. */
+.auth-card [mat-card-title] {
+  font: var(--mat-sys-headline-small);
+  margin: 0 0 0.25rem;
 }
 
 .auth-submit {
-  margin-top: 0.25rem;
+  margin-top: 0.5rem;
   height: 3rem;
 }
 
 .auth-actions {
   flex-wrap: wrap;
+  justify-content: center;
   gap: 0.5rem;
-  padding-inline: 1rem;
+  padding: 1rem 1rem 0.5rem;
+}
+
+/* The three things the account is for, kept quiet under the form. */
+.auth-points {
+  display: none;
+
+  @media (min-width: 56rem) {
+    display: grid;
+    /* Its own alignment: the page aligns the card to the right, the list inside reads left. */
+    justify-items: start;
+    width: 100%;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0.25rem 1rem 1rem;
+    list-style: none;
+    font: var(--mat-sys-body-medium);
+    color: var(--mat-sys-on-surface-variant);
+
+    li {
+      display: grid;
+      grid-template-columns: 0.75rem 1fr;
+      align-items: baseline;
+      gap: 0.5rem;
+    }
+
+    /* A shuttlecock rather than a bullet: the list is about playing, not about features. */
+    li::before {
+      content: '';
+      width: 0.4rem;
+      height: 0.4rem;
+      border-radius: 50% 50% 40% 40%;
+      background: var(--mat-sys-primary);
+      justify-self: center;
+    }
+  }
 }
 
 /*

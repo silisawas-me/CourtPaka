@@ -53,6 +53,8 @@ html {
   --page-gutter: 1rem;
   --page-width: 64rem;
   --stack: 1rem;
+  /* The air under the last thing on a page. A full-bleed screen has to cancel it, so it is named. */
+  --shell-bottom: 3rem;
 }
 
 * {
@@ -68,11 +70,20 @@ body {
   font: var(--mat-sys-body-large);
 }
 
+/*
+ * A full-bleed section is as wide as the viewport, and on a browser with a classic scrollbar the
+ * viewport is wider than the page — which would put a horizontal scrollbar under every scrolling
+ * page. Clipped rather than hidden, so the sticky bar still sticks to the window.
+ */
+body {
+  overflow-x: clip;
+}
+
 /** One column on a phone, a wider measure once there is room for it. */
 .shell {
   max-width: var(--page-width);
   margin: 0 auto;
-  padding: var(--stack) var(--page-gutter) 3rem;
+  padding: var(--stack) var(--page-gutter) var(--shell-bottom);
   display: grid;
   gap: var(--stack);
 }
