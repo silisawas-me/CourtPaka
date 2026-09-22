@@ -23,6 +23,9 @@ function booking(overrides: Record<string, unknown> = {}) {
     bookingId: 'b1',
     bookerEmail: 'player@example.com',
     status: 'Confirmed',
+    arrival: 'Unconfirmed',
+    arrivedAt: null,
+    graceEndsAt: '2026-09-21T11:15:00Z',
     paymentState: 'Received',
     totalBaht: 400,
     refundDueBaht: 0,
@@ -34,6 +37,8 @@ function booking(overrides: Record<string, unknown> = {}) {
     ],
     can: {
       cancel: true,
+      confirmArrival: false,
+      checkIn: false,
       noShow: false,
       settlePayment: false,
       playedAfterAll: false,
@@ -67,10 +72,29 @@ describe('VenueBookingsPage', () => {
     httpMock.verify();
   });
 
-  function render(day: object[] = [booking()]): void {
+  /** The floor the board is drawn on: the same answer the booker's grid comes from (US-25). */
+  function grid(courts: object[] = [{ courtId: 'c1', name: 'คอร์ท 1', hours: [] }]): object {
+    return {
+      venue: { id: 'v1', name: 'Smash Court' },
+      date: '2026-09-23',
+      lastBookableDate: '2026-10-23',
+      opensHour: 18,
+      closesHour: 20,
+      courts,
+    };
+  }
+
+  function render(day: object[] = [booking()], floor: object | null = grid()): void {
     fixture = TestBed.createComponent(VenueBookingsPage);
     fixture.componentRef.setInput('venueId', 'v1');
     fixture.detectChanges();
+
+    const asked = httpMock.expectOne((request) => request.url === '/api/venues/v1/availability');
+    if (floor) {
+      asked.flush(floor);
+    } else {
+      asked.flush(null, { status: 503, statusText: 'Unavailable' });
+    }
 
     httpMock.expectOne((request) => request.url === '/api/venues/v1/bookings').flush(day);
     fixture.detectChanges();
@@ -292,6 +316,10 @@ describe('VenueBookingsPage', () => {
     fixture.componentRef.setInput('venueId', 'v1');
     fixture.detectChanges();
 
+    // Somebody who may not read this venue is refused both answers, not one.
+    httpMock
+      .expectOne((request) => request.url === '/api/venues/v1/availability')
+      .flush({ code: 'venue.not_found' }, { status: 404, statusText: 'Not Found' });
     httpMock
       .expectOne((request) => request.url === '/api/venues/v1/bookings')
       .flush({ code: 'venue.not_member' }, { status: 403, statusText: 'Forbidden' });
@@ -427,5 +455,86 @@ describe('VenueBookingsPage', () => {
     render([booking()]);
 
     expect(elementOf(fixture, 'refunds-b1')).toBeNull();
+  });
+  describe('the day on one board (US-25) and who is coming (US-24)', () => {
+    /** A day with two courts and three hours, one of them taken off sale. */
+    function floor(): object {
+      return {
+        venue: { id: 'v1', name: 'Smash Court' },
+        date: '2026-09-23',
+        lastBookableDate: '2026-10-23',
+        opensHour: 18,
+        closesHour: 21,
+        courts: [
+          {
+            courtId: 'c1',
+            name: 'คอร์ท 1',
+            hours: [
+              { hour: 18, status: 'Booked', bahtPerHour: 200 },
+              { hour: 19, status: 'Booked', bahtPerHour: 200 },
+              { hour: 20, status: 'Free', bahtPerHour: 200 },
+            ],
+          },
+          {
+            courtId: 'c2',
+            name: 'คอร์ท 2',
+            hours: [
+              { hour: 18, status: 'Free', bahtPerHour: 200 },
+              { hour: 19, status: 'Closed', bahtPerHour: null },
+              { hour: 20, status: 'Free', bahtPerHour: 200 },
+            ],
+          },
+        ],
+      };
+    }
+
+    it('draws a booking as one block over the hours it holds', () => {
+      render([booking()], floor());
+
+      // Two hours on one court is one block two wide, not two blocks.
+      const block = elementOf(fixture, 'board-block-b1');
+      expect(block).not.toBeNull();
+      expect(block?.getAttribute('style')).toContain('--span: 2');
+      expect(block?.textContent).toContain('player@example.com');
+
+      // The hour nobody has taken is a button that sells it; the one off sale is not.
+      expect(elementOf(fixture, 'board-free-c1-20')).not.toBeNull();
+      expect(elementOf(fixture, 'board-closed-c2-19')).not.toBeNull();
+      expect(elementOf(fixture, 'board-free-c2-19')).toBeNull();
+    });
+
+    it('counts the day: what was booked, taken and still owed', () => {
+      render([booking()], floor());
+
+      // Two hours sold of the five that were on sale (one of six is closed).
+      expect(textOf(fixture, 'today-bookings')).toBe('1');
+      expect(textOf(fixture, 'today-used')).toBe('40%');
+      expect(textOf(fixture, 'today-taken')).toBe('400');
+      expect(textOf(fixture, 'today-owed')).toBe('0');
+    });
+
+    it('offers the counter the two things it writes down about a person', () => {
+      render(
+        [booking({ can: { ...booking().can, confirmArrival: true, checkIn: true } })],
+        floor(),
+      );
+
+      expect(textOf(fixture, 'arrival-b1')).toBe(TRANSLATIONS.th['board.arrival.Unconfirmed']);
+
+      clickOn(fixture, 'confirm-arrival-b1');
+      httpMock
+        .expectOne('/api/venues/v1/bookings/b1/confirm-arrival')
+        .flush(booking({ arrival: 'Confirmed' }));
+      fixture.detectChanges();
+
+      expect(textOf(fixture, 'arrival-b1')).toBe(TRANSLATIONS.th['board.arrival.Confirmed']);
+    });
+
+    it('draws the day without a board when the floor cannot be read', () => {
+      render([booking()], null);
+
+      expect(elementOf(fixture, 'day-board')).toBeNull();
+      expect(elementOf(fixture, 'booking-b1')).not.toBeNull();
+    });
   });
 });

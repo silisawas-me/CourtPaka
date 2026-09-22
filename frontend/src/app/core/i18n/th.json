@@ -559,5 +559,19 @@
   "error.account.confirm_with_line": "กรุณายืนยันผ่าน LINE ก่อนลบบัญชี",
   "error.venue.owner_needs_email": "บัญชีที่จะสมัครสนามต้องมีอีเมล เพราะเราติดต่อสนามทางอีเมล",
   "error.auth.email_not_verified": "ยังไม่ได้ยืนยันอีเมล กรุณากดลิงก์ในอีเมลที่เราส่งให้ก่อนจองคอร์ท",
-  "admin.users.line": "LINE"
+  "admin.users.line": "LINE",
+  "board.bookings": "การจองวันนี้",
+  "board.used": "ใช้คอร์ทไปแล้ว",
+  "board.taken": "รับเงินแล้ว",
+  "board.owed": "ยังค้าง",
+  "board.closed": "ปิดปรับปรุง",
+  "board.sell": "ขายชั่วโมงนี้",
+  "board.owes": "ค้างชำระ",
+  "board.arrived": "มาถึงแล้ว",
+  "board.arrival.Unconfirmed": "ยังไม่ยืนยันว่าจะมา",
+  "board.arrival.Reminded": "ส่งเตือนแล้ว",
+  "board.arrival.Confirmed": "ยืนยันว่าจะมา",
+  "board.arrival.Arrived": "มาถึงแล้ว",
+  "board.confirmArrival": "ยืนยันว่าจะมา",
+  "board.checkIn": "เช็กอิน"
 }

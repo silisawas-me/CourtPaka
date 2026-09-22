@@ -559,5 +559,19 @@
   "error.account.confirm_with_line": "Confirm with LINE before deleting the account.",
   "error.venue.owner_needs_email": "An account needs an email address to run a venue: that is how we reach it.",
   "error.auth.email_not_verified": "Your email is not confirmed yet. Open the link we sent you before booking.",
-  "admin.users.line": "LINE"
+  "admin.users.line": "LINE",
+  "board.bookings": "Bookings today",
+  "board.used": "Courts used",
+  "board.taken": "Taken",
+  "board.owed": "Still owed",
+  "board.closed": "Closed for maintenance",
+  "board.sell": "Sell this hour",
+  "board.owes": "Owes",
+  "board.arrived": "Here",
+  "board.arrival.Unconfirmed": "Not confirmed yet",
+  "board.arrival.Reminded": "Reminded",
+  "board.arrival.Confirmed": "Said they are coming",
+  "board.arrival.Arrived": "Here",
+  "board.confirmArrival": "They are coming",
+  "board.checkIn": "Check in"
 }

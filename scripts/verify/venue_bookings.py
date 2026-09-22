@@ -161,7 +161,45 @@ with sync_playwright() as p:
         == venue_cancelled.value.json()["totalBaht"],
     )
 
-    # 5. Someone with the permission to look but not to touch sees no doors.
+    # 5. The day as one board, and what the counter writes down about a person (US-24, US-25).
+    board_page, board_booking = waiting_booking(browser, venue_id, skip=3)
+    board_page.close()
+    page.request.post(f"{BASE}/api/venues/{venue_id}/slip-queue/{board_booking['id']}/confirm")
+
+    page.reload()
+    page.wait_for_selector("[data-testid=day]")
+    pick_date(page, tomorrow)
+    page.wait_for_selector("[data-testid=day-board]")
+    check(
+        "the day is drawn as a board of courts and hours",
+        page.locator(f"[data-testid=board-block-{board_booking['id']}]").count() == 1,
+        page,
+    )
+    check(
+        "and it counts the day beside it",
+        page.locator("[data-testid=today-numbers]").is_visible(),
+    )
+
+    with page.expect_response(lambda r: r.url.endswith("/confirm-arrival")) as said:
+        page.click(f"[data-testid=confirm-arrival-{board_booking['id']}]")
+    check("the counter writes down that they are coming", said.value.status == 200)
+    check("and the row says so", said.value.json()["arrival"] == "Confirmed")
+    check(
+        "so the same door is not offered twice",
+        page.locator(f"[data-testid=confirm-arrival-{board_booking['id']}]").count() == 0,
+        page,
+    )
+
+    # Checking in needs their hour to be close, which is the server's rule, not the screen's.
+    too_early = page.request.post(
+        f"{BASE}/api/venues/{venue_id}/bookings/{board_booking['id']}/check-in")
+    check("nobody is checked in a day early", too_early.status == 409)
+    check(
+        "and the refusal says which rule it is",
+        too_early.json().get("code") == "booking.arrival_not_allowed",
+    )
+
+    # 6. Someone with the permission to look but not to touch sees no doors.
     looker = browser.new_page()
     sign_in(looker, new_booker(looker))
     refused = looker.request.get(
