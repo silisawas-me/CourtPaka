@@ -12,7 +12,10 @@ namespace CourtBooking.Api.Identity;
 
 public sealed record AdminUserResponse(
     Guid Id,
-    string Email,
+    /// <summary>Null for a LINE account that has no address (PRD US-01).</summary>
+    string? Email,
+    /// <summary>What is left to find them by when there is no address.</summary>
+    string? PhoneNumber,
     bool EmailConfirmed,
     DateTimeOffset? SuspendedAt,
     bool IsPlatformAdmin);
@@ -83,6 +86,8 @@ public static class AdminUserEndpoints
         // Addresses are stored normalised upper-case, which the unique index already covers.
         var normalized = query.ToUpperInvariant();
         var pattern = "%" + PublicVenueEndpoints.Like(normalized) + "%";
+        // A phone number is typed with dashes as often as not, and stored without them.
+        var digits = "%" + PublicVenueEndpoints.Like(PhoneNumbers.Digits(query)) + "%";
 
         var users = await database.Users
             .AsNoTracking()
@@ -90,8 +95,11 @@ public static class AdminUserEndpoints
             // assumed: without it an address with "_" in it stops being findable by it.
             // A forgotten account is not somebody to find: its placeholder names nobody (S-15).
             .Where(user => user.DeletedAt == null)
-            .Where(user => EF.Functions.Like(
-                user.NormalizedEmail!, pattern, PublicVenueEndpoints.LikeEscape))
+            // By address, or by phone number: a LINE account may have no address at all, and an
+            // admin who cannot find an account cannot suspend it (PRD US-01, US-22).
+            .Where(user =>
+                EF.Functions.Like(user.NormalizedEmail!, pattern, PublicVenueEndpoints.LikeEscape)
+                || EF.Functions.Like(user.PhoneNumber!, digits, PublicVenueEndpoints.LikeEscape))
             .OrderBy(user => user.NormalizedEmail)
             .Take(MaxResults)
             .ToListAsync(cancellationToken);
@@ -255,7 +263,8 @@ public static class AdminUserEndpoints
     private static AdminUserResponse Drawn(AppUser user, AppOptions options) =>
         new(
             user.Id,
-            user.Email!,
+            user.Email,
+            user.PhoneNumber,
             user.EmailConfirmed,
             user.SuspendedAt,
             PlatformAdmins.Includes(user, options));

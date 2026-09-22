@@ -108,9 +108,13 @@ describe('AccountPage', () => {
 
     // No password to ask for: the way to confirm is the same trip to LINE as signing in.
     expect(elementOf(fixture, 'delete-password')).toBeNull();
-    expect(
-      (elementOf(fixture, 'confirm-with-line') as HTMLAnchorElement).getAttribute('href'),
-    ).toBe('/api/auth/line/start?purpose=confirm&returnUrl=%2Faccount');
+    // A POST from this page, which a link from another site cannot make the browser send.
+    const confirm = elementOf(fixture, 'confirm-with-line') as HTMLButtonElement;
+    const form = confirm.closest('form')!;
+    expect(form.getAttribute('method')).toBe('post');
+    expect(form.getAttribute('action')).toBe(
+      '/api/auth/line/start?purpose=confirm&returnUrl=%2Faccount',
+    );
 
     fixture.componentRef.setInput('line', 'confirmed');
     fixture.detectChanges();

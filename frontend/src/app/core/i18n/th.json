@@ -232,8 +232,6 @@
   "error.venue.reason_required": "ต้องระบุเหตุผล",
   "error.venue.reason_too_long": "เหตุผลยาวเกินไป",
   "error.venue.status_cannot_move_there": "สนามนี้ไม่ได้อยู่ในสถานะที่ทำแบบนั้นได้",
-  "home.emailNotVerified": "ยังไม่ได้ยืนยันอีเมล",
-  "home.emailVerified": "ยืนยันอีเมลแล้ว",
   "home.signedInAs": "เข้าสู่ระบบในชื่อ",
   "login.hidePassword": "ซ่อนรหัสผ่าน",
   "login.mascot": "อัลปากาของ CourtPaka ถือลูกขนไก่",
@@ -560,5 +558,7 @@
   "error.auth.line_already_registered": "บัญชี LINE นี้มีบัญชีอยู่แล้ว กรุณาเข้าสู่ระบบด้วย LINE",
   "error.auth.line_disabled": "ตอนนี้ยังเข้าสู่ระบบด้วย LINE ไม่ได้",
   "error.account.confirm_with_line": "กรุณายืนยันผ่าน LINE ก่อนลบบัญชี",
-  "error.venue.owner_needs_email": "บัญชีที่จะสมัครสนามต้องมีอีเมล เพราะเราติดต่อสนามทางอีเมล"
+  "error.venue.owner_needs_email": "บัญชีที่จะสมัครสนามต้องมีอีเมล เพราะเราติดต่อสนามทางอีเมล",
+  "error.auth.email_not_verified": "ยังไม่ได้ยืนยันอีเมล กรุณากดลิงก์ในอีเมลที่เราส่งให้ก่อนจองคอร์ท",
+  "admin.users.line": "LINE"
 }

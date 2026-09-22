@@ -27,13 +27,18 @@ public sealed class LineLoginTests(ApiTestFixture api)
     private HttpClient Browser() =>
         api.Api.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-    /// <summary>Goes to LINE and comes back with the code, the way the browser does.</summary>
+    /// <summary>
+    /// Goes to LINE and comes back with the code, the way the browser does. Proving again who you
+    /// are is a POST, which only a page of this site can make the browser send (see the endpoint).
+    /// </summary>
     private async Task<HttpResponseMessage> SignInWithLineAsync(
         HttpClient browser, string code, string? returnUrl = null, string? purpose = null)
     {
-        var start = await browser.GetAsync(
-            $"/api/auth/line/start?returnUrl={HttpUtility.UrlEncode(returnUrl ?? "/")}"
-            + (purpose is null ? "" : $"&purpose={purpose}"));
+        var url = $"/api/auth/line/start?returnUrl={HttpUtility.UrlEncode(returnUrl ?? "/")}"
+            + (purpose is null ? "" : $"&purpose={purpose}");
+        var start = purpose == "confirm"
+            ? await browser.PostAsync(url, null)
+            : await browser.GetAsync(url);
         Assert.Equal(HttpStatusCode.Redirect, start.StatusCode);
 
         var state = StateOf(start);
@@ -350,6 +355,102 @@ public sealed class LineLoginTests(ApiTestFixture api)
         var row = Assert.Single(day, booking => booking.BookingId == held.Id);
         Assert.Null(row.BookerEmail);
         Assert.Equal("0899999999", row.BookerPhone);
+    }
+
+    /// <summary>
+    /// The step-up is a POST for a reason: a GET could be followed from anybody's link, and would
+    /// hand out five minutes of "I proved who I am" that the person never meant to give.
+    /// </summary>
+    [Fact]
+    public async Task Following_a_link_cannot_prove_who_you_are()
+    {
+        var subject = NewSubject();
+        var browser = Browser();
+        await SignInWithLineAsync(browser, api.Line.Grant(subject));
+        await browser.PostAsJsonAsync(
+            "/api/auth/line/complete",
+            new CompleteLineSignUpRequest(ApiFactory.PrivacyPolicyVersion, SupportedLanguages.Thai, "0812345678"));
+
+        // A link is a GET: it starts an ordinary sign-in, which confirms nothing.
+        var followed = await SignInWithLineAsync(browser, api.Line.Grant(subject), "/account");
+        Assert.Equal("/account", WhereTo(followed));
+
+        var refused = await browser.PostAsJsonAsync("/api/auth/me/delete", new DeleteAccountRequest(null));
+        Assert.Equal(AccountDeletionErrorCodes.ConfirmWithLine, await refused.ErrorCodeAsync());
+    }
+
+    /// <summary>The policy version comes from the server, and a stale one is refused (PDPA).</summary>
+    [Fact]
+    public async Task A_sign_up_that_accepted_an_old_policy_is_refused()
+    {
+        var browser = Browser();
+        await SignInWithLineAsync(browser, api.Line.Grant(NewSubject()));
+
+        var refused = await browser.PostAsJsonAsync(
+            "/api/auth/line/complete",
+            new CompleteLineSignUpRequest("1999-01-01", SupportedLanguages.Thai, "0812345678"));
+
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Equal(AuthErrorCodes.PrivacyPolicyOutdated, await refused.ErrorCodeAsync());
+        // Still waiting, so accepting the current version still works.
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await browser.PostAsJsonAsync(
+                "/api/auth/line/complete",
+                new CompleteLineSignUpRequest(
+                    ApiFactory.PrivacyPolicyVersion, SupportedLanguages.Thai, "0812345678"))).StatusCode);
+    }
+
+    /// <summary>Finishing without LINE having said anything is nothing to finish.</summary>
+    [Fact]
+    public async Task Finishing_a_sign_up_nobody_started_is_refused()
+    {
+        var refused = await Browser().PostAsJsonAsync(
+            "/api/auth/line/complete",
+            new CompleteLineSignUpRequest(ApiFactory.PrivacyPolicyVersion, SupportedLanguages.Thai, null));
+
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Equal(LineErrorCodes.Expired, await refused.ErrorCodeAsync());
+    }
+
+    /// <summary>An address LINE hands back that is not one is dropped, not a dead end.</summary>
+    [Fact]
+    public async Task An_address_that_is_not_an_address_is_left_behind()
+    {
+        var browser = Browser();
+        await SignInWithLineAsync(browser, api.Line.Grant(NewSubject(), "ปกป้อง", "not-an-address"));
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await browser.PostAsJsonAsync(
+                "/api/auth/line/complete",
+                new CompleteLineSignUpRequest(
+                    ApiFactory.PrivacyPolicyVersion, SupportedLanguages.Thai, "0812345678"))).StatusCode);
+        Assert.Null((await MeAsync(browser)).Email);
+    }
+
+    /// <summary>
+    /// An account an admin cannot find is an account they cannot suspend (PRD US-22). A LINE
+    /// account may have no address, so the number it gave is what it is found by.
+    /// </summary>
+    [Fact]
+    public async Task A_LINE_account_with_no_address_is_found_by_its_phone_number()
+    {
+        var phone = $"09{Random.Shared.Next(10_000_000, 99_999_999)}";
+        var browser = Browser();
+        await SignInWithLineAsync(browser, api.Line.Grant(NewSubject()));
+        await browser.PostAsJsonAsync(
+            "/api/auth/line/complete",
+            new CompleteLineSignUpRequest(ApiFactory.PrivacyPolicyVersion, SupportedLanguages.Thai, phone));
+        var id = (await MeAsync(browser)).Id;
+
+        var admin = await scenario.PlatformAdminAsync();
+        var found = await VenueScenario.ReadAsync<AdminUserResponse[]>(
+            await admin.GetAsync($"/api/admin/users?q={phone}"));
+
+        var row = Assert.Single(found, user => user.Id == id);
+        Assert.Null(row.Email);
+        Assert.Equal(phone, row.PhoneNumber);
     }
 
     private static CreateBookingRequest Hold(Guid venueId, Guid courtId, int hour) =>

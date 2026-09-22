@@ -87,7 +87,8 @@ with sync_playwright() as p:
     refused.click("[data-testid=line-sign-in]")
     be_at_line(refused, f"U{uuid.uuid4().hex}", allow=False)
     refused.wait_for_selector("[data-testid=form-error]")
-    check("saying no at LINE says so", "LINE" in refused.locator("[data-testid=form-error]").inner_text(), refused)
+    # The code in the address is the contract; the sentence on screen is a translation of it.
+    check("saying no at LINE says so", "line=auth.line_denied" in refused.url, refused)
     check("and signs nobody in", refused.request.get(f"{BASE}/api/auth/me").status == 401)
 
     # 6. Deleting an account with no password: confirmed by going back to LINE.

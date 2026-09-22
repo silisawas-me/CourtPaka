@@ -1,5 +1,8 @@
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
 using CourtBooking.Api.Identity;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace CourtBooking.Api.Tests.Infrastructure;
 
@@ -42,8 +45,12 @@ public sealed class FakeLineLogin : ILineLogin
     public Task<LineIdentity?> RedeemAsync(
         string code, string codeVerifier, string redirectUri, string nonce, CancellationToken cancellationToken)
     {
+        // The challenge has to be S256 of the verifier, which is the one part of PKCE this side
+        // computes — and a wrong encoding of it would otherwise only show up against LINE itself.
+        var challenge = WebEncoders.Base64UrlEncode(SHA256.HashData(Encoding.ASCII.GetBytes(codeVerifier)));
+
         // A code is good once, and only for the attempt it was made for.
-        if (nonce != LastNonce || !granted.TryRemove(code, out var identity))
+        if (challenge != LastChallenge || nonce != LastNonce || !granted.TryRemove(code, out var identity))
         {
             return Task.FromResult<LineIdentity?>(null);
         }

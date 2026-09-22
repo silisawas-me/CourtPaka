@@ -83,13 +83,17 @@ public sealed class DevelopmentLineLogin(IDataProtectionProvider protection) : I
             return Results.Content(html, "text/html; charset=utf-8");
         });
 
-        routes.MapPost(AuthorizePath, (HttpRequest request, DevelopmentLineLogin line) =>
+        routes.MapPost(AuthorizePath, (
+            HttpRequest request,
+            DevelopmentLineLogin line,
+            Microsoft.Extensions.Options.IOptions<AppOptions> options) =>
         {
             var form = request.Form;
             var redirectUri = form["redirect_uri"].ToString();
 
-            // Back to this site's own callback only, as LINE only returns to a registered URL.
-            if (!redirectUri.EndsWith("/api/auth/line/callback", StringComparison.Ordinal))
+            // Back to this site's own callback and nowhere else, the way LINE only returns to a
+            // URL registered with the channel.
+            if (redirectUri != $"{options.Value.BaseUrl.TrimEnd('/')}/api/auth/line/callback")
             {
                 return Results.BadRequest();
             }

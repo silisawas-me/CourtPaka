@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -76,6 +77,13 @@ public static class LineLoginEndpoints
 
         line.MapGet("", (ILineLogin lineLogin) => TypedResults.Ok(new LineAvailabilityResponse(lineLogin.IsEnabled)));
         line.MapGet("/start", Start).RequireRateLimiting(RateLimitPolicies.Auth);
+        // Proving again who you are is a POST that carries the session cookie, which a link from
+        // another site cannot make the browser send (SameSite=Lax). A GET could be followed from
+        // anywhere, and would hand out five minutes of "I re-authenticated" nobody asked for.
+        line.MapPost("/start", Start)
+            .RequireAuthorization()
+            .RequireRateLimiting(RateLimitPolicies.Auth)
+            .DisableAntiforgery();
         line.MapGet("/callback", CallbackAsync).RequireRateLimiting(RateLimitPolicies.Auth);
         line.MapGet("/pending", Pending);
         line.MapPost("/complete", CompleteAsync).RequireRateLimiting(RateLimitPolicies.Auth);
@@ -106,12 +114,15 @@ public static class LineLoginEndpoints
             return Results.Redirect($"/login?line={LineErrorCodes.Disabled}");
         }
 
+        // Only the POST carries a session, so only it can be a re-authentication.
+        var confirming = purpose == "confirm" && HttpMethods.IsPost(http.Request.Method);
+
         var flow = new Flow(
             State: Random(),
             Nonce: Random(),
             Verifier: Random(),
             ReturnUrl: LocalOnly(returnUrl),
-            Confirming: purpose == "confirm");
+            Confirming: confirming);
 
         Write(http, options.Value, FlowCookie, flow, FlowLifetime, protection);
 
@@ -153,8 +164,22 @@ public static class LineLoginEndpoints
             return Results.Redirect($"{failedTo}?line={(string.Equals(error, "access_denied", StringComparison.OrdinalIgnoreCase) ? LineErrorCodes.Denied : LineErrorCodes.Failed)}");
         }
 
-        var identity = await lineLogin.RedeemAsync(
-            code, flow.Verifier, RedirectUri(options.Value), flow.Nonce, cancellationToken);
+        // The code is spent and the flow cookie is gone, so there is nothing to retry: whatever
+        // went wrong on LINE's side has to come back as something the app can say (US-23).
+        LineIdentity? identity;
+        try
+        {
+            identity = await lineLogin.RedeemAsync(
+                code, flow.Verifier, RedirectUri(options.Value), flow.Nonce, cancellationToken);
+        }
+        catch (Exception exception)
+            when (exception is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            loggers.CreateLogger(typeof(LineLoginEndpoints)).LogError(
+                exception, "Could not read LINE's answer for a sign-in");
+            return Results.Redirect($"{failedTo}?line={LineErrorCodes.Failed}");
+        }
+
         if (identity is null)
         {
             return Results.Redirect($"{failedTo}?line={LineErrorCodes.Failed}");
@@ -260,9 +285,15 @@ public static class LineLoginEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.InvalidPhone);
         }
 
-        // An address LINE shared is kept only if nobody has it; it is never proof of owning an
-        // account that does. Kept unverified until the person opens the platform's own link.
-        var email = pending.Email is { } shared && await users.FindByEmailAsync(shared) is null ? shared : null;
+        // An address LINE shared is kept only if it is an address and nobody has it; it is never
+        // proof of owning an account that does. Kept unverified until the person opens the
+        // platform's own link. Anything else is dropped rather than failing the sign-up, which
+        // would leave them retrying the same refusal until the pending cookie ran out.
+        var email = pending.Email is { } shared
+            && new EmailAddressAttribute().IsValid(shared)
+            && await users.FindByEmailAsync(shared) is null
+                ? shared
+                : null;
 
         var user = new AppUser
         {

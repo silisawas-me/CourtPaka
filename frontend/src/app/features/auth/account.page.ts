@@ -9,6 +9,7 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { errorKey } from '../../core/http/api-error';
 import { TranslationService } from '../../core/i18n/translation.service';
+import { FieldError } from '../../shared/field-error';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 
 /**
@@ -22,6 +23,7 @@ import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
   selector: 'app-account-page',
   imports: [
     ReactiveFormsModule,
+    FieldError,
     MatButtonModule,
     MatCardModule,
     MatCheckboxModule,
@@ -94,7 +96,18 @@ export class AccountPage {
 
   protected readonly deleteForm = this.forms.nonNullable.group({
     understood: [false, Validators.requiredTrue],
+    // Required for an account that has a password; an account that confirms at LINE has no box
+    // to fill in, so the rule follows which kind this is.
     password: [''],
+  });
+
+  private readonly requirePasswordWhenThereIsOne = effect(() => {
+    const control = this.deleteForm.controls.password;
+    const needed = this.confirmsWithLine() ? null : Validators.required;
+    untracked(() => {
+      control.setValidators(needed);
+      control.updateValueAndValidity({ emitEvent: false });
+    });
   });
 
   protected readonly deleting = signal(false);
@@ -102,10 +115,11 @@ export class AccountPage {
 
   protected deleteAccount(): void {
     this.deleteForm.markAllAsTouched();
-    const { understood, password } = this.deleteForm.getRawValue();
-    if (!understood || this.deleting() || (!this.confirmsWithLine() && !password)) {
+    if (this.deleteForm.invalid || this.deleting()) {
       return;
     }
+
+    const { password } = this.deleteForm.getRawValue();
 
     this.deleting.set(true);
     this.deleteError.set(null);

@@ -95,15 +95,19 @@
           </p>
         } @else {
           <p class="muted">{{ i18n.t('account.delete.lineWhy') }}</p>
-          <div class="row">
-            <a
-              matButton="outlined"
-              data-testid="confirm-with-line"
-              href="/api/auth/line/start?purpose=confirm&returnUrl=%2Faccount"
-            >
+          <!--
+            A form, not a link: the server only accepts this step as a POST, which a link from
+            another site cannot make this browser send with its session (SameSite=Lax).
+          -->
+          <form
+            class="row"
+            method="post"
+            action="/api/auth/line/start?purpose=confirm&returnUrl=%2Faccount"
+          >
+            <button matButton="outlined" type="submit" data-testid="confirm-with-line">
               {{ i18n.t('account.delete.confirmWithLine') }}
-            </a>
-          </div>
+            </button>
+          </form>
         }
         @if (lineError(); as key) {
           <p class="form-error" data-testid="line-error">{{ i18n.t('error.' + key) }}</p>
@@ -118,6 +122,10 @@
             autocomplete="current-password"
             data-testid="delete-password"
           />
+          <mat-error
+            [appFieldError]="deleteForm.controls.password"
+            testId="delete-password-error"
+          ></mat-error>
         </mat-form-field>
       }
 

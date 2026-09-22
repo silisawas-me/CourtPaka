@@ -232,8 +232,6 @@
   "error.venue.reason_required": "Say why",
   "error.venue.reason_too_long": "That reason is too long",
   "error.venue.status_cannot_move_there": "This venue is not somewhere that decision can be made from",
-  "home.emailNotVerified": "Email not verified",
-  "home.emailVerified": "Email verified",
   "home.signedInAs": "Signed in as",
   "login.hidePassword": "Hide password",
   "login.mascot": "The CourtPaka alpaca, holding a shuttlecock",
@@ -560,5 +558,7 @@
   "error.auth.line_already_registered": "This LINE account already has an account here. Please sign in with LINE.",
   "error.auth.line_disabled": "Signing in with LINE is not available right now.",
   "error.account.confirm_with_line": "Confirm with LINE before deleting the account.",
-  "error.venue.owner_needs_email": "An account needs an email address to run a venue: that is how we reach it."
+  "error.venue.owner_needs_email": "An account needs an email address to run a venue: that is how we reach it.",
+  "error.auth.email_not_verified": "Your email is not confirmed yet. Open the link we sent you before booking.",
+  "admin.users.line": "LINE"
 }
