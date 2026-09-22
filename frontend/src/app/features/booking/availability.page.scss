@@ -95,3 +95,8 @@
 .day-waiting-value {
   font: var(--mat-sys-body-large);
 }
+
+/* The same sentence the field carries as a hint, so the rule does not appear only later. */
+.day-waiting-hint {
+  font: var(--mat-sys-body-small);
+}

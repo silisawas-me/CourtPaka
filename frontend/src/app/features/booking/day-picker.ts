@@ -1,6 +1,15 @@
-import { Component, effect, inject, input, output, untracked } from '@angular/core';
+import {
+  afterNextRender,
+  Component,
+  effect,
+  inject,
+  input,
+  output,
+  untracked,
+  viewChild,
+} from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
-import { MatDatepickerModule } from '@angular/material/datepicker';
+import { MatDatepicker, MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { TranslationService } from '../../core/i18n/translation.service';
@@ -50,11 +59,27 @@ export class DayPicker {
   /** The last day the server will take, which it states itself. */
   readonly max = input<Date | null>(null);
 
+  /**
+   * Whether the booker is already waiting on the calendar — they pressed the placeholder that
+   * stands here until this is downloaded, and that press was meant to open it.
+   */
+  readonly openOnArrival = input(false);
+
   readonly picked = output<Date | null>();
 
   protected readonly field = new FormControl<Date>(new Date(), { nonNullable: true });
 
+  private readonly calendar = viewChild.required<MatDatepicker<Date>>('picker');
+
   constructor() {
+    afterNextRender(() => {
+      if (this.openOnArrival()) {
+        // Where the press that asked for it lands, so nobody has to press twice — and the focus
+        // that was on the placeholder goes to the calendar rather than back to the page.
+        this.calendar().open();
+      }
+    });
+
     // The field follows the day on screen, never the other way round: picking a day navigates,
     // and the page that comes back says which day that is.
     effect(() => {

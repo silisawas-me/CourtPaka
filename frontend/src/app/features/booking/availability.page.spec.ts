@@ -3,6 +3,7 @@ import { ComponentFixture, DeferBlockState, TestBed } from '@angular/core/testin
 import { Router } from '@angular/router';
 import { TRANSLATIONS } from '../../testing/translations';
 import { clickOn, elementOf, pageProviders, signInAs, textOf } from '../../testing/dom';
+import { PublicVenueService } from '../../core/venues/public-venue.service';
 import { AvailabilityPage, REFRESH_EVERY_MS } from './availability.page';
 
 const VENUE = {
@@ -468,6 +469,23 @@ describe('AvailabilityPage', () => {
       expect(elementOf(fixture, 'cell-c1-18')?.classList.contains('booked')).toBe(false);
     });
   });
+  it('draws a day that was asked for before it existed, without asking again', () => {
+    // What the app does at boot for a grid link: the request goes out before this page is here.
+    TestBed.inject(PublicVenueService).prefetch('v1', '2026-09-19');
+    const early = expectRead();
+
+    fixture = TestBed.createComponent(AvailabilityPage);
+    fixture.componentRef.setInput('venueId', 'v1');
+    fixture.componentRef.setInput('date', '2026-09-19');
+    fixture.detectChanges();
+
+    early.flush(day());
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'venue-name')).toBe('Smash Court');
+    httpMock.expectNone('/api/venues/v1/availability');
+  });
+
   describe('the day picker (PRD 8: what a booker waits for)', () => {
     it('shows the day without the calendar, and fetches it when asked', async () => {
       render(day(), '2026-09-19');

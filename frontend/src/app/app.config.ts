@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { AuthService } from './core/auth/auth.service';
+import { DEFAULT_LANGUAGE } from './core/i18n/locales';
 import { TranslationService } from './core/i18n/translation.service';
 import { PublicVenueService } from './core/venues/public-venue.service';
 import { plainDate, venueToday } from './core/i18n/plain-date';
@@ -47,7 +48,9 @@ export const appConfig: ApplicationConfig = {
     // words ship with the app (PRD US-23).
     provideAppInitializer(() => {
       const i18n = inject(TranslationService);
-      return i18n.language() === 'th' ? undefined : i18n.load(i18n.language());
+      // Never a reason for nothing to render: an initializer that rejects fails the whole
+      // bootstrap, and Thai is already here to read in the meantime.
+      return i18n.language() === DEFAULT_LANGUAGE ? undefined : i18n.load(i18n.language());
     }),
     provideAppInitializer(() => inject(AuthService).lookForSession()),
     // A booker who opened a grid link is waiting for one thing: that day. Asking for it here

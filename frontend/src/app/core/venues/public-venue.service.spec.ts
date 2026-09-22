@@ -58,7 +58,23 @@ describe('PublicVenueService', () => {
     );
     refresh.flush(DAY);
     early.flush(DAY);
-    venues.availability('v1', '2026-09-23').subscribe();
+  });
+
+  /**
+   * An answer that failed on the way is not an answer to hand on: whoever draws the day asks
+   * again and shows whatever comes back, rather than inheriting a failure from boot.
+   */
+  it('asks again when the early answer never arrived', () => {
+    venues.prefetch('v1', '2026-09-23');
+    httpMock
+      .expectOne((request) => request.url === '/api/venues/v1/availability')
+      .flush(null, { status: 503, statusText: 'Unavailable' });
+
+    let drawn: Availability | null = null;
+    venues.availability('v1', '2026-09-23').subscribe((day) => (drawn = day));
+
+    httpMock.expectOne((request) => request.url === '/api/venues/v1/availability').flush(DAY);
+    expect(drawn).toEqual(DAY);
   });
 });
 

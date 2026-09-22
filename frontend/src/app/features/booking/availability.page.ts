@@ -1,7 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
-import { FormBuilder, FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -46,7 +45,6 @@ export const REFRESH_EVERY_MS = 10_000;
 @Component({
   selector: 'app-availability-page',
   imports: [
-    ReactiveFormsModule,
     RouterLink,
     MatButtonModule,
     MatCardModule,

@@ -29,12 +29,14 @@
           [day]="shownDay()"
           [min]="today"
           [max]="lastBookableDay()"
+          [openOnArrival]="true"
           (picked)="pick($event)"
         />
       } @placeholder {
         <button class="day-waiting field" type="button" data-testid="day-placeholder">
           <span class="day-waiting-label">{{ i18n.t('availability.day') }}</span>
           <span class="day-waiting-value">{{ chosen() | appDate: i18n.locale() }}</span>
+          <span class="day-waiting-hint muted">{{ i18n.t('availability.window') }}</span>
         </button>
       }
     </mat-card-content>

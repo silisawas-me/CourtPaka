@@ -44,14 +44,22 @@ export class TranslationService {
    */
   t = (key: string): string => this.words()[this.current()]?.[key] ?? THAI[key] ?? key;
 
-  /** Fetches a language's words if this app does not have them yet. */
+  /**
+   * Fetches a language's words if this app does not have them yet. It never throws: a language
+   * that will not download is one the reader does without — the screen stays in Thai — and a
+   * refusal here would otherwise take the whole app down with it (it is awaited at startup).
+   */
   async load(language: Language): Promise<void> {
     if (this.words()[language]) {
       return;
     }
 
-    const words = await dictionaryFor(language);
-    this.words.update((have) => ({ ...have, [language]: words }));
+    try {
+      const words = await dictionaryFor(language);
+      this.words.update((have) => ({ ...have, [language]: words }));
+    } catch {
+      // Nothing to do about it here. The next attempt is the next time it is chosen.
+    }
   }
 
   use(language: Language): void {

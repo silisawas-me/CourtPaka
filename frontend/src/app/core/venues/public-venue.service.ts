@@ -52,7 +52,13 @@ export class PublicVenueService {
    * A day asked for before the page that draws it exists (see {@link prefetch}). One answer, kept
    * for whoever asks for that day first, and only that once.
    */
-  private readonly started = new Map<string, Observable<Availability>>();
+  private readonly started = new Map<string, { asked: number; answer: Observable<Availability> }>();
+
+  /**
+   * How long an answer asked for at boot is still the answer. Past that, whoever opens that day
+   * is opening it again, not still waiting for it.
+   */
+  private static readonly StaysFreshMs = 30_000;
 
   /**
    * One day's grid and the venue it belongs to, which is everything the grid page draws.
@@ -65,7 +71,9 @@ export class PublicVenueService {
     if (waiting) {
       // Asked once, drawn once: a refresh a minute later must reach the server, not this.
       this.started.delete(key(venueId, date));
-      return waiting;
+      if (Date.now() - waiting.asked < PublicVenueService.StaysFreshMs) {
+        return waiting.answer;
+      }
     }
 
     return this.http.get<Availability>(`/api/venues/${venueId}/availability`, {
@@ -87,8 +95,9 @@ export class PublicVenueService {
       .pipe(shareReplay({ bufferSize: 1, refCount: false }));
 
     // Subscribed here, or nothing would go out until the page asked — which is the wait this
-    // exists to remove. A failure is kept as it is and handed to the page, which says so.
+    // exists to remove. If it fails, shareReplay drops what it held, so the page that asks next
+    // sends its own request and shows its own answer; nothing inherits a stale failure.
     answer.subscribe({ error: () => undefined });
-    this.started.set(key(venueId, date), answer);
+    this.started.set(key(venueId, date), { asked: Date.now(), answer });
   }
 }
