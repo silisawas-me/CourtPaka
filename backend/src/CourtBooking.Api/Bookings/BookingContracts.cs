@@ -99,6 +99,12 @@ public sealed record BookingHistoryResponse(
 
 public static class BookingErrorCodes
 {
+    /// <summary>
+    /// The arrival cannot move that way from where it is: it only goes forward, and checking
+    /// somebody in needs a paid booking whose hours have not finished (PRD US-24).
+    /// </summary>
+    public const string ArrivalNotAllowed = "booking.arrival_not_allowed";
+
     public const string NoSlots = "booking.no_slots";
     public const string TooManySlots = "booking.too_many_slots";
     public const string DuplicateSlot = "booking.duplicate_slot";
@@ -243,6 +249,11 @@ public sealed record VenueBookingResponse(
     string? CustomerName,
     string? CustomerPhone,
     string Status,
+    /// <summary>Whether they are coming, and then whether they came (PRD US-24).</summary>
+    string Arrival,
+    DateTimeOffset? ArrivedAt,
+    /// <summary>When this booking stops being late and starts being a no-show (PRD US-24).</summary>
+    DateTimeOffset GraceEndsAt,
     string PaymentState,
     decimal TotalBaht,
     decimal RefundDueBaht,
@@ -260,6 +271,10 @@ public sealed record VenueBookingResponse(
 /// </summary>
 public sealed record VenueBookingActionsResponse(
     bool Cancel,
+    /// <summary>Writing down that they said they are coming (PRD US-24).</summary>
+    bool ConfirmArrival,
+    /// <summary>Taking them in at the desk.</summary>
+    bool CheckIn,
     bool NoShow,
     bool SettlePayment,
     bool PlayedAfterAll,

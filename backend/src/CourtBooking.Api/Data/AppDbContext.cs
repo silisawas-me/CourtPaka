@@ -47,6 +47,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<BookingStatusChange> BookingStatusChanges => Set<BookingStatusChange>();
 
+    public DbSet<BookingArrivalChange> BookingArrivalChanges => Set<BookingArrivalChange>();
+
     public DbSet<RefundRecord> RefundRecords => Set<RefundRecord>();
 
     public DbSet<BookerNotice> BookerNotices => Set<BookerNotice>();
@@ -98,6 +100,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             venue.HasIndex(v => new { v.Province, v.District });
             // The code prefixes document numbers, so two venues may never share one (PRD 7.4).
             venue.HasIndex(v => v.Code).IsUnique();
+            // Same reason as Booking.Arrival: a venue that existed before this waits fifteen
+            // minutes like everybody else, not zero (PRD US-24).
+            venue.Property(v => v.GraceMinutes).HasDefaultValue(VenueDecisions.DefaultGraceMinutes);
         });
 
         builder.Entity<RefundRecord>(refund =>
@@ -336,6 +341,30 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             // The caretaker reads the latest moves across every booking to tell bookers about
             // them (PRD US-06), and only the latest, so it asks by time alone.
             change.HasIndex(c => c.ChangedAt);
+        });
+
+        builder.Entity<Booking>(booking =>
+        {
+            // Said here as well as on the property, or every booking that already exists would
+            // come out of the migration as arrival 0, which is no arrival at all (CLAUDE.md's
+            // EF trap, found in US-17).
+            booking.Property(b => b.Arrival).HasDefaultValue(BookingArrival.Unconfirmed);
+        });
+
+        builder.Entity<BookingArrivalChange>(change =>
+        {
+            // Read one booking at a time, oldest first: the counter asks "what did we know about
+            // this person and when" (PRD US-24).
+            change.HasIndex(c => new { c.BookingId, c.ChangedAt });
+            change.HasOne(c => c.Booking)
+                .WithMany()
+                .HasForeignKey(c => c.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Restrict, like every other reference to an account (PRD 8, S-15).
+            change.HasOne(c => c.ChangedBy)
+                .WithMany()
+                .HasForeignKey(c => c.ChangedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<Complaint>(complaint =>

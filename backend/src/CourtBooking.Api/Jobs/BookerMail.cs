@@ -284,6 +284,33 @@ public sealed class BookerMail(
             new EmailMessage(booking.Address, booking.Language, subject, body, $"booker.{due.Kind}"),
             CancellationToken.None);
 
+        // Somebody has now been asked whether they are coming, which is what the counter reads
+        // as Reminded (PRD US-24). Written after the message, because it is about a message that
+        // went out; a second tick finds the arrival already moved and leaves it alone.
+        if (due.Kind is BookerNoticeKind.AboutToPlay)
+        {
+            var reminded = await database.Bookings
+                .Where(one =>
+                    one.Id == due.BookingId && one.Arrival == BookingArrival.Unconfirmed)
+                .ExecuteUpdateAsync(
+                    set => set.SetProperty(one => one.Arrival, BookingArrival.Reminded),
+                    CancellationToken.None);
+
+            if (reminded == 1)
+            {
+                database.BookingArrivalChanges.Add(new BookingArrivalChange
+                {
+                    BookingId = due.BookingId,
+                    From = BookingArrival.Unconfirmed,
+                    To = BookingArrival.Reminded,
+                    ChangedAt = DateTimeOffset.UtcNow,
+                    // Nobody pressed anything: the reminder going out is the system's own doing.
+                    ChangedByUserId = null,
+                });
+                await database.SaveChangesAsync(CancellationToken.None);
+            }
+        }
+
         // Not a name PRD 8 lists, like venue_notified; written down with that debt in CLAUDE.md.
         AppEvents.For(loggers).LogInformation(
             "booker_notified {BookingId} {Kind}", due.BookingId, due.Kind);
