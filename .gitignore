@@ -33,3 +33,6 @@ __pycache__/
 # Slips uploaded by a locally run API (docker compose keeps its own volume).
 .local/
 scripts/load/accounts.json
+
+# Database dumps: every booker, every venue, every slip record (deploy/backup.sh).
+deploy/backups/
