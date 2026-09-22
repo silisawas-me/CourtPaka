@@ -26,6 +26,8 @@ public sealed class AuditTrailTests(ApiTestFixture api) : IClassFixture<ApiTestF
     [InlineData("SlipViewings")]
     [InlineData("MembershipChanges")]
     [InlineData("BookingArrivalChanges")]
+    [InlineData("PaymentReceipts")]
+    [InlineData("DailyClosings")]
     public async Task A_history_row_cannot_be_changed_or_removed(string table)
     {
         await EveryHistoryHasARowAsync();
@@ -106,6 +108,13 @@ public sealed class AuditTrailTests(ApiTestFixture api) : IClassFixture<ApiTestF
             HttpStatusCode.OK,
             (await venueOwner.PostAsync(
                 $"/api/venues/{venue.Id}/bookings/{booking.Id}/confirm-arrival", null)).StatusCode);
+
+        // Money that came in, and a till that was counted (PRD US-26).
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await venueOwner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/money/closing",
+                new CloseDayRequest(1_000m, 1_000m, null))).StatusCode);
 
         var complaint = await VenueScenario.ReadAsync<ComplaintResponse>(
             await admin.PostAsJsonAsync(

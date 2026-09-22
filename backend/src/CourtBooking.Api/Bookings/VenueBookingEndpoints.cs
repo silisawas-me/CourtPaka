@@ -70,6 +70,8 @@ public static class VenueBookingEndpoints
         bookings.MapPost("/{bookingId:guid}/played", PlayedAfterAllAsync);
 
         bookings.MapRefundEndpoints();
+        // Money taken at the desk, in parts and in the form it arrived (PRD US-26).
+        bookings.MapCounterMoneyEndpoints();
     }
 
     /// <summary>
@@ -691,6 +693,19 @@ public static class VenueBookingEndpoints
             return ApiProblem.Of(StatusCodes.Status409Conflict, refused);
         }
 
+        // The money was in the venue's hands before the booking was written, which is why it
+        // starts confirmed (PRD US-13) — so the day's count is told about it too (PRD US-26).
+        database.PaymentReceipts.Add(new PaymentReceipt
+        {
+            BookingId = booking.Id,
+            VenueId = venueId,
+            AmountBaht = booking.TotalBaht,
+            Method = paid == CounterPayment.Cash ? PaymentMethod.Cash : PaymentMethod.PromptPay,
+            ReceivedAt = now,
+            ReceivedByUserId = membership.UserId,
+        });
+        await database.SaveChangesAsync(cancellationToken);
+
         AppEvents.For(loggers).LogInformation(
             BookingTransitions.EventName(BookingStatus.Confirmed)
             + " {BookingId} {VenueId} {Channel} {Slots} {TotalBaht}",
@@ -760,6 +775,17 @@ public static class VenueBookingEndpoints
             .SingleAsync(cancellationToken);
 
         var bookingIds = found.Select(row => row.Booking.Id).ToArray();
+
+        // What each of them has been paid so far, counted from the receipts (PRD US-26).
+        var taken = await database.PaymentReceipts
+            .Where(receipt => bookingIds.Contains(receipt.BookingId))
+            .GroupBy(receipt => receipt.BookingId)
+            .Select(receipts => new
+            {
+                BookingId = receipts.Key,
+                Baht = receipts.Sum(receipt => receipt.AmountBaht),
+            })
+            .ToDictionaryAsync(row => row.BookingId, row => row.Baht, cancellationToken);
         var sentBack = await database.RefundRecords
             .StillStanding()
             .Where(record => bookingIds.Contains(record.BookingId))
@@ -783,6 +809,7 @@ public static class VenueBookingEndpoints
                     courtNames,
                     byOwner,
                     sentBack.GetValueOrDefault(row.Booking.Id),
+                    taken.GetValueOrDefault(row.Booking.Id),
                     graceMinutes,
                     now)),
         ];
@@ -795,6 +822,7 @@ public static class VenueBookingEndpoints
         IReadOnlyDictionary<Guid, string> courtNames,
         bool byOwner,
         decimal sentBackBaht,
+        decimal takenBaht,
         int graceMinutes,
         DateTimeOffset now)
     {
@@ -814,6 +842,8 @@ public static class VenueBookingEndpoints
             VenueDecisions.GraceEndsAt(startsAt, graceMinutes),
             booking.PaymentState.ToString(),
             booking.TotalBaht,
+            takenBaht,
+            Takings.OutstandingOf(booking.TotalBaht, takenBaht),
             booking.RefundDueBaht,
             sentBackBaht,
             Refunds.OutstandingOf(booking.RefundDueBaht, sentBackBaht),
