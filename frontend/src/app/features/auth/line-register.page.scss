@@ -1,0 +1,23 @@
+:host {
+  display: block;
+}
+
+/*
+  The address LINE handed over reads as a statement, not as a field: there is nothing to do about
+  it here. It sits on its own soft surface so it is not mistaken for something typed in.
+*/
+.shared {
+  margin: 0;
+  padding: 0.75rem;
+  border-radius: var(--mat-sys-corner-medium);
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+  font: var(--mat-sys-body-medium);
+}
+
+/* An address is one thing even when it is long, and Thai around it must not break inside it. */
+.address {
+  display: inline-block;
+  word-break: break-all;
+  font: var(--mat-sys-body-medium);
+}

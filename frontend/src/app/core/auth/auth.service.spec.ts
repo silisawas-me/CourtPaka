@@ -11,7 +11,14 @@ const account: CurrentUser = {
   emailConfirmed: false,
   language: 'en',
   isPlatformAdmin: false,
+  phoneNumber: null,
+  hasPassword: true,
+  signsInWithLine: false,
+  cannotBookBecause: 'auth.email_not_verified',
 };
+
+/** The address of the account above, which the sign-in tests type in. */
+const address = account.email!;
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -28,7 +35,7 @@ describe('AuthService', () => {
 
   it('signs in, loads the account and applies its language', () => {
     let result: CurrentUser | null = null;
-    service.login(account.email, 'CorrectHorse1').subscribe((user) => (result = user));
+    service.login(address, 'CorrectHorse1').subscribe((user) => (result = user));
 
     httpMock.expectOne('/api/auth/login').flush(null, { status: 204, statusText: 'No Content' });
     httpMock.expectOne('/api/auth/me').flush(account);
@@ -41,7 +48,7 @@ describe('AuthService', () => {
   it('reports a sign-in that left the browser without a session as a failure', () => {
     let error: unknown;
     let emitted = false;
-    service.login(account.email, 'CorrectHorse1').subscribe({
+    service.login(address, 'CorrectHorse1').subscribe({
       next: () => (emitted = true),
       error: (caught: unknown) => (error = caught),
     });
@@ -68,9 +75,7 @@ describe('AuthService', () => {
 
   it('turns an API error code into an ApiError', () => {
     let error: unknown;
-    service
-      .login(account.email, 'wrong')
-      .subscribe({ error: (caught: unknown) => (error = caught) });
+    service.login(address, 'wrong').subscribe({ error: (caught: unknown) => (error = caught) });
 
     httpMock
       .expectOne('/api/auth/login')
@@ -82,9 +87,7 @@ describe('AuthService', () => {
 
   it('reports rate limiting with its own code', () => {
     let error: unknown;
-    service
-      .resendVerification(account.email)
-      .subscribe({ error: (caught: unknown) => (error = caught) });
+    service.resendVerification(address).subscribe({ error: (caught: unknown) => (error = caught) });
 
     httpMock
       .expectOne('/api/auth/resend-verification')

@@ -1,7 +1,7 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { pageProviders, setInput, submitForm } from '../../testing/dom';
+import { lineSignInAvailable, pageProviders, setInput, submitForm } from '../../testing/dom';
 import { LoginPage } from './login.page';
 
 describe('LoginPage returnUrl', () => {
@@ -26,6 +26,7 @@ describe('LoginPage returnUrl', () => {
     const fixture = TestBed.createComponent(LoginPage);
     fixture.componentRef.setInput('returnUrl', returnUrl);
     fixture.detectChanges();
+    lineSignInAvailable();
 
     setInput(fixture, '#email', 'player@example.com');
     setInput(fixture, '#password', 'CorrectHorse1');

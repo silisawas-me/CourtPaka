@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -9,7 +9,6 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { errorKey } from '../../core/http/api-error';
 import { TranslationService } from '../../core/i18n/translation.service';
-import { FieldError } from '../../shared/field-error';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 
 /**
@@ -23,7 +22,6 @@ import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
   selector: 'app-account-page',
   imports: [
     ReactiveFormsModule,
-    FieldError,
     MatButtonModule,
     MatCardModule,
     MatCheckboxModule,
@@ -42,9 +40,61 @@ export class AccountPage {
   protected readonly i18n = inject(TranslationService);
   protected readonly user = this.auth.currentUser;
 
+  /** What came back in the address from LINE: "confirmed", or why it did not (PRD US-01). */
+  readonly line = input<string>();
+
+  protected readonly lineConfirmed = computed(() => this.line() === 'confirmed');
+  protected readonly lineError = computed(() =>
+    this.line() && !this.lineConfirmed() ? this.line()! : null,
+  );
+
+  /** An account with no password (LINE) proves who it is at LINE instead. */
+  protected readonly confirmsWithLine = computed(() => this.user()?.hasPassword === false);
+
+  protected readonly phoneForm = this.forms.nonNullable.group({
+    phoneNumber: [''],
+  });
+
+  protected readonly savingPhone = signal(false);
+  protected readonly phoneSaved = signal(false);
+  protected readonly phoneError = signal<string | null>(null);
+
+  constructor() {
+    // The field starts at what the account has, and follows it when the account is read again.
+    effect(() => {
+      const phone = this.user()?.phoneNumber ?? '';
+      untracked(() => {
+        if (!this.phoneForm.controls.phoneNumber.dirty) {
+          this.phoneForm.controls.phoneNumber.setValue(phone);
+        }
+      });
+    });
+  }
+
+  protected savePhone(): void {
+    if (this.savingPhone()) {
+      return;
+    }
+
+    this.savingPhone.set(true);
+    this.phoneSaved.set(false);
+    this.phoneError.set(null);
+    this.auth.changePhone(this.phoneForm.getRawValue().phoneNumber || null).subscribe({
+      next: () => {
+        this.savingPhone.set(false);
+        this.phoneSaved.set(true);
+        this.phoneForm.controls.phoneNumber.markAsPristine();
+      },
+      error: (failure: unknown) => {
+        this.savingPhone.set(false);
+        this.phoneError.set(errorKey(failure));
+      },
+    });
+  }
+
   protected readonly deleteForm = this.forms.nonNullable.group({
     understood: [false, Validators.requiredTrue],
-    password: ['', Validators.required],
+    password: [''],
   });
 
   protected readonly deleting = signal(false);
@@ -52,13 +102,14 @@ export class AccountPage {
 
   protected deleteAccount(): void {
     this.deleteForm.markAllAsTouched();
-    if (this.deleteForm.invalid || this.deleting()) {
+    const { understood, password } = this.deleteForm.getRawValue();
+    if (!understood || this.deleting() || (!this.confirmsWithLine() && !password)) {
       return;
     }
 
     this.deleting.set(true);
     this.deleteError.set(null);
-    this.auth.deleteAccount(this.deleteForm.getRawValue().password).subscribe({
+    this.auth.deleteAccount(this.confirmsWithLine() ? null : password).subscribe({
       next: () => {
         this.deleting.set(false);
         void this.router.navigate(['/'], { queryParams: { deleted: 1 } });

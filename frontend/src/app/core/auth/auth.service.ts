@@ -7,7 +7,8 @@ import { TranslationService } from '../i18n/translation.service';
 
 export interface CurrentUser {
   id: string;
-  email: string;
+  /** Null for a LINE account that shared no address (PRD US-01). */
+  email: string | null;
   emailConfirmed: boolean;
   language: string;
   /**
@@ -15,6 +16,18 @@ export interface CurrentUser {
    * never to decide anything: every one of those doors asks the server again.
    */
   isPlatformAdmin: boolean;
+  phoneNumber: string | null;
+  /** False for a LINE account: deleting it is confirmed at LINE instead of with a password. */
+  hasPassword: boolean;
+  signsInWithLine: boolean;
+  /** What the account still needs before it can book, decided by the server, or null. */
+  cannotBookBecause: string | null;
+}
+
+/** Who LINE said came back, waiting for the policy to be accepted (PRD US-01). */
+export interface LinePendingSignUp {
+  name: string | null;
+  email: string | null;
 }
 
 export interface RegisterInput {
@@ -129,7 +142,7 @@ export class AuthService {
    * Asks the server to forget this account (PDPA, PRD 8). The server signs the session out
    * itself; this browser forgets the user once it has.
    */
-  deleteAccount(password: string): Observable<void> {
+  deleteAccount(password: string | null): Observable<void> {
     return this.http
       .post<void>('/api/auth/me/delete', { password })
       .pipe(tap(() => this.adopt(null)));
@@ -141,6 +154,40 @@ export class AuthService {
 
   resendVerification(email: string): Observable<void> {
     return this.http.post<void>('/api/auth/resend-verification', { email });
+  }
+
+  /** Whether this deployment has a LINE channel; the sign-in screens ask before offering it. */
+  private readonly lineEnabled$ = this.http.get<{ enabled: boolean }>('/api/auth/line').pipe(
+    map((response) => response.enabled),
+    catchError(() => of(false)),
+    shareReplay({ bufferSize: 1, refCount: false }),
+  );
+
+  lineEnabled(): Observable<boolean> {
+    return this.lineEnabled$;
+  }
+
+  linePending(): Observable<LinePendingSignUp> {
+    return this.http.get<LinePendingSignUp>('/api/auth/line/pending');
+  }
+
+  /** Accepts the policy and makes the account LINE's answer is waiting for (PRD US-01). */
+  completeLineSignUp(input: {
+    privacyPolicyVersion: string;
+    language: Language;
+    phoneNumber: string | null;
+  }): Observable<CurrentUser | null> {
+    return this.http
+      .post<void>('/api/auth/line/complete', input)
+      .pipe(switchMap(() => this.loadCurrentUser()));
+  }
+
+  /** The number a venue reaches the booker on (PRD US-01); empty clears it. */
+  changePhone(phoneNumber: string | null): Observable<void> {
+    return this.http.put<void>('/api/auth/me/phone', { phoneNumber }).pipe(
+      switchMap(() => this.loadCurrentUser()),
+      map(() => undefined),
+    );
   }
 
   changeLanguage(language: Language): Observable<void> {

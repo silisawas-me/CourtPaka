@@ -366,11 +366,19 @@ public static class BookingEndpoints
             return Refuse(loggers, StatusCodes.Status400BadRequest, invalid, bookerId);
         }
 
-        // An address nobody has proved they can read is not enough to hold a court (PRD US-01).
-        // Signing in unverified is allowed on purpose; this is the gate that is not.
+        // An address nobody has proved they can read is not enough to hold a court, and a LINE
+        // account needs a phone number instead (PRD US-01, BookingEligibility). Signing in
+        // without either is allowed on purpose; this is the gate that is not.
         var booker = await database.Users
             .Where(user => user.Id == bookerId)
-            .Select(user => new { user.EmailConfirmed, user.SuspendedAt })
+            .Select(user => new
+            {
+                user.EmailConfirmed,
+                user.SuspendedAt,
+                user.PhoneNumber,
+                SignsInWithLine = database.UserLogins.Any(login =>
+                    login.UserId == user.Id && login.LoginProvider == LineLoginEndpoints.Provider),
+            })
             .SingleOrDefaultAsync(cancellationToken);
 
         // A session opened before a suspension lives until the next revalidation (PRD US-22);
@@ -381,10 +389,12 @@ public static class BookingEndpoints
                 loggers, StatusCodes.Status403Forbidden, AuthErrorCodes.AccountSuspended, bookerId);
         }
 
-        if (booker is not { EmailConfirmed: true })
+        var missing = booker is null
+            ? AuthErrorCodes.EmailNotVerified
+            : BookingEligibility.MissingFor(booker.EmailConfirmed, booker.SignsInWithLine, booker.PhoneNumber);
+        if (missing is not null)
         {
-            return Refuse(
-                loggers, StatusCodes.Status403Forbidden, AuthErrorCodes.EmailNotVerified, bookerId);
+            return Refuse(loggers, StatusCodes.Status403Forbidden, missing, bookerId);
         }
 
         if (await PublicVenueEndpoints.ApprovedAsync(database, request.VenueId, cancellationToken)

@@ -1,7 +1,7 @@
 namespace CourtBooking.Api.Identity;
 
 public sealed record RegisterRequest(
-    string Email,
+    string? Email,
     string Password,
     string PrivacyPolicyVersion,
     string? Language,
@@ -15,16 +15,25 @@ public sealed record ResendVerificationRequest(string Email);
 
 public sealed record ChangeLanguageRequest(string Language);
 
+public sealed record ChangePhoneRequest(string? PhoneNumber);
+
 public sealed record CurrentUserResponse(
     Guid Id,
-    string Email,
+    /// <summary>Null for a LINE account that shared no address, or shared one somebody else has.</summary>
+    string? Email,
     bool EmailConfirmed,
     string Language,
     /// <summary>
     /// Whether this person acts for the platform (PRD US-20). Said here so the app knows which
     /// doors to draw — not so it can decide anything: every one of those doors asks again.
     /// </summary>
-    bool IsPlatformAdmin);
+    bool IsPlatformAdmin,
+    string? PhoneNumber = null,
+    /// <summary>False for a LINE account: deleting it is confirmed through LINE instead.</summary>
+    bool HasPassword = true,
+    bool SignsInWithLine = false,
+    /// <summary>What the account still needs before it can book (BookingEligibility), or null.</summary>
+    string? CannotBookBecause = null);
 
 public sealed record PrivacyPolicyResponse(string Version);
 
@@ -44,6 +53,14 @@ public static class AuthErrorCodes
 
     /// <summary>Signing in is allowed unverified; booking is not (PRD US-01).</summary>
     public const string EmailNotVerified = "auth.email_not_verified";
+
+    /// <summary>
+    /// A LINE account books once it has given a phone number, which is how a venue reaches a
+    /// booker who may have no address here (PRD US-01).
+    /// </summary>
+    public const string PhoneRequired = "auth.phone_required";
+
+    public const string InvalidPhone = "auth.invalid_phone";
 }
 
 public static class RateLimitPolicies

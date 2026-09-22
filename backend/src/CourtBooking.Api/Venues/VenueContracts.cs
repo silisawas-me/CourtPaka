@@ -100,6 +100,12 @@ public sealed record VenueInvitationResponse(Guid Id, string Email, string[] Per
 public static class VenueErrorCodes
 {
     public const string CodeAlreadyUsed = "venue.code_already_used";
+
+    /// <summary>
+    /// A venue is answered by email — the platform's decision, the slip queue, the money
+    /// (US-10, US-17, US-20) — so an account with no address cannot run one (PRD US-01).
+    /// </summary>
+    public const string OwnerNeedsEmail = "venue.owner_needs_email";
     public const string AlreadyMember = "venue.already_member";
     public const string OwnerCannotBeChanged = "venue.owner_cannot_be_changed";
     public const string InvalidPermissions = "venue.invalid_permissions";

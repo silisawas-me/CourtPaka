@@ -38,6 +38,10 @@ services:
       # Payment slips (US-04). A named volume, so redeploying the image keeps them; they move to
       # object storage before real venues use this (PRD 9.1), and that volume is in the backup set.
       App__SlipStoragePath: "/slips"
+      # Signing in with LINE (PRD US-01). Leave both empty and the app simply does not offer it,
+      # so a deployment without a LINE channel still works.
+      App__Line__ChannelId: ${LINE_CHANNEL_ID:-}
+      App__Line__ChannelSecret: ${LINE_CHANNEL_SECRET:-}
     volumes:
       - api-keys:/keys
       - api-slips:/slips

@@ -200,7 +200,11 @@ public sealed class BookerMail(
             {
                 one.BookerUserId,
                 // Nobody to write to once the person has asked to be forgotten (PRD 8).
-                Address = one.Booker!.DeletedAt == null ? one.Booker.Email : null,
+                // Only an address its owner has proved they read: a LINE account may carry one
+                // LINE shared that nobody has opened a link from yet (PRD US-01).
+                Address = one.Booker!.DeletedAt == null && one.Booker.EmailConfirmed
+                    ? one.Booker.Email
+                    : null,
                 one.Booker!.Language,
                 VenueName = one.Venue!.Name,
                 one.TotalBaht,

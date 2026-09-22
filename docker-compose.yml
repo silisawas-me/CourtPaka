@@ -54,6 +54,9 @@ services:
       App__SlipStoragePath: "/slips"
       # The browser checks upload more than a person would.
       App__UploadsPerHour: "200"
+      # Signing in with LINE, against a stand-in LINE that only a Development host will wire up
+      # (PRD US-01). A deployment sets App__Line__ChannelId and __ChannelSecret instead.
+      App__Line__UseDevelopmentFake: "true"
     volumes:
       - api-keys:/keys
       - api-slips:/slips

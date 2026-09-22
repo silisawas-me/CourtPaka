@@ -26,6 +26,8 @@ public static class AuthEndpoints
         auth.MapPost("/logout", LogoutAsync).RequireAuthorization();
         auth.MapGet("/me", GetCurrentUserAsync).RequireAuthorization();
         auth.MapPut("/me/language", ChangeLanguageAsync).RequireAuthorization();
+        auth.MapPut("/me/phone", ChangePhoneAsync).RequireAuthorization();
+        auth.MapLineLoginEndpoints();
         // Rate-limited like sign-in: it takes a password (PDPA, PRD 8).
         auth.MapPost("/me/delete", AccountDeletion.DeleteAsync)
             .RequireAuthorization()
@@ -58,11 +60,25 @@ public static class AuthEndpoints
             return ApiProblem.Of(StatusCodes.Status409Conflict, AuthErrorCodes.PrivacyPolicyOutdated);
         }
 
+        // An account signed up here signs in with its address, so it must have one. (A LINE
+        // account may not; EmailRules lets that through, which is why it is asked here.)
+        if (string.IsNullOrWhiteSpace(request.Email))
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.InvalidEmail);
+        }
+
+        string? phone = null;
+        if (!string.IsNullOrWhiteSpace(request.PhoneNumber)
+            && (phone = PhoneNumbers.Normalize(request.PhoneNumber)) is null)
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.InvalidPhone);
+        }
+
         var user = new AppUser
         {
             UserName = request.Email,
             Email = request.Email,
-            PhoneNumber = request.PhoneNumber,
+            PhoneNumber = phone,
             Language = language,
         };
 
@@ -236,14 +252,58 @@ public static class AuthEndpoints
     {
         // Read through to the row: verification state gates booking, so a stale copy is not good enough.
         var user = await userManager.GetUserAsync(principal);
-        return user is null
-            ? TypedResults.NotFound()
-            : TypedResults.Ok(new CurrentUserResponse(
-                user.Id,
-                user.Email!,
-                user.EmailConfirmed,
-                user.Language,
-                PlatformAdmins.Includes(user, options.Value)));
+        if (user is null)
+        {
+            return TypedResults.NotFound();
+        }
+
+        var signsInWithLine = (await userManager.GetLoginsAsync(user))
+            .Any(login => login.LoginProvider == LineLoginEndpoints.Provider);
+
+        return TypedResults.Ok(new CurrentUserResponse(
+            user.Id,
+            user.Email,
+            user.EmailConfirmed,
+            user.Language,
+            PlatformAdmins.Includes(user, options.Value),
+            user.PhoneNumber,
+            user.PasswordHash is not null,
+            signsInWithLine,
+            BookingEligibility.MissingFor(user.EmailConfirmed, signsInWithLine, user.PhoneNumber)));
+    }
+
+    /// <summary>
+    /// The number a venue can reach the booker on (PRD US-01). Empty clears it — which, for a LINE
+    /// account without a proved address, is also giving up booking until it is set again.
+    /// </summary>
+    private static async Task<Results<NoContent, ProblemHttpResult, NotFound>> ChangePhoneAsync(
+        ChangePhoneRequest request,
+        ClaimsPrincipal principal,
+        AppDbContext database,
+        CancellationToken cancellationToken)
+    {
+        string? phone = null;
+        if (!string.IsNullOrWhiteSpace(request.PhoneNumber)
+            && (phone = PhoneNumbers.Normalize(request.PhoneNumber)) is null)
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.InvalidPhone);
+        }
+
+        if (CallerId.TryOf(principal) is not { } userId)
+        {
+            return TypedResults.NotFound();
+        }
+
+        // Straight to the row, like the language: the stamp is not touched, so no session ends.
+        var updated = await database.Users
+            .Where(user => user.Id == userId && user.DeletedAt == null)
+            .ExecuteUpdateAsync(
+                set => set
+                    .SetProperty(user => user.PhoneNumber, phone)
+                    .SetProperty(user => user.PhoneNumberConfirmed, false),
+                cancellationToken);
+
+        return updated == 1 ? TypedResults.NoContent() : TypedResults.NotFound();
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult, NotFound>> ChangeLanguageAsync(
@@ -269,7 +329,7 @@ public static class AuthEndpoints
         return updated == 1 ? TypedResults.NoContent() : TypedResults.NotFound();
     }
 
-    private static async Task SendVerificationEmailAsync(
+    internal static async Task SendVerificationEmailAsync(
         AppUser user,
         UserManager<AppUser> userManager,
         ITransactionalEmailSender emailSender,

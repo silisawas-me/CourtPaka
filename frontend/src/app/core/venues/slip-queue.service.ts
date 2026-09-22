@@ -6,7 +6,9 @@ import { Booking } from '../bookings/booking.service';
 /** One booking waiting for the venue to look at its slip (PRD US-12). */
 export interface SlipQueueItem {
   bookingId: string;
-  bookerEmail: string;
+  /** Null for a LINE account with no address; the phone is then how to reach them (US-01). */
+  bookerEmail: string | null;
+  bookerPhone: string | null;
   totalBaht: number;
   slipUploadedAt: string;
   startsAt: string;

@@ -196,6 +196,17 @@ public static class VenueEndpoints
             return ApiProblem.Of(StatusCodes.Status403Forbidden, closed);
         }
 
+        // Everything the platform and its bookers say to a venue is an email, so a LINE account
+        // that shared no address cannot be the one running it (PRD US-01, US-17, US-20).
+        var ownerAddress = await database.Users
+            .Where(user => user.Id == CallerId.Of(principal))
+            .Select(user => user.Email)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (string.IsNullOrEmpty(ownerAddress))
+        {
+            return ApiProblem.Of(StatusCodes.Status403Forbidden, VenueErrorCodes.OwnerNeedsEmail);
+        }
+
         try
         {
             await database.SaveChangesAsync(cancellationToken);

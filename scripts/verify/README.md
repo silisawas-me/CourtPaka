@@ -44,6 +44,7 @@ Six rules worth keeping.
 | `booking.py` | Picking hours, the summary, and holding them (US-03) |
 | `payment.py` | The countdown, sending the slip, and who may read it (US-04) |
 | `slip_queue.py` | The venue looking at a slip and deciding (US-12) |
+| `line_login.py` | Signing in with LINE, against the stand-in LINE (US-01) |
 
 7. **Ask for the state you need; do not assume the script before you left it.**
    `venue_settings.py` edits the seeded venue's opening hours because that is what it is about,
@@ -51,6 +52,14 @@ Six rules worth keeping.
    `ensure_bookable()` first, which puts the venue back to 06:00–22:00 every day. This was found
    the hard way: run in one order the suite was green, and in another every booking script failed
    with no free hour anywhere and nothing to say why.
+
+## The stand-in LINE
+
+`line_login.py` drives the whole LINE flow. The local stack runs `App__Line__UseDevelopmentFake`,
+which serves a consent screen at `/api/dev/line/authorize` where the script says which LINE user
+to be. It is wired up only on a Development host with that flag, because it signs anybody in as
+anybody. Everything on this side of it is the real code: the state cookie, the account that is
+only made once the policy is accepted, and deleting an account that has no password.
 
 ## Service worker
 

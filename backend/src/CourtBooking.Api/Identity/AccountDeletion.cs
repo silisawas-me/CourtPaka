@@ -4,6 +4,7 @@ using CourtBooking.Api.Data;
 using CourtBooking.Api.Http;
 using CourtBooking.Api.Observability;
 using CourtBooking.Api.Venues;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,12 @@ public static class AccountDeletionErrorCodes
     public const string IsPlatformAdmin = "account.is_platform_admin";
     public const string HasUpcomingBookings = "account.has_upcoming_bookings";
     public const string HasMoneyPending = "account.has_money_pending";
+
+    /// <summary>
+    /// An account with no password (LINE) confirms by going to LINE and coming back, which stands
+    /// in for typing the password again.
+    /// </summary>
+    public const string ConfirmWithLine = "account.confirm_with_line";
 }
 
 /// <summary>
@@ -50,9 +57,11 @@ public static class AccountDeletion
     public static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         DeleteAccountRequest request,
         ClaimsPrincipal principal,
+        HttpContext http,
         UserManager<AppUser> users,
         SignInManager<AppUser> signIn,
         AppDbContext database,
+        IDataProtectionProvider protection,
         IOptions<AppOptions> options,
         TimeProvider timeProvider,
         ILoggerFactory loggers,
@@ -65,18 +74,31 @@ public static class AccountDeletion
         }
 
         // Asked again at the moment it matters: a borrowed session is not enough to erase a
-        // person. Through the sign-in manager, so a lockout stops the guessing here as it does at
-        // the sign-in page — and five wrong guesses lock the account there too.
-        var checkedPassword = await signIn.CheckPasswordSignInAsync(
-            user, request.Password ?? "", lockoutOnFailure: true);
-        if (checkedPassword.IsLockedOut)
+        // person. An account with a password types it again — through the sign-in manager, so a
+        // lockout stops the guessing here as it does at the sign-in page, and five wrong guesses
+        // lock the account there too. An account without one (LINE) proves it at LINE instead,
+        // within the last few minutes.
+        if (user.PasswordHash is null)
         {
-            return ApiProblem.Of(StatusCodes.Status403Forbidden, AccountDeletionErrorCodes.LockedOut);
+            if (!LineLoginEndpoints.RecentlyConfirmed(http, user.Id, protection))
+            {
+                return ApiProblem.Of(
+                    StatusCodes.Status403Forbidden, AccountDeletionErrorCodes.ConfirmWithLine);
+            }
         }
-
-        if (!checkedPassword.Succeeded)
+        else
         {
-            return ApiProblem.Of(StatusCodes.Status403Forbidden, AccountDeletionErrorCodes.WrongPassword);
+            var checkedPassword = await signIn.CheckPasswordSignInAsync(
+                user, request.Password ?? "", lockoutOnFailure: true);
+            if (checkedPassword.IsLockedOut)
+            {
+                return ApiProblem.Of(StatusCodes.Status403Forbidden, AccountDeletionErrorCodes.LockedOut);
+            }
+
+            if (!checkedPassword.Succeeded)
+            {
+                return ApiProblem.Of(StatusCodes.Status403Forbidden, AccountDeletionErrorCodes.WrongPassword);
+            }
         }
 
         if (options.Value.PlatformAdmins.Any(admin =>
@@ -124,6 +146,12 @@ public static class AccountDeletion
             .Where(member => member.UserId == user.Id)
             .ExecuteDeleteAsync(cancellationToken);
 
+        // The LINE user id names the person as surely as the address does, and signing in with it
+        // again must make a new account, not walk back into this one (PDPA, S-15).
+        await database.UserLogins
+            .Where(login => login.UserId == user.Id)
+            .ExecuteDeleteAsync(cancellationToken);
+
         // An accepted invitation is the last copy of the address the platform holds. Pending ones
         // are left: they are the venue's own entry, and whoever owns the address may still sign up
         // again and take one.
@@ -156,6 +184,7 @@ public static class AccountDeletion
 
         await transaction.CommitAsync(cancellationToken);
         await signIn.SignOutAsync();
+        LineLoginEndpoints.ForgetConfirmation(http, options.Value);
 
         AppEvents.For(loggers).LogInformation("account_deleted {UserId}", user.Id);
 
