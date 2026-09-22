@@ -64,10 +64,15 @@ public static class PublicVenueEndpoints
     /// The court-hours of one day, and the venue they belong to, because the page that draws the
     /// grid wants both and one request is one round trip. This is where the booking flow starts, so
     /// it is also where <c>venue_page_viewed</c> is recorded (PRD 8).
+    ///
+    /// The open page reads the day again every ten seconds (US-02) and says so with
+    /// <c>refresh=true</c>: that is the same person still looking, not another view, and counted
+    /// as one it would multiply the event by every minute the page stays open.
     /// </summary>
     private static async Task<Results<Ok<AvailabilityResponse>, ProblemHttpResult>> AvailabilityAsync(
         Guid venueId,
         DateOnly? date,
+        bool? refresh,
         AppDbContext database,
         TimeProvider timeProvider,
         ILoggerFactory loggers,
@@ -92,7 +97,10 @@ public static class PublicVenueEndpoints
 
         var day = await VenueDay.LoadAsync(database, venueId, asked, now, cancellationToken);
 
-        AppEvents.For(loggers).LogInformation("venue_page_viewed {VenueId} {Date}", venueId, asked);
+        if (refresh != true)
+        {
+            AppEvents.For(loggers).LogInformation("venue_page_viewed {VenueId} {Date}", venueId, asked);
+        }
 
         return TypedResults.Ok(Availability.Draw(Public(venue), day, today));
     }

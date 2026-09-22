@@ -103,4 +103,25 @@ public sealed class EventCoverageTests(ApiTestFixture api) : IClassFixture<ApiTe
         var written = api.Events.Names.ToHashSet();
         Assert.All(Required, name => Assert.Contains(name, written));
     }
+
+    /// <summary>
+    /// The open grid reads the day again every ten seconds (US-02). That is one person still
+    /// looking, so only the first read is a view.
+    /// </summary>
+    [Fact]
+    public async Task Reading_the_day_again_to_refresh_it_is_not_another_view()
+    {
+        var (_, venue, _) = await scenario.BookableVenueAsync();
+        var client = api.CreateClient();
+        var url = $"/api/venues/{venue.Id}/availability?date={VenueScenario.Today.AddDays(1):yyyy-MM-dd}";
+
+        var before = Views();
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(url)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(url + "&refresh=true")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(url + "&refresh=true")).StatusCode);
+
+        Assert.Equal(before + 1, Views());
+    }
+
+    private int Views() => api.Events.Names.Count(name => name == "venue_page_viewed");
 }

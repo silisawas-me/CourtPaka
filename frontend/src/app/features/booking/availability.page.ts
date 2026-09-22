@@ -1,3 +1,4 @@
+import { DOCUMENT } from '@angular/common';
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormControl, ReactiveFormsModule } from '@angular/forms';
@@ -8,7 +9,17 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Router, RouterLink } from '@angular/router';
-import { catchError, EMPTY, switchMap, tap } from 'rxjs';
+import {
+  catchError,
+  EMPTY,
+  exhaustMap,
+  filter,
+  fromEvent,
+  interval,
+  merge,
+  switchMap,
+  tap,
+} from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { BookingService } from '../../core/bookings/booking.service';
 import { errorKey } from '../../core/http/api-error';
@@ -24,6 +35,9 @@ import { VenueAddressPipe } from '../../shared/venue-address.pipe';
 function key(courtId: string, hour: number): string {
   return `${courtId}@${hour}`;
 }
+
+/** How often an open grid reads its day again (PRD US-02). */
+export const REFRESH_EVERY_MS = 10_000;
 
 /**
  * The court-by-hour grid for one day at one venue, and the hours taken from it (PRD US-02, US-03).
@@ -56,6 +70,7 @@ export class AvailabilityPage {
   private readonly bookings = inject(BookingService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly document = inject(DOCUMENT);
 
   protected readonly i18n = inject(TranslationService);
   protected readonly signedIn = computed(() => this.auth.currentUser() !== null);
@@ -163,11 +178,49 @@ export class AvailabilityPage {
         this.loading.set(false);
       });
 
+    // While the page is open the day is read again every ten seconds, and at once when the tab
+    // comes back into view (US-02). Quietly: no progress bar over a grid that is already there,
+    // and a failed refresh keeps the grid that was — the booking itself is checked again on the
+    // server whatever the grid says. The stream starts over with every day asked for, so a
+    // refresh of the day the booker has just left can never land on the one they moved to.
+    toObservable(this.asked)
+      .pipe(
+        switchMap(({ venueId, date }) =>
+          merge(interval(REFRESH_EVERY_MS), fromEvent(this.document, 'visibilitychange')).pipe(
+            filter(() => this.worthRefreshing()),
+            exhaustMap(() =>
+              this.venues.availability(venueId, date, true).pipe(catchError(() => EMPTY)),
+            ),
+          ),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe((day) => {
+        // Asked again on arrival: a hold made while this was on its way would come back as the
+        // booker's own hours taken, and empty the summary under the button they just pressed.
+        if (this.worthRefreshing()) {
+          this.day.set(day);
+        }
+      });
+
     // A booking is made from one grid, so moving to another day starts the pick again.
     effect(() => {
       this.chosen();
       untracked(() => this.clearPicks());
     });
+  }
+
+  /**
+   * A hidden tab is nobody looking, and while the day is loading or a hold is being made the
+   * answer on its way is newer than a refresh would be.
+   */
+  private worthRefreshing(): boolean {
+    return (
+      this.document.visibilityState === 'visible' &&
+      this.day() !== null &&
+      !this.loading() &&
+      !this.holding()
+    );
   }
 
   protected pick(date: Date | null): void {

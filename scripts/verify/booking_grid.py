@@ -122,7 +122,21 @@ with sync_playwright() as p:
         page,
     )
 
-    # 4. A venue that is not approved is invisible, whoever asks.
+    # 4. The open grid reads its day again by itself, marked as a refresh so it is not counted
+    #    as another view, and without covering the grid with a progress bar.
+    with page.expect_request(
+        lambda request: "/availability" in request.url and "refresh=true" in request.url,
+        timeout=15_000,
+    ) as refreshed:
+        pass
+    check("the open grid refreshes itself", tomorrow.isoformat() in refreshed.value.url, page)
+    check(
+        "and keeps the grid on screen while it does",
+        page.locator("[data-testid=availability-grid]").is_visible()
+        and page.locator("mat-progress-bar").count() == 0,
+    )
+
+    # 5. A venue that is not approved is invisible, whoever asks.
     hidden = page.request.get(f"{BASE}/api/venues/search?q=zzzz-no-such-venue")
     check("a search that matches nothing answers an empty list", hidden.json() == [])
 

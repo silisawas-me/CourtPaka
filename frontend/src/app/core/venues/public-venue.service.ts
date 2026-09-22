@@ -45,9 +45,13 @@ export class PublicVenueService {
   }
 
   /** The day's grid and the venue it belongs to, which is everything the grid page draws. */
-  availability(venueId: string, date: string): Observable<Availability> {
+  /**
+   * One day's grid. `refresh` marks a read of a day already on screen, which the server does not
+   * count as another view of the venue (PRD 8 `venue_page_viewed`).
+   */
+  availability(venueId: string, date: string, refresh = false): Observable<Availability> {
     return this.http.get<Availability>(`/api/venues/${venueId}/availability`, {
-      params: { date },
+      params: refresh ? { date, refresh: true } : { date },
     });
   }
 }

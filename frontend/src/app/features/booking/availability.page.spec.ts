@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { TRANSLATIONS } from '../../core/i18n/locales';
 import { clickOn, elementOf, pageProviders, signInAs, textOf } from '../../testing/dom';
-import { AvailabilityPage } from './availability.page';
+import { AvailabilityPage, REFRESH_EVERY_MS } from './availability.page';
 
 const VENUE = {
   id: 'v1',
@@ -377,6 +377,95 @@ describe('AvailabilityPage', () => {
     expect(navigate).toHaveBeenCalledWith([], {
       queryParams: { date: '2026-09-25' },
       queryParamsHandling: 'merge',
+    });
+  });
+  describe('while the page is open (US-02)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const taken = () =>
+      day({
+        courts: [
+          {
+            courtId: 'c1',
+            name: 'Court 1',
+            hours: [
+              { hour: 18, status: 'Booked', bahtPerHour: 300 },
+              { hour: 19, status: 'Free', bahtPerHour: 300 },
+            ],
+          },
+        ],
+      });
+
+    function expectRefresh() {
+      return httpMock.expectOne(
+        (request) =>
+          request.url === '/api/venues/v1/availability' &&
+          request.params.get('refresh') === 'true' &&
+          request.params.get('date') === '2026-09-19',
+      );
+    }
+
+    it('reads the day again every ten seconds, marked as a refresh, without a progress bar', () => {
+      render(day(), '2026-09-19');
+
+      vi.advanceTimersByTime(REFRESH_EVERY_MS - 1);
+      httpMock.expectNone('/api/venues/v1/availability');
+
+      vi.advanceTimersByTime(1);
+      fixture.detectChanges();
+      expect(elementOf(fixture, 'availability-grid')).not.toBeNull();
+      expectRefresh().flush(taken());
+      fixture.detectChanges();
+
+      expect(elementOf(fixture, 'cell-c1-18')?.classList.contains('booked')).toBe(true);
+    });
+
+    it('keeps the grid it has when a refresh fails', () => {
+      render(day(), '2026-09-19');
+
+      vi.advanceTimersByTime(REFRESH_EVERY_MS);
+      expectRefresh().flush(null, { status: 503, statusText: 'Unavailable' });
+      fixture.detectChanges();
+
+      expect(elementOf(fixture, 'availability-grid')).not.toBeNull();
+      expect(elementOf(fixture, 'page-error')).toBeNull();
+    });
+
+    it('does not read while the tab is hidden, and reads at once when it comes back', () => {
+      render(day(), '2026-09-19');
+      const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+
+      vi.advanceTimersByTime(REFRESH_EVERY_MS * 3);
+      httpMock.expectNone('/api/venues/v1/availability');
+
+      visibility.mockReturnValue('visible');
+      document.dispatchEvent(new Event('visibilitychange'));
+      expectRefresh().flush(taken());
+      fixture.detectChanges();
+
+      expect(elementOf(fixture, 'cell-c1-18')?.classList.contains('booked')).toBe(true);
+      visibility.mockRestore();
+    });
+
+    it('does not let a refresh of the day just left land on the day moved to', () => {
+      render(day(), '2026-09-19');
+
+      vi.advanceTimersByTime(REFRESH_EVERY_MS);
+      const stale = expectRefresh();
+
+      fixture.componentRef.setInput('date', '2026-09-20');
+      fixture.detectChanges();
+      expect(stale.cancelled).toBe(true);
+      expectRead().flush(day({ date: '2026-09-20' }));
+      fixture.detectChanges();
+
+      expect(elementOf(fixture, 'cell-c1-18')?.classList.contains('booked')).toBe(false);
     });
   });
 });
