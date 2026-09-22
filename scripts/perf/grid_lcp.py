@@ -67,14 +67,21 @@ def main() -> int:
     asked = parser.parse_args()
 
     url = asked.url
+    courts = None
     if url is None:
         with sync_playwright() as p:
             browser = p.chromium.launch()
-            venue = seeded_venue_id(browser.new_page())
+            page = browser.new_page()
+            venue = seeded_venue_id(page)
+            date = venue_today().isoformat()
+            # How big the grid is decides how long it takes to draw, and the seeded venue gains a
+            # court every time a check adds one. Two runs compare only at the same size.
+            grid = page.request.get(f"{BASE}/api/venues/{venue}/availability?date={date}").json()
+            courts = len(grid["courts"])
             browser.close()
-        url = f"{BASE}/book/{venue}?date={venue_today().isoformat()}"
+        url = f"{BASE}/book/{venue}?date={date}"
 
-    print(f"Measuring {url}\n")
+    print(f"Measuring {url}" + (f" ({courts} courts)" if courts else "") + "\n")
     scores: list[float] = []
     values: dict[str, list[float]] = {audit: [] for audit in MEASURED}
 
