@@ -111,6 +111,48 @@ jobs:
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=min,scope=web
 
+  # The browser checks (scripts/verify), against the same stack a person would run them on.
+  # They are what catches a flow that broke without a unit test noticing — a calendar that stopped
+  # opening, a grid that stopped refreshing — and CI is where that has to be noticed, not the next
+  # time somebody remembers to run them by hand.
+  #
+  # A subset, chosen for coverage per minute: the public grid and a booking through it, the venue
+  # side of a slip, and signing in with LINE. The rest stay a local command (scripts/verify/README).
+  flows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install Playwright
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Start the stack
+        run: docker compose --profile full up -d --build --wait
+
+      - name: Run the flows
+        run: |
+          for check in booking_grid booking slip_queue line_login; do
+            echo "== $check"
+            python scripts/verify/$check.py
+          done
+
+      - name: Keep the screenshots
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: flow-screenshots
+          path: scripts/verify/shots
+
+      - name: What the API said
+        if: failure()
+        run: docker compose logs --no-log-prefix api | tail -200
+
   # PRD 8: an OWASP ZAP baseline scan of the running stack, and no High alert allowed. The stack is
   # the local one (Development settings, plain HTTP) behind the same Caddyfile the deployments
   # use, which is where the headers the scan reads are set.
