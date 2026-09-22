@@ -288,6 +288,25 @@ public static class VerifySlipEndpoints
         }
 
         database.BookingStatusChanges.AddRange(recorded);
+
+        // A slip the venue accepted is money that arrived, so the day's count knows about it
+        // (PRD US-26). Written here rather than left to the counter: nobody types in what a
+        // booker transferred, and a day whose transfers are missing is a day that does not add up.
+        if (payment == PaymentState.Received
+            && await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken) == 0m)
+        {
+            database.PaymentReceipts.Add(new PaymentReceipt
+            {
+                BookingId = bookingId,
+                VenueId = venueId,
+                AmountBaht = booking.TotalBaht,
+                Method = PaymentMethod.PromptPay,
+                ReceivedAt = now,
+                // The booker sent it; the person at the desk only agreed that it arrived.
+                ReceivedByUserId = null,
+            });
+        }
+
         await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 

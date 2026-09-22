@@ -256,6 +256,10 @@ public sealed record VenueBookingResponse(
     DateTimeOffset GraceEndsAt,
     string PaymentState,
     decimal TotalBaht,
+    /// <summary>What the venue has taken for this booking so far (PRD US-26).</summary>
+    decimal TakenBaht,
+    /// <summary>And what that leaves to take. Zero once it is paid for.</summary>
+    decimal ToPayBaht,
     decimal RefundDueBaht,
     /// <summary>What the venue says it has sent back, and what that leaves (PRD 6.2, US-18).</summary>
     decimal SentBackBaht,

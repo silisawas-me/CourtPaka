@@ -49,6 +49,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<BookingArrivalChange> BookingArrivalChanges => Set<BookingArrivalChange>();
 
+    public DbSet<PaymentReceipt> PaymentReceipts => Set<PaymentReceipt>();
+
+    public DbSet<DailyClosing> DailyClosings => Set<DailyClosing>();
+
     public DbSet<RefundRecord> RefundRecords => Set<RefundRecord>();
 
     public DbSet<BookerNotice> BookerNotices => Set<BookerNotice>();
@@ -364,6 +368,50 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             change.HasOne(c => c.ChangedBy)
                 .WithMany()
                 .HasForeignKey(c => c.ChangedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<PaymentReceipt>(receipt =>
+        {
+            receipt.Property(r => r.AmountBaht).HasPrecision(10, 2);
+            receipt.Property(r => r.Note).HasMaxLength(PaymentReceipt.NoteMaxLength);
+            // Counting a venue's day is one query over its own money, in the order it came in.
+            receipt.HasIndex(r => new { r.VenueId, r.ReceivedAt });
+            receipt.HasIndex(r => r.BookingId);
+            receipt.HasOne(r => r.Booking)
+                .WithMany()
+                .HasForeignKey(r => r.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            receipt.HasOne(r => r.Venue)
+                .WithMany()
+                .HasForeignKey(r => r.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+            receipt.HasOne(r => r.ReceivedBy)
+                .WithMany()
+                .HasForeignKey(r => r.ReceivedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // Money that came in is money that came in: nothing below zero, nothing free.
+            receipt.ToTable(table => table.HasCheckConstraint(
+                "CK_PaymentReceipts_AmountIsMoney", "\"AmountBaht\" > 0"));
+        });
+
+        builder.Entity<DailyClosing>(closing =>
+        {
+            closing.Property(c => c.OpeningFloatBaht).HasPrecision(10, 2);
+            closing.Property(c => c.ExpectedCashBaht).HasPrecision(10, 2);
+            closing.Property(c => c.CountedCashBaht).HasPrecision(10, 2);
+            closing.Property(c => c.DifferenceBaht).HasPrecision(10, 2);
+            closing.Property(c => c.Note).HasMaxLength(DailyClosing.NoteMaxLength);
+            // A day is counted once. The database is what makes two people pressing at the same
+            // time into one count rather than two.
+            closing.HasIndex(c => new { c.VenueId, c.Date }).IsUnique();
+            closing.HasOne(c => c.Venue)
+                .WithMany()
+                .HasForeignKey(c => c.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+            closing.HasOne(c => c.ClosedBy)
+                .WithMany()
+                .HasForeignKey(c => c.ClosedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

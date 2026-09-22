@@ -58,6 +58,8 @@ public static class VenueEndpoints
         venue.MapPricingEndpoints();
         venue.MapVerifySlipEndpoints();
         venue.MapVenueBookingEndpoints();
+        // What the day took, and the count at the end of it (PRD US-26).
+        venue.MapDayMoneyEndpoints();
         venue.MapVenueDashboardEndpoints();
 
         return venues;
