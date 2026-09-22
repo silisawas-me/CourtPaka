@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
+import { AvailabilityPage } from './features/booking/availability.page';
 
 export const routes: Routes = [
   {
@@ -74,8 +75,7 @@ export const routes: Routes = [
   },
   {
     path: 'book/:venueId',
-    loadComponent: () =>
-      import('./features/booking/availability.page').then((m) => m.AvailabilityPage),
+    component: AvailabilityPage,
   },
   {
     path: 'admin/dashboard',

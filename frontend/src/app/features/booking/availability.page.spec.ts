@@ -1,7 +1,7 @@
 import { HttpTestingController } from '@angular/common/http/testing';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, DeferBlockState, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { TRANSLATIONS } from '../../core/i18n/locales';
+import { TRANSLATIONS } from '../../testing/translations';
 import { clickOn, elementOf, pageProviders, signInAs, textOf } from '../../testing/dom';
 import { AvailabilityPage, REFRESH_EVERY_MS } from './availability.page';
 
@@ -466,6 +466,23 @@ describe('AvailabilityPage', () => {
       fixture.detectChanges();
 
       expect(elementOf(fixture, 'cell-c1-18')?.classList.contains('booked')).toBe(false);
+    });
+  });
+  describe('the day picker (PRD 8: what a booker waits for)', () => {
+    it('shows the day without the calendar, and fetches it when asked', async () => {
+      render(day(), '2026-09-19');
+
+      // The calendar is a third of what the page would weigh, and only somebody changing day
+      // needs it — so what is on screen first is the day itself.
+      expect(textOf(fixture, 'day-placeholder')).toContain('2569');
+      expect(elementOf(fixture, 'day-picker')).toBeNull();
+
+      const blocks = await fixture.getDeferBlocks();
+      await blocks[0].render(DeferBlockState.Complete);
+      fixture.detectChanges();
+
+      expect(elementOf(fixture, 'day-picker')).not.toBeNull();
+      expect(elementOf(fixture, 'day-placeholder')).toBeNull();
     });
   });
 });

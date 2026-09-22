@@ -4,9 +4,6 @@ import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { FormBuilder, FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
-import { MatDatepickerModule } from '@angular/material/datepicker';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Router, RouterLink } from '@angular/router';
 import {
@@ -27,8 +24,7 @@ import { AppDatePipe } from '../../core/i18n/app-date.pipe';
 import { fromPlainDate, plainDate, venueToday } from '../../core/i18n/plain-date';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { Availability, PublicVenueService } from '../../core/venues/public-venue.service';
-import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
-import { provideLocalizedDateAdapter } from '../../shared/localized-date-adapter';
+import { DayPicker } from './day-picker';
 import { VenueAddressPipe } from '../../shared/venue-address.pipe';
 
 /** A court-hour, keyed the way the grid is. */
@@ -54,14 +50,11 @@ export const REFRESH_EVERY_MS = 10_000;
     RouterLink,
     MatButtonModule,
     MatCardModule,
-    MatDatepickerModule,
-    MatFormFieldModule,
-    MatInputModule,
+    DayPicker,
     MatProgressBarModule,
     AppDatePipe,
     VenueAddressPipe,
   ],
-  providers: [FORM_FIELD_DEFAULTS, provideLocalizedDateAdapter()],
   templateUrl: './availability.page.html',
   styleUrl: './availability.page.scss',
 })
@@ -136,8 +129,8 @@ export class AvailabilityPage {
   protected readonly holding = signal(false);
   protected readonly bookingError = signal<string | null>(null);
 
-  protected readonly dayField: FormControl<Date> =
-    inject(FormBuilder).nonNullable.control(venueToday());
+  /** The day on screen as a date, which is what the picker and the placeholder both show. */
+  protected readonly shownDay = computed(() => fromPlainDate(this.chosen()) ?? venueToday());
 
   /** Bumped to read the day again without changing what the page is showing. */
   private readonly refresh = signal(0);
@@ -157,8 +150,6 @@ export class AvailabilityPage {
         tap(() => {
           this.loading.set(true);
           this.pageError.set(null);
-          // The field follows the URL, never the other way round: picking a day navigates.
-          this.dayField.setValue(fromPlainDate(this.chosen()) ?? venueToday());
         }),
         switchMap(({ venueId, date }) =>
           this.venues.availability(venueId, date).pipe(

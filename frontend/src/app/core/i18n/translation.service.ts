@@ -1,5 +1,12 @@
 import { computed, Injectable, signal } from '@angular/core';
-import { DATE_LOCALES, DEFAULT_LANGUAGE, isLanguage, Language, TRANSLATIONS } from './locales';
+import {
+  DATE_LOCALES,
+  DEFAULT_LANGUAGE,
+  dictionaryFor,
+  isLanguage,
+  Language,
+  THAI,
+} from './locales';
 
 export const LANGUAGE_STORAGE_KEY = 'courtpaka.language';
 
@@ -12,6 +19,14 @@ export const LANGUAGE_STORAGE_KEY = 'courtpaka.language';
 export class TranslationService {
   private readonly current = signal<Language>(readStoredLanguage());
 
+  /**
+   * The words this app has so far: Thai from the start, another language once it is fetched.
+   * A signal, so every template that is already on screen rewrites itself when one arrives.
+   */
+  private readonly words = signal<Partial<Record<Language, Record<string, string>>>>({
+    [DEFAULT_LANGUAGE]: THAI,
+  });
+
   readonly language = this.current.asReadonly();
 
   /** The locale dates are written in, so nothing else has to know how a language maps to one. */
@@ -22,10 +37,25 @@ export class TranslationService {
     document.documentElement.lang = this.current();
   }
 
-  /** Reading the signal inside makes every template binding that calls this refresh on a switch. */
-  t = (key: string): string => TRANSLATIONS[this.current()][key] ?? key;
+  /**
+   * Reading the signals inside makes every template binding that calls this refresh on a switch,
+   * and again when a language that had to be fetched arrives. Until it does, the words are Thai:
+   * the app is readable throughout, which a page of untranslated keys would not be.
+   */
+  t = (key: string): string => this.words()[this.current()]?.[key] ?? THAI[key] ?? key;
+
+  /** Fetches a language's words if this app does not have them yet. */
+  async load(language: Language): Promise<void> {
+    if (this.words()[language]) {
+      return;
+    }
+
+    const words = await dictionaryFor(language);
+    this.words.update((have) => ({ ...have, [language]: words }));
+  }
 
   use(language: Language): void {
+    void this.load(language);
     this.current.set(language);
     document.documentElement.lang = language;
     try {
@@ -43,7 +73,7 @@ export class TranslationService {
   }
 }
 
-function readStoredLanguage(): Language {
+export function readStoredLanguage(): Language {
   try {
     const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY);
     if (isLanguage(stored)) {

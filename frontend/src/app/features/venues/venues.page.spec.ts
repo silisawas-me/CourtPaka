@@ -1,6 +1,6 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TRANSLATIONS } from '../../core/i18n/locales';
+import { TRANSLATIONS } from '../../testing/translations';
 import { elementOf, pageProviders, textOf } from '../../testing/dom';
 import { VenuesPage } from './venues.page';
 

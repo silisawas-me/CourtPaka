@@ -1,4 +1,5 @@
-import { LANGUAGES, TRANSLATIONS } from './locales';
+import { LANGUAGES } from './locales';
+import { TRANSLATIONS } from '../../testing/translations';
 
 describe('translations', () => {
   const [source, ...others] = LANGUAGES;

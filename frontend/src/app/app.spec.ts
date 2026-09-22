@@ -2,7 +2,8 @@ import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { App } from './app';
 import { AuthService } from './core/auth/auth.service';
-import { TRANSLATIONS } from './core/i18n/locales';
+import { TranslationService } from './core/i18n/translation.service';
+import { TRANSLATIONS } from './testing/translations';
 import { check, clickOn, elementOf, pageProviders, textOf } from './testing/dom';
 
 describe('App shell', () => {
@@ -44,12 +45,14 @@ describe('App shell', () => {
     expect(textOf(fixture, 'language-not-saved')).toBeUndefined();
   });
 
-  it('says so when the language could not be saved to the account', () => {
+  it('says so when the language could not be saved to the account', async () => {
     check(fixture, '[data-testid="language-en"]');
 
     httpMock
       .expectOne('/api/auth/me/language')
       .flush(null, { status: 500, statusText: 'Server Error' });
+    // English is fetched when it is chosen, so the message arrives in it once it is here.
+    await TestBed.inject(TranslationService).load('en');
     fixture.detectChanges();
 
     expect(textOf(fixture, 'language-not-saved')).toBe(TRANSLATIONS.en['app.languageNotSaved']);

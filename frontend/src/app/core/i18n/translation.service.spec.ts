@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { TRANSLATIONS } from './locales';
+import { TRANSLATIONS } from '../../testing/translations';
 import { LANGUAGE_STORAGE_KEY, TranslationService } from './translation.service';
 
 describe('TranslationService', () => {
@@ -16,12 +16,22 @@ describe('TranslationService', () => {
     expect(service.t('login.title')).toBe(TRANSLATIONS.th['login.title']);
   });
 
-  it('switches language, remembers it and updates the document language', () => {
+  it('switches language, remembers it and updates the document language', async () => {
     service.use('en');
 
-    expect(service.t('login.title')).toBe(TRANSLATIONS.en['login.title']);
+    // The choice is made at once; the words that go with it are fetched, so they arrive next.
     expect(document.documentElement.lang).toBe('en');
     expect(localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBe('en');
+
+    await service.load('en');
+    expect(service.t('login.title')).toBe(TRANSLATIONS.en['login.title']);
+  });
+
+  /** Until the other language arrives the screen is Thai, never a page of raw keys. */
+  it('reads in Thai while another language is on its way', () => {
+    service.use('en');
+
+    expect(service.t('login.title')).toBe(TRANSLATIONS.th['login.title']);
   });
 
   it('adopts a language an account reports, and ignores one it does not support', () => {

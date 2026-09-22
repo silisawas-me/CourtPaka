@@ -67,7 +67,10 @@ with sync_playwright() as p:
     )
     # What happens once an hour is picked, signed out and signed in, is booking.py.
 
-    # 2. The day can be moved within the booking window, and not outside it.
+    # 2. The day can be moved within the booking window, and not outside it. The calendar is not
+    #    downloaded until it is asked for (PRD 8's LCP target), so asking is the first click.
+    page.click("[data-testid=day-placeholder]")
+    page.wait_for_selector("mat-datepicker-toggle button")
     page.click("mat-datepicker-toggle button")
     page.wait_for_selector("mat-calendar")
     check(
