@@ -9,7 +9,17 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Router, RouterLink } from '@angular/router';
-import { catchError, EMPTY, exhaustMap, filter, fromEvent, interval, merge, switchMap, tap } from 'rxjs';
+import {
+  catchError,
+  EMPTY,
+  exhaustMap,
+  filter,
+  fromEvent,
+  interval,
+  merge,
+  switchMap,
+  tap,
+} from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { BookingService } from '../../core/bookings/booking.service';
 import { errorKey } from '../../core/http/api-error';
@@ -176,10 +186,7 @@ export class AvailabilityPage {
     toObservable(this.asked)
       .pipe(
         switchMap(({ venueId, date }) =>
-          merge(
-            interval(REFRESH_EVERY_MS),
-            fromEvent(this.document, 'visibilitychange'),
-          ).pipe(
+          merge(interval(REFRESH_EVERY_MS), fromEvent(this.document, 'visibilitychange')).pipe(
             filter(() => this.worthRefreshing()),
             exhaustMap(() =>
               this.venues.availability(venueId, date, true).pipe(catchError(() => EMPTY)),
