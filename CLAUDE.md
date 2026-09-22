@@ -82,6 +82,7 @@
 | Test backend บางตัว | `dotnet test backend --filter "FullyQualifiedName~HealthEndpointTests"` |
 | Test frontend | `cd frontend && npm test -- --watch=false` |
 | Build (เหมือน CI) | `dotnet build backend -c Release -warnaserror` · `cd frontend && npm run build` |
+| จัดฟอร์แมต frontend (CI เช็ก) | `cd frontend && npm run format` · ตรวจอย่างเดียว `npm run format:check` — **CI fail ถ้าไม่ผ่าน** ต้องรันก่อน push ทุกครั้งที่แก้ไฟล์ใน `frontend/` |
 | Build image arm64 (UAT) | `docker buildx build --platform linux/arm64 backend` |
 | วัด LCP หน้า grid (PRD 8) | `python scripts/perf/grid_lcp.py --runs 3` (ต้องเปิด stack `--profile full` ก่อน) |
 | Load test (PRD 8) | ดู `scripts/load/README.md` — k6 ผ่าน docker · บัญชีทดสอบจาก `scripts/load/provision_accounts.py` (local เท่านั้น) · ผลจริงต้องวัดบนเครื่อง PRD |
