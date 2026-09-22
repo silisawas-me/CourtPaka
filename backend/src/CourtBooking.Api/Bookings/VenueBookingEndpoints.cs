@@ -58,6 +58,12 @@ public static class VenueBookingEndpoints
         bookings.MapPost("/", TakeAtCounterAsync)
             .RequireAuthorization(VenuePolicies.Needs(VenuePermissions.ManageBookings));
 
+        // Who is coming and who is here (PRD US-24). Both are things the counter writes down
+        // about a booking it already has, so they stay open to a suspended venue like the rest of
+        // this group: people still turn up to hours that were sold before the platform stopped it.
+        bookings.MapPost("/{bookingId:guid}/confirm-arrival", ConfirmArrivalAsync);
+        bookings.MapPost("/{bookingId:guid}/check-in", CheckInAsync);
+
         bookings.MapPost("/{bookingId:guid}/cancel", CancelAsync);
         bookings.MapPost("/{bookingId:guid}/no-show", NoShowAsync);
         bookings.MapPost("/{bookingId:guid}/settle-payment", SettleAsync);
@@ -157,6 +163,129 @@ public static class VenueBookingEndpoints
     }
 
     /// <summary>
+    /// The booker said they are coming — usually because somebody rang them (PRD US-24). It moves
+    /// the arrival forward and nothing else: the booking, the money and the hours stay as they are.
+    /// </summary>
+    private static Task<Results<Ok<VenueBookingResponse>, ProblemHttpResult>> ConfirmArrivalAsync(
+        Guid venueId,
+        Guid bookingId,
+        CurrentVenue venue,
+        AppDbContext database,
+        TimeProvider timeProvider,
+        ILoggerFactory loggers,
+        CancellationToken cancellationToken) =>
+        MoveArrivalAsync(
+            venueId,
+            bookingId,
+            BookingArrival.Confirmed,
+            (booking, status, _) => Arrivals.CanConfirm(booking, status),
+            venue,
+            database,
+            timeProvider,
+            loggers,
+            cancellationToken);
+
+    /// <summary>They are at the desk (PRD US-24). The hours were already theirs; this says so.</summary>
+    private static Task<Results<Ok<VenueBookingResponse>, ProblemHttpResult>> CheckInAsync(
+        Guid venueId,
+        Guid bookingId,
+        CurrentVenue venue,
+        AppDbContext database,
+        TimeProvider timeProvider,
+        ILoggerFactory loggers,
+        CancellationToken cancellationToken) =>
+        MoveArrivalAsync(
+            venueId,
+            bookingId,
+            BookingArrival.Arrived,
+            Arrivals.CanCheckIn,
+            venue,
+            database,
+            timeProvider,
+            loggers,
+            cancellationToken);
+
+    /// <summary>
+    /// Writes one step of an arrival, with the row that says who wrote it (PRD US-24, PRD 8).
+    ///
+    /// It changes nothing else — not the status, not the money, not the hours — so unlike the
+    /// counter's other doors it needs no transaction of its own: the move and its record are one
+    /// save, which is what keeps them from parting.
+    /// </summary>
+    private static async Task<Results<Ok<VenueBookingResponse>, ProblemHttpResult>> MoveArrivalAsync(
+        Guid venueId,
+        Guid bookingId,
+        BookingArrival to,
+        Func<Booking, BookingStatus, DateTimeOffset, bool> allowed,
+        CurrentVenue venue,
+        AppDbContext database,
+        TimeProvider timeProvider,
+        ILoggerFactory loggers,
+        CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        var membership = venue.Require();
+
+        var booking = await OneAsync(database, venueId, bookingId).SingleOrDefaultAsync(cancellationToken);
+        if (booking is null)
+        {
+            return ApiProblem.Of(StatusCodes.Status404NotFound, BookingErrorCodes.NotFound);
+        }
+
+        var status = BookedSlots.StatusAt(booking, now);
+        if (!allowed(booking, status, now))
+        {
+            return ApiProblem.Of(StatusCodes.Status409Conflict, BookingErrorCodes.ArrivalNotAllowed);
+        }
+
+        var from = booking.Arrival;
+        if (!ArrivalTransitions.Allowed(from, to))
+        {
+            return ApiProblem.Of(StatusCodes.Status409Conflict, BookingErrorCodes.ArrivalNotAllowed);
+        }
+
+        // The booking was read without tracking, the way every rule here reads one, so the move
+        // is a conditional update: it finds the arrival where this decision found it, or somebody
+        // else moved it first and nothing is written twice.
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+
+        var moved = await database.Bookings
+            .Where(candidate =>
+                candidate.Id == bookingId
+                && candidate.VenueId == venueId
+                && candidate.Arrival == from)
+            .ExecuteUpdateAsync(
+                set => set
+                    .SetProperty(candidate => candidate.Arrival, to)
+                    .SetProperty(
+                        candidate => candidate.ArrivedAt,
+                        candidate => to == BookingArrival.Arrived ? now : candidate.ArrivedAt),
+                cancellationToken);
+
+        if (moved != 1)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return ApiProblem.Of(StatusCodes.Status409Conflict, BookingErrorCodes.ArrivalNotAllowed);
+        }
+
+        database.BookingArrivalChanges.Add(new BookingArrivalChange
+        {
+            BookingId = bookingId,
+            From = from,
+            To = to,
+            ChangedAt = now,
+            ChangedByUserId = membership.UserId,
+        });
+        await database.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        AppEvents.For(loggers).LogInformation(
+            "booking_arrival_{Arrival} {BookingId}", to.ToString().ToLowerInvariant(), bookingId);
+
+        return TypedResults.Ok(await OneDrawnAsync(database, venueId, bookingId, venue, now, cancellationToken));
+    }
+
+    /// <summary>
     /// Nobody turned up. The court was held for them, so nothing is owed — and the hours they
     /// have not reached yet go back on sale for whoever wants them (PRD 6.1).
     /// </summary>
@@ -173,7 +302,8 @@ public static class VenueBookingEndpoints
             venueId,
             bookingId,
             BookingStatus.NoShow,
-            VenueDecisions.NoShowOffer,
+            // The venue's own wait, which the rule takes rather than assumes (PRD US-24).
+            (booking, status, now) => VenueDecisions.NoShowOffer(booking, status, now, venue.GraceMinutes),
             reason: null,
             cause: null,
             Hours.ReleaseRemaining,
@@ -623,6 +753,12 @@ public static class VenueBookingEndpoints
             .Where(court => court.VenueId == venueId)
             .ToDictionaryAsync(court => court.Id, court => court.Name, cancellationToken);
 
+        // How long this venue waits for somebody before they have not come (PRD US-24).
+        var graceMinutes = await database.Venues
+            .Where(venue => venue.Id == venueId)
+            .Select(venue => venue.GraceMinutes)
+            .SingleAsync(cancellationToken);
+
         var bookingIds = found.Select(row => row.Booking.Id).ToArray();
         var sentBack = await database.RefundRecords
             .StillStanding()
@@ -647,6 +783,7 @@ public static class VenueBookingEndpoints
                     courtNames,
                     byOwner,
                     sentBack.GetValueOrDefault(row.Booking.Id),
+                    graceMinutes,
                     now)),
         ];
     }
@@ -658,9 +795,11 @@ public static class VenueBookingEndpoints
         IReadOnlyDictionary<Guid, string> courtNames,
         bool byOwner,
         decimal sentBackBaht,
+        int graceMinutes,
         DateTimeOffset now)
     {
         var status = BookedSlots.StatusAt(booking, now);
+        var startsAt = booking.Slots.Min(slot => slot.StartsAt);
 
         return new VenueBookingResponse(
             booking.Id,
@@ -670,13 +809,16 @@ public static class VenueBookingEndpoints
             booking.CustomerName,
             booking.CustomerPhone,
             status.ToString(),
+            booking.Arrival.ToString(),
+            booking.ArrivedAt,
+            VenueDecisions.GraceEndsAt(startsAt, graceMinutes),
             booking.PaymentState.ToString(),
             booking.TotalBaht,
             booking.RefundDueBaht,
             sentBackBaht,
             Refunds.OutstandingOf(booking.RefundDueBaht, sentBackBaht),
             BookingSlotResponse.Of(booking, courtNames),
-            Doors(booking, status, byOwner, now));
+            Doors(booking, status, byOwner, graceMinutes, now));
     }
 
     /// <summary>
@@ -689,6 +831,7 @@ public static class VenueBookingEndpoints
         Booking booking,
         BookingStatus status,
         bool byOwner,
+        int graceMinutes,
         DateTimeOffset now)
     {
         // Asked with an answer that only tests the timing and who is asking; the venue still
@@ -699,7 +842,9 @@ public static class VenueBookingEndpoints
 
         return new VenueBookingActionsResponse(
             cancelling.Allowed,
-            VenueDecisions.NoShowOffer(booking, status, now).Allowed,
+            Arrivals.CanConfirm(booking, status),
+            Arrivals.CanCheckIn(booking, status, now),
+            VenueDecisions.NoShowOffer(booking, status, now, graceMinutes).Allowed,
             booking.PaymentState == PaymentState.Unconfirmed,
             VenueDecisions
                 .PlayedAfterAllOffer(booking, status, "recorded wrongly", byOwner, now)

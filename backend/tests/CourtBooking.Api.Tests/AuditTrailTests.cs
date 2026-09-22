@@ -25,6 +25,7 @@ public sealed class AuditTrailTests(ApiTestFixture api) : IClassFixture<ApiTestF
     [InlineData("UserConsents")]
     [InlineData("SlipViewings")]
     [InlineData("MembershipChanges")]
+    [InlineData("BookingArrivalChanges")]
     public async Task A_history_row_cannot_be_changed_or_removed(string table)
     {
         await EveryHistoryHasARowAsync();
@@ -82,7 +83,7 @@ public sealed class AuditTrailTests(ApiTestFixture api) : IClassFixture<ApiTestF
     private async Task EveryHistoryHasARowAsync()
     {
         var admin = await scenario.PlatformAdminAsync();
-        var (_, venue, courts) = await scenario.BookableVenueAsync();
+        var (venueOwner, venue, courts) = await scenario.BookableVenueAsync();
         var (booker, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
 
         var owner = await scenario.SignedInClientAsync();
@@ -98,6 +99,13 @@ public sealed class AuditTrailTests(ApiTestFixture api) : IClassFixture<ApiTestF
             (await admin.PostAsJsonAsync(
                 $"/api/admin/users/{me.Id}/suspend",
                 new Identity.AccountStandingRequest("ทดสอบ"))).StatusCode);
+
+        // Somebody turned up, which is the row BookingArrivalChanges keeps (PRD US-24).
+        await scenario.StartsInAsync(booking.Id, TimeSpan.FromMinutes(5));
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await venueOwner.PostAsync(
+                $"/api/venues/{venue.Id}/bookings/{booking.Id}/confirm-arrival", null)).StatusCode);
 
         var complaint = await VenueScenario.ReadAsync<ComplaintResponse>(
             await admin.PostAsJsonAsync(

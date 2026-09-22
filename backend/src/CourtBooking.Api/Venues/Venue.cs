@@ -1,5 +1,7 @@
 using CourtBooking.Api.Identity;
 
+using CourtBooking.Api.Bookings;
+
 namespace CourtBooking.Api.Venues;
 
 /// <summary>
@@ -25,6 +27,13 @@ public sealed class Venue
     public required string Province { get; set; }
 
     public VenueStatus Status { get; set; } = VenueStatus.Pending;
+
+    /// <summary>
+    /// How long after the hour starts the venue waits before somebody counts as not having come
+    /// (PRD US-24). Fifteen minutes unless the venue says otherwise: a court by a main road and a
+    /// court in a mall do not wait the same.
+    /// </summary>
+    public int GraceMinutes { get; set; } = VenueDecisions.DefaultGraceMinutes;
 
     /// <summary>
     /// Where the money goes and who the venue is for tax (PRD US-10). Owned by the venue rather

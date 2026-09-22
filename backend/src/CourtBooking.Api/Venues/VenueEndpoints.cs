@@ -43,6 +43,8 @@ public static class VenueEndpoints
         venue.MapPost("/resubmit", ResubmitAsync)
             .RequireAuthorization(VenuePolicies.OwnerAnsweringRefusal);
         venue.MapGet("/attention", WaitingForAsync).RequireAuthorization(VenuePolicies.Member);
+        // How long the counter waits for somebody is a setting like the prices are (PRD US-24).
+        venue.MapPut("/grace", SetGraceAsync).RequireAuthorization(VenuePolicies.Settings);
         venue.MapPut("/notifications", ChooseNotificationsAsync)
             .RequireAuthorization(VenuePolicies.OwnChoice);
         venue.MapGet("/members", ListMembersAsync).RequireAuthorization(VenuePolicies.Member);
@@ -606,6 +608,30 @@ public static class VenueEndpoints
         await transaction.CommitAsync(cancellationToken);
 
         return TypedResults.Ok(ToResponse(invitation.Venue!, membership));
+    }
+
+    /// <summary>
+    /// How long this venue waits after the hour starts before nobody having come is what it is
+    /// (PRD US-24). A court by a main road and a court in a mall do not wait the same.
+    /// </summary>
+    private static async Task<Results<NoContent, ProblemHttpResult>> SetGraceAsync(
+        Guid venueId,
+        GraceRequest request,
+        AppDbContext database,
+        CancellationToken cancellationToken)
+    {
+        if (request.Minutes < 0 || request.Minutes > VenueDecisions.MaxGraceMinutes)
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, VenueErrorCodes.InvalidGrace);
+        }
+
+        await database.Venues
+            .Where(venue => venue.Id == venueId)
+            .ExecuteUpdateAsync(
+                set => set.SetProperty(venue => venue.GraceMinutes, request.Minutes),
+                cancellationToken);
+
+        return TypedResults.NoContent();
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult, NotFound>> ChangePermissionsAsync(

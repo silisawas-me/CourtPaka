@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using CourtBooking.Api.Bookings;
 using CourtBooking.Api.Data;
 using CourtBooking.Api.Identity;
 using Microsoft.AspNetCore.Authorization;
@@ -137,6 +138,13 @@ public sealed class CurrentVenue
 
     public VenueStatus? Status { get; set; }
 
+    /// <summary>
+    /// How long this venue waits before somebody has not turned up (PRD US-24). Carried with the
+    /// request because the handler has already read the venue; asking again would be a second
+    /// query for one integer.
+    /// </summary>
+    public int GraceMinutes { get; set; } = VenueDecisions.DefaultGraceMinutes;
+
     public VenueMembership Require() =>
         Membership ?? throw new InvalidOperationException("No venue membership was resolved for this request.");
 }
@@ -171,6 +179,7 @@ public sealed class VenuePermissionHandler(AppDbContext database, CurrentVenue c
 
             currentVenue.Membership = found;
             currentVenue.Status = found?.Venue?.Status;
+            currentVenue.GraceMinutes = found?.Venue?.GraceMinutes ?? VenueDecisions.DefaultGraceMinutes;
         }
 
         var membership = currentVenue.Membership;

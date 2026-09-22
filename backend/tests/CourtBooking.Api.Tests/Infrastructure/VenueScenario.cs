@@ -297,6 +297,27 @@ public sealed class VenueScenario(ApiTestFixture api)
     }
 
     /// <summary>
+    /// A booking the venue has confirmed: paid for, looked at, and waiting to be played. What a
+    /// counter deals with all evening (PRD US-24).
+    /// </summary>
+    public async Task<(HttpClient Booker, BookingResponse Booking)> ConfirmedBookingAsync(
+        HttpClient owner,
+        Guid venueId,
+        Guid courtId,
+        int hour)
+    {
+        var (booker, booking) = await WaitingBookingAsync(venueId, courtId, hour);
+        var confirmed = await owner.PostAsync(
+            $"/api/venues/{venueId}/slip-queue/{booking.Id}/confirm", null);
+        if (confirmed.StatusCode != HttpStatusCode.OK)
+        {
+            throw new InvalidOperationException($"Could not confirm a slip: {confirmed.StatusCode}");
+        }
+
+        return (booker, booking);
+    }
+
+    /// <summary>
     /// Somebody else takes the hours a booking has let go. Written straight to the database: a
     /// test that has moved a booking's hours around no longer lines up with the grid, and what is
     /// being tested is the constraint that stops two bookings holding one court-hour (PRD BR-04).

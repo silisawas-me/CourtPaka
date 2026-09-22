@@ -63,6 +63,9 @@ public sealed record AcceptInvitationRequest(Guid InvitationId, string Token);
 
 public sealed record ChangePermissionsRequest(string[] Permissions);
 
+/// <summary>How long this venue waits before a booking counts as a no-show (PRD US-24).</summary>
+public sealed record GraceRequest(int Minutes);
+
 /// <summary>
 /// A venue always arrives with what the caller may do there, so screens and guards never have to
 /// work it out from the member list (PRD US-14).
@@ -99,6 +102,12 @@ public sealed record VenueInvitationResponse(Guid Id, string Email, string[] Per
 
 public static class VenueErrorCodes
 {
+    /// <summary>
+    /// The wait before somebody counts as not having come has to be a wait a person could keep:
+    /// nothing, up to an hour (PRD US-24).
+    /// </summary>
+    public const string InvalidGrace = "venue.invalid_grace";
+
     public const string CodeAlreadyUsed = "venue.code_already_used";
 
     /// <summary>

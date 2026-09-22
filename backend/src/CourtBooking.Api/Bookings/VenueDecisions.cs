@@ -34,10 +34,20 @@ public static class VenueDecisions
     public static readonly TimeSpan CorrectionWindow = TimeSpan.FromHours(24);
 
     /// <summary>
-    /// How late a customer has to be before the venue may write them off (PRD 6.1). Nobody is a
-    /// no-show at one minute past.
+    /// How late a customer has to be before the venue may write them off (PRD 6.1, US-24). Nobody
+    /// is a no-show at one minute past. A venue may set its own (Venue.GraceMinutes); this is what
+    /// it starts at, and what everything that has no venue to hand uses.
     /// </summary>
-    public static readonly TimeSpan LateEnoughForNoShow = TimeSpan.FromMinutes(15);
+    public const int DefaultGraceMinutes = 15;
+
+    public static readonly TimeSpan LateEnoughForNoShow = TimeSpan.FromMinutes(DefaultGraceMinutes);
+
+    /// <summary>The longest wait a venue may set, so a booking cannot be un-missable.</summary>
+    public const int MaxGraceMinutes = 60;
+
+    /// <summary>When this booking's grace runs out, after which it may be written off.</summary>
+    public static DateTimeOffset GraceEndsAt(DateTimeOffset playStartsAt, int graceMinutes) =>
+        playStartsAt + TimeSpan.FromMinutes(graceMinutes);
 
     /// <summary>
     /// What cancelling this booking from the counter would come to.
@@ -114,11 +124,15 @@ public static class VenueDecisions
     /// <summary>
     /// Whether the venue may record that nobody turned up, and what that leaves (PRD 6.1). It is
     /// always nothing: the court was held, nobody came, and the money stays where it is.
+    ///
+    /// How long it waits first is the venue's (PRD US-24); callers that have the venue to hand
+    /// pass its own, and the rest get the default.
     /// </summary>
     public static Cancellation.Offer NoShowOffer(
         Booking booking,
         BookingStatus status,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        int graceMinutes = DefaultGraceMinutes)
     {
         if (Played(booking) is not { } played)
         {
@@ -131,7 +145,7 @@ public static class VenueDecisions
         {
             // Nobody is a no-show at one minute past, and once the hours are over the booking has
             // already been played as far as everything else is concerned (PRD 6.1, 9.2).
-            BookingStatus.Confirmed when now < playStartsAt + LateEnoughForNoShow =>
+            BookingStatus.Confirmed when now < GraceEndsAt(playStartsAt, graceMinutes) =>
                 Shut(booking, BookingErrorCodes.NotYetLateEnough),
 
             BookingStatus.Confirmed => Give(booking, BookingStatus.NoShow, 0, booking.PaymentState),

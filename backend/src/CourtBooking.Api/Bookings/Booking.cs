@@ -101,6 +101,15 @@ public sealed class Booking
     public PaymentState PaymentState { get; set; } = PaymentState.NotReceived;
 
     /// <summary>
+    /// Whether the person is coming, and then whether they came (PRD US-24). Apart from the
+    /// status on purpose: a booking that is paid for says nothing about somebody walking in.
+    /// </summary>
+    public BookingArrival Arrival { get; set; } = BookingArrival.Unconfirmed;
+
+    /// <summary>When they were checked in at the desk, or null.</summary>
+    public DateTimeOffset? ArrivedAt { get; set; }
+
+    /// <summary>
     /// What the venue owes the booker back, in baht (PRD 6.2). Zero unless the money arrived and
     /// the booking then ended in a way that gives some of it back; recomputed whenever the status
     /// or the payment state moves, never read from the policy after the fact (BR-05).
