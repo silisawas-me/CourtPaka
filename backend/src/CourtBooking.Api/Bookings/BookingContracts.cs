@@ -191,11 +191,13 @@ public sealed record RejectSlipRequest(string Reason, bool PaymentReceived);
 
 /// <summary>
 /// One booking waiting for the venue to look at its slip (PRD US-12). It names the booker by the
-/// address they signed up with; nothing else about them is the venue's business here.
+/// address they signed up with — or, for a LINE account that has none, by the phone number they
+/// gave instead (PRD US-01); nothing else about them is the venue's business here.
 /// </summary>
 public sealed record SlipQueueItemResponse(
     Guid BookingId,
-    string BookerEmail,
+    string? BookerEmail,
+    string? BookerPhone,
     decimal TotalBaht,
     DateTimeOffset SlipUploadedAt,
     DateTimeOffset StartsAt,
@@ -233,6 +235,8 @@ public sealed record CounterBookingRequest(
 public sealed record VenueBookingResponse(
     Guid BookingId,
     string? BookerEmail,
+    /// <summary>Only when there is no address: a LINE booker is reached on the phone (US-01).</summary>
+    string? BookerPhone,
     /// <summary>Online or at the counter, so the row can say who it is for (PRD US-13).</summary>
     string Channel,
     /// <summary>For a counter booking, the name and phone the customer gave; null otherwise.</summary>

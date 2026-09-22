@@ -78,7 +78,8 @@ public static class VerifySlipEndpoints
             {
                 booking.Id,
                 booking.TotalBaht,
-                BookerEmail = booking.Booker!.Email!,
+                BookerEmail = booking.Booker!.Email,
+                BookerPhone = booking.Booker.PhoneNumber,
                 StartsAt = booking.Slots.Min(slot => slot.StartsAt),
                 Latest = database.PaymentSlips
                     .Where(slip => slip.BookingId == booking.Id)
@@ -97,6 +98,8 @@ public static class VerifySlipEndpoints
             .Select(booking => new SlipQueueItemResponse(
                 booking.Id,
                 booking.BookerEmail,
+                // The one way left to reach a booker who has no address here (PRD US-01).
+                booking.BookerEmail is null ? booking.BookerPhone : null,
                 booking.TotalBaht,
                 booking.Latest!.UploadedAt,
                 booking.StartsAt,

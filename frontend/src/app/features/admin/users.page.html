@@ -52,15 +52,21 @@
                   [attr.data-testid]="'open-user-' + user.id"
                   (click)="show(user)"
                 >
-                  {{ user.email }}
+                  <!-- Whichever this account is reachable by (PRD US-01). -->
+                  {{ user.email ?? user.phoneNumber }}
                 </button>
                 @if (user.suspendedAt) {
                   <span class="badge badge-stopped" data-testid="suspended-badge">
                     {{ i18n.t('admin.users.suspended') }}
                   </span>
                 }
-                @if (!user.emailConfirmed) {
+                @if (!user.emailConfirmed && user.email) {
                   <span class="badge">{{ i18n.t('admin.users.unconfirmed') }}</span>
+                }
+                @if (!user.email) {
+                  <span class="badge" data-testid="line-only">{{
+                    i18n.t('admin.users.line')
+                  }}</span>
                 }
                 @if (user.isPlatformAdmin) {
                   <span class="badge">{{ i18n.t('admin.users.admin') }}</span>

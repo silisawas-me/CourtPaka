@@ -84,8 +84,11 @@
                   }
                   <span class="badge">{{ i18n.t('counter.badge') }}</span>
                 } @else {
-                  <!-- Null once the booker has asked to be forgotten (PDPA, S-15). -->
-                  {{ booking.bookerEmail ?? i18n.t('booker.deleted') }}
+                  <!--
+                    The address, or the phone number of a LINE booker who has none (US-01), or
+                    nobody once the booker has asked to be forgotten (PDPA, S-15).
+                  -->
+                  {{ booking.bookerEmail ?? booking.bookerPhone ?? i18n.t('booker.deleted') }}
                 }
               </span>
               <span class="badge booking-status" [class.badge-on]="booking.status === 'Confirmed'">

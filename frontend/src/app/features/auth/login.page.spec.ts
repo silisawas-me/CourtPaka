@@ -1,7 +1,15 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TRANSLATIONS } from '../../core/i18n/locales';
-import { clickOn, pageProviders, setInput, submitForm, textOf } from '../../testing/dom';
+import {
+  clickOn,
+  elementOf,
+  lineSignInAvailable,
+  pageProviders,
+  setInput,
+  submitForm,
+  textOf,
+} from '../../testing/dom';
 import { LoginPage } from './login.page';
 
 describe('LoginPage', () => {
@@ -18,6 +26,7 @@ describe('LoginPage', () => {
     httpMock = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(LoginPage);
     fixture.detectChanges();
+    lineSignInAvailable(true);
   });
 
   afterEach(() => httpMock.verify());
@@ -74,5 +83,21 @@ describe('LoginPage', () => {
 
     clickOn(fixture, 'toggle-password');
     expect(password().type).toBe('password');
+  });
+  it('offers LINE, carrying the page the guard interrupted', () => {
+    fixture.componentRef.setInput('returnUrl', '/bookings');
+    fixture.detectChanges();
+
+    const button = elementOf(fixture, 'line-sign-in') as HTMLAnchorElement;
+    expect(button.getAttribute('href')).toBe(
+      '/api/auth/line/start?returnUrl=' + encodeURIComponent('/bookings'),
+    );
+  });
+
+  it('says why LINE sent the booker back here', () => {
+    fixture.componentRef.setInput('line', 'auth.line_denied');
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'form-error')).toBe(TRANSLATIONS.th['error.auth.line_denied']);
   });
 });

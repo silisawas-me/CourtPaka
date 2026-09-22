@@ -1,3 +1,4 @@
+using CourtBooking.Api.Identity;
 using System.ComponentModel.DataAnnotations;
 
 namespace CourtBooking.Api;
@@ -91,4 +92,7 @@ public sealed class AppOptions
     /// its hours forever.
     /// </summary>
     public bool RunCaretaker { get; init; } = true;
+
+    /// <summary>Signing in with LINE (PRD US-01); off until a channel is configured.</summary>
+    public LineOptions Line { get; init; } = new();
 }

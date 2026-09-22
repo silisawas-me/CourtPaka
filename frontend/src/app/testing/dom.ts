@@ -2,7 +2,7 @@ import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { EnvironmentProviders, Provider } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { AuthService } from '../core/auth/auth.service';
+import { AuthService, CurrentUser } from '../core/auth/auth.service';
 import { provideRouter, Routes } from '@angular/router';
 import { apiErrorInterceptor } from '../core/http/api-error';
 
@@ -19,11 +19,31 @@ export function pageProviders(routes: Routes = []): (Provider | EnvironmentProvi
 }
 
 /** Puts a signed-in account behind the pages under test, the way the app initializer does. */
-export function signInAs(email = 'user@example.com'): void {
+export function signInAs(email = 'user@example.com', account: Partial<CurrentUser> = {}): void {
   TestBed.inject(AuthService).loadCurrentUser().subscribe();
   TestBed.inject(HttpTestingController)
     .expectOne('/api/auth/me')
-    .flush({ id: 'u0', email, emailConfirmed: true, language: 'th' });
+    .flush({
+      id: 'u0',
+      email,
+      emailConfirmed: true,
+      language: 'th',
+      isPlatformAdmin: false,
+      phoneNumber: '0812345678',
+      hasPassword: true,
+      signsInWithLine: false,
+      cannotBookBecause: null,
+      ...account,
+    });
+}
+
+/**
+ * Answers the one question the LINE button asks on every way in: does this deployment have a
+ * channel (PRD US-01). Signed-out pages ask it as they render, so a spec that does not care still
+ * has to answer it.
+ */
+export function lineSignInAvailable(enabled = false): void {
+  TestBed.inject(HttpTestingController).expectOne('/api/auth/line').flush({ enabled });
 }
 
 export function textOf(fixture: ComponentFixture<unknown>, testId: string): string | undefined {

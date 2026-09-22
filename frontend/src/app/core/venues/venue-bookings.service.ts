@@ -45,6 +45,8 @@ export interface CounterBookingRequest {
 export interface VenueBooking {
   bookingId: string;
   bookerEmail: string | null;
+  /** Only when there is no address: a LINE booker is reached on the phone (US-01). */
+  bookerPhone: string | null;
   /** Online, or taken at the counter — which decides who the row is for. */
   channel: 'Online' | 'Staff';
   customerName: string | null;

@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -42,9 +42,72 @@ export class AccountPage {
   protected readonly i18n = inject(TranslationService);
   protected readonly user = this.auth.currentUser;
 
+  /** What came back in the address from LINE: "confirmed", or why it did not (PRD US-01). */
+  readonly line = input<string>();
+
+  protected readonly lineConfirmed = computed(() => this.line() === 'confirmed');
+  protected readonly lineError = computed(() =>
+    this.line() && !this.lineConfirmed() ? this.line()! : null,
+  );
+
+  /** An account with no password (LINE) proves who it is at LINE instead. */
+  protected readonly confirmsWithLine = computed(() => this.user()?.hasPassword === false);
+
+  protected readonly phoneForm = this.forms.nonNullable.group({
+    phoneNumber: [''],
+  });
+
+  protected readonly savingPhone = signal(false);
+  protected readonly phoneSaved = signal(false);
+  protected readonly phoneError = signal<string | null>(null);
+
+  constructor() {
+    // The field starts at what the account has, and follows it when the account is read again.
+    effect(() => {
+      const phone = this.user()?.phoneNumber ?? '';
+      untracked(() => {
+        if (!this.phoneForm.controls.phoneNumber.dirty) {
+          this.phoneForm.controls.phoneNumber.setValue(phone);
+        }
+      });
+    });
+  }
+
+  protected savePhone(): void {
+    if (this.savingPhone()) {
+      return;
+    }
+
+    this.savingPhone.set(true);
+    this.phoneSaved.set(false);
+    this.phoneError.set(null);
+    this.auth.changePhone(this.phoneForm.getRawValue().phoneNumber || null).subscribe({
+      next: () => {
+        this.savingPhone.set(false);
+        this.phoneSaved.set(true);
+        this.phoneForm.controls.phoneNumber.markAsPristine();
+      },
+      error: (failure: unknown) => {
+        this.savingPhone.set(false);
+        this.phoneError.set(errorKey(failure));
+      },
+    });
+  }
+
   protected readonly deleteForm = this.forms.nonNullable.group({
     understood: [false, Validators.requiredTrue],
-    password: ['', Validators.required],
+    // Required for an account that has a password; an account that confirms at LINE has no box
+    // to fill in, so the rule follows which kind this is.
+    password: [''],
+  });
+
+  private readonly requirePasswordWhenThereIsOne = effect(() => {
+    const control = this.deleteForm.controls.password;
+    const needed = this.confirmsWithLine() ? null : Validators.required;
+    untracked(() => {
+      control.setValidators(needed);
+      control.updateValueAndValidity({ emitEvent: false });
+    });
   });
 
   protected readonly deleting = signal(false);
@@ -56,9 +119,11 @@ export class AccountPage {
       return;
     }
 
+    const { password } = this.deleteForm.getRawValue();
+
     this.deleting.set(true);
     this.deleteError.set(null);
-    this.auth.deleteAccount(this.deleteForm.getRawValue().password).subscribe({
+    this.auth.deleteAccount(this.confirmsWithLine() ? null : password).subscribe({
       next: () => {
         this.deleting.set(false);
         void this.router.navigate(['/'], { queryParams: { deleted: 1 } });

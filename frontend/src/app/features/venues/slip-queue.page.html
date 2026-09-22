@@ -48,7 +48,8 @@
                   [attr.aria-current]="item.bookingId === openedId()"
                   (click)="open(item.bookingId)"
                 >
-                  <span class="queue-item-who">{{ item.bookerEmail }}</span>
+                  <!-- Whichever the venue can reach this booker by (PRD US-01). -->
+                  <span class="queue-item-who">{{ item.bookerEmail ?? item.bookerPhone }}</span>
                   <span class="queue-item-baht">{{ item.totalBaht }}</span>
                   <span class="queue-item-when muted">
                     {{ item.slipUploadedAt | appDateTime: i18n.locale() }}
@@ -79,7 +80,7 @@
               {{ i18n.t('booking.total') }}: {{ booking.totalBaht }}
             </mat-card-title>
             <mat-card-subtitle data-testid="decision-who">{{
-              booking.bookerEmail
+              booking.bookerEmail ?? booking.bookerPhone
             }}</mat-card-subtitle>
           </mat-card-header>
 

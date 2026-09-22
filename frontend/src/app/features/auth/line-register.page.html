@@ -1,0 +1,71 @@
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>{{ i18n.t('line.register.title') }}</mat-card-title>
+    @if (greeting(); as name) {
+      <mat-card-subtitle data-testid="line-greeting">
+        {{ i18n.t('line.register.greeting') }} {{ name }}
+      </mat-card-subtitle>
+    }
+  </mat-card-header>
+
+  <mat-card-content>
+    @if (loading()) {
+      <p class="muted">{{ i18n.t('common.loading') }}</p>
+    } @else if (errorKey(); as key) {
+      <p class="form-error" data-testid="line-error">{{ i18n.t(key) }}</p>
+    }
+
+    @if (!loading()) {
+      <form class="stack" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <!--
+          What LINE handed over, said plainly: the address is the one thing carried across, and a
+          person should not find out later that it is on their account here.
+        -->
+        @if (sharedEmail(); as email) {
+          <p class="shared" data-testid="line-shared-email">
+            {{ i18n.t('line.register.sharedEmail') }} <span class="address">{{ email }}</span>
+          </p>
+          <p class="muted">{{ i18n.t('line.register.verifyLater') }}</p>
+        } @else {
+          <p class="muted">{{ i18n.t('line.register.noEmail') }}</p>
+        }
+
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('common.phone') }}</mat-label>
+          <input
+            matInput
+            id="phone"
+            type="tel"
+            formControlName="phoneNumber"
+            autocomplete="tel"
+            data-testid="line-phone"
+          />
+          <mat-hint>{{ i18n.t('line.register.phoneWhy') }}</mat-hint>
+          <mat-error [appFieldError]="form.controls.phoneNumber" testId="phone-error"></mat-error>
+        </mat-form-field>
+
+        <mat-checkbox formControlName="acceptPolicy" data-testid="line-accept-policy">
+          {{ i18n.t('register.acceptPolicy') }}
+        </mat-checkbox>
+        @if (form.controls.acceptPolicy.touched && form.controls.acceptPolicy.invalid) {
+          <p class="form-error" data-testid="policy-error">
+            {{ i18n.t('register.policyRequired') }}
+          </p>
+        }
+
+        <button
+          matButton="filled"
+          type="submit"
+          data-testid="line-complete"
+          [disabled]="submitting()"
+        >
+          {{ i18n.t(submitting() ? 'common.loading' : 'line.register.submit') }}
+        </button>
+      </form>
+    }
+  </mat-card-content>
+
+  <mat-card-actions>
+    <a matButton routerLink="/login">{{ i18n.t('line.register.startOver') }}</a>
+  </mat-card-actions>
+</mat-card>

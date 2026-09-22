@@ -11,6 +11,11 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/register.page').then((m) => m.RegisterPage),
   },
   {
+    path: 'register/line',
+    loadComponent: () =>
+      import('./features/auth/line-register.page').then((m) => m.LineRegisterPage),
+  },
+  {
     path: 'login',
     loadComponent: () => import('./features/auth/login.page').then((m) => m.LoginPage),
   },

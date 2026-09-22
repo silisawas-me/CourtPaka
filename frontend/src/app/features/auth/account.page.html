@@ -2,9 +2,58 @@
   <mat-card-header>
     <mat-card-title>{{ i18n.t('account.title') }}</mat-card-title>
   </mat-card-header>
-  <mat-card-content>
-    <p class="muted">{{ i18n.t('account.email') }}</p>
-    <p class="email" data-testid="account-email">{{ user()?.email }}</p>
+  <mat-card-content class="stack">
+    <div>
+      <p class="muted">{{ i18n.t('account.email') }}</p>
+      <!-- A LINE account may have no address at all, which is a state, not a blank. -->
+      <p class="email" data-testid="account-email">
+        {{ user()?.email ?? i18n.t('account.noEmail') }}
+      </p>
+      @if (user()?.signsInWithLine) {
+        <p class="muted" data-testid="account-line">{{ i18n.t('account.signsInWithLine') }}</p>
+      }
+    </div>
+
+    <!--
+      The number is what a venue calls when something about the booking changes, so it sits with
+      the account rather than being asked for again at every booking (PRD US-01).
+    -->
+    <form
+      class="stack"
+      data-testid="phone-form"
+      [formGroup]="phoneForm"
+      (ngSubmit)="savePhone()"
+      novalidate
+    >
+      <mat-form-field class="field">
+        <mat-label>{{ i18n.t('common.phone') }}</mat-label>
+        <input
+          matInput
+          id="phone"
+          type="tel"
+          formControlName="phoneNumber"
+          autocomplete="tel"
+          data-testid="account-phone"
+        />
+        <mat-hint>{{ i18n.t('account.phoneWhy') }}</mat-hint>
+      </mat-form-field>
+
+      @if (user()?.cannotBookBecause; as key) {
+        <p class="form-error" data-testid="cannot-book">{{ i18n.t('error.' + key) }}</p>
+      }
+      @if (phoneError(); as key) {
+        <p class="form-error" data-testid="phone-error">{{ i18n.t(key) }}</p>
+      }
+      @if (phoneSaved()) {
+        <p class="success" data-testid="phone-saved">{{ i18n.t('account.phoneSaved') }}</p>
+      }
+
+      <div class="row">
+        <button matButton="tonal" type="submit" data-testid="save-phone" [disabled]="savingPhone()">
+          {{ i18n.t(savingPhone() ? 'common.loading' : 'account.savePhone') }}
+        </button>
+      </div>
+    </form>
   </mat-card-content>
 </mat-card>
 
@@ -21,7 +70,13 @@
       <li>{{ i18n.t('account.delete.first') }}</li>
     </ul>
 
-    <form class="stack" [formGroup]="deleteForm" (ngSubmit)="deleteAccount()" novalidate>
+    <form
+      class="stack"
+      data-testid="delete-form"
+      [formGroup]="deleteForm"
+      (ngSubmit)="deleteAccount()"
+      novalidate
+    >
       <mat-checkbox formControlName="understood" data-testid="delete-understood">
         {{ i18n.t('account.delete.understood') }}
       </mat-checkbox>
@@ -29,20 +84,50 @@
         <p class="form-error" data-testid="understood-error">{{ i18n.t('common.required') }}</p>
       }
 
-      <mat-form-field class="field">
-        <mat-label>{{ i18n.t('account.delete.password') }}</mat-label>
-        <input
-          matInput
-          type="password"
-          formControlName="password"
-          autocomplete="current-password"
-          data-testid="delete-password"
-        />
-        <mat-error
-          [appFieldError]="deleteForm.controls.password"
-          testId="delete-password-error"
-        ></mat-error>
-      </mat-form-field>
+      <!--
+        Asked again at the moment it matters. An account made through LINE has no password to
+        ask for, so it goes back to LINE and returns confirmed (PRD US-01, S-15).
+      -->
+      @if (confirmsWithLine()) {
+        @if (lineConfirmed()) {
+          <p class="success" data-testid="line-confirmed">
+            {{ i18n.t('account.delete.lineConfirmed') }}
+          </p>
+        } @else {
+          <p class="muted">{{ i18n.t('account.delete.lineWhy') }}</p>
+          <!--
+            A form, not a link: the server only accepts this step as a POST, which a link from
+            another site cannot make this browser send with its session (SameSite=Lax).
+          -->
+          <form
+            class="row"
+            method="post"
+            action="/api/auth/line/start?purpose=confirm&returnUrl=%2Faccount"
+          >
+            <button matButton="outlined" type="submit" data-testid="confirm-with-line">
+              {{ i18n.t('account.delete.confirmWithLine') }}
+            </button>
+          </form>
+        }
+        @if (lineError(); as key) {
+          <p class="form-error" data-testid="line-error">{{ i18n.t('error.' + key) }}</p>
+        }
+      } @else {
+        <mat-form-field class="field">
+          <mat-label>{{ i18n.t('account.delete.password') }}</mat-label>
+          <input
+            matInput
+            type="password"
+            formControlName="password"
+            autocomplete="current-password"
+            data-testid="delete-password"
+          />
+          <mat-error
+            [appFieldError]="deleteForm.controls.password"
+            testId="delete-password-error"
+          ></mat-error>
+        </mat-form-field>
+      }
 
       <div class="row">
         <button

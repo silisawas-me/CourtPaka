@@ -37,7 +37,9 @@ export interface PlatformDashboard {
 /** An account as the platform's screen lists it (PRD US-22). */
 export interface AdminUser {
   id: string;
-  email: string;
+  /** Null for a LINE account with no address; it is found and read by its phone (US-01). */
+  email: string | null;
+  phoneNumber: string | null;
   emailConfirmed: boolean;
   suspendedAt: string | null;
   isPlatformAdmin: boolean;

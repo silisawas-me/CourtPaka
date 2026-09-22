@@ -72,7 +72,9 @@ var appOptions = builder.Configuration.GetSection(AppOptions.SectionName).Get<Ap
 builder.Services
     .AddIdentityCore<AppUser>(options =>
     {
-        options.User.RequireUniqueEmail = true;
+        // One account per address is still the rule (EmailRules, and the unique index), but a
+        // LINE account may have no address at all, which this built-in check does not allow.
+        options.User.RequireUniqueEmail = false;
         options.SignIn.RequireConfirmedEmail = false; // Verification gates booking, not signing in (PRD US-01).
         options.Password.RequiredLength = 8;
         options.Password.RequireNonAlphanumeric = false;
@@ -82,6 +84,7 @@ builder.Services
         options.Lockout.AllowedForNewUsers = true;
     })
     .AddEntityFrameworkStores<AppDbContext>()
+    .AddUserValidator<EmailRules>()
     .AddSignInManager<AppSignInManager>()
     .AddDefaultTokenProviders();
 
@@ -131,6 +134,18 @@ builder.Services.ConfigureApplicationCookie(options =>
     });
 
 builder.Services.AddAuthorization();
+
+// LINE Login (PRD US-01). The stand-in LINE takes two locks, like the seeded accounts: the flag
+// AND a development host, because its page signs anybody in as anybody.
+if (builder.Environment.IsDevelopment() && appOptions?.Line.UseDevelopmentFake == true)
+{
+    builder.Services.AddSingleton<DevelopmentLineLogin>();
+    builder.Services.AddSingleton<ILineLogin>(services => services.GetRequiredService<DevelopmentLineLogin>());
+}
+else
+{
+    builder.Services.AddHttpClient<ILineLogin, LineLoginClient>(client => client.Timeout = TimeSpan.FromSeconds(10));
+}
 // Venue endpoints declare the permission they need inline; the handler answers it per venue (PRD US-14).
 builder.Services.AddScoped<CurrentVenue>();
 builder.Services.AddScoped<VenueNotifications>();
@@ -236,6 +251,11 @@ if (app.Environment.IsDevelopment())
 
 // Caddy and the dev-server proxy forward "/api" unchanged, so the API mounts everything under it once here.
 var api = app.MapGroup("/api");
+
+if (app.Environment.IsDevelopment() && startupOptions.Line.UseDevelopmentFake)
+{
+    DevelopmentLineLogin.Map(app);
+}
 
 api.MapAuthEndpoints();
 api.MapVenueEndpoints();

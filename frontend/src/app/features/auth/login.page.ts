@@ -1,4 +1,4 @@
-import { Component, inject, input, signal } from '@angular/core';
+import { Component, computed, inject, input, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -11,6 +11,7 @@ import { errorKey } from '../../core/http/api-error';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { Alpaca } from '../../shared/alpaca';
 import { FieldError } from '../../shared/field-error';
+import { LineSignIn } from '../../shared/line-sign-in';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 
 @Component({
@@ -19,6 +20,7 @@ import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
     ReactiveFormsModule,
     RouterLink,
     FieldError,
+    LineSignIn,
     MatButtonModule,
     MatCardModule,
     MatFormFieldModule,
@@ -52,6 +54,15 @@ export class LoginPage {
 
   /** Set by the auth guard when it interrupts a page that needs an account. */
   readonly returnUrl = input<string>();
+
+  /**
+   * Why LINE sent them back here instead of on (PRD US-01). It arrives in the address because
+   * the answer comes back as a navigation from another site, not as a request this page made.
+   */
+  readonly line = input<string>();
+
+  // The same shape as an error from a request: the page translates one key, whichever it is.
+  protected readonly lineError = computed(() => (this.line() ? `error.${this.line()}` : null));
 
   protected readonly submitting = signal(false);
   protected readonly formError = signal<string | null>(null);

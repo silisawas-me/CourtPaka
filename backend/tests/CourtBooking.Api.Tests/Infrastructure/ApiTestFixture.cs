@@ -1,4 +1,5 @@
 using CourtBooking.Api.Email;
+using CourtBooking.Api.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -21,6 +22,9 @@ public sealed class ApiTestFixture : IAsyncLifetime
 
     public FakeEmailSender Emails { get; } = new();
 
+    /// <summary>LINE, as far as the tests are concerned (PRD US-01).</summary>
+    public FakeLineLogin Line { get; } = new();
+
     public WebApplicationFactory<Program> Api { get; private set; } = null!;
 
     public string ConnectionString => _container.GetConnectionString();
@@ -40,7 +44,10 @@ public sealed class ApiTestFixture : IAsyncLifetime
 
         Api = _root.WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
-                services.Replace(ServiceDescriptor.Singleton<ITransactionalEmailSender>(Emails))));
+            {
+                services.Replace(ServiceDescriptor.Singleton<ITransactionalEmailSender>(Emails));
+                services.Replace(ServiceDescriptor.Singleton<ILineLogin>(Line));
+            }));
     }
 
     public async Task DisposeAsync()

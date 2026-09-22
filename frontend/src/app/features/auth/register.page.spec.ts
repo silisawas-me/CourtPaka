@@ -1,7 +1,15 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TRANSLATIONS } from '../../core/i18n/locales';
-import { check, pageProviders, setInput, submitForm, textOf } from '../../testing/dom';
+import {
+  check,
+  elementOf,
+  lineSignInAvailable,
+  pageProviders,
+  setInput,
+  submitForm,
+  textOf,
+} from '../../testing/dom';
 import { RegisterPage } from './register.page';
 
 describe('RegisterPage', () => {
@@ -18,6 +26,7 @@ describe('RegisterPage', () => {
     httpMock = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(RegisterPage);
     fixture.detectChanges();
+    lineSignInAvailable();
   });
 
   afterEach(() => httpMock.verify());
@@ -86,5 +95,10 @@ describe('RegisterPage', () => {
 
     expect(textOf(fixture, 'password-error')).toBe(TRANSLATIONS.th['common.passwordTooShort']);
     httpMock.expectNone('/api/auth/register');
+  });
+  it('offers no LINE button where the deployment has no channel', () => {
+    answerPolicyVersion();
+
+    expect(elementOf(fixture, 'line-sign-in')).toBeNull();
   });
 });

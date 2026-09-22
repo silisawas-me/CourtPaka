@@ -60,7 +60,7 @@
           <mat-error [appFieldError]="form.controls.password" testId="password-error"></mat-error>
         </mat-form-field>
 
-        @if (formError(); as key) {
+        @if (formError() ?? lineError(); as key) {
           <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
         }
 
@@ -68,6 +68,8 @@
           {{ i18n.t(submitting() ? 'common.loading' : 'login.submit') }}
         </button>
       </form>
+
+      <app-line-sign-in [returnUrl]="returnUrl() ?? '/'" />
     </mat-card-content>
 
     <mat-card-actions class="auth-actions">

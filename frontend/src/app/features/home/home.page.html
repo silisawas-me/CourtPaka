@@ -9,9 +9,16 @@
       <p class="success" data-testid="account-deleted">{{ i18n.t('account.deleted') }}</p>
     }
     @if (user(); as account) {
-      <p data-testid="signed-in-as">{{ i18n.t('home.signedInAs') }} {{ account.email }}</p>
+      <p data-testid="signed-in-as">
+        {{ i18n.t('home.signedInAs') }} {{ account.email ?? i18n.t('account.noEmail') }}
+      </p>
+      <!-- What stands between this account and a booking, in the server's own words. -->
       <p data-testid="verification-state">
-        {{ i18n.t(account.emailConfirmed ? 'home.emailVerified' : 'home.emailNotVerified') }}
+        {{
+          account.cannotBookBecause
+            ? i18n.t('error.' + account.cannotBookBecause)
+            : i18n.t('home.canBook')
+        }}
       </p>
     }
   </mat-card-content>
@@ -21,10 +28,13 @@
       <a matButton="filled" routerLink="/venues" data-testid="home-venues">
         {{ i18n.t('nav.venues') }}
       </a>
-      @if (!account.emailConfirmed) {
+      @if (!account.emailConfirmed && account.email) {
         <a matButton routerLink="/resend-verification">
           {{ i18n.t('login.resendVerification') }}
         </a>
+      }
+      @if (account.cannotBookBecause === 'auth.phone_required') {
+        <a matButton routerLink="/account">{{ i18n.t('account.savePhone') }}</a>
       }
     } @else {
       <a matButton="filled" routerLink="/login">{{ i18n.t('nav.signIn') }}</a>
