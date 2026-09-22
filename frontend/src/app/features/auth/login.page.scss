@@ -2,12 +2,23 @@
  * The sign-in screen is a picture of a court with the form standing on it: the court fills the
  * window, the card keeps to one side of it, and the alpaca stands on the card's top edge.
  */
+/*
+ * The shell's own spacing sits on this element, not inside it, so the bleed starts here — or a
+ * strip of page shows between the bar and the court. Two stacks above: the shell pads by one and
+ * the grid it is puts another between the router outlet's empty row and this one.
+ */
+:host {
+  display: block;
+  /* A stretched grid item grows into a negative margin instead of moving, so it is told not to. */
+  align-self: start;
+  margin-block: calc(var(--stack) * -2) calc(var(--shell-bottom) * -1);
+}
+
 .auth {
   position: relative;
   /* Out of the shell's measure: this screen is the page, not a block on it. */
   width: 100vw;
   margin-inline: calc(50% - 50vw);
-  margin-block: calc(var(--stack) * -1) calc(var(--shell-bottom) * -1);
   min-height: calc(100vh - var(--mat-toolbar-mobile-height, 3.5rem));
   display: grid;
   align-content: center;
