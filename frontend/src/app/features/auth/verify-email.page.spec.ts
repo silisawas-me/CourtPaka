@@ -1,7 +1,7 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { TRANSLATIONS } from '../../core/i18n/locales';
+import { TRANSLATIONS } from '../../testing/translations';
 import { pageProviders, textOf } from '../../testing/dom';
 import { VerifyEmailPage } from './verify-email.page';
 

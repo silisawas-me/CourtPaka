@@ -3,7 +3,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNativeDateAdapter } from '@angular/material/core';
 import { plainDate, venueToday } from '../../core/i18n/plain-date';
 import { AppDatePipe } from '../../core/i18n/app-date.pipe';
-import { DATE_LOCALES, TRANSLATIONS } from '../../core/i18n/locales';
+import { DATE_LOCALES } from '../../core/i18n/locales';
+import { TRANSLATIONS } from '../../testing/translations';
 import {
   check,
   isDisabled,

@@ -67,3 +67,36 @@
   color: var(--mat-sys-on-primary);
   font-weight: 500;
 }
+
+/*
+  The day, before the calendar that edits it has been downloaded. It is the same size and shape as
+  the field it becomes, so nothing on the page moves when the calendar arrives — and it reads as
+  something to press rather than as text that happens to be in a box.
+*/
+.day-waiting {
+  display: grid;
+  gap: 0.125rem;
+  width: 100%;
+  max-width: 20rem;
+  padding: 0.75rem 1rem;
+  text-align: start;
+  border: 1px solid var(--mat-sys-outline);
+  border-radius: var(--mat-sys-corner-extra-small);
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  cursor: pointer;
+}
+
+.day-waiting-label {
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.day-waiting-value {
+  font: var(--mat-sys-body-large);
+}
+
+/* The same sentence the field carries as a hint, so the rule does not appear only later. */
+.day-waiting-hint {
+  font: var(--mat-sys-body-small);
+}

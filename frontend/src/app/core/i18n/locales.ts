@@ -1,4 +1,3 @@
-import en from './en.json';
 import th from './th.json';
 
 /**
@@ -17,8 +16,19 @@ export type Language = (typeof LANGUAGES)[number];
 
 export const DEFAULT_LANGUAGE: Language = 'th';
 
-/** Flat key/value dictionaries; th is the source of truth and en must match it key for key. */
-export const TRANSLATIONS: Record<Language, Record<string, string>> = { th, en };
+/**
+ * Thai, which is the source of truth and what almost every visitor reads. It ships with the app;
+ * any other language is fetched when somebody asks for it, because a Thai reader waiting on a
+ * court grid should not be downloading English first (PRD 8's LCP target, US-23).
+ *
+ * `locales.spec.ts` is what keeps the other languages honest: same keys, nothing empty.
+ */
+export const THAI: Record<string, string> = th;
+
+/** One language's words, fetched if they are not the ones that ship with the app. */
+export async function dictionaryFor(language: Language): Promise<Record<string, string>> {
+  return language === DEFAULT_LANGUAGE ? THAI : (await import('./en.json')).default;
+}
 
 export function isLanguage(value: string | null | undefined): value is Language {
   return LANGUAGES.includes(value as Language);

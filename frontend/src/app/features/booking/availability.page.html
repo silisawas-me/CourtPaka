@@ -19,23 +19,26 @@
     </mat-card-header>
 
     <mat-card-content>
-      <mat-form-field class="field">
-        <mat-label>{{ i18n.t('availability.day') }}</mat-label>
-        <input
-          id="day"
-          matInput
-          readonly
-          [formControl]="dayField"
-          [matDatepicker]="picker"
+      <!--
+        The calendar is a third of what a booker downloads before they can see a court, and only
+        somebody who wants another day needs it. So the hours come first and the calendar follows
+        — fetched as soon as the browser is idle, opened by whoever asks for it (PRD 8, US-02).
+      -->
+      @defer (on interaction; prefetch on idle) {
+        <app-day-picker
+          [day]="shownDay()"
           [min]="today"
           [max]="lastBookableDay()"
-          (dateChange)="pick($event.value)"
-          (click)="picker.open()"
+          [openOnArrival]="true"
+          (picked)="pick($event)"
         />
-        <mat-datepicker-toggle matIconSuffix [for]="picker" />
-        <mat-datepicker #picker />
-        <mat-hint>{{ i18n.t('availability.window') }}</mat-hint>
-      </mat-form-field>
+      } @placeholder {
+        <button class="day-waiting field" type="button" data-testid="day-placeholder">
+          <span class="day-waiting-label">{{ i18n.t('availability.day') }}</span>
+          <span class="day-waiting-value">{{ chosen() | appDate: i18n.locale() }}</span>
+          <span class="day-waiting-hint muted">{{ i18n.t('availability.window') }}</span>
+        </button>
+      }
     </mat-card-content>
   </mat-card>
 }

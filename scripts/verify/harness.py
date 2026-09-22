@@ -242,6 +242,13 @@ def pick_date(page, date, toggle="mat-datepicker-toggle button") -> None:
     """Drives the calendar, because the field itself is read-only: Intl prints Thai dates but
     cannot read one back, so typing into it would be thrown away. `toggle` names which calendar,
     for a page carrying more than one."""
+    # The grid page does not download the calendar until somebody asks for it (PRD 8's LCP
+    # target). What stands there until then is a placeholder, and pressing it both fetches the
+    # calendar and opens it — the same one press a booker makes.
+    if page.locator(toggle).count() == 0 and page.locator("[data-testid=day-placeholder]").count():
+        page.click("[data-testid=day-placeholder]")
+        page.wait_for_selector("mat-calendar")
+
     if page.locator("mat-calendar").count() == 0:
         page.click(toggle)
         page.wait_for_selector("mat-calendar")

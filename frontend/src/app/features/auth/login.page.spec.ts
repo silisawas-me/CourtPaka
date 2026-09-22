@@ -1,6 +1,7 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TRANSLATIONS } from '../../core/i18n/locales';
+import { TranslationService } from '../../core/i18n/translation.service';
+import { TRANSLATIONS } from '../../testing/translations';
 import {
   clickOn,
   elementOf,
@@ -67,6 +68,8 @@ describe('LoginPage', () => {
       language: 'en',
     });
     await fixture.whenStable();
+    // The account's language is fetched when it is adopted; the page follows when it is here.
+    await TestBed.inject(TranslationService).load('en');
     fixture.detectChanges();
 
     expect(textOf(fixture, 'page-title')).toBe(TRANSLATIONS.en['login.title']);
