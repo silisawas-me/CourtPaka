@@ -74,6 +74,34 @@ ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub | awk '{print $2}'
 > **ชั่วคราว** PRD หัวข้อ 9.1 วางไว้ว่าจะย้ายไป object storage (S3-compatible) ก่อนใช้งานกับสนามจริง
 > ตอนนี้เก็บบนดิสก์ของเครื่องเพื่อให้ flow ทำงานได้ก่อน
 
+## Backup (PRD 8)
+
+`backup.sh` ดัมป์ฐานข้อมูลผ่าน container `db` ลง `deploy/backups/` (เปลี่ยนได้ด้วย `BACKUP_DIR`)
+เป็นไฟล์ custom-format แล้วลบไฟล์ที่เก่ากว่า `KEEP_DAYS` (ค่าเริ่มต้น 14 วันตาม PRD 8)
+ตั้งให้รันทุกวันตอนตีสองด้วย crontab ของ root บนเครื่อง:
+
+```cron
+0 2 * * * cd /srv/courtpaka/deploy && ./backup.sh >> /var/log/courtpaka-backup.log 2>&1
+```
+
+**ไฟล์สลิปไม่ได้อยู่ในดัมป์** (อยู่ใน volume `api-slips` — ดูหัวข้อถัดไป) ฉะนั้นชุด backup ต้องมีทั้งสองอย่าง
+กู้คืนแต่ฐานข้อมูลจะได้การจองที่ไม่มีหลักฐานการชำระเงิน:
+
+```cron
+15 2 * * * docker run --rm -v courtpaka_api-slips:/slips -v /srv/backups:/out alpine tar czf /out/slips-$(date -u +\%Y\%m\%d).tar.gz -C /slips .
+```
+
+`restore-check.sh` คือการพิสูจน์ว่าไฟล์นั้นกู้คืนได้จริง — PRD 8 ให้ทำเดือนละครั้งและ**บันทึกผลไว้**
+มันกู้ลงฐานข้อมูลชั่วคราวข้าง ๆ ตัวจริง เทียบจำนวนแถวกับของจริง แล้วลบทิ้ง (ไม่แตะตัวจริงเลย)
+ไฟล์ที่ไม่ครบจะถูกปฏิเสธ ไม่ใช่ผ่านเพราะ schema กลับมา:
+
+```bash
+cd /srv/courtpaka/deploy && ./restore-check.sh
+```
+
+ทั้งสองสคริปต์อ่าน `POSTGRES_DB` / `POSTGRES_USER` จาก `.env` ที่อยู่ข้าง ๆ และสั่ง `docker compose` ในโฟลเดอร์นั้น
+(ตั้ง `COMPOSE` ได้ถ้าต้องชี้ไปที่ไฟล์อื่น เช่นตอนทดสอบกับ stack local)
+
 ## Rollback
 
 ```bash
