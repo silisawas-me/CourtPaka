@@ -220,10 +220,9 @@ public static class CounterMoneyEndpoints
 
         // Hours that are already behind it land on Completed the moment they are confirmed, and
         // both steps are recorded — a history that skips the one the clock made has a hole in it
-        // (PRD 9.2, and US-12 does the same with a slip answered late).
-        var landed = confirms && booking.Slots.Max(slot => slot.EndsAt) <= now
-            ? BookingStatus.Completed
-            : BookingStatus.Confirmed;
+        // (PRD 9.2, and US-12 lands a late-answered slip the same way).
+        var landed = BookingTransitions.LandingFor(
+            BookingStatus.Confirmed, booking.Slots.Max(slot => slot.EndsAt), now);
 
         // What the history will say about this payment. Written from the same answers the update
         // is made with, so the rows and the event lines below cannot tell different stories.
@@ -250,15 +249,13 @@ public static class CounterMoneyEndpoints
 
             if (confirms)
             {
-                recorded.Add(BookingTransitions.Record(
-                    bookingId, booking.Status, BookingStatus.Confirmed, membership.UserId, now));
-
-                if (landed != BookingStatus.Confirmed)
-                {
-                    // Nobody pressed this one; the clock did, so it is recorded with no actor.
-                    recorded.Add(BookingTransitions.Record(
-                        bookingId, BookingStatus.Confirmed, landed, null, now));
-                }
+                recorded.AddRange(BookingTransitions.RecordsFor(
+                    bookingId,
+                    booking.Status,
+                    BookingStatus.Confirmed,
+                    landed,
+                    membership.UserId,
+                    now));
             }
             else
             {

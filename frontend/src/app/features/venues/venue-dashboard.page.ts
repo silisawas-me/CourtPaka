@@ -11,6 +11,7 @@ import { Router, RouterLink } from '@angular/router';
 import { catchError, map, of, switchMap, tap } from 'rxjs';
 import { ApiError, errorKey } from '../../core/http/api-error';
 import { AppDatePipe } from '../../core/i18n/app-date.pipe';
+import { BahtPipe, formatBaht } from '../../core/i18n/baht.pipe';
 import { fromPlainDate, plainDate, venueToday } from '../../core/i18n/plain-date';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { Dashboard, VenueDashboardService } from '../../core/venues/venue-dashboard.service';
@@ -37,6 +38,7 @@ import { provideLocalizedDateAdapter } from '../../shared/localized-date-adapter
     MatInputModule,
     MatProgressBarModule,
     AppDatePipe,
+    BahtPipe,
   ],
   providers: [FORM_FIELD_DEFAULTS, provideLocalizedDateAdapter()],
   templateUrl: './venue-dashboard.page.html',
@@ -68,11 +70,6 @@ export class VenueDashboardPage {
 
   /** A month table only says something the day table does not when there is more than one. */
   protected readonly manyMonths = computed(() => (this.figures()?.months.length ?? 0) > 1);
-
-  /** Numbers in the reader's own grouping, without a currency sign: the column says baht. */
-  private readonly numbers = computed(
-    () => new Intl.NumberFormat(this.i18n.locale(), { maximumFractionDigits: 2 }),
-  );
 
   /** What is being asked for: the venue and the range the URL holds. */
   private readonly asked = computed(() => ({
@@ -108,13 +105,10 @@ export class VenueDashboardPage {
       });
   }
 
-  protected baht(amount: number): string {
-    return this.numbers().format(amount);
-  }
-
   /** Used out of sellable, as "12 / 32". The share alone hides how small a day was. */
   protected hours(used: number, sellable: number): string {
-    return `${this.numbers().format(used)} / ${this.numbers().format(sellable)}`;
+    const locale = this.i18n.locale();
+    return `${formatBaht(used, locale)} / ${formatBaht(sellable, locale)}`;
   }
 
   /** "กันยายน 2569" / "September 2026": through Intl, so Thai gets the Buddhist year like dates do. */

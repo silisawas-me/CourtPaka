@@ -68,27 +68,28 @@
         {{ f.to | appDate: i18n.locale() }}
       </p>
       <p class="lead" data-testid="revenue-total">
-        {{ baht(totalBaht()) }} <span class="unit">{{ i18n.t('dashboard.baht') }}</span>
+        {{ totalBaht() | baht: i18n.locale() }}
+        <span class="unit">{{ i18n.t('dashboard.baht') }}</span>
       </p>
 
       <dl class="figures">
         <div>
           <dt class="muted">{{ i18n.t('dashboard.online') }}</dt>
-          <dd data-testid="revenue-online">{{ baht(f.onlineBaht) }}</dd>
+          <dd data-testid="revenue-online">{{ f.onlineBaht | baht: i18n.locale() }}</dd>
         </div>
         <div>
           <dt class="muted">{{ i18n.t('dashboard.counter') }}</dt>
-          <dd data-testid="revenue-counter">{{ baht(f.staffBaht) }}</dd>
+          <dd data-testid="revenue-counter">{{ f.staffBaht | baht: i18n.locale() }}</dd>
         </div>
         <div>
           <dt class="muted">{{ i18n.t('dashboard.advance') }}</dt>
-          <dd data-testid="advance">{{ baht(f.advanceBaht) }}</dd>
+          <dd data-testid="advance">{{ f.advanceBaht | baht: i18n.locale() }}</dd>
         </div>
         <div>
           <dt class="muted">{{ i18n.t('dashboard.utilization') }}</dt>
           <dd data-testid="utilization">
             @if (f.utilizationPercent !== null) {
-              {{ baht(f.utilizationPercent) }}%
+              {{ f.utilizationPercent | baht: i18n.locale() }}%
               <span class="muted small">({{ hours(f.bookedHours, f.sellableHours) }})</span>
             } @else {
               <span class="muted">{{ i18n.t('dashboard.nothingToSell') }}</span>
@@ -163,8 +164,8 @@
               @for (month of f.months; track month.year * 100 + month.month) {
                 <tr>
                   <th scope="row">{{ monthName(month.year, month.month) }}</th>
-                  <td class="num">{{ baht(month.onlineBaht) }}</td>
-                  <td class="num">{{ baht(month.staffBaht) }}</td>
+                  <td class="num">{{ month.onlineBaht | baht: i18n.locale() }}</td>
+                  <td class="num">{{ month.staffBaht | baht: i18n.locale() }}</td>
                 </tr>
               }
             </tbody>
@@ -197,8 +198,8 @@
             @for (day of f.days; track day.date) {
               <tr [attr.data-testid]="'day-' + day.date">
                 <th scope="row">{{ day.date | appDate: i18n.locale() }}</th>
-                <td class="num">{{ baht(day.onlineBaht) }}</td>
-                <td class="num">{{ baht(day.staffBaht) }}</td>
+                <td class="num">{{ day.onlineBaht | baht: i18n.locale() }}</td>
+                <td class="num">{{ day.staffBaht | baht: i18n.locale() }}</td>
                 <td class="num">{{ hours(day.bookedHours, day.sellableHours) }}</td>
               </tr>
             }

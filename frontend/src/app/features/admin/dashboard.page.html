@@ -62,25 +62,27 @@
         {{ f.to | appDate: i18n.locale() }}
       </p>
       <p class="lead" data-testid="gmv-total">
-        {{ number(f.totals.gmvBaht) }} <span class="unit">{{ i18n.t('dashboard.baht') }}</span>
+        {{ f.totals.gmvBaht | baht: i18n.locale() }}
+        <span class="unit">{{ i18n.t('dashboard.baht') }}</span>
       </p>
 
       <dl class="figures">
         <div>
           <dt class="muted">{{ i18n.t('admin.dashboard.bookings') }}</dt>
-          <dd data-testid="bookings-total">{{ number(f.totals.bookings) }}</dd>
+          <dd data-testid="bookings-total">{{ f.totals.bookings | baht: i18n.locale() }}</dd>
         </div>
         <div>
           <dt class="muted">{{ i18n.t('admin.dashboard.onlineToStaff') }}</dt>
           <dd data-testid="channel-split">
-            {{ number(f.totals.onlineBookings) }} : {{ number(f.totals.staffBookings) }}
+            {{ f.totals.onlineBookings | baht: i18n.locale() }} :
+            {{ f.totals.staffBookings | baht: i18n.locale() }}
           </dd>
         </div>
         @for (status of statuses; track status) {
           <div>
             <dt class="muted">{{ i18n.t('admin.venues.filter.' + status) }}</dt>
             <dd [attr.data-testid]="'venues-' + status">
-              {{ number(f.venuesByStatus[status]) }}
+              {{ f.venuesByStatus[status] | baht: i18n.locale() }}
             </dd>
           </div>
         }
@@ -114,11 +116,12 @@
                 <td>
                   <span class="badge">{{ i18n.t('admin.venues.filter.' + line.status) }}</span>
                 </td>
-                <td class="num">{{ number(line.bookings) }}</td>
+                <td class="num">{{ line.bookings | baht: i18n.locale() }}</td>
                 <td class="num">
-                  {{ number(line.onlineBookings) }} : {{ number(line.staffBookings) }}
+                  {{ line.onlineBookings | baht: i18n.locale() }} :
+                  {{ line.staffBookings | baht: i18n.locale() }}
                 </td>
-                <td class="num">{{ number(line.gmvBaht) }}</td>
+                <td class="num">{{ line.gmvBaht | baht: i18n.locale() }}</td>
               </tr>
             }
           </tbody>

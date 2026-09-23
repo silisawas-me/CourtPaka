@@ -11,6 +11,7 @@ import { Router, RouterLink } from '@angular/router';
 import { catchError, map, of, switchMap, tap } from 'rxjs';
 import { ApiError, errorKey } from '../../core/http/api-error';
 import { AppDatePipe, AppDateTimePipe } from '../../core/i18n/app-date.pipe';
+import { BahtPipe } from '../../core/i18n/baht.pipe';
 import { fromPlainDate, plainDate, VENUE_TIME_ZONE, venueToday } from '../../core/i18n/plain-date';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { DayMoney, VenueBookingsService } from '../../core/venues/venue-bookings.service';
@@ -43,6 +44,7 @@ const NOTE_MAX_LENGTH = 400;
     MatProgressBarModule,
     AppDatePipe,
     AppDateTimePipe,
+    BahtPipe,
   ],
   providers: [FORM_FIELD_DEFAULTS, provideLocalizedDateAdapter()],
   templateUrl: './money.page.html',
@@ -86,11 +88,6 @@ export class MoneyPage {
     ]),
     note: this.forms.nonNullable.control('', Validators.maxLength(NOTE_MAX_LENGTH)),
   });
-
-  /** Numbers in the reader's own grouping, without a currency sign: the label says baht. */
-  private readonly numbers = computed(
-    () => new Intl.NumberFormat(this.i18n.locale(), { maximumFractionDigits: 2 }),
-  );
 
   private readonly times = computed(
     () =>
@@ -140,10 +137,6 @@ export class MoneyPage {
           );
         }
       });
-  }
-
-  protected baht(amount: number): string {
-    return this.numbers().format(amount);
   }
 
   /** The hour a receipt was taken, in the venue's own time rather than the reader's. */

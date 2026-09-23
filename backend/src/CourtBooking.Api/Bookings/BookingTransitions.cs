@@ -286,6 +286,52 @@ public static class BookingTransitions
         EventName(status) + " {BookingId} {VenueId} {RefundDueBaht}";
 
     /// <summary>
+    /// Where a booking actually lands when it is moved somewhere now: hours that are already
+    /// behind it make a confirmation a completion, without waiting for anything to run (PRD 9.2).
+    ///
+    /// <see cref="BookedSlots.StatusAt"/> answers the same question about a booking that is
+    /// sitting still; this one answers it about a booking that is being moved, which is what
+    /// every writer needs before it decides what to record.
+    /// </summary>
+    public static BookingStatus LandingFor(
+        BookingStatus reached,
+        DateTimeOffset lastHourEndsAt,
+        DateTimeOffset now) =>
+        reached == BookingStatus.Confirmed && lastHourEndsAt <= now
+            ? BookingStatus.Completed
+            : reached;
+
+    /// <summary>
+    /// What a move writes down: the move itself, and — when the clock carried it further in the
+    /// same breath — the step the clock made, with no actor against it. Both rows or neither, so
+    /// a history can never hold the first without the second (PRD 6.1, and US-12/US-26 both need
+    /// exactly this pair).
+    /// </summary>
+    public static List<BookingStatusChange> RecordsFor(
+        Guid bookingId,
+        BookingStatus from,
+        BookingStatus decided,
+        BookingStatus landed,
+        Guid? byUserId,
+        DateTimeOffset at,
+        string? reason = null,
+        CancellationReason? cause = null)
+    {
+        var recorded = new List<BookingStatusChange>
+        {
+            Record(bookingId, from, decided, byUserId, at, reason, cause),
+        };
+
+        if (landed != decided)
+        {
+            // Nobody pressed this one; the clock did (PRD 6.1), so it is recorded with no actor.
+            recorded.Add(Record(bookingId, decided, landed, null, at));
+        }
+
+        return recorded;
+    }
+
+    /// <summary>
     /// The line the venue answering for a booking's money writes (PRD 8). One template, because
     /// the counter taking the last of it and the venue saying it arrived are the same event.
     /// </summary>

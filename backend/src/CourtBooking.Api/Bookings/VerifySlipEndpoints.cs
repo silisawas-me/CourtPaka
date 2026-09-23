@@ -229,9 +229,7 @@ public static class VerifySlipEndpoints
         }
 
         // Confirmed after the hours were played is played, not upcoming (PRD 6.1).
-        var landed = decided == BookingStatus.Confirmed && booking.LastHourEndsAt <= now
-            ? BookingStatus.Completed
-            : decided;
+        var landed = BookingTransitions.LandingFor(decided, booking.LastHourEndsAt, now);
 
         // A rejection gives back everything; a confirmation gives back nothing. The share is
         // written down so that a later answer about the money lands on the same number (PRD 6.2).
@@ -275,17 +273,8 @@ public static class VerifySlipEndpoints
                 StatusCodes.Status409Conflict, SlipErrorCodes.NotAwaitingVerification);
         }
 
-        var recorded = new List<BookingStatusChange>
-        {
-            BookingTransitions.Record(
-                bookingId, BookingStatus.PendingVerification, decided, decidedBy, now, written),
-        };
-
-        if (landed != decided)
-        {
-            // Nobody pressed this one; the clock did (PRD 6.1), so it is recorded with no actor.
-            recorded.Add(BookingTransitions.Record(bookingId, decided, landed, null, now));
-        }
+        var recorded = BookingTransitions.RecordsFor(
+            bookingId, BookingStatus.PendingVerification, decided, landed, decidedBy, now, written);
 
         database.BookingStatusChanges.AddRange(recorded);
 
