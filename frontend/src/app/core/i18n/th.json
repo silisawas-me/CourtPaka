@@ -638,5 +638,9 @@
   "dashboard.hoursLost": "ชั่วโมงที่หลุดไป",
   "dashboard.hoursRefilled": "ขายใหม่ได้",
   "dashboard.fromQueue": "ในนั้นมาจากคิวรอ",
-  "dashboard.recoveryNote": "นับเฉพาะชั่วโมงที่มีคนจองแล้วปล่อยกลับมา (ยกเลิก ปฏิเสธสลิป หรือไม่มา) — การจองที่หมดเวลาถือว่ายังไม่เคยขาย"
+  "dashboard.recoveryNote": "นับเฉพาะชั่วโมงที่มีคนจองแล้วปล่อยกลับมา (ยกเลิก ปฏิเสธสลิป หรือไม่มา) — การจองที่หมดเวลาถือว่ายังไม่เคยขาย",
+  "dashboard.bookings": "จำนวนการจอง",
+  "dashboard.refundDue": "ยอดต้องคืน",
+  "dashboard.refunded": "ยอดคืนแล้ว",
+  "dashboard.download": "ดาวน์โหลดสรุปรายได้ (CSV)"
 }

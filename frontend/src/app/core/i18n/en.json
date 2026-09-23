@@ -638,5 +638,9 @@
   "dashboard.hoursLost": "Hours lost",
   "dashboard.hoursRefilled": "Sold again",
   "dashboard.fromQueue": "Of those, from the queue",
-  "dashboard.recoveryNote": "Counted only for hours somebody had and gave back — cancelled, turned away, or not turned up for. A hold that ran out was never sold."
+  "dashboard.recoveryNote": "Counted only for hours somebody had and gave back — cancelled, turned away, or not turned up for. A hold that ran out was never sold.",
+  "dashboard.bookings": "Bookings",
+  "dashboard.refundDue": "Owed back",
+  "dashboard.refunded": "Sent back",
+  "dashboard.download": "Download the summary (CSV)"
 }

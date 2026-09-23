@@ -19,7 +19,17 @@ function figures(overrides: Record<string, unknown> = {}) {
       { date: '2026-09-01', onlineBaht: 1200, staffBaht: 0, sellableHours: 32, bookedHours: 6 },
       { date: '2026-09-02', onlineBaht: 0, staffBaht: 400, sellableHours: 32, bookedHours: 2 },
     ],
-    months: [{ year: 2026, month: 9, onlineBaht: 1200, staffBaht: 400 }],
+    months: [
+      {
+        year: 2026,
+        month: 9,
+        onlineBaht: 1200,
+        staffBaht: 400,
+        bookings: 5,
+        refundDueBaht: 100,
+        refundedBaht: 50,
+      },
+    ],
     attention: { slipsToCheck: 2, paymentsUnanswered: 1, refundsOutstanding: 0 },
     recovery: {
       hoursLost: 0,
@@ -164,6 +174,32 @@ describe('VenueDashboardPage', () => {
     render();
 
     expect(elementOf(fixture, 'hours-lost')).toBeNull();
+  });
+
+  it('hands the months over as a file named for the range', () => {
+    render();
+
+    // What is checked is the file the page offers, not how many times the browser was asked for
+    // a url: other specs share this environment and call the same globals, so a count here
+    // would fail on somebody else's work (it did, in CI).
+    const offered: { name: string; href: string }[] = [];
+    const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:made');
+    const revoked = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const clicked = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      offered.push({ name: this.download, href: this.href });
+    });
+
+    clickOn(fixture, 'download-csv');
+
+    expect(offered).toEqual([{ name: 'courtpaka-2026-09-01-2026-09-02.csv', href: 'blob:made' }]);
+    // And the blob is let go once the click has been handled, or the page holds it for ever.
+    expect(revoked).toHaveBeenCalledWith('blob:made');
+
+    created.mockRestore();
+    revoked.mockRestore();
+    clicked.mockRestore();
   });
 
   it('counts what is waiting and links to where it is dealt with', () => {

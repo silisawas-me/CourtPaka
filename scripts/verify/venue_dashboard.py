@@ -1,6 +1,8 @@
 """A venue's own figures (US-15): what it kept, what is coming, how much of the courts was used."""
 
+import codecs
 import datetime
+import pathlib
 
 from harness import (
     BASE,
@@ -28,7 +30,7 @@ with sync_playwright() as p:
     venue_id = seeded_venue_id(browser.new_page())
     ensure_bookable(browser, venue_id)
 
-    page = browser.new_page(viewport={"width": 1280, "height": 900})
+    page = browser.new_page(viewport={"width": 1280, "height": 900}, accept_downloads=True)
     sign_in(page, OWNER)
     page.goto(f"{BASE}{open_seeded_venue(page)}")
     page.click("[data-testid=dashboard-link]")
@@ -101,7 +103,34 @@ with sync_playwright() as p:
         f"{BASE}/api/venues/{venue_id}/bookings/{booking_id}/cancel",
         data={"reason": "CustomerRequest", "paymentReceived": None, "note": None},
     )
+    # 6. The months as a spreadsheet (US-16, columns from PRD 7.3). The file is built in the
+    # browser so its headings are in the reader's language — the server sends figures, not words.
+    # sign_in leaves the page on the home screen, so the dashboard is opened again for it.
     sign_in(page, OWNER)
+    page.goto(f"{BASE}/venues/{venue_id}/dashboard")
+    page.wait_for_selector("[data-testid=download-csv]")
+
+    with page.expect_download() as download:
+        page.click("[data-testid=download-csv]")
+    saved = download.value
+    check("the summary comes down as a file", saved.suggested_filename.endswith(".csv"))
+
+    path = pathlib.Path(saved.path())
+    raw = path.read_bytes()
+    check("which a spreadsheet opens as UTF-8", raw[:3] == codecs.BOM_UTF8)
+
+    rows = raw.decode("utf-8-sig").strip().splitlines()
+    figures = page.request.get(
+        f"{BASE}/api/venues/{venue_id}/dashboard").json()
+    check(
+        "with one line per month the page is showing",
+        len(rows) == len(figures["months"]) + 1,
+    )
+    check(
+        "and the headings in the language the reader chose",
+        rows[0].split(",")[0] not in ("Month", "month"),
+    )
+
     browser.close()
 
 check.summarise()

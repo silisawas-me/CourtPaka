@@ -21,8 +21,44 @@ public sealed class VenueDashboardTests(ApiTestFixture api) : IClassFixture<ApiT
     private static DateOnly Yesterday => Today.AddDays(-1);
     private static DateOnly Tomorrow => Today.AddDays(1);
 
+    /// <summary>
+    /// The figures the monthly report is made of (PRD 7.3): how many bookings the money came
+    /// from, what the venue owes back, and what it has actually sent. Owed and sent are two
+    /// numbers because US-18 lets a venue send it in parts.
+    /// </summary>
     [Fact]
-    public async Task Revenue_is_what_was_kept_on_the_day_it_was_played_by_channel()
+    public async Task A_month_says_how_many_bookings_and_what_is_owed_and_sent()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (booker, booking) = await scenario.ConfirmedBookingAsync(owner, venue.Id, courts[0], 18);
+        // Played, but inside the window a venue may still correct what it recorded (PRD 6.1).
+        await scenario.StartsInAsync(booking.Id, TimeSpan.FromHours(-3));
+
+        // The booker cancels after the fact is impossible, so the venue turns it away itself and
+        // owes the whole amount back (PRD 6.1).
+        var cancelled = await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/bookings/{booking.Id}/cancel",
+            new VenueCancelRequest(nameof(CancellationReason.VenueInitiated), null, null));
+        Assert.True(cancelled.IsSuccessStatusCode, await cancelled.ErrorCodeAsync());
+
+        var half = booking.TotalBaht / 2;
+        var sent = await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/bookings/{booking.Id}/refunds",
+            new RecordRefundRequest(half, VenueScenario.Today, nameof(RefundMethod.Transfer), null));
+        Assert.True(sent.IsSuccessStatusCode, await sent.ErrorCodeAsync());
+
+        var figures = await ReadAsync(
+            owner, venue.Id, VenueScenario.Today.AddDays(-4), VenueScenario.Today);
+        var month = figures.Months.Single();
+
+        Assert.True(month.Bookings >= 1);
+        Assert.True(month.RefundDueBaht >= booking.TotalBaht);
+        Assert.True(month.RefundedBaht >= half);
+        // Owed and sent are not the same number, which is the whole reason both are reported.
+        Assert.True(month.RefundedBaht < month.RefundDueBaht);
+    }
+
+    [Fact]    public async Task Revenue_is_what_was_kept_on_the_day_it_was_played_by_channel()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();
 
