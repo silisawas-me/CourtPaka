@@ -19,7 +19,17 @@ function figures(overrides: Record<string, unknown> = {}) {
       { date: '2026-09-01', onlineBaht: 1200, staffBaht: 0, sellableHours: 32, bookedHours: 6 },
       { date: '2026-09-02', onlineBaht: 0, staffBaht: 400, sellableHours: 32, bookedHours: 2 },
     ],
-    months: [{ year: 2026, month: 9, onlineBaht: 1200, staffBaht: 400 }],
+    months: [
+      {
+        year: 2026,
+        month: 9,
+        onlineBaht: 1200,
+        staffBaht: 400,
+        bookings: 5,
+        refundDueBaht: 100,
+        refundedBaht: 50,
+      },
+    ],
     attention: { slipsToCheck: 2, paymentsUnanswered: 1, refundsOutstanding: 0 },
     recovery: {
       hoursLost: 0,
@@ -164,6 +174,27 @@ describe('VenueDashboardPage', () => {
     render();
 
     expect(elementOf(fixture, 'hours-lost')).toBeNull();
+  });
+
+  it("hands the months over as a file, with the headings in the reader's language", () => {
+    render();
+
+    // The click is what makes the file; what is checked is that it was made from these months
+    // and named for the range, not that the browser saved it.
+    const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:made');
+    const revoked = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const clicked = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    clickOn(fixture, 'download-csv');
+
+    expect(created).toHaveBeenCalledOnce();
+    expect(clicked).toHaveBeenCalledOnce();
+    // The blob is let go once the click has been handled, or the page holds it for ever.
+    expect(revoked).toHaveBeenCalledWith('blob:made');
+
+    created.mockRestore();
+    revoked.mockRestore();
+    clicked.mockRestore();
   });
 
   it('counts what is waiting and links to where it is dealt with', () => {

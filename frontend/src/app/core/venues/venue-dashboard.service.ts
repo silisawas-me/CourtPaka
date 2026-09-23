@@ -16,6 +16,11 @@ export interface DashboardMonth {
   month: number;
   onlineBaht: number;
   staffBaht: number;
+  /** Bookings the money came from: paid for, and played in that month. */
+  bookings: number;
+  /** What those bookings left the venue owing back, and what it has sent so far (PRD 7.3). */
+  refundDueBaht: number;
+  refundedBaht: number;
 }
 
 /** What is waiting for somebody at the venue, whatever the range (PRD US-15). */

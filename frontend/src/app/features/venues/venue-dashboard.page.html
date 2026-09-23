@@ -41,6 +41,11 @@
 
   <mat-card-actions>
     <a matButton [routerLink]="['/venues', venueId()]">{{ i18n.t('settings.backToVenue') }}</a>
+    @if (figures()) {
+      <button matButton type="button" data-testid="download-csv" (click)="download()">
+        {{ i18n.t('dashboard.download') }}
+      </button>
+    }
   </mat-card-actions>
 </mat-card>
 

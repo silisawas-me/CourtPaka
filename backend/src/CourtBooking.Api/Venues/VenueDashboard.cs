@@ -14,14 +14,23 @@ public sealed record DashboardDayResponse(
     decimal OnlineBaht,
     decimal StaffBaht,
     int SellableHours,
-    int BookedHours);
+    int BookedHours,
+    /// <summary>Bookings counted in the money above: paid for, played, on this day.</summary>
+    int Bookings,
+    /// <summary>What those bookings left the venue owing back (PRD 6.2).</summary>
+    decimal RefundDueBaht,
+    /// <summary>What the venue has written down as sent back so far (PRD US-18).</summary>
+    decimal RefundedBaht);
 
 /// <summary>One calendar month, from the days of it that fall inside the range asked for.</summary>
 public sealed record DashboardMonthResponse(
     int Year,
     int Month,
     decimal OnlineBaht,
-    decimal StaffBaht);
+    decimal StaffBaht,
+    int Bookings,
+    decimal RefundDueBaht,
+    decimal RefundedBaht);
 
 /// <summary>What is waiting for somebody at the venue, however far back it goes (PRD US-15).</summary>
 public sealed record DashboardAttentionResponse(
@@ -174,7 +183,10 @@ public static class VenueDashboard
                     money.Online,
                     money.Staff,
                     sellable.GetValueOrDefault(date),
-                    booked.GetValueOrDefault(date));
+                    booked.GetValueOrDefault(date),
+                    money.Bookings,
+                    money.RefundDue,
+                    money.Refunded);
             })
             .ToArray();
 
@@ -184,7 +196,10 @@ public static class VenueDashboard
                 month.Key.Year,
                 month.Key.Month,
                 month.Sum(day => day.OnlineBaht),
-                month.Sum(day => day.StaffBaht)))
+                month.Sum(day => day.StaffBaht),
+                month.Sum(day => day.Bookings),
+                month.Sum(day => day.RefundDueBaht),
+                month.Sum(day => day.RefundedBaht)))
             .ToArray();
 
         var sellableHours = days.Sum(day => day.SellableHours);
@@ -212,7 +227,7 @@ public static class VenueDashboard
     /// the channel it came through (PRD 6.2). Only a booking whose money arrived keeps anything,
     /// and only once it has ended — played, not turned up for, or cancelled.
     /// </summary>
-    private static async Task<Dictionary<DateOnly, (decimal Online, decimal Staff)>> KeptByDayAsync(
+    private static async Task<Dictionary<DateOnly, KeptOnADay>> KeptByDayAsync(
         AppDbContext database,
         Guid venueId,
         DateTimeOffset since,
@@ -245,12 +260,18 @@ public static class VenueDashboard
                 booking.Channel,
                 booking.TotalBaht,
                 booking.RefundDueBaht,
+                // What has actually gone back, which is not what is owed: US-18 lets a venue send
+                // it in parts, and the two numbers are both worth reporting (PRD 7.3).
+                Refunded = database.RefundRecords
+                    .StillStanding()
+                    .Where(record => record.BookingId == booking.Id)
+                    .Sum(record => (decimal?)record.AmountBaht) ?? 0m,
                 FirstStart = booking.Slots.Min(slot => slot.StartsAt),
                 LastEnd = booking.Slots.Max(slot => slot.EndsAt),
             })
             .ToListAsync(cancellationToken);
 
-        var byDay = new Dictionary<DateOnly, (decimal Online, decimal Staff)>();
+        var byDay = new Dictionary<DateOnly, KeptOnADay>();
 
         foreach (var booking in bookings.Where(one => one.FirstStart >= since && one.FirstStart < until))
         {
@@ -263,15 +284,28 @@ public static class VenueDashboard
 
             var keeps = booking.TotalBaht - booking.RefundDueBaht;
             var day = PlatformRequirements.BangkokDateAndHour(booking.FirstStart).Date;
-            var (online, staff) = byDay.GetValueOrDefault(day);
+            var so_far = byDay.GetValueOrDefault(day);
 
-            byDay[day] = booking.Channel == BookingChannel.Staff
-                ? (online, staff + keeps)
-                : (online + keeps, staff);
+            byDay[day] = so_far with
+            {
+                Online = so_far.Online + (booking.Channel == BookingChannel.Staff ? 0 : keeps),
+                Staff = so_far.Staff + (booking.Channel == BookingChannel.Staff ? keeps : 0),
+                Bookings = so_far.Bookings + 1,
+                RefundDue = so_far.RefundDue + booking.RefundDueBaht,
+                Refunded = so_far.Refunded + booking.Refunded,
+            };
         }
 
         return byDay;
     }
+
+    /// <summary>What one day of play came to, as the report reads it (PRD 7.3).</summary>
+    private readonly record struct KeptOnADay(
+        decimal Online,
+        decimal Staff,
+        int Bookings,
+        decimal RefundDue,
+        decimal Refunded);
 
     /// <summary>
     /// The court-hours the venue had to sell each day, and how many of them were used (PRD

@@ -14,6 +14,7 @@ import { AppDatePipe } from '../../core/i18n/app-date.pipe';
 import { BahtPipe, formatBaht } from '../../core/i18n/baht.pipe';
 import { fromPlainDate, plainDate, venueToday } from '../../core/i18n/plain-date';
 import { TranslationService } from '../../core/i18n/translation.service';
+import { revenueCsv, revenueCsvBlob } from '../../core/venues/revenue-csv';
 import { Dashboard, VenueDashboardService } from '../../core/venues/venue-dashboard.service';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 import { provideLocalizedDateAdapter } from '../../shared/localized-date-adapter';
@@ -106,6 +107,34 @@ export class VenueDashboardPage {
   }
 
   /** Used out of sellable, as "12 / 32". The share alone hides how small a day was. */
+  /**
+   * The months on screen as a spreadsheet (PRD US-16, columns from 7.3). Built here so the
+   * headings are in the reader's own language: the server sends figures, never words (US-23).
+   */
+  protected download(): void {
+    const figures = this.figures();
+    if (!figures) {
+      return;
+    }
+
+    const csv = revenueCsv(figures.months, {
+      month: this.i18n.t('dashboard.month'),
+      bookings: this.i18n.t('dashboard.bookings'),
+      online: this.i18n.t('dashboard.online'),
+      counter: this.i18n.t('dashboard.counter'),
+      refundDue: this.i18n.t('dashboard.refundDue'),
+      refunded: this.i18n.t('dashboard.refunded'),
+    });
+
+    const url = URL.createObjectURL(revenueCsvBlob(csv));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `courtpaka-${figures.from}-${figures.to}.csv`;
+    link.click();
+    // The browser has the bytes once the click has been handled; holding the url leaks the blob.
+    URL.revokeObjectURL(url);
+  }
+
   protected hours(used: number, sellable: number): string {
     const locale = this.i18n.locale();
     return `${formatBaht(used, locale)} / ${formatBaht(sellable, locale)}`;
