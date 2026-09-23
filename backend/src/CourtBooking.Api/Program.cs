@@ -266,6 +266,7 @@ api.MapComplaintEndpoints();
 // Looking is public; booking is not (PRD US-02).
 api.MapPublicVenueEndpoints();
 api.MapBookingEndpoints();
+api.MapWaitlistEndpoints();
 
 // Liveness: the process is running. Readiness: dependencies such as the database are reachable.
 api.MapHealthChecks("/health/live", new HealthCheckOptions

@@ -6,6 +6,7 @@ import { RouterLink } from '@angular/router';
 import { Booking, BookingHistory, BookingService } from '../../core/bookings/booking.service';
 import { courtsOf, hoursOf } from '../../core/bookings/hours';
 import { errorKey } from '../../core/http/api-error';
+import { WaitlistEntry, WaitlistService } from '../../core/bookings/waitlist.service';
 import { AppDatePipe } from '../../core/i18n/app-date.pipe';
 import { TranslationService } from '../../core/i18n/translation.service';
 
@@ -50,8 +51,49 @@ export class MyBookingsPage {
 
   protected readonly nothingAtAll = computed(
     () =>
-      !this.loading() && this.history().upcoming.length === 0 && this.history().past.length === 0,
+      !this.loading() &&
+      this.history().upcoming.length === 0 &&
+      this.history().past.length === 0 &&
+      this.waiting().length === 0,
   );
+
+  /**
+   * The queues this booker is standing in (PRD US-27). They belong on this page because they are
+   * the other half of the same question — what have I got coming — and because leaving one is
+   * something people do from here rather than by going back to the venue's grid.
+   */
+  private readonly waitlist = inject(WaitlistService);
+
+  protected readonly waiting = signal<WaitlistEntry[]>([]);
+  protected readonly leaving = signal<string | null>(null);
+
+  protected leave(entryId: string): void {
+    if (this.leaving() !== null) {
+      return;
+    }
+
+    this.leaving.set(entryId);
+    this.waitlist.leave(entryId).subscribe({
+      next: () => {
+        this.leaving.set(null);
+        this.waiting.update((places) => places.filter((place) => place.id !== entryId));
+      },
+      // A place that will not be given up is one somebody else already ended: read them again
+      // rather than leave a row that does nothing when pressed.
+      error: () => {
+        this.leaving.set(null);
+        this.loadWaiting();
+      },
+    });
+  }
+
+  private loadWaiting(): void {
+    this.waitlist.mine().subscribe({
+      next: (places) => this.waiting.set(places),
+      // A queue that cannot be read does not stop the bookings being read.
+      error: () => this.waiting.set([]),
+    });
+  }
 
   /** Which booking is being asked about. One at a time: this gives hours up for good. */
   protected readonly letting = signal<string | null>(null);
@@ -60,6 +102,7 @@ export class MyBookingsPage {
 
   constructor() {
     this.load();
+    this.loadWaiting();
   }
 
   protected ask(bookingId: string): void {

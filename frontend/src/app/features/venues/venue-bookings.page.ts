@@ -9,7 +9,8 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 import { courtsOf, hoursOf } from '../../core/bookings/hours';
-import { AppDatePipe } from '../../core/i18n/app-date.pipe';
+import { VenueWaitlistEntry, WaitlistService } from '../../core/bookings/waitlist.service';
+import { AppDatePipe, AppDateTimePipe } from '../../core/i18n/app-date.pipe';
 import { errorKey } from '../../core/http/api-error';
 import { plainDate, venueToday } from '../../core/i18n/plain-date';
 import { TranslationService } from '../../core/i18n/translation.service';
@@ -63,6 +64,7 @@ const PAYMENT_METHODS: PaymentMethod[] = ['Cash', 'PromptPay', 'Card'];
     MatInputModule,
     MatProgressBarModule,
     AppDatePipe,
+    AppDateTimePipe,
   ],
   providers: [FORM_FIELD_DEFAULTS, provideLocalizedDateAdapter()],
   templateUrl: './venue-bookings.page.html',
@@ -99,6 +101,13 @@ export class VenueBookingsPage {
    * floor (PRD US-02, US-25).
    */
   protected readonly grid = signal<Availability | null>(null);
+
+  /**
+   * Who wanted hours on this day and did not get them (PRD US-27). It sits beside the day
+   * because the moment it is worth reading is the moment a booking on this day is cancelled.
+   */
+  private readonly waitlist = inject(WaitlistService);
+  protected readonly waiting = signal<VenueWaitlistEntry[]>([]);
   protected readonly loading = signal(true);
   protected readonly pageError = signal<string | null>(null);
 
@@ -547,6 +556,14 @@ export class VenueBookingsPage {
       this.venues.availability(venueId, day).subscribe({
         next: (grid) => this.grid.set(grid),
         error: () => this.grid.set(null),
+      });
+
+      // Who wanted this day and did not get it, asked for with the day rather than after every
+      // decision: a queue does not change because somebody paid (PRD US-27). It fails quietly
+      // for the same reason the grid does.
+      this.waitlist.queue(venueId, day).subscribe({
+        next: (queue) => this.waiting.set(queue),
+        error: () => this.waiting.set([]),
       });
     }
 

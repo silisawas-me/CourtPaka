@@ -45,6 +45,7 @@ Six rules worth keeping.
 | `payment.py` | The countdown, sending the slip, and who may read it (US-04) |
 | `slip_queue.py` | The venue looking at a slip and deciding (US-12) |
 | `counter_money.py` | Money taken at the desk and the day's count (US-26) |
+| `waitlist.py` | Joining and leaving the queue for a full day (US-27) |
 | `line_login.py` | Signing in with LINE, against the stand-in LINE (US-01) |
 
 7. **Ask for the state you need; do not assume the script before you left it.**

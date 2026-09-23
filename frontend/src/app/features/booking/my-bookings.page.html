@@ -26,6 +26,41 @@
   }
 
   <!--
+    The queues they are standing in, above the bookings: a place in a queue is a thing waiting to
+    happen to them, and it is the one thing on this page they might act on today (PRD US-27).
+  -->
+  @if (waiting().length > 0) {
+    <mat-card data-testid="my-waitlist">
+      <mat-card-header>
+        <mat-card-title>{{ i18n.t('waitlist.mine') }}</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <ul class="stack">
+          @for (place of waiting(); track place.id) {
+            <li class="entry" [attr.data-testid]="'waiting-' + place.id">
+              <span>
+                {{ place.venueName }} · {{ place.date | appDate: i18n.locale() }} ·
+                {{ place.fromHour }}:00–{{ place.untilHour }}:00 · {{ i18n.t('waitlist.hours') }}
+                {{ place.hours }}
+              </span>
+              <span class="spacer"></span>
+              <button
+                matButton
+                type="button"
+                [attr.data-testid]="'leave-' + place.id"
+                [disabled]="leaving() !== null"
+                (click)="leave(place.id)"
+              >
+                {{ i18n.t('waitlist.leave') }}
+              </button>
+            </li>
+          }
+        </ul>
+      </mat-card-content>
+    </mat-card>
+  }
+
+  <!--
     Ahead of them first and soonest first: the reason to open this page is almost always the next
     one to be played. What is behind is a record and keeps out of the way below it.
   -->

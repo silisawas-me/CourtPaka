@@ -2,7 +2,7 @@ import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, DeferBlockState, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { TRANSLATIONS } from '../../testing/translations';
-import { clickOn, elementOf, pageProviders, signInAs, textOf } from '../../testing/dom';
+import { choose, clickOn, elementOf, pageProviders, signInAs, textOf } from '../../testing/dom';
 import { PublicVenueService } from '../../core/venues/public-venue.service';
 import { AvailabilityPage, REFRESH_EVERY_MS } from './availability.page';
 
@@ -157,6 +157,64 @@ describe('AvailabilityPage', () => {
 
     expect(textOf(fixture, 'sign-in-to-book')).toBe(TRANSLATIONS.th['availability.signInToBook']);
     expect(elementOf(fixture, 'book')).toBeNull();
+  });
+
+  it('takes a place in the queue for a day that had nothing on it', () => {
+    signInAs('player@example.com');
+    render(day(), '2026-09-19');
+
+    choose(fixture, '[data-testid=wait-from]', '19:00');
+    choose(fixture, '[data-testid=wait-until]', '20:00');
+    choose(fixture, '[data-testid=wait-hours]', '1');
+    clickOn(fixture, 'wait-for-it');
+
+    const request = httpMock.expectOne('/api/waitlist');
+    // The window is offered from the hours this venue actually sells that day, so a queue can
+    // never ask for an hour the venue does not have.
+    expect(request.request.body).toEqual({
+      venueId: 'v1',
+      date: '2026-09-19',
+      fromHour: 19,
+      untilHour: 20,
+      hours: 1,
+    });
+
+    request.flush({
+      id: 'w1',
+      venueId: 'v1',
+      venueName: 'DEV01',
+      date: '2026-09-19',
+      fromHour: 19,
+      untilHour: 20,
+      hours: 1,
+      state: 'Waiting',
+      askedAt: '2026-09-18T10:00:00Z',
+    });
+    fixture.detectChanges();
+
+    // Once they are in it, the page says so rather than offering to put them in it again.
+    expect(elementOf(fixture, 'waiting-now')).not.toBeNull();
+    expect(elementOf(fixture, 'wait-for-it')).toBeNull();
+  });
+
+  it('asks somebody with no session to sign in before they can wait', () => {
+    render();
+
+    expect(elementOf(fixture, 'wait-for-it')).toBeNull();
+    expect(elementOf(fixture, 'sign-in-to-wait')).not.toBeNull();
+  });
+
+  it('says what a refused place in a queue was refused for', () => {
+    signInAs('player@example.com');
+    render();
+
+    clickOn(fixture, 'wait-for-it');
+    httpMock
+      .expectOne('/api/waitlist')
+      .flush({ code: 'waitlist.already_waiting' }, { status: 409, statusText: 'Conflict' });
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'wait-error')).toBe(TRANSLATIONS.th['error.waitlist.already_waiting']);
   });
 
   it('holds the hours it was given, and hands over to the page that pays for it', () => {
