@@ -21,6 +21,13 @@ function figures(overrides: Record<string, unknown> = {}) {
     ],
     months: [{ year: 2026, month: 9, onlineBaht: 1200, staffBaht: 400 }],
     attention: { slipsToCheck: 2, paymentsUnanswered: 1, refundsOutstanding: 0 },
+    recovery: {
+      hoursLost: 0,
+      hoursRefilled: 0,
+      refilledBaht: 0,
+      hoursFromQueue: 0,
+      fromQueueBaht: 0,
+    },
     ...overrides,
   };
 }
@@ -133,6 +140,30 @@ describe('VenueDashboardPage', () => {
       }),
     );
     expect(elementOf(fixture, 'months')).not.toBeNull();
+  });
+
+  it('says what was lost and what came back, and how much of it the queue did', () => {
+    render(
+      figures({
+        recovery: {
+          hoursLost: 6,
+          hoursRefilled: 4,
+          refilledBaht: 900,
+          hoursFromQueue: 3,
+          fromQueueBaht: 700,
+        },
+      }),
+    );
+
+    expect(textOf(fixture, 'hours-lost')).toBe('6');
+    expect(textOf(fixture, 'hours-refilled')).toContain('900');
+    expect(textOf(fixture, 'from-queue')).toContain('3');
+  });
+
+  it('says nothing about recovery on a range that lost nothing', () => {
+    render();
+
+    expect(elementOf(fixture, 'hours-lost')).toBeNull();
   });
 
   it('counts what is waiting and links to where it is dealt with', () => {

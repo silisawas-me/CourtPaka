@@ -145,6 +145,47 @@
     </mat-card-content>
   </mat-card>
 
+  <!--
+    What the venue lost and what came back (PRD US-27). Drawn only when something was lost —
+    a run of zeroes says nothing except that the card was written.
+  -->
+  @if (f.recovery.hoursLost > 0) {
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>{{ i18n.t('dashboard.recovery') }}</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <dl class="figures">
+          <div>
+            <dt class="muted">{{ i18n.t('dashboard.hoursLost') }}</dt>
+            <dd data-testid="hours-lost">{{ f.recovery.hoursLost }}</dd>
+          </div>
+          <div>
+            <dt class="muted">{{ i18n.t('dashboard.hoursRefilled') }}</dt>
+            <dd data-testid="hours-refilled">
+              {{ f.recovery.hoursRefilled }}
+              <span class="muted small">
+                {{ f.recovery.refilledBaht | baht: i18n.locale() }}
+                {{ i18n.t('dashboard.baht') }}
+              </span>
+            </dd>
+          </div>
+          <div>
+            <dt class="muted">{{ i18n.t('dashboard.fromQueue') }}</dt>
+            <dd data-testid="from-queue">
+              {{ f.recovery.hoursFromQueue }}
+              <span class="muted small">
+                {{ f.recovery.fromQueueBaht | baht: i18n.locale() }}
+                {{ i18n.t('dashboard.baht') }}
+              </span>
+            </dd>
+          </div>
+        </dl>
+        <p class="muted small">{{ i18n.t('dashboard.recoveryNote') }}</p>
+      </mat-card-content>
+    </mat-card>
+  }
+
   @if (manyMonths()) {
     <mat-card>
       <mat-card-header>

@@ -29,6 +29,24 @@ public sealed record DashboardAttentionResponse(
     int PaymentsUnanswered,
     int RefundsOutstanding);
 
+/// <summary>
+/// Hours the venue had sold and then lost, and how many of them it sold again (PRD US-27).
+///
+/// Lost means an hour somebody had taken and gave back: cancelled by either side, turned away
+/// for a slip that was not good, or written off as a no-show. A hold that ran out is not in it —
+/// nobody ever bought those, and counting every abandoned pick as a loss would bury the number
+/// that matters.
+/// </summary>
+public sealed record DashboardRecoveryResponse(
+    int HoursLost,
+    /// <summary>Of those, the ones somebody else has now taken.</summary>
+    int HoursRefilled,
+    /// <summary>What the hours that came back were sold for.</summary>
+    decimal RefilledBaht,
+    /// <summary>The ones the queue itself filled, which is what a queue is for (PRD US-27).</summary>
+    int HoursFromQueue,
+    decimal FromQueueBaht);
+
 public sealed record DashboardResponse(
     DateOnly From,
     DateOnly To,
@@ -42,7 +60,8 @@ public sealed record DashboardResponse(
     decimal? UtilizationPercent,
     DashboardDayResponse[] Days,
     DashboardMonthResponse[] Months,
-    DashboardAttentionResponse Attention);
+    DashboardAttentionResponse Attention,
+    DashboardRecoveryResponse Recovery);
 
 public static class DashboardErrorCodes
 {
@@ -61,6 +80,30 @@ public static class VenueDashboard
 {
     /// <summary>A year and a day: enough for "this year so far" plus one either side.</summary>
     public const int MaxDays = 366;
+
+    /// <summary>
+    /// The statuses that mean an hour somebody had was given back (PRD US-27). Expired is not
+    /// among them: a hold that ran out was never sold.
+    /// </summary>
+    private static readonly BookingStatus[] LostStatuses =
+    [
+        BookingStatus.Cancelled,
+        BookingStatus.Rejected,
+        BookingStatus.NoShow,
+    ];
+
+    /// <summary>
+    /// The statuses that mean somebody has the hour again (PRD US-27). A fresh hold is not one:
+    /// it has fifteen minutes to become real, and an hour counted as recovered that then lapses
+    /// is a number that walks backwards.
+    /// </summary>
+    private static readonly BookingStatus[] RefilledStatuses =
+    [
+        BookingStatus.PendingVerification,
+        BookingStatus.Confirmed,
+        BookingStatus.Completed,
+        BookingStatus.NoShow,
+    ];
 
     /// <summary>The statuses that mean the hour was sold and kept (PRD US-15).</summary>
     private static readonly BookingStatus[] UsedStatuses =
@@ -160,7 +203,8 @@ public static class VenueDashboard
                 : Math.Round(100m * bookedHours / sellableHours, 1, MidpointRounding.AwayFromZero),
             days,
             months,
-            await AttentionAsync(database, venueId, cancellationToken));
+            await AttentionAsync(database, venueId, cancellationToken),
+            await RecoveryAsync(database, venueId, since, until, cancellationToken));
     }
 
     /// <summary>
@@ -331,6 +375,70 @@ public static class VenueDashboard
     /// What is waiting (PRD US-15): slips nobody has checked, payments nobody has answered for,
     /// and money still to be sent back — counted by the same rules as the venue's notifications.
     /// </summary>
+    /// <summary>
+    /// What the venue lost and what it got back (PRD US-27). Two reads of the same hours: the
+    /// ones given back, and the ones somebody has since taken — matched on the court and the
+    /// hour, because that is what "the same hour" means to a venue.
+    /// </summary>
+    private static async Task<DashboardRecoveryResponse> RecoveryAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateTimeOffset since,
+        DateTimeOffset until,
+        CancellationToken cancellationToken)
+    {
+        // Hours somebody had and gave back. A hold that ran out is not one of them: it was never
+        // bought, and every abandoned pick would drown the number that matters.
+        var lost = await database.BookingSlots
+            .AsNoTracking()
+            .Where(slot =>
+                slot.Booking!.VenueId == venueId
+                && slot.StartsAt >= since
+                && slot.StartsAt < until
+                && !slot.IsActive
+                && LostStatuses.Contains(slot.Booking.Status))
+            .Select(slot => new { slot.CourtId, slot.StartsAt })
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (lost.Count == 0)
+        {
+            return new DashboardRecoveryResponse(0, 0, 0m, 0, 0m);
+        }
+
+        // The hours that are taken again now, with what they went for and whether the queue is
+        // what filled them.
+        var refilled = await database.BookingSlots
+            .AsNoTracking()
+            .Where(slot =>
+                slot.Booking!.VenueId == venueId
+                && slot.StartsAt >= since
+                && slot.StartsAt < until
+                && slot.IsActive
+                && RefilledStatuses.Contains(slot.Booking.Status))
+            .Select(slot => new
+            {
+                slot.CourtId,
+                slot.StartsAt,
+                slot.BahtPerHour,
+                FromQueue = database.WaitlistEntries.Any(
+                    entry => entry.OfferedBookingId == slot.BookingId),
+            })
+            .ToListAsync(cancellationToken);
+
+        var given = lost.Select(hour => (hour.CourtId, hour.StartsAt)).ToHashSet();
+        var back = refilled
+            .Where(hour => given.Contains((hour.CourtId, hour.StartsAt)))
+            .ToList();
+
+        return new DashboardRecoveryResponse(
+            lost.Count,
+            back.Count,
+            back.Sum(hour => hour.BahtPerHour),
+            back.Count(hour => hour.FromQueue),
+            back.Where(hour => hour.FromQueue).Sum(hour => hour.BahtPerHour));
+    }
+
     private static async Task<DashboardAttentionResponse> AttentionAsync(
         AppDbContext database,
         Guid venueId,

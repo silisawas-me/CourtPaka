@@ -633,5 +633,10 @@
   "error.waitlist.window_not_a_window": "ช่วงเวลาไม่ถูกต้อง",
   "error.waitlist.hours_do_not_fit": "จำนวนชั่วโมงไม่พอดีกับช่วงเวลาที่เลือก",
   "error.waitlist.already_waiting": "คุณอยู่ในคิวรอของวันนี้อยู่แล้ว",
-  "error.waitlist.not_found": "ไม่พบคิวรอนี้"
+  "error.waitlist.not_found": "ไม่พบคิวรอนี้",
+  "dashboard.recovery": "ชั่วโมงที่หลุดและที่ได้คืน",
+  "dashboard.hoursLost": "ชั่วโมงที่หลุดไป",
+  "dashboard.hoursRefilled": "ขายใหม่ได้",
+  "dashboard.fromQueue": "ในนั้นมาจากคิวรอ",
+  "dashboard.recoveryNote": "นับเฉพาะชั่วโมงที่มีคนจองแล้วปล่อยกลับมา (ยกเลิก ปฏิเสธสลิป หรือไม่มา) — การจองที่หมดเวลาถือว่ายังไม่เคยขาย"
 }

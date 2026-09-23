@@ -30,6 +30,18 @@ export interface DashboardAttention {
  * hours were for sale, and what is still to come are rules about money (PRD 6.2), and the page
  * only lays them out.
  */
+/**
+ * Hours the venue had sold and lost, and how many of them went again (PRD US-27). A hold that
+ * ran out is not counted as a loss — nobody ever bought it.
+ */
+export interface Recovery {
+  hoursLost: number;
+  hoursRefilled: number;
+  refilledBaht: number;
+  hoursFromQueue: number;
+  fromQueueBaht: number;
+}
+
 export interface Dashboard {
   from: string;
   to: string;
@@ -43,6 +55,7 @@ export interface Dashboard {
   days: DashboardDay[];
   months: DashboardMonth[];
   attention: DashboardAttention;
+  recovery: Recovery;
 }
 
 @Injectable({ providedIn: 'root' })
