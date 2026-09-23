@@ -117,7 +117,8 @@ jobs:
   # time somebody remembers to run them by hand.
   #
   # A subset, chosen for coverage per minute: the public grid and a booking through it, the venue
-  # side of a slip, and signing in with LINE. The rest stay a local command (scripts/verify/README).
+  # side of a slip, the money crossing the counter, and signing in with LINE. The rest stay a
+  # local command (scripts/verify/README).
   flows:
     runs-on: ubuntu-latest
     steps:
@@ -137,7 +138,7 @@ jobs:
 
       - name: Run the flows
         run: |
-          for check in booking_grid booking slip_queue line_login; do
+          for check in booking_grid booking slip_queue counter_money line_login; do
             echo "== $check"
             python scripts/verify/$check.py
           done

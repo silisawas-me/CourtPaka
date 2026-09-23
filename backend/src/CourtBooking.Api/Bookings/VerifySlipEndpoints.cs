@@ -292,14 +292,23 @@ public static class VerifySlipEndpoints
         // A slip the venue accepted is money that arrived, so the day's count knows about it
         // (PRD US-26). Written here rather than left to the counter: nobody types in what a
         // booker transferred, and a day whose transfers are missing is a day that does not add up.
-        if (payment == PaymentState.Received
-            && await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken) == 0m)
+        //
+        // What it covers is whatever the desk has not already taken — a deposit paid at the
+        // counter and the rest transferred is two receipts, not one of them overwritten and not
+        // a booking whose receipts never reach its price.
+        var transferred = payment == PaymentState.Received
+            ? Takings.OutstandingOf(
+                booking.TotalBaht,
+                await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken))
+            : 0m;
+
+        if (transferred > 0)
         {
             database.PaymentReceipts.Add(new PaymentReceipt
             {
                 BookingId = bookingId,
                 VenueId = venueId,
-                AmountBaht = booking.TotalBaht,
+                AmountBaht = transferred,
                 Method = PaymentMethod.PromptPay,
                 ReceivedAt = now,
                 // The booker sent it; the person at the desk only agreed that it arrived.

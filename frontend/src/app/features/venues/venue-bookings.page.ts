@@ -15,6 +15,7 @@ import { plainDate, venueToday } from '../../core/i18n/plain-date';
 import { TranslationService } from '../../core/i18n/translation.service';
 import {
   CancellationReason,
+  PaymentMethod,
   RefundMethod,
   Refunds,
   VenueBooking,
@@ -31,10 +32,13 @@ import { provideLocalizedDateAdapter } from '../../shared/localized-date-adapter
 const NOTE_MAX_LENGTH = 400;
 
 /** Which question a row is being asked. One row at a time: these decide money. */
-type Asking = 'cancel' | 'noShow' | 'settle' | 'played' | 'refund';
+type Asking = 'cancel' | 'noShow' | 'settle' | 'played' | 'refund' | 'take';
 
 /** The two ways a venue gets money back to somebody (PRD US-18). */
 const REFUND_METHODS: RefundMethod[] = ['Transfer', 'Cash'];
+
+/** The three ways money reaches the counter (PRD US-26). */
+const PAYMENT_METHODS: PaymentMethod[] = ['Cash', 'PromptPay', 'Card'];
 
 /**
  * A day at the counter (PRD US-13): who booked what, and every door the venue can press on it.
@@ -73,6 +77,7 @@ export class VenueBookingsPage {
   protected readonly i18n = inject(TranslationService);
   protected readonly noteMaxLength = NOTE_MAX_LENGTH;
   protected readonly refundMethods = REFUND_METHODS;
+  protected readonly paymentMethods = PAYMENT_METHODS;
 
   /** A transfer cannot have happened tomorrow, so the calendar does not offer it (PRD US-18). */
   protected readonly today = venueToday();
@@ -116,20 +121,24 @@ export class VenueBookingsPage {
 
   protected readonly todayCount = computed(() => this.bookings$().length);
 
-  /** What the day took: everything the venue has the money for, less what it owes back. */
+  /**
+   * What the day took, counted from what was actually written down as taken rather than from the
+   * price of everything marked paid — so this number and the day's money page are the same number
+   * (PRD US-26).
+   */
   protected readonly todayTaken = computed(() =>
-    this.bookings$()
-      .filter((booking) => booking.paymentState === 'Received')
-      .reduce((sum, booking) => sum + booking.totalBaht - booking.refundDueBaht, 0),
+    this.bookings$().reduce((sum, booking) => sum + booking.takenBaht, 0),
   );
 
-  /** What is still to come in: hours sold and not paid for, plus money owed back and not sent. */
+  /**
+   * What is still to come in: what each booking still owes, plus money owed back and not sent.
+   * A booking owes nothing forwards once the venue has turned it away, and which those are is
+   * the server's answer (`can.takeMoney`), not a status list kept here.
+   */
   protected readonly todayOwed = computed(() =>
     this.bookings$().reduce(
       (sum, booking) =>
-        sum +
-        booking.outstandingBaht +
-        (booking.paymentState === 'NotReceived' ? booking.totalBaht : 0),
+        sum + booking.outstandingBaht + (booking.can.takeMoney ? booking.toPayBaht : 0),
       0,
     ),
   );
@@ -203,6 +212,19 @@ export class VenueBookingsPage {
     note: this.forms.nonNullable.control('', Validators.maxLength(NOTE_MAX_LENGTH)),
   });
 
+  /**
+   * Taking money at the desk (PRD US-26). The amount is filled in with what is still owed,
+   * because that is what usually changes hands, and the server refuses more than that anyway.
+   */
+  protected readonly takeForm = this.forms.group({
+    amountBaht: this.forms.control<number | null>(null, [
+      Validators.required,
+      Validators.min(0.01),
+    ]),
+    method: this.forms.nonNullable.control<PaymentMethod>('Cash'),
+    note: this.forms.nonNullable.control('', Validators.maxLength(NOTE_MAX_LENGTH)),
+  });
+
   /** Taking a no-show back says the record is wrong, so it has to say why (PRD 6.1). */
   protected readonly playedForm = this.forms.group({
     reason: this.forms.nonNullable.control('', [
@@ -235,6 +257,11 @@ export class VenueBookingsPage {
   protected ask(bookingId: string, door: Asking): void {
     this.asking.set({ bookingId, door });
     this.decideError.set(null);
+
+    if (door === 'take') {
+      const owed = this.bookings$().find((row) => row.bookingId === bookingId)?.toPayBaht ?? null;
+      this.takeForm.reset({ amountBaht: owed, method: 'Cash', note: '' });
+    }
     this.cancelForm.reset({ reason: null, note: '' });
     this.playedForm.reset({ reason: '' });
     this.refunds.set(null);
@@ -371,12 +398,7 @@ export class VenueBookingsPage {
    */
   protected cancel(booking: VenueBooking, paymentReceived?: boolean): void {
     if (booking.status === 'PendingVerification') {
-      this.send(
-        booking,
-        this.bookings.cancel(this.venueId(), booking.bookingId, {
-          paymentReceived,
-        }),
-      );
+      this.decide(this.bookings.cancel(this.venueId(), booking.bookingId, { paymentReceived }));
       return;
     }
 
@@ -386,8 +408,7 @@ export class VenueBookingsPage {
       return;
     }
 
-    this.send(
-      booking,
+    this.decide(
       this.bookings.cancel(this.venueId(), booking.bookingId, {
         reason,
         note: note.trim() || undefined,
@@ -396,14 +417,11 @@ export class VenueBookingsPage {
   }
 
   protected noShow(booking: VenueBooking): void {
-    this.send(booking, this.bookings.noShow(this.venueId(), booking.bookingId));
+    this.decide(this.bookings.noShow(this.venueId(), booking.bookingId));
   }
 
   protected settle(booking: VenueBooking, paymentReceived: boolean): void {
-    this.send(
-      booking,
-      this.bookings.settlePayment(this.venueId(), booking.bookingId, paymentReceived),
-    );
+    this.decide(this.bookings.settlePayment(this.venueId(), booking.bookingId, paymentReceived));
   }
 
   protected playedAfterAll(booking: VenueBooking): void {
@@ -412,13 +430,19 @@ export class VenueBookingsPage {
       return;
     }
 
-    this.send(
-      booking,
+    this.decide(
       this.bookings.playedAfterAll(
         this.venueId(),
         booking.bookingId,
         this.playedForm.getRawValue().reason.trim(),
       ),
+    );
+  }
+
+  /** Whether there is any money to say a line about: what is owed, owed back, or unanswered. */
+  protected owesSomething(booking: VenueBooking): boolean {
+    return (
+      booking.can.takeMoney || booking.refundDueBaht > 0 || booking.paymentState === 'Unconfirmed'
     );
   }
 
@@ -430,7 +454,12 @@ export class VenueBookingsPage {
     return courtsOf(booking.slots);
   }
 
-  private send(booking: VenueBooking, decision: Observable<VenueBooking>): void {
+  /**
+   * A door was pressed. One booking comes back changed and replaces its own row rather than
+   * reloading the day: the counter may be halfway through reading it. A refusal is the one case
+   * the day is read again for — it usually means somebody else decided first.
+   */
+  private decide(decision: Observable<VenueBooking>): void {
     if (this.deciding()) {
       return;
     }
@@ -457,10 +486,6 @@ export class VenueBookingsPage {
     });
   }
 
-  /**
-   * A booking was just taken at the counter. The day is read again rather than patched, because
-   * the new row belongs among the others in play order, and the server is what knows that order.
-   */
   /** A block on the board was pressed: put that row where the counter is looking. */
   protected reveal(bookingId: string): void {
     document
@@ -471,6 +496,25 @@ export class VenueBookingsPage {
   /** An empty hour was pressed: open the counter's own form at it (PRD US-13, US-25). */
   protected sellAt(_at: { courtId: string; hour: number }): void {
     this.selling.set(true);
+  }
+
+  /** Writes down what just changed hands (PRD US-26). */
+  protected takePayment(booking: VenueBooking): void {
+    this.takeForm.markAllAsTouched();
+    if (this.takeForm.invalid) {
+      return;
+    }
+
+    const { amountBaht, method, note } = this.takeForm.getRawValue();
+    this.decide(
+      this.bookings.takePayment(
+        this.venueId(),
+        booking.bookingId,
+        amountBaht!,
+        method,
+        note.trim() || undefined,
+      ),
+    );
   }
 
   /** They rang to say they are coming (PRD US-24). */
@@ -484,30 +528,9 @@ export class VenueBookingsPage {
   }
 
   /**
-   * One booking came back changed. It replaces its own row rather than reloading the day: the
-   * counter may be halfway through reading it.
+   * A booking was just taken at the counter. The day is read again rather than patched, because
+   * the new row belongs among the others in play order, and the server is what knows that order.
    */
-  private decide(answer: Observable<VenueBooking>): void {
-    if (this.deciding()) {
-      return;
-    }
-
-    this.deciding.set(true);
-    this.decideError.set(null);
-    answer.subscribe({
-      next: (changed) => {
-        this.deciding.set(false);
-        this.bookings$.update((day) =>
-          day.map((row) => (row.bookingId === changed.bookingId ? changed : row)),
-        );
-      },
-      error: (failure: unknown) => {
-        this.deciding.set(false);
-        this.decideError.set(errorKey(failure));
-      },
-    });
-  }
-
   protected sold(): void {
     this.selling.set(false);
     this.load(this.venueId(), this.day(), { quiet: true });

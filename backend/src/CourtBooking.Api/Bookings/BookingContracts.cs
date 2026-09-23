@@ -282,6 +282,8 @@ public sealed record VenueBookingActionsResponse(
     bool NoShow,
     bool SettlePayment,
     bool PlayedAfterAll,
+    /// <summary>Taking money for it at the desk, in any form (PRD US-26).</summary>
+    bool TakeMoney,
     /// <summary>
     /// The reasons this booking may be turned away for, and what each would owe the booker.
     /// Only the ones PRD 6.1 allows where it stands: a booking whose hours were played cannot be

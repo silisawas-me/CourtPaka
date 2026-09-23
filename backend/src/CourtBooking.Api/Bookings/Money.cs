@@ -100,6 +100,47 @@ public static class Takings
         Math.Max(0m, decimal.Round(totalBaht - takenBaht, 2, MidpointRounding.AwayFromZero));
 
     /// <summary>
+    /// Whether money may still be taken for this booking (PRD US-26). Something has to be owed,
+    /// and the booking has to be one the venue is going to honour or has already played: a
+    /// booking that was turned away or let go owes nothing forwards, and money against it would
+    /// be a refund question wearing the wrong hat.
+    ///
+    /// A venue that already says it has the money is asked for none, whatever the receipts add up
+    /// to. Payment state is the older answer and some bookings reached it without one — a slip
+    /// accepted before receipts were written down, a venue answering for the money after the fact
+    /// (PRD US-13) — and offering a door there is offering to collect twice.
+    ///
+    /// A hold is not one of them. PRD 6.1 leaves a hold two ways out — a slip, or the clock — and
+    /// a booker who paid at the desk instead is sold the hours at the counter (US-13), which is
+    /// the answer the state machine already has.
+    ///
+    /// The one place that answers it, so the door the counter sees and the door the server opens
+    /// are the same door.
+    /// </summary>
+    public static bool CanTake(BookingStatus status, PaymentState payment, decimal outstanding) =>
+        outstanding > 0 && payment != PaymentState.Received && StillOwing.Contains(status);
+
+    /// <summary>
+    /// The bookings a venue may still be owed for. Written once, because the door on one row and
+    /// the day's outstanding total are the same question asked twice.
+    /// </summary>
+    public static readonly BookingStatus[] StillOwing =
+    [
+        BookingStatus.PendingVerification,
+        BookingStatus.Confirmed,
+        BookingStatus.Completed,
+        BookingStatus.NoShow,
+    ];
+
+    /// <summary>
+    /// Whether paying the last of it settles the booking itself and not only its money. A booking
+    /// waiting on a slip that was paid another way would otherwise wait for a slip that is never
+    /// coming — the money arriving is the same answer the slip queue gives (PRD US-12, 6.1).
+    /// </summary>
+    public static bool PayingInFullConfirms(BookingStatus status) =>
+        BookingTransitions.CanMove(status, BookingStatus.Confirmed);
+
+    /// <summary>
     /// What the till should hold at the end of the day: what it started with, plus the cash that
     /// came in, less the cash that went back out (PRD US-26). Anything that never touched the
     /// till — a transfer, a card — is not in it.

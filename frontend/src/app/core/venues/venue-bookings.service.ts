@@ -26,6 +26,8 @@ export interface VenueBookingActions {
   noShow: boolean;
   settlePayment: boolean;
   playedAfterAll: boolean;
+  /** Taking money for it at the desk, in any form (PRD US-26). */
+  takeMoney: boolean;
   /**
    * The reasons this booking may be turned away for, and what each owes the booker. Only the
    * ones the rules allow where it stands, so the page can never offer an answer the server
@@ -69,12 +71,59 @@ export interface VenueBooking {
   graceEndsAt: string;
   paymentState: 'NotReceived' | 'Received' | 'Unconfirmed';
   totalBaht: number;
+  /** What the venue has taken for this booking so far, and what that leaves (PRD US-26). */
+  takenBaht: number;
+  toPayBaht: number;
   refundDueBaht: number;
   /** What the venue says it has sent back, and what that leaves to send (PRD 6.2, US-18). */
   sentBackBaht: number;
   outstandingBaht: number;
   slots: BookingSlot[];
   can: VenueBookingActions;
+}
+
+/** How money reached the venue (PRD US-26). */
+export type PaymentMethod = 'Cash' | 'PromptPay' | 'Card';
+
+/** One amount the venue took, as the counter reads it back. */
+export interface PaymentReceipt {
+  id: string;
+  bookingId: string;
+  amountBaht: number;
+  method: PaymentMethod;
+  receivedAt: string;
+  note: string | null;
+}
+
+/** What one booking has been paid, and what that leaves (PRD US-26). */
+export interface Takings {
+  totalBaht: number;
+  takenBaht: number;
+  outstandingBaht: number;
+  receipts: PaymentReceipt[];
+}
+
+/** A day's money, and the count at the end of it (PRD US-26). */
+export interface DayMoney {
+  date: string;
+  takenBaht: number;
+  cashBaht: number;
+  promptPayBaht: number;
+  cardBaht: number;
+  cashRefundedBaht: number;
+  outstandingBaht: number;
+  cashReceipts: PaymentReceipt[];
+  closed: DailyClosing | null;
+}
+
+export interface DailyClosing {
+  date: string;
+  openingFloatBaht: number;
+  expectedCashBaht: number;
+  countedCashBaht: number;
+  differenceBaht: number;
+  note: string | null;
+  closedAt: string;
 }
 
 /** How the venue got the money back to the booker (PRD US-18). */
@@ -127,6 +176,41 @@ export class VenueBookingsService {
       paymentReceived: answers.paymentReceived ?? null,
       note: answers.note ?? null,
     });
+  }
+
+  /** Writes down an amount the venue has just taken, and answers with the row it changed. */
+  takePayment(
+    venueId: string,
+    bookingId: string,
+    amountBaht: number,
+    method: PaymentMethod,
+    note?: string,
+  ): Observable<VenueBooking> {
+    return this.http.post<VenueBooking>(`${this.at(venueId, bookingId)}/payments`, {
+      amountBaht,
+      method,
+      note,
+    });
+  }
+
+  /** What a day took, by the form it came in, and whether it has been counted (PRD US-26). */
+  money(venueId: string, date: string): Observable<DayMoney> {
+    return this.http.get<DayMoney>(`/api/venues/${venueId}/money`, { params: { date } });
+  }
+
+  /** Counts the till and writes it down. The server works out what should be there. */
+  closeDay(
+    venueId: string,
+    date: string,
+    openingFloatBaht: number,
+    countedCashBaht: number,
+    note?: string,
+  ): Observable<DailyClosing> {
+    return this.http.post<DailyClosing>(
+      `/api/venues/${venueId}/money/closing`,
+      { openingFloatBaht, countedCashBaht, note },
+      { params: { date } },
+    );
   }
 
   /** They rang to say they are on their way, and the counter wrote it down (PRD US-24). */

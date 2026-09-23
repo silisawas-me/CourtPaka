@@ -23,18 +23,20 @@ public sealed class CounterMoneyTests(ApiTestFixture api)
 
         var deposit = await Take(owner, venue.Id, booking.Id, 100m, nameof(PaymentMethod.Cash));
         Assert.Equal(100m, deposit.TakenBaht);
-        Assert.Equal(booking.TotalBaht - 100m, deposit.OutstandingBaht);
+        Assert.Equal(booking.TotalBaht - 100m, deposit.ToPayBaht);
 
         var rest = await Take(
-            owner, venue.Id, booking.Id, deposit.OutstandingBaht, nameof(PaymentMethod.Card));
+            owner, venue.Id, booking.Id, deposit.ToPayBaht, nameof(PaymentMethod.Card));
 
         Assert.Equal(booking.TotalBaht, rest.TakenBaht);
-        Assert.Equal(0m, rest.OutstandingBaht);
-        Assert.Equal(2, rest.Receipts.Length);
+        Assert.Equal(0m, rest.ToPayBaht);
+
+        var takings = await Takings(owner, venue.Id, booking.Id);
+        Assert.Equal(2, takings.Receipts.Length);
         // Each one says what form it came in, because that is what the till is counted against.
         Assert.Equal(
             [nameof(PaymentMethod.Cash), nameof(PaymentMethod.Card)],
-            rest.Receipts.Select(receipt => receipt.Method));
+            takings.Receipts.Select(receipt => receipt.Method));
     }
 
     /// <summary>A till that says it took more than was owed is a till nobody can count.</summary>
@@ -101,6 +103,34 @@ public sealed class CounterMoneyTests(ApiTestFixture api)
         Assert.Equal(booking.TotalBaht, (await Takings(owner, venue.Id, booking.Id)).TakenBaht);
     }
 
+    /// <summary>
+    /// A deposit at the desk and the rest transferred is two receipts that add up to the price.
+    /// The slip covers what the desk has not taken, so the booking does not end up paid for with
+    /// a door still open on it, and the day's transfers are not short (PRD US-26).
+    /// </summary>
+    [Fact]
+    public async Task A_deposit_at_the_desk_and_the_rest_transferred_add_up()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+
+        await Take(owner, venue.Id, booking.Id, 50m, nameof(PaymentMethod.Cash));
+        var confirmed = await owner.PostAsync(
+            $"/api/venues/{venue.Id}/slip-queue/{booking.Id}/confirm", null);
+        Assert.True(confirmed.IsSuccessStatusCode);
+
+        var takings = await Takings(owner, venue.Id, booking.Id);
+        Assert.Equal(booking.TotalBaht, takings.TakenBaht);
+        Assert.Equal(0m, takings.OutstandingBaht);
+
+        var money = await Money(owner, venue.Id);
+        Assert.Equal(50m, money.CashBaht);
+        Assert.Equal(booking.TotalBaht - 50m, money.PromptPayBaht);
+
+        // And nothing is asked for twice.
+        Assert.False((await Row(owner, venue.Id, booking.Id)).Can.TakeMoney);
+    }
+
     /// <summary>What was sold at the counter was already paid for, in the form it was paid.</summary>
     [Fact]
     public async Task What_the_counter_sold_is_counted_in_the_form_it_was_paid()
@@ -120,6 +150,81 @@ public sealed class CounterMoneyTests(ApiTestFixture api)
 
         Assert.Equal(sold.TotalBaht, money.CashBaht);
         Assert.Equal(0m, sold.ToPayBaht);
+    }
+
+    /// <summary>
+    /// A booking waiting on a slip that is paid another way is not waiting for anything: the
+    /// money arriving is the same answer the slip queue gives, so it is confirmed here rather
+    /// than left waiting for a slip that is never coming (PRD US-12, US-26).
+    /// </summary>
+    [Fact]
+    public async Task Paying_the_last_of_it_at_the_desk_confirms_a_booking_waiting_on_a_slip()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+
+        await Take(owner, venue.Id, booking.Id, booking.TotalBaht, nameof(PaymentMethod.Cash));
+
+        var row = await Row(owner, venue.Id, booking.Id);
+        Assert.Equal(nameof(BookingStatus.Confirmed), row.Status);
+        Assert.Equal("Received", row.PaymentState);
+
+        // And the move is in the history like every other one, with the person who took the
+        // money against it (PRD 6.1).
+        var history = await scenario.HistoryAsync(booking.Id);
+        Assert.Equal(BookingStatus.PendingVerification, history[^1].From);
+        Assert.Equal(BookingStatus.Confirmed, history[^1].To);
+        Assert.NotNull(history[^1].ChangedByUserId);
+    }
+
+    /// <summary>
+    /// A hold has two ways out and neither of them is the till (PRD 6.1): a booker who paid at
+    /// the desk is sold the hours at the counter, which is the answer the state machine has. A
+    /// hold that has run out is further out still — it owes nothing forwards, and money against
+    /// it would be a refund question wearing the wrong hat (PRD US-26).
+    /// </summary>
+    [Fact]
+    public async Task Money_is_not_taken_against_a_hold()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var booker = await scenario.SignedInClientAsync();
+        var held = await VenueScenario.HoldAsync(
+            booker, venue.Id, VenueScenario.Today.AddDays(1), (courts[0], 19));
+
+        var waiting = await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/bookings/{held.Id}/payments",
+            new TakePaymentRequest(held.TotalBaht, nameof(PaymentMethod.Cash), null));
+
+        Assert.Equal(HttpStatusCode.Conflict, waiting.StatusCode);
+        Assert.Equal(MoneyErrorCodes.NotTakeable, await waiting.ErrorCodeAsync());
+
+        await scenario.LapseHoldAsync(held.Id);
+        var lapsed = await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/bookings/{held.Id}/payments",
+            new TakePaymentRequest(held.TotalBaht, nameof(PaymentMethod.Cash), null));
+
+        Assert.Equal(HttpStatusCode.Conflict, lapsed.StatusCode);
+        Assert.Equal(MoneyErrorCodes.NotTakeable, await lapsed.ErrorCodeAsync());
+
+        // And the day sees nothing, because nothing came in.
+        Assert.Equal(0m, (await Money(owner, venue.Id)).TakenBaht);
+    }
+
+    /// <summary>
+    /// The door the counter is shown is the door the server opens: the row says whether there is
+    /// money to take on it, and it is the same rule both times (PRD US-13, US-26).
+    /// </summary>
+    [Fact]
+    public async Task The_row_says_whether_there_is_money_to_take_on_it()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 20);
+
+        Assert.True((await Row(owner, venue.Id, booking.Id)).Can.TakeMoney);
+
+        await Take(owner, venue.Id, booking.Id, booking.TotalBaht, nameof(PaymentMethod.Cash));
+
+        Assert.False((await Row(owner, venue.Id, booking.Id)).Can.TakeMoney);
     }
 
     /// <summary>
@@ -203,9 +308,9 @@ public sealed class CounterMoneyTests(ApiTestFixture api)
                 new CloseDayRequest(0m, 0m, null))).StatusCode);
     }
 
-    private static async Task<TakingsResponse> Take(
+    private static async Task<VenueBookingResponse> Take(
         HttpClient client, Guid venueId, Guid bookingId, decimal amount, string method) =>
-        await VenueScenario.ReadAsync<TakingsResponse>(
+        await VenueScenario.ReadAsync<VenueBookingResponse>(
             await client.PostAsJsonAsync(
                 $"/api/venues/{venueId}/bookings/{bookingId}/payments",
                 new TakePaymentRequest(amount, method, null)));

@@ -1,0 +1,223 @@
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>{{ i18n.t('money.title') }}</mat-card-title>
+  </mat-card-header>
+
+  <mat-card-content>
+    <mat-form-field class="field">
+      <mat-label>{{ i18n.t('money.day') }}</mat-label>
+      <input
+        id="day"
+        matInput
+        readonly
+        data-testid="day"
+        [formControl]="dayField"
+        [matDatepicker]="picker"
+        [max]="today"
+        (dateChange)="pick($event.value)"
+        (click)="picker.open()"
+      />
+      <mat-datepicker-toggle matIconSuffix [for]="picker" />
+      <mat-datepicker #picker />
+    </mat-form-field>
+  </mat-card-content>
+
+  <mat-card-actions>
+    <a matButton [routerLink]="['/venues', venueId()]">{{ i18n.t('settings.backToVenue') }}</a>
+    <a matButton [routerLink]="['/venues', venueId(), 'bookings']">
+      {{ i18n.t('venueBookings.title') }}
+    </a>
+  </mat-card-actions>
+</mat-card>
+
+@if (loading()) {
+  <mat-progress-bar mode="indeterminate" />
+}
+
+@if (pageError(); as key) {
+  <mat-card>
+    <mat-card-content>
+      <p class="form-error" data-testid="page-error">{{ i18n.t(key) }}</p>
+    </mat-card-content>
+  </mat-card>
+} @else if (money(); as day) {
+  <mat-card>
+    <mat-card-content>
+      <!--
+        One number leads — everything that came in that day — and the forms it came in are read
+        after it. Cash is first of the three because it is the one the till is counted against.
+      -->
+      <p class="lead-label muted">
+        {{ i18n.t('money.takenToday') }} · {{ day.date | appDate: i18n.locale() }}
+      </p>
+      <p class="lead" data-testid="taken-today">
+        {{ baht(day.takenBaht) }} <span class="unit">{{ i18n.t('money.baht') }}</span>
+      </p>
+
+      <dl class="figures">
+        <div>
+          <dt class="muted">{{ i18n.t('money.method.Cash') }}</dt>
+          <dd data-testid="cash">{{ baht(day.cashBaht) }}</dd>
+        </div>
+        <div>
+          <dt class="muted">{{ i18n.t('money.method.PromptPay') }}</dt>
+          <dd data-testid="promptpay">{{ baht(day.promptPayBaht) }}</dd>
+        </div>
+        <div>
+          <dt class="muted">{{ i18n.t('money.method.Card') }}</dt>
+          <dd data-testid="card">{{ baht(day.cardBaht) }}</dd>
+        </div>
+        <div>
+          <dt class="muted">{{ i18n.t('money.cashRefunded') }}</dt>
+          <dd data-testid="cash-refunded">{{ baht(day.cashRefundedBaht) }}</dd>
+        </div>
+        <div>
+          <dt class="muted">{{ i18n.t('money.outstanding') }}</dt>
+          <dd data-testid="outstanding">{{ baht(day.outstandingBaht) }}</dd>
+        </div>
+      </dl>
+    </mat-card-content>
+  </mat-card>
+
+  <!--
+    Only the cash, because only the cash is in the till. A transfer that arrived is money the
+    venue has, but it is not money anybody is going to count tonight.
+  -->
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('money.receipts') }}</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      @if (day.cashReceipts.length === 0) {
+        <p class="muted" data-testid="no-receipts">{{ i18n.t('money.nothing') }}</p>
+      } @else {
+        <div class="table-scroll">
+          <table class="figures-table" data-testid="receipts">
+            <thead>
+              <tr>
+                <th scope="col">{{ i18n.t('money.time') }}</th>
+                <th scope="col">{{ i18n.t('money.note') }}</th>
+                <th scope="col" class="num">{{ i18n.t('money.amount') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (receipt of day.cashReceipts; track receipt.id) {
+                <tr [attr.data-testid]="'receipt-' + receipt.id">
+                  <th scope="row">{{ time(receipt.receivedAt) }}</th>
+                  <td class="note">{{ receipt.note }}</td>
+                  <td class="num">{{ baht(receipt.amountBaht) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('money.closing') }}</mat-card-title>
+    </mat-card-header>
+
+    <mat-card-content>
+      @if (day.closed; as closed) {
+        <!--
+          A day that has been counted shows its count and nothing to press: the difference is
+          what the till was short or over, and it stays that way.
+        -->
+        <dl class="figures">
+          <div>
+            <dt class="muted">{{ i18n.t('money.float') }}</dt>
+            <dd data-testid="closed-float">{{ baht(closed.openingFloatBaht) }}</dd>
+          </div>
+          <div>
+            <dt class="muted">{{ i18n.t('money.expected') }}</dt>
+            <dd data-testid="closed-expected">{{ baht(closed.expectedCashBaht) }}</dd>
+          </div>
+          <div>
+            <dt class="muted">{{ i18n.t('money.counted') }}</dt>
+            <dd data-testid="closed-counted">{{ baht(closed.countedCashBaht) }}</dd>
+          </div>
+          <div>
+            <dt class="muted">{{ i18n.t('money.difference') }}</dt>
+            <dd data-testid="closed-difference" [class.off]="closed.differenceBaht !== 0">
+              @if (closed.differenceBaht === 0) {
+                {{ i18n.t('money.exact') }}
+              } @else {
+                {{ baht(closed.differenceBaht) }}
+                <span class="muted small">
+                  {{ i18n.t(closed.differenceBaht < 0 ? 'money.short' : 'money.over') }}
+                </span>
+              }
+            </dd>
+          </div>
+        </dl>
+
+        @if (closed.note) {
+          <p class="muted" data-testid="closed-note">{{ closed.note }}</p>
+        }
+        <p class="muted small" data-testid="closed-at">
+          {{ i18n.t('money.closedAt') }} {{ closed.closedAt | appDateTime: i18n.locale() }}
+        </p>
+      } @else {
+        <form class="stack" [formGroup]="closeForm" novalidate>
+          <p class="muted">{{ i18n.t('money.closedOnce') }}</p>
+
+          <mat-form-field class="field">
+            <mat-label>{{ i18n.t('money.float') }}</mat-label>
+            <input
+              matInput
+              id="float"
+              type="number"
+              inputmode="decimal"
+              data-testid="opening-float"
+              formControlName="openingFloatBaht"
+            />
+            <mat-error
+              [appFieldError]="closeForm.controls.openingFloatBaht"
+              testId="float-error"
+            ></mat-error>
+          </mat-form-field>
+
+          <mat-form-field class="field">
+            <mat-label>{{ i18n.t('money.counted') }}</mat-label>
+            <input
+              matInput
+              id="counted"
+              type="number"
+              inputmode="decimal"
+              data-testid="counted-cash"
+              formControlName="countedCashBaht"
+            />
+            <mat-error
+              [appFieldError]="closeForm.controls.countedCashBaht"
+              testId="counted-error"
+            ></mat-error>
+          </mat-form-field>
+
+          <mat-form-field class="field">
+            <mat-label>{{ i18n.t('money.note') }}</mat-label>
+            <input matInput id="closing-note" data-testid="closing-note" formControlName="note" />
+          </mat-form-field>
+
+          <div class="row">
+            <button
+              matButton="filled"
+              type="submit"
+              data-testid="close-day"
+              [disabled]="closing()"
+              (click)="close()"
+            >
+              {{ i18n.t('money.close') }}
+            </button>
+          </div>
+
+          @if (closeError(); as key) {
+            <p class="form-error" data-testid="close-error">{{ i18n.t(key) }}</p>
+          }
+        </form>
+      }
+    </mat-card-content>
+  </mat-card>
+}

@@ -1,0 +1,93 @@
+// minmax(0, 1fr), not the default auto: the receipts table is wider than a phone and has its own
+// scroll box — without this the track grows to it and takes the whole page with it.
+:host {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--stack);
+}
+
+.lead-label {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+}
+
+// The one figure set large. A bigger token rather than a heavier weight: the app ships 400 and
+// 500 only.
+.lead {
+  margin: 0.25rem 0 1rem;
+  font: var(--mat-sys-display-small);
+  color: var(--mat-sys-primary);
+
+  .unit {
+    font: var(--mat-sys-title-medium);
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+// A line of readings that wraps, each label over its number — not equal tiles, since they are
+// different things and are read in the order they are written.
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+  margin: 0 0 0.75rem;
+
+  dt {
+    font: var(--mat-sys-label-large);
+  }
+
+  dd {
+    margin: 0.25rem 0 0;
+    font: var(--mat-sys-title-large);
+  }
+}
+
+// A till that did not come out even is the one thing on this page somebody has to answer for.
+.off {
+  color: var(--mat-sys-error);
+}
+
+.small {
+  font: var(--mat-sys-body-small);
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.figures-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: var(--mat-sys-body-medium);
+
+  th,
+  td {
+    padding: 0.5rem 0.75rem;
+    text-align: start;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--mat-sys-outline-variant);
+  }
+
+  thead th {
+    font: var(--mat-sys-label-large);
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  tbody th {
+    font: var(--mat-sys-body-medium);
+    font-variant-numeric: tabular-nums;
+  }
+
+  // Whatever the counter wrote is the only free text here, so it is the one column that wraps.
+  .note {
+    white-space: normal;
+    min-width: 12ch;
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  // Figures line up on their last digit so the column can be read down and added up.
+  .num {
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+  }
+}

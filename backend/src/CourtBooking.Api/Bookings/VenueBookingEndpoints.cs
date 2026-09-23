@@ -423,8 +423,7 @@ public static class VenueBookingEndpoints
         await transaction.CommitAsync(cancellationToken);
 
         AppEvents.For(loggers).LogInformation(
-            "booking_payment_settled {BookingId} {VenueId} {PaymentState} {RefundDueBaht}",
-            bookingId, venueId, payment, refundDue);
+            BookingTransitions.SettledTemplate, bookingId, venueId, payment, refundDue);
 
         // Saying the money did arrive is what turns the share into a debt, and nothing else would
         // say so — the count beside the door does not even change, because the booking only moves
@@ -720,7 +719,9 @@ public static class VenueBookingEndpoints
             await OneDrawnAsync(database, venueId, booking.Id, venue, now, cancellationToken));
     }
 
-    private static async Task<VenueBookingResponse> OneDrawnAsync(
+    /// <summary>One booking as the counter reads it, doors and all. Shared with the money the
+    /// counter takes for it (PRD US-26), which changes the same row.</summary>
+    internal static async Task<VenueBookingResponse> OneDrawnAsync(
         AppDbContext database,
         Guid venueId,
         Guid bookingId,
@@ -828,6 +829,7 @@ public static class VenueBookingEndpoints
     {
         var status = BookedSlots.StatusAt(booking, now);
         var startsAt = booking.Slots.Min(slot => slot.StartsAt);
+        var outstanding = Takings.OutstandingOf(booking.TotalBaht, takenBaht);
 
         return new VenueBookingResponse(
             booking.Id,
@@ -843,12 +845,12 @@ public static class VenueBookingEndpoints
             booking.PaymentState.ToString(),
             booking.TotalBaht,
             takenBaht,
-            Takings.OutstandingOf(booking.TotalBaht, takenBaht),
+            outstanding,
             booking.RefundDueBaht,
             sentBackBaht,
             Refunds.OutstandingOf(booking.RefundDueBaht, sentBackBaht),
             BookingSlotResponse.Of(booking, courtNames),
-            Doors(booking, status, byOwner, graceMinutes, now));
+            Doors(booking, status, byOwner, outstanding, graceMinutes, now));
     }
 
     /// <summary>
@@ -861,6 +863,7 @@ public static class VenueBookingEndpoints
         Booking booking,
         BookingStatus status,
         bool byOwner,
+        decimal outstandingBaht,
         int graceMinutes,
         DateTimeOffset now)
     {
@@ -879,6 +882,7 @@ public static class VenueBookingEndpoints
             VenueDecisions
                 .PlayedAfterAllOffer(booking, status, "recorded wrongly", byOwner, now)
                 .Allowed,
+            Takings.CanTake(status, booking.PaymentState, outstandingBaht),
             cancelling.Allowed ? Choices(booking, status, byOwner, now) : []);
     }
 

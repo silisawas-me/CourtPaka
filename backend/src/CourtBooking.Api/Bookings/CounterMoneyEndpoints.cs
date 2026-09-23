@@ -67,6 +67,9 @@ public static class MoneyErrorCodes
     public const string DayNotOver = "money.day_not_over";
 
     public const string InvalidFloat = "money.invalid_float";
+
+    /// <summary>Nothing is owed on it, or it is not a booking the venue is going to honour.</summary>
+    public const string NotTakeable = "money.not_takeable";
 }
 
 /// <summary>
@@ -120,8 +123,11 @@ public static class CounterMoneyEndpoints
     /// Writes down an amount the venue has just taken. It refuses more than is owed — a till that
     /// says it took 1,200 for a 900 booking is a till nobody can count — and once the whole
     /// amount is in, the booking's payment state says so, which is what everything else reads.
+    ///
+    /// It answers with the booking as the day list draws it, like every other door the counter
+    /// presses: what has been taken, what that leaves, and which doors are open now.
     /// </summary>
-    private static async Task<Results<Ok<TakingsResponse>, ProblemHttpResult>> TakeAsync(
+    private static async Task<Results<Ok<VenueBookingResponse>, ProblemHttpResult>> TakeAsync(
         Guid venueId,
         Guid bookingId,
         TakePaymentRequest request,
@@ -160,9 +166,21 @@ public static class CounterMoneyEndpoints
             $"SELECT pg_advisory_xact_lock(hashtextextended({bookingId.ToString()}, 0))",
             cancellationToken);
 
+        // And the booking row itself, for as long as this takes. The advisory lock above only
+        // holds off other tills; a slip being answered or a booking being cancelled writes the
+        // row without it, and a deposit receipted against a booking that was turned away a
+        // moment ago is money the venue cannot account for (PRD US-26). A share lock is enough:
+        // those writers take the row exclusively and will wait (AccountGate does the same).
+        await database.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT 1 FROM \"Bookings\" WHERE \"Id\" = {bookingId} FOR SHARE",
+            cancellationToken);
+
+        // With its hours, because what a booking reads as depends on them: a hold whose fifteen
+        // minutes are up is Expired and owes nothing forwards (PRD 9.2).
         var booking = await database.Bookings
+            .AsNoTracking()
+            .Include(one => one.Slots)
             .Where(one => one.Id == bookingId && one.VenueId == venueId)
-            .Select(one => new { one.TotalBaht, one.Status, one.PaymentState })
             .SingleOrDefaultAsync(cancellationToken);
 
         if (booking is null)
@@ -170,8 +188,14 @@ public static class CounterMoneyEndpoints
             return ApiProblem.Of(StatusCodes.Status404NotFound, BookingErrorCodes.NotFound);
         }
 
+        var status = BookedSlots.StatusAt(booking, now);
         var taken = await TakenAsync(database, bookingId, cancellationToken);
         var outstanding = Takings.OutstandingOf(booking.TotalBaht, taken);
+        if (!Takings.CanTake(status, booking.PaymentState, outstanding))
+        {
+            return ApiProblem.Of(StatusCodes.Status409Conflict, MoneyErrorCodes.NotTakeable);
+        }
+
         if (amount > outstanding)
         {
             return ApiProblem.Of(StatusCodes.Status409Conflict, MoneyErrorCodes.InvalidAmount);
@@ -188,24 +212,98 @@ public static class CounterMoneyEndpoints
             Note = string.IsNullOrEmpty(note) ? null : note,
         });
 
-        // Paid in full is what the rest of the system reads as "the venue has the money" (6.2).
-        if (amount == outstanding && booking.PaymentState != PaymentState.Received)
+        // Paid in full is what the rest of the system reads as "the venue has the money" (6.2),
+        // and for a booking that was still waiting it is also the answer it was waiting for: the
+        // hours are paid for, so they are confirmed rather than left to run out (PRD BR-02).
+        var settled = amount == outstanding;
+        var confirms = settled && Takings.PayingInFullConfirms(status);
+
+        // Hours that are already behind it land on Completed the moment they are confirmed, and
+        // both steps are recorded — a history that skips the one the clock made has a hole in it
+        // (PRD 9.2, and US-12 does the same with a slip answered late).
+        var landed = confirms && booking.Slots.Max(slot => slot.EndsAt) <= now
+            ? BookingStatus.Completed
+            : BookingStatus.Confirmed;
+
+        // What the history will say about this payment. Written from the same answers the update
+        // is made with, so the rows and the event lines below cannot tell different stories.
+        var recorded = new List<BookingStatusChange>();
+
+        if (settled && booking.PaymentState != PaymentState.Received)
         {
-            await database.Bookings
-                .Where(one => one.Id == bookingId)
+            // Conditional on the status that was read, so a slip somebody else answered a moment
+            // ago is not answered again on top of the answer it already has (PRD BR-04). Writing
+            // the status back unchanged is what the WHERE already pins it to.
+            var moved = await database.Bookings
+                .Where(one => one.Id == bookingId && one.Status == booking.Status)
                 .ExecuteUpdateAsync(
-                    set => set.SetProperty(one => one.PaymentState, PaymentState.Received),
+                    set => set
+                        .SetProperty(one => one.PaymentState, PaymentState.Received)
+                        .SetProperty(one => one.Status, confirms ? landed : booking.Status),
                     cancellationToken);
+
+            if (moved == 0)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return ApiProblem.Of(StatusCodes.Status409Conflict, MoneyErrorCodes.NotTakeable);
+            }
+
+            if (confirms)
+            {
+                recorded.Add(BookingTransitions.Record(
+                    bookingId, booking.Status, BookingStatus.Confirmed, membership.UserId, now));
+
+                if (landed != BookingStatus.Confirmed)
+                {
+                    // Nobody pressed this one; the clock did, so it is recorded with no actor.
+                    recorded.Add(BookingTransitions.Record(
+                        bookingId, BookingStatus.Confirmed, landed, null, now));
+                }
+            }
+            else
+            {
+                // The booking did not move, but the venue now says it has the money, and who
+                // decided that is the first thing a complaint asks (PRD 6.1, US-13 does the same).
+                recorded.Add(BookingTransitions.Settled(
+                    bookingId, booking.Status, PaymentState.Received, membership.UserId, now));
+            }
+
+            database.BookingStatusChanges.AddRange(recorded);
         }
 
         await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        AppEvents.For(loggers).LogInformation(
+        var events = AppEvents.For(loggers);
+        events.LogInformation(
             "payment_taken {BookingId} {VenueId} {Baht} {Method}", bookingId, venueId, amount, method);
 
-        return TypedResults.Ok(
-            await ReadTakingsAsync(database, bookingId, booking.TotalBaht, cancellationToken));
+        foreach (var change in recorded)
+        {
+            // A row that stays where it was is the venue answering for the money, not a move.
+            if (change.From == change.To)
+            {
+                events.LogInformation(
+                    BookingTransitions.SettledTemplate,
+                    bookingId,
+                    venueId,
+                    PaymentState.Received,
+                    booking.RefundDueBaht);
+            }
+            else
+            {
+                events.LogInformation(
+                    BookingTransitions.EventTemplate(change.To),
+                    bookingId,
+                    venueId,
+                    booking.RefundDueBaht);
+            }
+        }
+
+        // The row as the counter reads it, like every other door on the day list: the money it
+        // has taken, what that leaves, and which doors are open now (PRD US-13).
+        return TypedResults.Ok(await VenueBookingEndpoints.OneDrawnAsync(
+            database, venueId, bookingId, venue, now, cancellationToken));
     }
 
     /// <summary>
@@ -440,10 +538,8 @@ public static class CounterMoneyEndpoints
             .Where(booking =>
                 booking.VenueId == venueId
                 && booking.Slots.Any(slot => slot.StartsAt >= from && slot.StartsAt < until)
-                && (booking.Status == BookingStatus.Confirmed
-                    || booking.Status == BookingStatus.Completed
-                    || booking.Status == BookingStatus.NoShow
-                    || booking.Status == BookingStatus.PendingVerification))
+                // The same bookings the counter is offered a door on, from the same list.
+                && Takings.StillOwing.Contains(booking.Status))
             .Select(booking => new
             {
                 booking.TotalBaht,
