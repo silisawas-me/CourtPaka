@@ -133,6 +133,13 @@
   }
 }
 
+/* Three short words: a line on a desk, two lines on a phone, rather than three stacked rows. */
+.pay-methods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1.25rem;
+}
+
 /* Taking hours away from someone is not the same weight of action as recording them. */
 .danger {
   background: var(--mat-sys-error);

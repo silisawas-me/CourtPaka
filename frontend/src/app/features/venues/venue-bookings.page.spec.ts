@@ -28,6 +28,8 @@ function booking(overrides: Record<string, unknown> = {}) {
     graceEndsAt: '2026-09-21T11:15:00Z',
     paymentState: 'Received',
     totalBaht: 400,
+    takenBaht: 400,
+    toPayBaht: 0,
     refundDueBaht: 0,
     sentBackBaht: 0,
     outstandingBaht: 0,
@@ -42,6 +44,7 @@ function booking(overrides: Record<string, unknown> = {}) {
       noShow: false,
       settlePayment: false,
       playedAfterAll: false,
+      takeMoney: false,
       cancelChoices: [
         { reason: 'CustomerRequest', refundBaht: 400 },
         { reason: 'VenueInitiated', refundBaht: 400 },
@@ -513,6 +516,33 @@ describe('VenueBookingsPage', () => {
       expect(textOf(fixture, 'today-owed')).toBe('0');
     });
 
+    it('counts what is owed the way the server counts it, not from the price', () => {
+      render(
+        [
+          // Half paid for, and still owing the rest.
+          booking({
+            paymentState: 'NotReceived',
+            takenBaht: 200,
+            toPayBaht: 200,
+            can: { ...booking().can, takeMoney: true },
+          }),
+          // Turned away: it has a price, but the venue is not owed it (PRD US-26).
+          booking({
+            bookingId: 'b2',
+            status: 'Cancelled',
+            paymentState: 'NotReceived',
+            takenBaht: 0,
+            toPayBaht: 400,
+            can: { ...booking().can, cancel: false, takeMoney: false },
+          }),
+        ],
+        floor(),
+      );
+
+      expect(textOf(fixture, 'today-taken')).toBe('200');
+      expect(textOf(fixture, 'today-owed')).toBe('200');
+    });
+
     it('offers the counter the two things it writes down about a person', () => {
       render(
         [booking({ can: { ...booking().can, confirmArrival: true, checkIn: true } })],
@@ -528,6 +558,49 @@ describe('VenueBookingsPage', () => {
       fixture.detectChanges();
 
       expect(textOf(fixture, 'arrival-b1')).toBe(TRANSLATIONS.th['board.arrival.Confirmed']);
+    });
+
+    it('takes money at the desk and leaves the rest of the day where it was', () => {
+      render(
+        [
+          booking({
+            paymentState: 'NotReceived',
+            takenBaht: 0,
+            toPayBaht: 400,
+            can: { ...booking().can, takeMoney: true },
+          }),
+        ],
+        floor(),
+      );
+
+      expect(textOf(fixture, 'to-pay-b1')).toContain('400');
+
+      clickOn(fixture, 'take-b1');
+      // The amount is filled in with what is owed, because that is what usually changes hands.
+      expect(elementOf<HTMLInputElement>(fixture, 'take-amount')?.value).toBe('400');
+
+      setInput(fixture, '#take-note', 'รับเงินสดหน้าเคาน์เตอร์');
+      clickOn(fixture, 'take-money');
+
+      const request = httpMock.expectOne('/api/venues/v1/bookings/b1/payments');
+      expect(request.request.body).toEqual({
+        amountBaht: 400,
+        method: 'Cash',
+        note: 'รับเงินสดหน้าเคาน์เตอร์',
+      });
+      // The answer is the row as the server now draws it, like every other door: paying the last
+      // of it can confirm the booking, and which doors that leaves open is the server's to say.
+      request.flush(booking());
+      fixture.detectChanges();
+
+      expect(elementOf(fixture, 'to-pay-b1')).toBeNull();
+      expect(textOf(fixture, 'today-taken')).toBe('400');
+    });
+
+    it('does not offer to take money where the server says there is none to take', () => {
+      render([booking()], floor());
+
+      expect(elementOf(fixture, 'take-b1')).toBeNull();
     });
 
     it('draws the day without a board when the floor cannot be read', () => {

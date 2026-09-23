@@ -134,8 +134,23 @@
               <span class="booking-baht">{{ booking.totalBaht }}</span>
             </div>
 
-            @if (booking.refundDueBaht > 0 || booking.paymentState === 'Unconfirmed') {
+            @if (owesSomething(booking)) {
               <p class="booking-money muted">
+                <!--
+                  What is still to pay is said where there is still something to take: a booking
+                  the venue turned away owes nothing forwards, whatever its price was, and the
+                  server is who says which is which (PRD US-26).
+                -->
+                @if (booking.can.takeMoney) {
+                  <span [attr.data-testid]="'to-pay-' + booking.bookingId">
+                    {{ i18n.t('money.toPay') }}: {{ booking.toPayBaht }}
+                  </span>
+                  @if (booking.takenBaht > 0) {
+                    <span [attr.data-testid]="'taken-' + booking.bookingId">
+                      {{ i18n.t('money.takenOf') }}: {{ booking.takenBaht }}
+                    </span>
+                  }
+                }
                 @if (booking.refundDueBaht > 0) {
                   <span [attr.data-testid]="'refund-due-' + booking.bookingId">
                     {{ i18n.t('myBookings.refundDue') }}: {{ booking.refundDueBaht }}
@@ -177,6 +192,17 @@
                   (click)="checkIn(booking)"
                 >
                   {{ i18n.t('board.checkIn') }}
+                </button>
+              }
+              @if (booking.can.takeMoney) {
+                <button
+                  matButton="filled"
+                  type="button"
+                  [attr.data-testid]="'take-' + booking.bookingId"
+                  [disabled]="deciding()"
+                  (click)="ask(booking.bookingId, 'take')"
+                >
+                  {{ i18n.t('money.take') }}
                 </button>
               }
               @if (booking.can.settlePayment) {
@@ -241,6 +267,66 @@
               The question opens in the row it is about. A counter answering it has the hour, the
               name and the amount in the same glance as the answer.
             -->
+            @if (asked(booking.bookingId, 'take')) {
+              <div class="asking" data-testid="asking">
+                <form class="stack" [formGroup]="takeForm" novalidate>
+                  <mat-form-field>
+                    <mat-label>{{ i18n.t('money.amount') }}</mat-label>
+                    <input
+                      matInput
+                      type="number"
+                      inputmode="decimal"
+                      data-testid="take-amount"
+                      formControlName="amountBaht"
+                    />
+                    <mat-error
+                      [appFieldError]="takeForm.controls.amountBaht"
+                      testId="take-amount-error"
+                    ></mat-error>
+                  </mat-form-field>
+
+                  <!--
+                    Three buttons rather than a select: the form the money came in is picked with
+                    a hand that is also holding the money, and all three fit on a phone.
+                  -->
+                  <fieldset class="reasons pay-methods">
+                    <legend>{{ i18n.t('money.method') }}</legend>
+                    @for (method of paymentMethods; track method) {
+                      <label class="reason-choice">
+                        <input
+                          type="radio"
+                          formControlName="method"
+                          [value]="method"
+                          [attr.data-testid]="'pay-method-' + method"
+                        />
+                        <span>{{ i18n.t('money.method.' + method) }}</span>
+                      </label>
+                    }
+                  </fieldset>
+
+                  <mat-form-field>
+                    <mat-label>{{ i18n.t('money.note') }}</mat-label>
+                    <input matInput id="take-note" data-testid="take-note" formControlName="note" />
+                  </mat-form-field>
+
+                  <div class="row">
+                    <button
+                      matButton="filled"
+                      type="submit"
+                      data-testid="take-money"
+                      [disabled]="deciding()"
+                      (click)="takePayment(booking)"
+                    >
+                      {{ i18n.t('money.record') }}
+                    </button>
+                    <button matButton type="button" data-testid="close" (click)="close()">
+                      {{ i18n.t('common.cancel') }}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            }
+
             @if (asked(booking.bookingId, 'settle')) {
               <div class="asking" data-testid="asking">
                 <p>{{ i18n.t('venueBookings.settleQuestion') }}</p>

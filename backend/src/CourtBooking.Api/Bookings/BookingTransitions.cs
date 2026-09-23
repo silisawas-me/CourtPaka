@@ -269,7 +269,8 @@ public static class BookingTransitions
         return moved;
     }
 
-    private static bool CanMove(BookingStatus from, BookingStatus to) =>
+    /// <summary>Whether PRD 6.1's table has this move in it at all.</summary>
+    public static bool CanMove(BookingStatus from, BookingStatus to) =>
         Allowed.TryGetValue(from, out var next) && next.Contains(to);
 
     /// <summary>
@@ -283,6 +284,13 @@ public static class BookingTransitions
     /// </summary>
     public static string EventTemplate(BookingStatus status) =>
         EventName(status) + " {BookingId} {VenueId} {RefundDueBaht}";
+
+    /// <summary>
+    /// The line the venue answering for a booking's money writes (PRD 8). One template, because
+    /// the counter taking the last of it and the venue saying it arrived are the same event.
+    /// </summary>
+    public const string SettledTemplate =
+        "booking_payment_settled {BookingId} {VenueId} {PaymentState} {RefundDueBaht}";
 
     public static string EventName(BookingStatus status) =>
         $"booking_{string.Concat(status.ToString().Select((letter, index) =>
