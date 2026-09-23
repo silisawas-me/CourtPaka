@@ -100,3 +100,25 @@
 .day-waiting-hint {
   font: var(--mat-sys-body-small);
 }
+
+/*
+ * What stands in for the queue card until somebody presses it. Shaped like the card it becomes,
+ * so pressing does not make the page jump under the reader's thumb.
+ */
+.wait-waiting {
+  display: block;
+  width: 100%;
+  text-align: start;
+  padding: 1rem;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-large);
+  background: var(--mat-sys-surface-container-low);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-title-medium);
+  cursor: pointer;
+
+  span {
+    font: var(--mat-sys-body-medium);
+    margin-inline-start: 0.5rem;
+  }
+}

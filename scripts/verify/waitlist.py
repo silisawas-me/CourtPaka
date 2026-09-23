@@ -30,6 +30,15 @@ with sync_playwright() as p:
     email = new_booker(page)
     sign_in(page, email)
     page.goto(f"{BASE}/book/{venue_id}?date={day.isoformat()}")
+    # The card is not carried by every visit to the grid (PRD 8's LCP target): pressing the
+    # placeholder is what fetches it, the same bargain the calendar makes.
+    page.wait_for_selector("[data-testid=waitlist-placeholder]")
+    check(
+        "the grid does not carry the queue until somebody asks for it",
+        page.locator("[data-testid=waitlist]").count() == 0,
+        page,
+    )
+    page.click("[data-testid=waitlist-placeholder]")
     page.wait_for_selector("[data-testid=waitlist]")
     check("the queue is offered under the day it is for", True, page)
 

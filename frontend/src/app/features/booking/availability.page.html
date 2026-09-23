@@ -117,69 +117,29 @@
 
 <!--
   For the day that had nothing on it. It sits under the grid because the moment somebody wants a
-  queue is the moment they have just looked at a full day (PRD US-27).
+  queue is the moment they have just looked at a full day (PRD US-27) — and it is fetched by that
+  press rather than carried by every visit, because this page is the one PRD 8's LCP is about.
 -->
-@if (hours().length > 0 && picked().length === 0) {
-  <mat-card data-testid="waitlist">
-    <mat-card-header>
-      <mat-card-title>{{ i18n.t('waitlist.title') }}</mat-card-title>
-    </mat-card-header>
+@if (hours().length > 0 && picked().length === 0 && !waitingFor()) {
+  @defer (on interaction; prefetch on idle) {
+    <app-waitlist-card
+      [venueId]="venue()!.id"
+      [date]="chosen()"
+      [hours]="hours()"
+      [signedIn]="signedIn()"
+      (joined)="waitingFor.set($event)"
+    />
+  } @placeholder {
+    <button class="wait-waiting" type="button" data-testid="waitlist-placeholder">
+      {{ i18n.t('waitlist.title') }} <span class="muted">{{ i18n.t('waitlist.join') }}</span>
+    </button>
+  }
+}
 
+@if (waitingFor()) {
+  <mat-card>
     <mat-card-content>
-      @if (waitingFor()) {
-        <p data-testid="waiting-now">{{ i18n.t('waitlist.waitingNow') }}</p>
-      } @else {
-        <p class="muted">{{ i18n.t('waitlist.what') }}</p>
-
-        <form class="row wait-row" [formGroup]="waitForm" novalidate>
-          <mat-form-field>
-            <mat-label>{{ i18n.t('waitlist.from') }}</mat-label>
-            <select matNativeControl data-testid="wait-from" formControlName="fromHour">
-              @for (hour of hours(); track hour) {
-                <option [ngValue]="hour">{{ hour }}:00</option>
-              }
-            </select>
-          </mat-form-field>
-
-          <mat-form-field>
-            <mat-label>{{ i18n.t('waitlist.until') }}</mat-label>
-            <select matNativeControl data-testid="wait-until" formControlName="untilHour">
-              @for (hour of closeHours(); track hour) {
-                <option [ngValue]="hour">{{ hour }}:00</option>
-              }
-            </select>
-          </mat-form-field>
-
-          <mat-form-field>
-            <mat-label>{{ i18n.t('waitlist.hours') }}</mat-label>
-            <select matNativeControl data-testid="wait-hours" formControlName="hours">
-              @for (many of waitHourChoices(); track many) {
-                <option [ngValue]="many">{{ many }}</option>
-              }
-            </select>
-          </mat-form-field>
-        </form>
-
-        @if (signedIn()) {
-          <button
-            matButton="filled"
-            type="button"
-            data-testid="wait-for-it"
-            [disabled]="waiting()"
-            (click)="wait()"
-          >
-            {{ i18n.t('waitlist.join') }}
-          </button>
-        } @else {
-          <a matButton="filled" routerLink="/login" data-testid="sign-in-to-wait">
-            {{ i18n.t('availability.signInToBook') }}
-          </a>
-        }
-
-        @if (waitingError(); as key) {
-          <p class="form-error" data-testid="wait-error">{{ i18n.t(key) }}</p>
-        }
-      }
+      <p data-testid="waiting-now">{{ i18n.t('waitlist.waitingNow') }}</p>
     </mat-card-content>
   </mat-card>
 }

@@ -70,6 +70,13 @@ describe('AvailabilityPage', () => {
     fixture.detectChanges();
   }
 
+  /** Opens the queue card, which the page fetches only when somebody presses for it. */
+  async function openWaitlist(): Promise<void> {
+    const blocks = await fixture.getDeferBlocks();
+    await blocks[blocks.length - 1].render(DeferBlockState.Complete);
+    fixture.detectChanges();
+  }
+
   /** Picks an hour the way a booker does: by touching the cell. */
   function pickHour(courtId: string, hour: number): void {
     clickOn(fixture, `cell-${courtId}-${hour}`);
@@ -159,9 +166,13 @@ describe('AvailabilityPage', () => {
     expect(elementOf(fixture, 'book')).toBeNull();
   });
 
-  it('takes a place in the queue for a day that had nothing on it', () => {
+  it('takes a place in the queue for a day that had nothing on it', async () => {
     signInAs('player@example.com');
     render(day(), '2026-09-19');
+
+    // The queue is not carried by every visit to the grid: pressing for it is what fetches it.
+    expect(elementOf(fixture, 'waitlist')).toBeNull();
+    await openWaitlist();
 
     choose(fixture, '[data-testid=wait-from]', '19:00');
     choose(fixture, '[data-testid=wait-until]', '20:00');
@@ -197,16 +208,18 @@ describe('AvailabilityPage', () => {
     expect(elementOf(fixture, 'wait-for-it')).toBeNull();
   });
 
-  it('asks somebody with no session to sign in before they can wait', () => {
+  it('asks somebody with no session to sign in before they can wait', async () => {
     render();
+    await openWaitlist();
 
     expect(elementOf(fixture, 'wait-for-it')).toBeNull();
     expect(elementOf(fixture, 'sign-in-to-wait')).not.toBeNull();
   });
 
-  it('says what a refused place in a queue was refused for', () => {
+  it('says what a refused place in a queue was refused for', async () => {
     signInAs('player@example.com');
     render();
+    await openWaitlist();
 
     clickOn(fixture, 'wait-for-it');
     httpMock
