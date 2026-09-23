@@ -52,8 +52,17 @@ public sealed class WaitlistEntry
 
     public WaitlistState State { get; set; } = WaitlistState.Waiting;
 
+    /// <summary>
+    /// The hold put aside for them, once there is one. An offer is an ordinary booking — the
+    /// same fifteen minutes, the same way of paying — and this is the only thread between it and
+    /// the queue it came from (PRD US-27).
+    /// </summary>
+    public Guid? OfferedBookingId { get; set; }
+
     /// <summary>When they stopped waiting, whichever way it ended.</summary>
     public DateTimeOffset? EndedAt { get; set; }
+
+    public Booking? OfferedBooking { get; init; }
 
     public Venue? Venue { get; init; }
 

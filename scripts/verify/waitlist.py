@@ -102,6 +102,55 @@ with sync_playwright() as p:
     mine = page.request.get(f"{BASE}/api/waitlist").json()
     check("the queue is empty afterwards", all(one["id"] != took["id"] for one in mine))
 
+    # The offer: hours that come back are put aside for whoever asked first, and the booker sees
+    # a held booking like any other (US-27). The caretaker makes it; local sweeps every 10 s.
+    grid_day = page.request.get(
+        f"{BASE}/api/venues/{venue_id}/availability?date={day.isoformat()}").json()
+    free = next(
+        (row["courtId"], cell["hour"])
+        for row in grid_day["courts"]
+        for cell in row["hours"]
+        if cell["status"] == "Free"
+    )
+
+    waiter = browser.new_page()
+    waiter_email = new_booker(waiter)
+    sign_in(waiter, waiter_email)
+    joined = waiter.request.post(
+        f"{BASE}/api/waitlist",
+        data={
+            "venueId": venue_id,
+            "date": day.isoformat(),
+            "fromHour": free[1],
+            "untilHour": free[1] + 1,
+            "hours": 1,
+        },
+    )
+    check("somebody waits for an hour the day still has", joined.status == 201)
+
+    # Wait for one sweep of the caretaker to notice.
+    offer = None
+    for _ in range(30):
+        waiter.wait_for_timeout(1000)
+        mine = waiter.request.get(f"{BASE}/api/bookings").json()
+        held = [one for one in mine["upcoming"] if one["status"] == "Held"]
+        if held:
+            offer = held[0]
+            break
+
+    check("the hours are put aside for them without anybody pressing anything", offer is not None)
+    if offer is not None:
+        check(
+            "and it is an ordinary hold they can pay for",
+            offer["totalBaht"] > 0 and offer["holdExpiresAt"] is not None,
+        )
+
+        place = waiter.request.get(f"{BASE}/api/waitlist").json()
+        check(
+            "while their place in the queue says it has been offered",
+            any(one["state"] == "Offered" for one in place),
+        )
+
     browser.close()
 
 check.summarise()
