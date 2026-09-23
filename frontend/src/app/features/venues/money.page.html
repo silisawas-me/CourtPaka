@@ -51,29 +51,30 @@
         {{ i18n.t('money.takenToday') }} · {{ day.date | appDate: i18n.locale() }}
       </p>
       <p class="lead" data-testid="taken-today">
-        {{ baht(day.takenBaht) }} <span class="unit">{{ i18n.t('money.baht') }}</span>
+        {{ day.takenBaht | baht: i18n.locale() }}
+        <span class="unit">{{ i18n.t('money.baht') }}</span>
       </p>
 
       <dl class="figures">
         <div>
           <dt class="muted">{{ i18n.t('money.method.Cash') }}</dt>
-          <dd data-testid="cash">{{ baht(day.cashBaht) }}</dd>
+          <dd data-testid="cash">{{ day.cashBaht | baht: i18n.locale() }}</dd>
         </div>
         <div>
           <dt class="muted">{{ i18n.t('money.method.PromptPay') }}</dt>
-          <dd data-testid="promptpay">{{ baht(day.promptPayBaht) }}</dd>
+          <dd data-testid="promptpay">{{ day.promptPayBaht | baht: i18n.locale() }}</dd>
         </div>
         <div>
           <dt class="muted">{{ i18n.t('money.method.Card') }}</dt>
-          <dd data-testid="card">{{ baht(day.cardBaht) }}</dd>
+          <dd data-testid="card">{{ day.cardBaht | baht: i18n.locale() }}</dd>
         </div>
         <div>
           <dt class="muted">{{ i18n.t('money.cashRefunded') }}</dt>
-          <dd data-testid="cash-refunded">{{ baht(day.cashRefundedBaht) }}</dd>
+          <dd data-testid="cash-refunded">{{ day.cashRefundedBaht | baht: i18n.locale() }}</dd>
         </div>
         <div>
           <dt class="muted">{{ i18n.t('money.outstanding') }}</dt>
-          <dd data-testid="outstanding">{{ baht(day.outstandingBaht) }}</dd>
+          <dd data-testid="outstanding">{{ day.outstandingBaht | baht: i18n.locale() }}</dd>
         </div>
       </dl>
     </mat-card-content>
@@ -105,7 +106,7 @@
                 <tr [attr.data-testid]="'receipt-' + receipt.id">
                   <th scope="row">{{ time(receipt.receivedAt) }}</th>
                   <td class="note">{{ receipt.note }}</td>
-                  <td class="num">{{ baht(receipt.amountBaht) }}</td>
+                  <td class="num">{{ receipt.amountBaht | baht: i18n.locale() }}</td>
                 </tr>
               }
             </tbody>
@@ -129,15 +130,17 @@
         <dl class="figures">
           <div>
             <dt class="muted">{{ i18n.t('money.float') }}</dt>
-            <dd data-testid="closed-float">{{ baht(closed.openingFloatBaht) }}</dd>
+            <dd data-testid="closed-float">{{ closed.openingFloatBaht | baht: i18n.locale() }}</dd>
           </div>
           <div>
             <dt class="muted">{{ i18n.t('money.expected') }}</dt>
-            <dd data-testid="closed-expected">{{ baht(closed.expectedCashBaht) }}</dd>
+            <dd data-testid="closed-expected">
+              {{ closed.expectedCashBaht | baht: i18n.locale() }}
+            </dd>
           </div>
           <div>
             <dt class="muted">{{ i18n.t('money.counted') }}</dt>
-            <dd data-testid="closed-counted">{{ baht(closed.countedCashBaht) }}</dd>
+            <dd data-testid="closed-counted">{{ closed.countedCashBaht | baht: i18n.locale() }}</dd>
           </div>
           <div>
             <dt class="muted">{{ i18n.t('money.difference') }}</dt>
@@ -145,7 +148,7 @@
               @if (closed.differenceBaht === 0) {
                 {{ i18n.t('money.exact') }}
               } @else {
-                {{ baht(closed.differenceBaht) }}
+                {{ closed.differenceBaht | baht: i18n.locale() }}
                 <span class="muted small">
                   {{ i18n.t(closed.differenceBaht < 0 ? 'money.short' : 'money.over') }}
                 </span>

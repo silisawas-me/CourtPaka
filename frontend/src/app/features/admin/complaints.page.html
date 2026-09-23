@@ -172,9 +172,11 @@
         <div>
           <dt class="muted">{{ i18n.t('admin.complaints.money') }}</dt>
           <dd>
-            {{ baht(c.booking.totalBaht) }} · {{ i18n.t('admin.complaints.refundDue') }}
-            {{ baht(c.booking.refundDueBaht) }} · {{ i18n.t('admin.complaints.sentBack') }}
-            {{ baht(c.booking.sentBackBaht) }}
+            {{ c.booking.totalBaht | baht: i18n.locale() }} ·
+            {{ i18n.t('admin.complaints.refundDue') }}
+            {{ c.booking.refundDueBaht | baht: i18n.locale() }} ·
+            {{ i18n.t('admin.complaints.sentBack') }}
+            {{ c.booking.sentBackBaht | baht: i18n.locale() }}
           </dd>
         </div>
         <div>

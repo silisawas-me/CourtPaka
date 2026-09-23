@@ -16,6 +16,7 @@ import {
 } from '../../core/admin/admin.service';
 import { errorKey } from '../../core/http/api-error';
 import { AppDateTimePipe } from '../../core/i18n/app-date.pipe';
+import { BahtPipe } from '../../core/i18n/baht.pipe';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { FieldError } from '../../shared/field-error';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
@@ -47,6 +48,7 @@ const FILTERS: (ComplaintStatus | 'All')[] = ['Open', 'Resolved', 'All'];
     MatInputModule,
     MatProgressBarModule,
     AppDateTimePipe,
+    BahtPipe,
   ],
   providers: [FORM_FIELD_DEFAULTS],
   templateUrl: './complaints.page.html',
@@ -100,10 +102,6 @@ export class AdminComplaintsPage implements OnInit {
   /** Lists asked for, newest last; switchMap drops an older answer that arrives late. */
   private readonly listing = new Subject<ComplaintStatus | 'All'>();
 
-  private readonly numbers = computed(
-    () => new Intl.NumberFormat(this.i18n.locale(), { maximumFractionDigits: 2 }),
-  );
-
   constructor() {
     // switchMap, so a complaint opened earlier cannot land on top of the one asked for last.
     this.showing
@@ -150,10 +148,6 @@ export class AdminComplaintsPage implements OnInit {
 
   ngOnInit(): void {
     this.load();
-  }
-
-  protected baht(value: number): string {
-    return this.numbers().format(value);
   }
 
   protected show(filter: ComplaintStatus | 'All'): void {

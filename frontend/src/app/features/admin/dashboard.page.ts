@@ -12,6 +12,7 @@ import { catchError, map, of, switchMap, tap } from 'rxjs';
 import { AdminService, PlatformDashboard } from '../../core/admin/admin.service';
 import { errorKey } from '../../core/http/api-error';
 import { AppDatePipe } from '../../core/i18n/app-date.pipe';
+import { BahtPipe } from '../../core/i18n/baht.pipe';
 import { fromPlainDate, plainDate, venueToday } from '../../core/i18n/plain-date';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { VenueStatus } from '../../core/venues/venue.service';
@@ -39,6 +40,7 @@ const STATUSES: VenueStatus[] = ['Pending', 'Approved', 'Suspended', 'Rejected']
     MatInputModule,
     MatProgressBarModule,
     AppDatePipe,
+    BahtPipe,
   ],
   providers: [FORM_FIELD_DEFAULTS, provideLocalizedDateAdapter()],
   templateUrl: './dashboard.page.html',
@@ -62,10 +64,6 @@ export class AdminDashboardPage {
     start: new FormControl<Date | null>(null),
     end: new FormControl<Date | null>(null),
   });
-
-  private readonly numbers = computed(
-    () => new Intl.NumberFormat(this.i18n.locale(), { maximumFractionDigits: 2 }),
-  );
 
   private readonly asked = computed(() => ({ from: this.from(), to: this.to() }));
 
@@ -97,10 +95,6 @@ export class AdminDashboardPage {
           this.pageError.set(errorKey(failure));
         }
       });
-  }
-
-  protected number(value: number): string {
-    return this.numbers().format(value);
   }
 
   protected picked(): void {
