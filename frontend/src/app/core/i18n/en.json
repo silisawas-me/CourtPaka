@@ -633,5 +633,10 @@
   "error.waitlist.window_not_a_window": "That is not a window.",
   "error.waitlist.hours_do_not_fit": "That many hours will not fit in the window you chose.",
   "error.waitlist.already_waiting": "You are already in the queue for that day.",
-  "error.waitlist.not_found": "That place in the queue is not there."
+  "error.waitlist.not_found": "That place in the queue is not there.",
+  "dashboard.recovery": "Hours lost, and hours back",
+  "dashboard.hoursLost": "Hours lost",
+  "dashboard.hoursRefilled": "Sold again",
+  "dashboard.fromQueue": "Of those, from the queue",
+  "dashboard.recoveryNote": "Counted only for hours somebody had and gave back — cancelled, turned away, or not turned up for. A hold that ran out was never sold."
 }

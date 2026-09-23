@@ -4,6 +4,7 @@ using CourtBooking.Api.Bookings;
 using CourtBooking.Api.Data;
 using CourtBooking.Api.Identity;
 using CourtBooking.Api.Jobs;
+using CourtBooking.Api.Venues;
 using CourtBooking.Api.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -146,6 +147,57 @@ public sealed class WaitlistOfferTests(ApiTestFixture api)
         var entry = Assert.Single(await EntriesAsync(venue.Id));
         Assert.Equal(WaitlistState.Waiting, entry.State);
     }
+
+    /// <summary>
+    /// What the venue is shown of all this (PRD US-27): the hours it lost, the ones that went
+    /// again, and how much of that the queue itself did.
+    /// </summary>
+    [Fact]
+    public async Task The_venue_sees_what_it_lost_and_what_the_queue_got_back()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var first = await scenario.SignedInClientAsync();
+        var waiting = await scenario.SignedInClientAsync();
+
+        // An hour somebody bought and then gave back.
+        var sold = await VenueScenario.HoldAsync(first, venue.Id, Day, (courts[0], 15));
+        var sent = await VenueScenario.UploadAsync(first, sold.Id, VenueScenario.Jpeg());
+        Assert.Equal(HttpStatusCode.OK, sent.StatusCode);
+        Assert.True(
+            (await owner.PostAsync(
+                $"/api/venues/{venue.Id}/slip-queue/{sold.Id}/confirm", null)).IsSuccessStatusCode);
+        Assert.True(
+            (await first.PostAsync($"/api/bookings/{sold.Id}/cancel", null)).IsSuccessStatusCode);
+
+        var lost = await RecoveryAsync(owner, venue.Id);
+        Assert.Equal(1, lost.HoursLost);
+        Assert.Equal(0, lost.HoursRefilled);
+
+        // Somebody waiting for exactly that hour is given it back by the queue, and takes it up:
+        // an hour is not recovered until somebody has done more than be offered it.
+        await JoinAsync(waiting, venue.Id, 15, 16, 1);
+        await OfferAsync();
+
+        var offer = Assert.Single(await OffersAsync(venue.Id));
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await VenueScenario.UploadAsync(
+                waiting, offer.OfferedBookingId!.Value, VenueScenario.Jpeg())).StatusCode);
+
+        var back = await RecoveryAsync(owner, venue.Id);
+        Assert.Equal(1, back.HoursLost);
+        Assert.Equal(1, back.HoursRefilled);
+        Assert.Equal(1, back.HoursFromQueue);
+        Assert.True(back.FromQueueBaht > 0);
+    }
+
+    private static async Task<DashboardRecoveryResponse> RecoveryAsync(
+        HttpClient owner,
+        Guid venueId) =>
+        (await VenueScenario.ReadAsync<DashboardResponse>(
+            await owner.GetAsync(
+                $"/api/venues/{venueId}/dashboard?from={Day:yyyy-MM-dd}&to={Day:yyyy-MM-dd}")))
+        .Recovery;
 
     private async Task JoinAsync(HttpClient booker, Guid venueId, int from, int until, int hours)
     {
