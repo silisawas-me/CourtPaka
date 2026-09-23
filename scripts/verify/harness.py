@@ -366,6 +366,32 @@ def real_jpeg() -> bytes:
 DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
 
+# What the seed gives the staff account: everything except reading reports and changing
+# settings (VenuePermissions.StaffDefault).
+STAFF_DEFAULT = ["VerifySlip", "ManageBookings", "CloseCourt"]
+
+
+def staff_can(browser, venue_id, *permissions) -> None:
+    """Sets what the seeded staff account may do at the seeded venue.
+
+    `venue_ui.py` hands the staff more permissions because that is what it tests, and leaves them
+    wherever its last check left them — so a script that checks what somebody *without* a
+    permission sees would pass alone and fail after it. Ask for the standing you need; do not
+    assume the script before you left it (rule 7 in this directory's README)."""
+    page = browser.new_page()
+    sign_in(page, OWNER)
+    members = page.request.get(f"{BASE}/api/venues/{venue_id}/members").json()
+    staff = next(one for one in members if one["email"] == STAFF)
+
+    set_to = page.request.put(
+        f"{BASE}/api/venues/{venue_id}/members/{staff['userId']}/permissions",
+        data={"permissions": list(permissions) or STAFF_DEFAULT},
+    )
+    if set_to.status not in (200, 204):
+        raise RuntimeError(f"Could not set the staff's permissions: {set_to.status}")
+    page.close()
+
+
 def ensure_bookable(browser, venue_id) -> None:
     """Puts the seeded venue back to the hours every booking script assumes: open 06:00 to 22:00,
     every day, from today.

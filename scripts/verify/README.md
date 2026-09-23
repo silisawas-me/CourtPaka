@@ -55,6 +55,11 @@ Six rules worth keeping.
    the hard way: run in one order the suite was green, and in another every booking script failed
    with no free hour anywhere and nothing to say why.
 
+   The same goes for who may do what. `venue_ui.py` hands the seeded staff account permissions
+   because that is what it tests, and leaves them there — so a script checking what somebody
+   *without* a permission sees passes alone and fails after it. `staff_can(browser, venue_id)`
+   puts the staff back to what the seed gives them, or to whatever the script needs.
+
 ## The stand-in LINE
 
 `line_login.py` drives the whole LINE flow. The local stack runs `App__Line__UseDevelopmentFake`,

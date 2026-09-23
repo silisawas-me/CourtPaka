@@ -4,14 +4,16 @@ import datetime
 
 from harness import (
     BASE,
+    Checks,
     OWNER,
     STAFF,
-    Checks,
-    control,
     calendar_label,
+    control,
     login,
     open_seeded_venue,
     pick_date,
+    seeded_venue_id,
+    staff_can,
     thai_date,
     thai_month_year,
 )
@@ -26,6 +28,10 @@ with sync_playwright() as p:
     page.goto(f"{BASE}/login")
     login(page, OWNER)
     page.wait_for_url(f"{BASE}/")
+
+    # What this script checks about staff is what somebody *without* ManageSettings sees, and
+    # venue_ui.py hands them that permission as the thing it tests. Ask for the standing needed.
+    staff_can(browser, seeded_venue_id(page))
 
     # The seeded DEV01 venue is the approved one.
     venue_url = open_seeded_venue(page)
