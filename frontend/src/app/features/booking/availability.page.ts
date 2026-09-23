@@ -1,8 +1,11 @@
 import { DOCUMENT } from '@angular/common';
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Router, RouterLink } from '@angular/router';
 import {
@@ -18,6 +21,7 @@ import {
 } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { BookingService } from '../../core/bookings/booking.service';
+import { WAITLIST_MAX_HOURS, WaitlistService } from '../../core/bookings/waitlist.service';
 import { errorKey } from '../../core/http/api-error';
 import { AppDatePipe } from '../../core/i18n/app-date.pipe';
 import { fromPlainDate, plainDate, venueToday } from '../../core/i18n/plain-date';
@@ -45,9 +49,12 @@ export const REFRESH_EVERY_MS = 10_000;
 @Component({
   selector: 'app-availability-page',
   imports: [
+    ReactiveFormsModule,
     RouterLink,
     MatButtonModule,
     MatCardModule,
+    MatFormFieldModule,
+    MatInputModule,
     DayPicker,
     MatProgressBarModule,
     AppDatePipe,
@@ -125,6 +132,38 @@ export class AvailabilityPage {
   );
 
   protected readonly holding = signal(false);
+
+  /**
+   * Waiting for a day that has nothing left (PRD US-27). It sits under the grid rather than
+   * behind a button somewhere else, because the moment somebody wants it is the moment they have
+   * just looked at a full day.
+   */
+  private readonly waitlist = inject(WaitlistService);
+  private readonly forms = inject(FormBuilder);
+
+  protected readonly waiting = signal(false);
+  protected readonly waitingError = signal<string | null>(null);
+
+  /** Set once this booker has a place in the queue for the day on screen. */
+  protected readonly waitingFor = signal<string | null>(null);
+
+  protected readonly waitForm = this.forms.nonNullable.group({
+    fromHour: this.forms.nonNullable.control(0),
+    untilHour: this.forms.nonNullable.control(0),
+    hours: this.forms.nonNullable.control(1),
+  });
+
+  /** The hours a window may end on: one past each hour the venue sells. */
+  protected readonly closeHours = computed(() => this.hours().map((hour) => hour + 1));
+
+  /**
+   * How long a run anybody may ask for here: never more than the day is open, so the form cannot
+   * offer a want this venue could not answer even if it were empty.
+   */
+  protected readonly waitHourChoices = computed(() => {
+    const most = Math.min(WAITLIST_MAX_HOURS, this.hours().length);
+    return Array.from({ length: Math.max(most, 1) }, (_, index) => index + 1);
+  });
   protected readonly bookingError = signal<string | null>(null);
 
   /** The day on screen as a date, which is what the picker and the placeholder both show. */
@@ -141,6 +180,25 @@ export class AvailabilityPage {
   }));
 
   constructor() {
+    // The window somebody may wait for is the window this venue sells that day, so the form is
+    // filled from the day rather than from a guess. It is only reset when what it holds is not
+    // an hour this venue has — otherwise a refresh every ten seconds would keep undoing the
+    // choice somebody is in the middle of making.
+    effect(() => {
+      const hours = this.hours();
+      if (hours.length === 0) {
+        return;
+      }
+
+      const opens = hours[0];
+      const closes = hours[hours.length - 1] + 1;
+      const { fromHour, untilHour } = this.waitForm.getRawValue();
+
+      if (fromHour < opens || fromHour >= closes || untilHour <= opens || untilHour > closes) {
+        untracked(() => this.waitForm.patchValue({ fromHour: opens, untilHour: closes }));
+      }
+    });
+
     // switchMap drops the answer to a day the booker has already moved off, so going back and
     // forward through the history cannot leave an older day's grid on screen.
     toObservable(this.asked)
@@ -195,7 +253,12 @@ export class AvailabilityPage {
     // A booking is made from one grid, so moving to another day starts the pick again.
     effect(() => {
       this.chosen();
-      untracked(() => this.clearPicks());
+      untracked(() => {
+        this.clearPicks();
+        // A place is taken for one day, so moving to another day is a different queue.
+        this.waitingFor.set(null);
+        this.waitingError.set(null);
+      });
     });
   }
 
@@ -219,6 +282,32 @@ export class AvailabilityPage {
         queryParamsHandling: 'merge',
       });
     }
+  }
+
+  /**
+   * Takes a place in the queue for the day on screen. Nothing is held and nothing is owed — the
+   * venue gets somebody to ring when an hour comes back (PRD US-27).
+   */
+  protected wait(): void {
+    const venue = this.venue();
+    if (!venue || this.waiting()) {
+      return;
+    }
+
+    const { fromHour, untilHour, hours } = this.waitForm.getRawValue();
+    this.waiting.set(true);
+    this.waitingError.set(null);
+
+    this.waitlist.join(venue.id, this.chosen(), fromHour, untilHour, hours).subscribe({
+      next: (entry) => {
+        this.waiting.set(false);
+        this.waitingFor.set(entry.id);
+      },
+      error: (failure: unknown) => {
+        this.waiting.set(false);
+        this.waitingError.set(errorKey(failure));
+      },
+    });
   }
 
   protected isPicked(courtId: string, hour: number): boolean {

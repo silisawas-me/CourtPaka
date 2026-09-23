@@ -62,6 +62,23 @@ export function setInput(
   fixture.detectChanges();
 }
 
+/**
+ * Picks an option in a native select by what it says. Angular writes its own values into the
+ * options (`0: 18`), so setting `value` to the number on screen matches nothing — the option is
+ * found by its text and chosen by its index, the way a person picks it.
+ */
+export function choose(fixture: ComponentFixture<unknown>, selector: string, label: string): void {
+  const select = (fixture.nativeElement as HTMLElement).querySelector<HTMLSelectElement>(selector)!;
+  const index = [...select.options].findIndex((option) => option.textContent?.trim() === label);
+  if (index < 0) {
+    throw new Error(`No option "${label}" in ${selector}`);
+  }
+
+  select.selectedIndex = index;
+  select.dispatchEvent(new Event('change'));
+  fixture.detectChanges();
+}
+
 /** Clicks whatever the selector names: a button, or the control inside a Material checkbox. */
 export function check(fixture: ComponentFixture<unknown>, selector: string): void {
   controlOf(fixture, selector).click();

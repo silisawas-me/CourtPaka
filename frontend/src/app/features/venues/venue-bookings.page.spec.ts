@@ -87,7 +87,11 @@ describe('VenueBookingsPage', () => {
     };
   }
 
-  function render(day: object[] = [booking()], floor: object | null = grid()): void {
+  function render(
+    day: object[] = [booking()],
+    floor: object | null = grid(),
+    queue: object[] = [],
+  ): void {
     fixture = TestBed.createComponent(VenueBookingsPage);
     fixture.componentRef.setInput('venueId', 'v1');
     fixture.detectChanges();
@@ -98,6 +102,9 @@ describe('VenueBookingsPage', () => {
     } else {
       asked.flush(null, { status: 503, statusText: 'Unavailable' });
     }
+
+    // The queue for the day is asked for with it (PRD US-27).
+    httpMock.expectOne((request) => request.url === '/api/venues/v1/waitlist').flush(queue);
 
     httpMock.expectOne((request) => request.url === '/api/venues/v1/bookings').flush(day);
     fixture.detectChanges();
@@ -323,6 +330,9 @@ describe('VenueBookingsPage', () => {
     httpMock
       .expectOne((request) => request.url === '/api/venues/v1/availability')
       .flush({ code: 'venue.not_found' }, { status: 404, statusText: 'Not Found' });
+    httpMock
+      .expectOne((request) => request.url === '/api/venues/v1/waitlist')
+      .flush({ code: 'venue.not_member' }, { status: 403, statusText: 'Forbidden' });
     httpMock
       .expectOne((request) => request.url === '/api/venues/v1/bookings')
       .flush({ code: 'venue.not_member' }, { status: 403, statusText: 'Forbidden' });
@@ -611,6 +621,24 @@ describe('VenueBookingsPage', () => {
       render([booking()], floor());
 
       expect(elementOf(fixture, 'take-b1')).toBeNull();
+    });
+
+    it('shows who wanted this day and did not get it', () => {
+      render([booking()], floor(), [
+        {
+          id: 'w1',
+          bookerEmail: 'waiting@example.com',
+          bookerPhone: null,
+          date: '2026-09-21',
+          fromHour: 18,
+          untilHour: 22,
+          hours: 2,
+          state: 'Waiting',
+          askedAt: '2026-09-20T10:00:00Z',
+        },
+      ]);
+
+      expect(textOf(fixture, 'waiting-w1')).toContain('waiting@example.com');
     });
 
     it('draws the day without a board when the floor cannot be read', () => {

@@ -25,6 +25,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<CourtClosure> CourtClosures => Set<CourtClosure>();
 
+    public DbSet<WaitlistEntry> WaitlistEntries => Set<WaitlistEntry>();
+
     public DbSet<CourtStatusChange> CourtStatusChanges => Set<CourtStatusChange>();
 
     public DbSet<OpeningHoursSchedule> OpeningHoursSchedules => Set<OpeningHoursSchedule>();
@@ -297,6 +299,29 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .WithMany()
                 .HasForeignKey(c => c.LiftedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<WaitlistEntry>(entry =>
+        {
+            // Every read is "who is waiting on this venue, for this day, in the order they
+            // asked" — the queue as it is offered and as it is shown (PRD US-27).
+            entry.HasIndex(one => new { one.VenueId, one.Date, one.State, one.AskedAt });
+
+            // One place per booker per venue per day, at the database rather than only in the
+            // handler: a queue with the same name in it twice offers the same hour twice.
+            entry.HasIndex(one => new { one.VenueId, one.BookerUserId, one.Date })
+                .IsUnique()
+                .HasFilter($"\"State\" IN ({(int)WaitlistState.Waiting}, {(int)WaitlistState.Offered})");
+
+            entry.HasOne(one => one.Venue)
+                .WithMany()
+                .HasForeignKey(one => one.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entry.HasOne(one => one.Booker)
+                .WithMany()
+                .HasForeignKey(one => one.BookerUserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<VenueStatusChange>(change =>

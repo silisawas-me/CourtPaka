@@ -49,13 +49,45 @@ describe('MyBookingsPage', () => {
     httpMock.verify();
   });
 
-  function render(upcoming: object[] = [], past: object[] = []): void {
+  function render(upcoming: object[] = [], past: object[] = [], waiting: object[] = []): void {
     fixture = TestBed.createComponent(MyBookingsPage);
     fixture.detectChanges();
 
     httpMock.expectOne('/api/bookings').flush({ upcoming, past });
+    // The page also asks which queues this booker is standing in (PRD US-27).
+    httpMock.expectOne('/api/waitlist').flush(waiting);
     fixture.detectChanges();
   }
+
+  it('lists the queues this booker is standing in, and lets one go', () => {
+    render(
+      [],
+      [],
+      [
+        {
+          id: 'w1',
+          venueId: 'v1',
+          venueName: 'DEV01',
+          date: '2026-09-21',
+          fromHour: 18,
+          untilHour: 22,
+          hours: 2,
+          state: 'Waiting',
+          askedAt: '2026-09-20T10:00:00Z',
+        },
+      ],
+    );
+
+    expect(elementOf(fixture, 'waiting-w1')).not.toBeNull();
+    // A queue is something to answer for, so the page does not read as "nothing yet".
+    expect(elementOf(fixture, 'nothing-yet')).toBeNull();
+
+    clickOn(fixture, 'leave-w1');
+    httpMock.expectOne('/api/waitlist/w1').flush(null);
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, 'waiting-w1')).toBeNull();
+  });
 
   it('says so when the booker has taken nothing yet', () => {
     render();
