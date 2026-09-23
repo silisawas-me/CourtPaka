@@ -23,6 +23,13 @@ public enum BookerNoticeKind
     AboutToPlay = 7,
 
     /// <summary>
+    /// Hours came free on a day they were waiting for, and are being held for them (PRD US-27).
+    /// The hold behind it is an ordinary one; what is different is that they did not ask for it
+    /// just now, so the letter has to say where it came from.
+    /// </summary>
+    WaitlistOffer = 9,
+
+    /// <summary>
     /// The venue said, after a cancellation, whether the money arrived — which is what decides
     /// what comes back (PRD 6.2, US-13). The cancellation message promised this one.
     /// </summary>

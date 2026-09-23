@@ -143,6 +143,16 @@ public static class BookerLetters
                     when,
                     letter.Link)),
 
+            BookerNoticeKind.WaitlistOffer => (
+                $"คอร์ทว่างแล้วตามที่รอไว้: {venue}",
+                Lines(
+                    $"มีคอร์ทว่างในวันที่คุณเข้าคิวรอไว้ที่ {venue} เราจองไว้ให้คุณก่อนแล้ว",
+                    when,
+                    $"ยอดชำระ {Baht(letter.TotalBaht, Thai)} บาท",
+                    $"กรุณาโอนเงินและส่งสลิปภายใน {Clock(letter.HoldExpiresAt)} น. "
+                    + "ถ้าเลยเวลานี้ คอร์ทจะถูกเสนอให้คนถัดไปในคิว",
+                    letter.Link)),
+
             _ => throw new ArgumentOutOfRangeException(nameof(letter), letter.Kind, null),
         };
     }
@@ -231,6 +241,17 @@ public static class BookerLetters
                 Lines(
                     $"A reminder that you have a court at {venue}.",
                     when,
+                    letter.Link)),
+
+            BookerNoticeKind.WaitlistOffer => (
+                $"A court came free, as you asked: {venue}",
+                Lines(
+                    $"A court has come free on the day you were waiting for at {venue}, and we "
+                    + "are holding it for you.",
+                    when,
+                    $"Amount to pay: THB {Baht(letter.TotalBaht, English)}",
+                    $"Please transfer and send the slip by {Clock(letter.HoldExpiresAt)}. "
+                    + "After that the hours go to the next person in the queue.",
                     letter.Link)),
 
             _ => throw new ArgumentOutOfRangeException(nameof(letter), letter.Kind, null),

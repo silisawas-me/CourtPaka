@@ -126,10 +126,23 @@ public sealed class BookerMail(
             .Distinct()
             .ToListAsync(cancellationToken);
 
+        // A hold the queue put aside is still a hold, but the booker did not ask for it a moment
+        // ago — they asked days ago — so the letter has to say where it came from (PRD US-27).
+        var fromQueue = await database.WaitlistEntries
+            .AsNoTracking()
+            .Where(entry => entry.OfferedBookingId != null
+                && moves.Select(move => move.BookingId).Contains(entry.OfferedBookingId!.Value))
+            .Select(entry => entry.OfferedBookingId!.Value)
+            .ToListAsync(cancellationToken);
+
         return
         [
             .. moves.Select(move => new Due(
-                move.Settled ? BookerNoticeKind.PaymentSettled : KindOf(move.To),
+                move.Settled
+                    ? BookerNoticeKind.PaymentSettled
+                    : move.To == BookingStatus.Held && fromQueue.Contains(move.BookingId)
+                        ? BookerNoticeKind.WaitlistOffer
+                        : KindOf(move.To),
                 move.Id,
                 move.BookingId,
                 move.ChangedAt)),

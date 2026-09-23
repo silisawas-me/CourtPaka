@@ -322,6 +322,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .WithMany()
                 .HasForeignKey(one => one.BookerUserId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // The hold an offer put aside. Restrict, not cascade: a booking is never deleted, and
+            // if one ever were, losing the queue it came from with it would hide what happened.
+            entry.HasOne(one => one.OfferedBooking)
+                .WithMany()
+                .HasForeignKey(one => one.OfferedBookingId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<VenueStatusChange>(change =>

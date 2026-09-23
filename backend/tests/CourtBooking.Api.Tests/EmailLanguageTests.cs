@@ -1,3 +1,4 @@
+using CourtBooking.Api.Bookings;
 using CourtBooking.Api.Identity;
 using CourtBooking.Api.Venues;
 
@@ -30,6 +31,38 @@ public sealed class EmailLanguageTests
 
         Assert.Equal(language == SupportedLanguages.Thai, IsThai(AccountLetters.Locked(language).Body));
         Assert.Equal(language == SupportedLanguages.Thai, IsThai(AccountLetters.AccountExists(language).Body));
+    }
+
+    /// <summary>
+    /// Every letter a booker can get, in both languages. The switches have no default arm, so a
+    /// kind added without words throws — and it throws here rather than at somebody's inbox.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Languages))]
+    public void Every_booker_letter_has_words_in_both_languages(string language)
+    {
+        foreach (var kind in Enum.GetValues<BookerNoticeKind>())
+        {
+            var letter = new BookerLetter(
+                kind,
+                "CourtPaka Test",
+                [new LetterSlot("Court 1", DateTimeOffset.UtcNow.AddDays(1))],
+                400m,
+                "https://courtpaka.test/bookings",
+                DateTimeOffset.UtcNow.AddMinutes(15),
+                Reason: "a reason",
+                Cause: CancellationReason.VenueInitiated,
+                RefundDueBaht: 400m,
+                RefundAmountBaht: 400m,
+                RefundMethod: RefundMethod.Transfer,
+                RefundedOn: DateOnly.FromDateTime(DateTime.UtcNow));
+
+            var (subject, body) = BookerLetters.Write(letter, language);
+
+            Assert.NotEmpty(subject);
+            Assert.Contains(letter.Link, body);
+            Assert.Equal(language == SupportedLanguages.Thai, IsThai(subject));
+        }
     }
 
     [Theory]

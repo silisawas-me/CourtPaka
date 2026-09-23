@@ -47,9 +47,22 @@ public sealed class Caretaker(
         await DoAsync("holds that ran out", HoldsThatRanOutAsync, stopping);
         await DoAsync("slips about to be played", SlipsAboutToBePlayedAsync, stopping);
 
+        // After the holds that ran out, so hours let go of this sweep are offered in it.
+        await DoAsync("hours somebody was waiting for", WaitlistOffersAsync, stopping);
+
         // Last, so a hold this sweep let go of is told about in the same sweep.
         await DoAsync("telling bookers", TellBookersAsync, stopping);
     }
+
+    /// <summary>
+    /// Hours that came back, offered to whoever asked for them first (PRD US-27). The offer is an
+    /// ordinary hold, so the booker hears about it through the same post as any other.
+    /// </summary>
+    private async Task WaitlistOffersAsync(
+        AppDbContext database,
+        IServiceProvider services,
+        CancellationToken stopping) =>
+        await services.GetRequiredService<WaitlistOffers>().WorkAsync(stopping);
 
     /// <summary>
     /// What happened to each booker's bookings since the last sweep, and the reminder before
