@@ -2,7 +2,7 @@
 
 import datetime
 
-from harness import BASE, OWNER, STAFF, Checks, login, open_seeded_venue
+from harness import BASE, OWNER, STAFF, Checks, login, open_seeded_venue, staff_can
 from playwright.sync_api import sync_playwright
 
 check = Checks(__file__)
@@ -16,6 +16,10 @@ with sync_playwright() as p:
     page.wait_for_url(f"{BASE}/")
     venue_url = open_seeded_venue(page)
     venue_id = venue_url.split("/venues/")[1]
+
+    # This script checks what somebody without ManageSettings sees, and venue_ui.py hands the
+    # staff that permission as the thing it tests. Ask for the standing needed.
+    staff_can(browser, venue_id)
 
     # These checks share one venue with the other scripts, and prices are only valid against the
     # hours the venue is open, so start from a week this script knows: open 6-22, every day.
