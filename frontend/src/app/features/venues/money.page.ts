@@ -98,10 +98,14 @@ export class MoneyPage {
       }),
   );
 
+  /** Bumped when the day has been counted, because that changes what the server says about it. */
+  private readonly counted = signal(0);
+
   /** The day being asked about: the URL's, or the venue's own today (PRD BR-10). */
   private readonly asked = computed(() => ({
     venueId: this.venueId(),
     date: this.date() ?? plainDate(venueToday()),
+    counted: this.counted(),
   }));
 
   constructor() {
@@ -174,11 +178,12 @@ export class MoneyPage {
         note.trim() || undefined,
       )
       .subscribe({
-        next: (closed) => {
+        next: () => {
           this.closing.set(false);
-          // The count is part of the day, so the day is what is updated: the card that asked
-          // for it is replaced by the count itself.
-          this.money.update((day) => (day ? { ...day, closed } : day));
+          // The day is read again rather than patched: counting it is what makes the server
+          // work out which rows would explain the difference (PRD US-26), and those come with
+          // the day, not with the answer to the count.
+          this.counted.update((times) => times + 1);
         },
         error: (failure: unknown) => {
           this.closing.set(false);

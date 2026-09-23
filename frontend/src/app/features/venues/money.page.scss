@@ -42,6 +42,53 @@
   }
 }
 
+/*
+ * Where the difference might have come from: set apart from the count itself, because the count
+ * is a fact and this is a list of coincidences worth walking over to check.
+ */
+.leads {
+  margin-top: 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--mat-sys-corner-medium);
+  background: var(--mat-sys-surface-container-high);
+}
+
+.leads-title {
+  margin: 0 0 0.5rem;
+  font: var(--mat-sys-label-large);
+}
+
+.lead-list {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+}
+
+.lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  font: var(--mat-sys-body-medium);
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+// The amount is what the eye is comparing, so it sits at the end of the line on its own.
+.lead-baht {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.lead-note {
+  flex-basis: 100%;
+  font: var(--mat-sys-body-small);
+}
+
 // A till that did not come out even is the one thing on this page somebody has to answer for.
 .off {
   color: var(--mat-sys-error);

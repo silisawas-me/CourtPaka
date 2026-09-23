@@ -42,7 +42,23 @@ public sealed record DayMoneyResponse(
     decimal CashRefundedBaht,
     decimal OutstandingBaht,
     PaymentReceiptResponse[] CashReceipts,
-    DailyClosingResponse? Closed);
+    DailyClosingResponse? Closed,
+    /// <summary>
+    /// Where the difference might have come from, once the day has been counted and did not come
+    /// out even. Empty until then, and empty when nothing matches (PRD US-26).
+    /// </summary>
+    MoneyLeadResponse[] Leads);
+
+/// <summary>
+/// One row whose amount is exactly what the till came out by (PRD US-26). The system does not say
+/// what happened; it says where to look, and the person who was there decides.
+/// </summary>
+public sealed record MoneyLeadResponse(
+    string Kind,
+    decimal AmountBaht,
+    Guid? BookingId,
+    DateTimeOffset? At,
+    string? Note);
 
 public sealed record DailyClosingResponse(
     DateOnly Date,
@@ -338,17 +354,22 @@ public static class CounterMoneyEndpoints
             .ToListAsync(cancellationToken);
 
         // Cash the venue sent back that day leaves the same till the cash came into (US-18).
-        var cashRefunded = await database.RefundRecords
+        var cashBack = await database.RefundRecords
             .StillStanding()
             .Where(record =>
                 record.Booking!.VenueId == venueId
                 && record.Method == RefundMethod.Cash
                 && record.RecordedAt >= from
                 && record.RecordedAt < until)
-            .SumAsync(record => (decimal?)record.AmountBaht, cancellationToken) ?? 0m;
+            .Select(record => new CashHandedBack(
+                record.BookingId, record.AmountBaht, record.RecordedAt))
+            .ToListAsync(cancellationToken);
+
+        var cashRefunded = cashBack.Sum(record => record.AmountBaht);
 
         // What the day's bookings are still short, counted the same way the rows are.
-        var outstanding = await OutstandingOnAsync(database, venueId, day, cancellationToken);
+        var owing = await OwingOnAsync(database, venueId, day, cancellationToken);
+        var outstanding = owing.Sum(one => one.Baht);
 
         var closed = await database.DailyClosings
             .AsNoTracking()
@@ -366,6 +387,19 @@ public static class CounterMoneyEndpoints
         decimal By(PaymentMethod method) =>
             receipts.Where(receipt => receipt.Method == method).Sum(receipt => receipt.AmountBaht);
 
+        PaymentReceiptResponse[] cashTaken =
+        [
+            .. receipts
+                .Where(receipt => receipt.Method == PaymentMethod.Cash)
+                .Select(receipt => new PaymentReceiptResponse(
+                    receipt.Id,
+                    receipt.BookingId,
+                    receipt.AmountBaht,
+                    receipt.Method.ToString(),
+                    receipt.ReceivedAt,
+                    receipt.Note)),
+        ];
+
         return TypedResults.Ok(new DayMoneyResponse(
             day,
             receipts.Sum(receipt => receipt.AmountBaht),
@@ -374,19 +408,69 @@ public static class CounterMoneyEndpoints
             By(PaymentMethod.Card),
             cashRefunded,
             outstanding,
-            [
-                .. receipts
-                    .Where(receipt => receipt.Method == PaymentMethod.Cash)
-                    .Select(receipt => new PaymentReceiptResponse(
-                        receipt.Id,
-                        receipt.BookingId,
-                        receipt.AmountBaht,
-                        receipt.Method.ToString(),
-                        receipt.ReceivedAt,
-                        receipt.Note)),
-            ],
-            closed));
+            cashTaken,
+            closed,
+            LeadsFor(closed, cashTaken, cashBack, owing)));
     }
+
+    /// <summary>
+    /// The rows whose amount is exactly what the count came out by, for a day that has been
+    /// counted and did not balance (PRD US-26). Cash written down as taken and cash written down
+    /// as handed back are the two that move the till; a booking still owing is the third, because
+    /// money taken and not written down is the usual reason a till is over.
+    ///
+    /// It offers; it does not conclude. Nothing here changes a number, and a day that balanced
+    /// gets an empty list rather than a list of coincidences.
+    /// </summary>
+    private static MoneyLeadResponse[] LeadsFor(
+        DailyClosingResponse? closed,
+        IReadOnlyList<PaymentReceiptResponse> cashTaken,
+        IReadOnlyList<CashHandedBack> cashBack,
+        IReadOnlyList<StillOwed> owing)
+    {
+        if (closed is null)
+        {
+            return [];
+        }
+
+        var difference = closed.DifferenceBaht;
+
+        return
+        [
+            .. cashTaken
+                .Where(receipt => Takings.Explains(receipt.AmountBaht, difference))
+                .Select(receipt => new MoneyLeadResponse(
+                    nameof(MoneyLeadKind.CashTaken),
+                    receipt.AmountBaht,
+                    receipt.BookingId,
+                    receipt.ReceivedAt,
+                    receipt.Note)),
+
+            .. cashBack
+                .Where(record => Takings.Explains(record.AmountBaht, difference))
+                .Select(record => new MoneyLeadResponse(
+                    nameof(MoneyLeadKind.CashHandedBack),
+                    record.AmountBaht,
+                    record.BookingId,
+                    record.At,
+                    null)),
+
+            .. owing
+                .Where(one => Takings.Explains(one.Baht, difference))
+                .Select(one => new MoneyLeadResponse(
+                    nameof(MoneyLeadKind.StillOwed),
+                    one.Baht,
+                    one.BookingId,
+                    null,
+                    null)),
+        ];
+    }
+
+    /// <summary>Cash that left the till that day (PRD US-18).</summary>
+    private sealed record CashHandedBack(Guid BookingId, decimal AmountBaht, DateTimeOffset At);
+
+    /// <summary>A booking of that day and what it is still short.</summary>
+    private sealed record StillOwed(Guid BookingId, decimal Baht);
 
     /// <summary>
     /// Counts the day and writes it down (PRD US-26). What the till should hold is the server's
@@ -518,10 +602,13 @@ public static class CounterMoneyEndpoints
     }
 
     /// <summary>
-    /// What the day's bookings are still short. Only the ones that are still going to be played
-    /// or were: a booking nobody took up owes nothing.
+    /// What each of the day's bookings is still short, and therefore what the day is. Only the
+    /// ones that are still going to be played or were: a booking nobody took up owes nothing.
+    ///
+    /// Per booking rather than as one sum, because a booking that owes exactly what the till is
+    /// out by is the first place to look when a count does not balance (PRD US-26).
     /// </summary>
-    private static async Task<decimal> OutstandingOnAsync(
+    private static async Task<IReadOnlyList<StillOwed>> OwingOnAsync(
         AppDbContext database,
         Guid venueId,
         DateOnly day,
@@ -539,6 +626,7 @@ public static class CounterMoneyEndpoints
                 && Takings.StillOwing.Contains(booking.Status))
             .Select(booking => new
             {
+                booking.Id,
                 booking.TotalBaht,
                 Taken = database.PaymentReceipts
                     .Where(receipt => receipt.BookingId == booking.Id)
@@ -546,6 +634,12 @@ public static class CounterMoneyEndpoints
             })
             .ToListAsync(cancellationToken);
 
-        return owed.Sum(one => Takings.OutstandingOf(one.TotalBaht, one.Taken));
+        return
+        [
+            .. owed
+                .Select(one => new StillOwed(
+                    one.Id, Takings.OutstandingOf(one.TotalBaht, one.Taken)))
+                .Where(one => one.Baht > 0),
+        ];
     }
 }

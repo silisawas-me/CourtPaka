@@ -610,5 +610,10 @@
   "error.money.not_takeable": "การจองนี้ไม่มียอดค้างให้รับแล้ว",
   "error.money.already_closed": "วันนี้ปิดยอดไปแล้ว",
   "error.money.day_not_over": "ปิดยอดของวันที่ยังไม่ถึงไม่ได้",
-  "error.money.invalid_float": "เงินทอนตั้งต้นไม่ถูกต้อง"
+  "error.money.invalid_float": "เงินทอนตั้งต้นไม่ถูกต้อง",
+  "money.leads": "ผลต่างนี้อาจมาจาก",
+  "money.leadsNote": "รายการที่ยอดตรงกับผลต่างพอดี ระบบไม่ได้บอกว่าอันไหนใช่ — คนที่อยู่หน้าเคาน์เตอร์วันนั้นเป็นคนตัดสิน",
+  "money.lead.CashTaken": "เงินสดที่บันทึกว่ารับ",
+  "money.lead.CashHandedBack": "เงินสดที่บันทึกว่าคืนไป",
+  "money.lead.StillOwed": "การจองที่ยังค้างเท่านี้พอดี"
 }

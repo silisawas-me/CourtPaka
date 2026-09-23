@@ -90,6 +90,22 @@ public sealed class DailyClosing
 }
 
 /// <summary>
+/// The kinds of row that can be what a till is out by (PRD US-26). Not a diagnosis: each one is
+/// an amount that happens to match, offered to somebody who can go and look.
+/// </summary>
+public enum MoneyLeadKind
+{
+    /// <summary>Cash written down as taken. Short by exactly this = it was never in the drawer.</summary>
+    CashTaken = 1,
+
+    /// <summary>Cash written down as handed back. Over by exactly this = it never left.</summary>
+    CashHandedBack = 2,
+
+    /// <summary>A booking of that day still owing this. Over by exactly this = taken, not written.</summary>
+    StillOwed = 3,
+}
+
+/// <summary>
 /// What a venue is owed and what it has taken (PRD US-26, 6.2). One place, because the number on
 /// the screen before the money is taken and the number the endpoint refuses on have to be the same.
 /// </summary>
@@ -147,4 +163,14 @@ public static class Takings
     /// </summary>
     public static decimal ExpectedCash(decimal openingFloat, decimal cashIn, decimal cashOut) =>
         decimal.Round(openingFloat + cashIn - cashOut, 2, MidpointRounding.AwayFromZero);
+
+    /// <summary>
+    /// Whether one amount is exactly what a count came out by (PRD US-26). Exactly, in either
+    /// direction, and nothing looser: a list of rows that are roughly the right size is a list
+    /// nobody reads twice. A till that balanced has nothing to explain.
+    /// </summary>
+    public static bool Explains(decimal amount, decimal differenceBaht) =>
+        differenceBaht != 0
+        && decimal.Round(Math.Abs(amount), 2, MidpointRounding.AwayFromZero)
+            == decimal.Round(Math.Abs(differenceBaht), 2, MidpointRounding.AwayFromZero);
 }

@@ -103,6 +103,21 @@ export interface Takings {
   receipts: PaymentReceipt[];
 }
 
+/** Which kind of row might be what the till is out by (PRD US-26). */
+export type MoneyLeadKind = 'CashTaken' | 'CashHandedBack' | 'StillOwed';
+
+/**
+ * One row whose amount is exactly what the count came out by. It is where to look, not what
+ * happened — the person who was at the desk decides that.
+ */
+export interface MoneyLead {
+  kind: MoneyLeadKind;
+  amountBaht: number;
+  bookingId: string | null;
+  at: string | null;
+  note: string | null;
+}
+
 /** A day's money, and the count at the end of it (PRD US-26). */
 export interface DayMoney {
   date: string;
@@ -114,6 +129,8 @@ export interface DayMoney {
   outstandingBaht: number;
   cashReceipts: PaymentReceipt[];
   closed: DailyClosing | null;
+  /** Empty until the day has been counted, and empty when it came out even. */
+  leads: MoneyLead[];
 }
 
 export interface DailyClosing {

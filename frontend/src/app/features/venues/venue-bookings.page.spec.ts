@@ -506,6 +506,16 @@ describe('VenueBookingsPage', () => {
       expect(elementOf(fixture, 'board-free-c2-19')).toBeNull();
     });
 
+    it('says what an empty hour costs, which is what the phone is asking', () => {
+      render([booking()], floor());
+
+      // The price of the hour, from the same answer the board is drawn on — no second request.
+      expect(textOf(fixture, 'board-free-c1-20')).toBe('200');
+      // An hour with no price says nothing rather than nothing-shaped-like-a-number.
+      expect(textOf(fixture, 'board-free-c2-20')).toBe('200');
+      expect(elementOf(fixture, 'board-free-c1-20')?.getAttribute('aria-label')).toContain('200');
+    });
+
     it('counts the day: what was booked, taken and still owed', () => {
       render([booking()], floor());
 
