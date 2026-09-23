@@ -176,20 +176,25 @@ describe('VenueDashboardPage', () => {
     expect(elementOf(fixture, 'hours-lost')).toBeNull();
   });
 
-  it("hands the months over as a file, with the headings in the reader's language", () => {
+  it('hands the months over as a file named for the range', () => {
     render();
 
-    // The click is what makes the file; what is checked is that it was made from these months
-    // and named for the range, not that the browser saved it.
+    // What is checked is the file the page offers, not how many times the browser was asked for
+    // a url: other specs share this environment and call the same globals, so a count here
+    // would fail on somebody else's work (it did, in CI).
+    const offered: { name: string; href: string }[] = [];
     const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:made');
     const revoked = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
-    const clicked = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const clicked = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      offered.push({ name: this.download, href: this.href });
+    });
 
     clickOn(fixture, 'download-csv');
 
-    expect(created).toHaveBeenCalledOnce();
-    expect(clicked).toHaveBeenCalledOnce();
-    // The blob is let go once the click has been handled, or the page holds it for ever.
+    expect(offered).toEqual([{ name: 'courtpaka-2026-09-01-2026-09-02.csv', href: 'blob:made' }]);
+    // And the blob is let go once the click has been handled, or the page holds it for ever.
     expect(revoked).toHaveBeenCalledWith('blob:made');
 
     created.mockRestore();
