@@ -163,6 +163,32 @@
         <p class="muted small" data-testid="closed-at">
           {{ i18n.t('money.closedAt') }} {{ closed.closedAt | appDateTime: i18n.locale() }}
         </p>
+
+        <!--
+          Where to look, for a till that did not come out even: the rows whose amount is exactly
+          the difference. The page offers them and says so — it does not decide which one it was
+          (PRD US-26).
+        -->
+        @if (day.leads.length > 0) {
+          <div class="leads">
+            <p class="leads-title">{{ i18n.t('money.leads') }}</p>
+            <ul class="lead-list" data-testid="leads">
+              @for (lead of day.leads; track $index) {
+                <li class="lead" [attr.data-testid]="'lead-' + lead.kind">
+                  <span>{{ i18n.t('money.lead.' + lead.kind) }}</span>
+                  @if (lead.at) {
+                    <span class="muted">{{ time(lead.at) }}</span>
+                  }
+                  @if (lead.note) {
+                    <span class="muted lead-note">{{ lead.note }}</span>
+                  }
+                  <span class="lead-baht">{{ lead.amountBaht | baht: i18n.locale() }}</span>
+                </li>
+              }
+            </ul>
+            <p class="muted small">{{ i18n.t('money.leadsNote') }}</p>
+          </div>
+        }
       } @else {
         <form class="stack" [formGroup]="closeForm" novalidate>
           <p class="muted">{{ i18n.t('money.closedOnce') }}</p>

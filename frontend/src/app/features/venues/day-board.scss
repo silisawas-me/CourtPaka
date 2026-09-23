@@ -59,12 +59,27 @@
 
 /* An hour nobody has taken: faint, but a button, because pressing it sells that hour. */
 .board-cell.free {
+  display: grid;
+  place-items: center;
   background: color-mix(in srgb, var(--mat-sys-surface-variant) 55%, transparent);
   cursor: pointer;
 
   &:hover {
     background: var(--mat-sys-surface-variant);
   }
+}
+
+/*
+ * The price sits in the hour it belongs to, quiet enough that the blocks still read first: it is
+ * an answer waiting to be needed — "how much is seven o'clock" is what the phone asks — not
+ * something the eye has to step over (PRD US-25).
+ */
+.board-price {
+  font: var(--mat-sys-label-small);
+  color: var(--mat-sys-on-surface-variant);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+  pointer-events: none;
 }
 
 /*

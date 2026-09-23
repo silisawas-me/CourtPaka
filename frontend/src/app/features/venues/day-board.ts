@@ -1,4 +1,5 @@
 import { Component, computed, inject, input, output } from '@angular/core';
+import { BahtPipe, formatBaht } from '../../core/i18n/baht.pipe';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { Availability } from '../../core/venues/public-venue.service';
 import { VenueBooking } from '../../core/venues/venue-bookings.service';
@@ -17,11 +18,19 @@ interface Block {
   reads: 'playing' | 'confirmed' | 'waiting';
 }
 
+/** An hour nobody has taken, and what it costs — which is what the phone is asking. */
+interface Free {
+  kind: 'free';
+  hour: number;
+  /** Null when the venue has no price for that hour, and then the cell says nothing. */
+  baht: number | null;
+}
+
 /** A court's row: the blocks on it, and which of its hours are shut (PRD US-11). */
 interface Row {
   courtId: string;
   name: string;
-  cells: ({ kind: 'free'; hour: number } | { kind: 'closed'; hour: number } | Block)[];
+  cells: (Free | { kind: 'closed'; hour: number } | Block)[];
 }
 
 /**
@@ -34,7 +43,7 @@ interface Row {
  */
 @Component({
   selector: 'app-day-board',
-  imports: [],
+  imports: [BahtPipe],
   templateUrl: './day-board.html',
   styleUrl: './day-board.scss',
 })
@@ -87,8 +96,15 @@ export class DayBoard {
           continue;
         }
 
-        const status = court.hours.find((cell) => cell.hour === hour)?.status;
-        cells.push({ kind: status === 'Closed' ? 'closed' : 'free', hour });
+        // The price of an empty hour is on the board because the question asked across the
+        // counter — and down the phone — is "how much is seven o'clock" (PRD US-25). The day
+        // already carries it, so the answer costs nothing to show.
+        const cell = court.hours.find((one) => one.hour === hour);
+        cells.push(
+          cell?.status === 'Closed'
+            ? { kind: 'closed', hour }
+            : { kind: 'free', hour, baht: cell?.bahtPerHour ?? null },
+        );
       }
 
       return { courtId: court.courtId, name: court.name, cells };
@@ -115,6 +131,14 @@ export class DayBoard {
 
   protected isBlock(cell: Row['cells'][number]): cell is Block {
     return 'bookingId' in cell;
+  }
+
+  /** What pressing an empty hour would do, said in full for whoever is not looking at it. */
+  protected sellLabel(courtName: string, cell: Free): string {
+    const hour = `${this.i18n.t('board.sell')} ${courtName} ${cell.hour}:00`;
+    return cell.baht === null
+      ? hour
+      : `${hour} ${formatBaht(cell.baht, this.i18n.locale())} ${this.i18n.t('money.baht')}`;
   }
 
   /**

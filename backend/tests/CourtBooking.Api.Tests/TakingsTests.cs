@@ -50,6 +50,31 @@ public sealed class TakingsTests
         Assert.False(Takings.CanTake(BookingStatus.Confirmed, PaymentState.NotReceived, 0m));
     }
 
+    /// <summary>
+    /// What a count is out by points at rows of exactly that amount, in either direction — short
+    /// by 300 and a 300 taken in cash are the same coincidence as over by 300 and a 300 still
+    /// owed. Nothing looser: a list of roughly-right amounts is a list nobody reads (PRD US-26).
+    /// </summary>
+    [Theory]
+    [InlineData(300, -300, true)]
+    [InlineData(300, 300, true)]
+    [InlineData(300.004, -300, true)]
+    [InlineData(300, -299.99, false)]
+    [InlineData(300, -600, false)]
+    public void Only_an_amount_that_is_exactly_the_difference_explains_it(
+        decimal amount,
+        decimal difference,
+        bool explains) =>
+        Assert.Equal(explains, Takings.Explains(amount, difference));
+
+    /// <summary>A till that balanced has nothing to explain, whatever is lying around.</summary>
+    [Fact]
+    public void A_count_that_came_out_even_is_explained_by_nothing()
+    {
+        Assert.False(Takings.Explains(0m, 0m));
+        Assert.False(Takings.Explains(300m, 0m));
+    }
+
     /// <summary>Paying the last of it answers only the booking that was waiting for an answer.</summary>
     [Fact]
     public void Only_a_booking_waiting_on_a_slip_is_confirmed_by_the_money_arriving()

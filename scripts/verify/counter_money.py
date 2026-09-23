@@ -71,6 +71,22 @@ with sync_playwright() as p:
         page,
     )
 
+    # The board answers "how much is that hour" without anybody opening the price page (US-25).
+    day = page.request.get(
+        f"{BASE}/api/venues/{venue_id}/availability?date={tomorrow.isoformat()}").json()
+    free = next(
+        (row["courtId"], cell["hour"], cell["bahtPerHour"])
+        for row in day["courts"]
+        for cell in row["hours"]
+        if cell["status"] == "Free" and cell["bahtPerHour"] is not None
+    )
+    shown = page.locator(f"[data-testid=board-free-{free[0]}-{free[1]}]").inner_text()
+    check(
+        "an empty hour on the board says what it costs",
+        shown.strip().replace(",", "") == f"{free[2]:g}",
+        page,
+    )
+
     # 1. Money is taken in parts, in the form it arrived.
     page.click(f"[data-testid=take-{booking['id']}]")
     amount = page.locator("[data-testid=take-amount]")
@@ -147,7 +163,10 @@ with sync_playwright() as p:
     expected = 1000 + before["cashBaht"] - before["cashRefundedBaht"]
 
     page.fill("[data-testid=opening-float]", "1000")
-    page.fill("[data-testid=counted-cash]", str(expected - 100))
+    # Short by exactly one of the day's cash receipts when there is one, so the run exercises
+    # the list of rows that would explain it.
+    short = before["cashReceipts"][0]["amountBaht"] if before["cashReceipts"] else 100
+    page.fill("[data-testid=counted-cash]", str(expected - short))
     page.fill("[data-testid=closing-note]", "ขาดร้อยนึง")
     with page.expect_response(lambda r: "/money/closing" in r.url) as closed:
         page.click("[data-testid=close-day]")
@@ -156,13 +175,34 @@ with sync_playwright() as p:
         "and the server works out what should have been in it",
         closed.value.json()["expectedCashBaht"] == expected,
     )
-    check("and says how far off it was", closed.value.json()["differenceBaht"] == -100)
+    check("and says how far off it was", closed.value.json()["differenceBaht"] == -short)
     expect(page.locator("[data-testid=closed-difference]")).to_be_visible()
     check(
         "which the page shows instead of the form it replaces",
         page.locator("[data-testid=close-day]").count() == 0,
         page,
     )
+
+    # 5. A count that did not come out even says which rows are exactly that amount (US-26).
+    leads = page.request.get(
+        f"{BASE}/api/venues/{venue_id}/money?date={counting.isoformat()}").json()["leads"]
+    if before["cashReceipts"]:
+        check(
+            "a till that is short points at the rows of exactly that amount",
+            any(lead["kind"] == "CashTaken" for lead in leads),
+            page,
+        )
+        check(
+            "and the page shows them",
+            page.locator("[data-testid=leads]").count() == 1,
+            page,
+        )
+    else:
+        check(
+            "a day with nothing in the till has nothing to point at",
+            leads == [] and page.locator("[data-testid=leads]").count() == 0,
+            page,
+        )
 
     again = page.request.post(
         f"{BASE}/api/venues/{venue_id}/money/closing?date={counting.isoformat()}",

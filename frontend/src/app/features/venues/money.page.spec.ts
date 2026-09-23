@@ -1,12 +1,16 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { plainDate, venueToday } from '../../core/i18n/plain-date';
 import { TRANSLATIONS } from '../../testing/translations';
 import { clickOn, elementOf, pageProviders, setInput, textOf } from '../../testing/dom';
 import { MoneyPage } from './money.page';
 
+/** The venue's own today, because that is the day the page asks for when the URL says nothing. */
+const TODAY = plainDate(venueToday());
+
 function day(overrides: Record<string, unknown> = {}) {
   return {
-    date: '2026-09-23',
+    date: TODAY,
     takenBaht: 900,
     cashBaht: 500,
     promptPayBaht: 300,
@@ -24,13 +28,14 @@ function day(overrides: Record<string, unknown> = {}) {
       },
     ],
     closed: null,
+    leads: [],
     ...overrides,
   };
 }
 
 function closing(overrides: Record<string, unknown> = {}) {
   return {
-    date: '2026-09-23',
+    date: TODAY,
     openingFloatBaht: 1000,
     expectedCashBaht: 1500,
     countedCashBaht: 1400,
@@ -137,14 +142,49 @@ describe('MoneyPage', () => {
       countedCashBaht: 1400,
       note: 'ขาดร้อยนึง',
     });
-    expect(request.request.params.get('date')).toBe('2026-09-23');
+    expect(request.request.params.get('date')).toBe(TODAY);
     request.flush(closing());
+    fixture.detectChanges();
+
+    // Counting the day changes what the server says about it — which rows would explain the
+    // difference come with the day — so the day is read again rather than patched.
+    httpMock
+      .expectOne((one) => one.url === '/api/venues/v1/money')
+      .flush(day({ closed: closing() }));
     fixture.detectChanges();
 
     // The difference is the server's, not the page's, and a till that is short says so.
     expect(textOf(fixture, 'closed-expected')).toBe('1,500');
     expect(textOf(fixture, 'closed-difference')).toContain(TRANSLATIONS.th['money.short']);
     expect(elementOf(fixture, 'close-day')).toBeNull();
+  });
+
+  it('says where to look when the till did not come out even', () => {
+    render(
+      day({
+        closed: closing(),
+        leads: [
+          {
+            kind: 'CashTaken',
+            amountBaht: 100,
+            bookingId: 'b1',
+            at: '2026-09-23T11:00:00Z',
+            note: 'มัดจำ',
+          },
+          { kind: 'StillOwed', amountBaht: 100, bookingId: 'b2', at: null, note: null },
+        ],
+      }),
+    );
+
+    expect(elementOf(fixture, 'leads')).not.toBeNull();
+    expect(textOf(fixture, 'lead-CashTaken')).toContain(TRANSLATIONS.th['money.lead.CashTaken']);
+    expect(textOf(fixture, 'lead-StillOwed')).toContain('100');
+  });
+
+  it('offers nothing about a count that balanced', () => {
+    render(day({ closed: closing({ differenceBaht: 0, countedCashBaht: 1500 }), leads: [] }));
+
+    expect(elementOf(fixture, 'leads')).toBeNull();
   });
 
   it('does not ask twice: a day that has been counted shows its count', () => {

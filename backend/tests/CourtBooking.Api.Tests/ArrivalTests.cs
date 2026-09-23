@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using CourtBooking.Api.Bookings;
 using CourtBooking.Api.Data;
+using CourtBooking.Api.Localization;
 using CourtBooking.Api.Tests.Infrastructure;
 using CourtBooking.Api.Venues;
 using Microsoft.EntityFrameworkCore;
@@ -140,7 +141,9 @@ public sealed class ArrivalTests(ApiTestFixture api)
         // Twenty minutes past the hour: late by the usual fifteen, not by this venue's forty.
         await scenario.StartsInAsync(booking.Id, TimeSpan.FromMinutes(-20));
 
-        var row = await DayRowAsync(owner, venue.Id, booking.Id, VenueScenario.Today);
+        // The day the hours actually landed on, not today: twenty minutes before now is
+        // yesterday for the hour after Thai midnight, and the list is by the venue's day.
+        var row = await DayRowAsync(owner, venue.Id, booking.Id, await PlayDayAsync(booking.Id));
         Assert.False(row.Can.NoShow);
         // The list says when the wait is over, so the screen can count it down without a rule of
         // its own: forty minutes after the hour this venue sold.
@@ -205,6 +208,10 @@ public sealed class ArrivalTests(ApiTestFixture api)
     /// One booking as the counter's day list draws it. The date is asked for, because a booking
     /// whose hours were moved to now is on today's list, not on the one it was sold for.
     /// </summary>
+    /// <summary>The venue's own day the booking's first hour falls on (PRD BR-10).</summary>
+    private async Task<DateOnly> PlayDayAsync(Guid bookingId) =>
+        PlatformRequirements.BangkokDateAndHour(await PlayStartsAtAsync(bookingId)).Date;
+
     private static async Task<VenueBookingResponse> DayRowAsync(
         HttpClient client, Guid venueId, Guid bookingId, DateOnly? date = null)
     {

@@ -610,5 +610,10 @@
   "error.money.not_takeable": "There is nothing left to take on this booking.",
   "error.money.already_closed": "This day has already been counted.",
   "error.money.day_not_over": "A day that has not happened cannot be counted.",
-  "error.money.invalid_float": "That opening float is not right."
+  "error.money.invalid_float": "That opening float is not right.",
+  "money.leads": "The difference might be",
+  "money.leadsNote": "Rows whose amount is exactly what the count came out by. This is where to look, not what happened — whoever was at the desk decides that.",
+  "money.lead.CashTaken": "Cash written down as taken",
+  "money.lead.CashHandedBack": "Cash written down as handed back",
+  "money.lead.StillOwed": "A booking still owing exactly this"
 }

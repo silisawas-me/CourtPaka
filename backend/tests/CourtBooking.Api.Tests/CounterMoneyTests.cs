@@ -267,6 +267,73 @@ public sealed class CounterMoneyTests(ApiTestFixture api)
         Assert.Contains(money.CashReceipts, receipt => receipt.AmountBaht == booking.TotalBaht);
     }
 
+    /// <summary>
+    /// A till that did not balance is told where to look: the rows whose amount is exactly what
+    /// it came out by, and nothing looser than exactly (PRD US-26). A day that balanced is told
+    /// nothing, because there is nothing to explain.
+    /// </summary>
+    [Fact]
+    public async Task A_count_that_did_not_balance_says_which_rows_are_that_amount()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        // Half of it in cash, so the deposit and what is still owed are the same amount.
+        var half = booking.TotalBaht / 2;
+        await Take(owner, venue.Id, booking.Id, half, nameof(PaymentMethod.Cash));
+
+        // The till is short by exactly that, which both the deposit and the rest would explain.
+        var closed = await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/money/closing",
+            new CloseDayRequest(1_000m, 1_000m, null));
+        Assert.True(closed.IsSuccessStatusCode);
+
+        var money = await Money(owner, venue.Id);
+        Assert.Equal(-half, money.Closed!.DifferenceBaht);
+
+        var lead = Assert.Single(
+            money.Leads, one => one.Kind == nameof(MoneyLeadKind.CashTaken));
+        Assert.Equal(half, lead.AmountBaht);
+        Assert.Equal(booking.Id, lead.BookingId);
+
+        // What the booking still owes is not offered here, and should not be: it is played
+        // tomorrow, so it is tomorrow's outstanding, not this day's (PRD US-15's rule, by
+        // service date).
+        Assert.DoesNotContain(money.Leads, one => one.Kind == nameof(MoneyLeadKind.StillOwed));
+    }
+
+    /// <summary>A day that came out even has nothing to explain, so nothing is offered.</summary>
+    [Fact]
+    public async Task A_count_that_balanced_is_offered_nothing()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 19);
+        await Take(owner, venue.Id, booking.Id, booking.TotalBaht, nameof(PaymentMethod.Cash));
+
+        var before = await Money(owner, venue.Id);
+        var closed = await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/money/closing",
+            new CloseDayRequest(1_000m, 1_000m + before.CashBaht - before.CashRefundedBaht, null));
+        Assert.True(closed.IsSuccessStatusCode);
+
+        var money = await Money(owner, venue.Id);
+        Assert.Equal(0m, money.Closed!.DifferenceBaht);
+        Assert.Empty(money.Leads);
+    }
+
+    /// <summary>A day nobody has counted is not guessing at anything yet.</summary>
+    [Fact]
+    public async Task A_day_that_has_not_been_counted_offers_nothing()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 20);
+        await Take(owner, venue.Id, booking.Id, 100m, nameof(PaymentMethod.Cash));
+
+        var money = await Money(owner, venue.Id);
+
+        Assert.Null(money.Closed);
+        Assert.Empty(money.Leads);
+    }
+
     [Fact]
     public async Task A_day_that_has_not_happened_cannot_be_counted()
     {
