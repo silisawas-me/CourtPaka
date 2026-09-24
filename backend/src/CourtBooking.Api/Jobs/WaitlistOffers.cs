@@ -122,11 +122,12 @@ public sealed class WaitlistOffers(
             // What it asks for up front comes back with it: an offer is an ordinary hold, and an
             // ordinary hold is held on the venue's own terms (PRD US-28).
             var selling = await database.Venues
+                .AsNoTracking()
                 .Where(venue => venue.Id == day.Key.VenueId && venue.Status == VenueStatus.Approved)
-                .Select(venue => (int?)venue.DepositPercent)
+                .Select(venue => new { venue.DepositPercent, venue.Risk })
                 .SingleOrDefaultAsync(cancellationToken);
 
-            if (selling is not { } depositPercent)
+            if (selling is null)
             {
                 continue;
             }
@@ -136,7 +137,8 @@ public sealed class WaitlistOffers(
 
             foreach (var entry in day)
             {
-                if (await OfferOneAsync(entry, floor, depositPercent, now, cancellationToken))
+                if (await OfferOneAsync(
+                        entry, floor, selling.DepositPercent, selling.Risk, now, cancellationToken))
                 {
                     offered++;
 
@@ -159,6 +161,7 @@ public sealed class WaitlistOffers(
         WaitlistEntry entry,
         VenueDay floor,
         int depositPercent,
+        VenueRiskRule risk,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
@@ -198,12 +201,21 @@ public sealed class WaitlistOffers(
 
         var policyId = await BookingEndpoints.InForcePolicyIdAsync(
             database, entry.VenueId, cancellationToken);
+        // Offered hours are held on the same terms as hours somebody picked themselves, risk and
+        // all: a queue is a way of asking, not a way round what the asking costs (PRD US-28).
+        var misses = await DepositRisk.MissesAsync(
+            database, entry.VenueId, entry.BookerUserId, risk, now, cancellationToken);
+
+        var (percent, reason) = DepositRisk.Asks(
+            risk, depositPercent, misses, DepositRisk.TouchesPeak(risk, priced.Slots));
+
         var booking = Booking.Hold(
             entry.VenueId,
             entry.BookerUserId,
             policyId,
             priced.Slots,
-            depositPercent,
+            percent,
+            reason,
             now);
 
         // The same write everybody else's booking goes through: the advisory lock, the exclusion
@@ -212,6 +224,20 @@ public sealed class WaitlistOffers(
             is not null)
         {
             return false;
+        }
+
+        // Said here as well as where a booker picks hours themselves: the event is the record of
+        // the rule having applied, and somebody who did not choose these hours is the most likely
+        // of anybody to ask why they were asked for more (PRD US-28). After the write, so it is
+        // only said of hours that were actually held.
+        if (reason != DepositReason.VenueTerms)
+        {
+            AppEvents.For(loggers).LogInformation(
+                "deposit_required {BookingId} {VenueId} {DepositBaht} {Reason}",
+                booking.Id,
+                entry.VenueId,
+                booking.DepositBaht,
+                reason.ToString());
         }
 
         var claimed = await database.WaitlistEntries

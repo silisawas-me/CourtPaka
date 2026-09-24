@@ -67,6 +67,11 @@ public sealed record BookingResponse(
     /// </summary>
     decimal DepositBaht,
     /// <summary>
+    /// Why that much was asked for (PRD US-28), as a name the page turns into a sentence — the
+    /// server does not send people words (US-23).
+    /// </summary>
+    string DepositReason,
+    /// <summary>
     /// What is still owed at the venue, worked out by the server (PRD US-28, US-26). Nought
     /// unless the booking is one the venue is going to honour and is still short of its price —
     /// a cancelled booking has a difference too, and it is not something anybody owes.
@@ -88,6 +93,8 @@ public sealed record PaymentResponse(
     /// code carries, so that what a bank app fills in is what the venue is waiting for.
     /// </summary>
     decimal DepositBaht,
+    /// <summary>Why that much, as a name the page turns into a sentence (PRD US-28, US-23).</summary>
+    string DepositReason,
     /// <summary>What is left for the desk once the deposit has arrived. Zero when there is none.</summary>
     decimal PayAtVenueBaht,
     DateTimeOffset HoldExpiresAt,

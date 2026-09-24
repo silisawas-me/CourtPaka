@@ -72,6 +72,18 @@ public sealed record GraceRequest(int Minutes);
 public sealed record DepositRequest(int Percent);
 
 /// <summary>
+/// When this venue asks for more than its usual share, and of whom (PRD US-28). Null hours mean
+/// the venue has named no peak, and then the top tier asks for half like the one below it.
+/// </summary>
+public sealed record RiskRuleRequest(
+    bool On,
+    int LookbackDays,
+    int HalfAt,
+    int FullAt,
+    int? PeakFromHour,
+    int? PeakUntilHour);
+
+/// <summary>
 /// A venue always arrives with what the caller may do there, so screens and guards never have to
 /// work it out from the member list (PRD US-14).
 /// </summary>
@@ -94,7 +106,18 @@ public sealed record VenueResponse(
     /// How much of a booking's price this venue asks for up front, as a percentage (PRD US-28).
     /// A hundred is the whole of it, which is what every venue asks for until it says otherwise.
     /// </summary>
-    int DepositPercent);
+    int DepositPercent,
+    /// <summary>When this venue asks for more than that share, and of whom (PRD US-28).</summary>
+    RiskRuleResponse Risk);
+
+/// <summary>What a venue counts as too often, and which hours it will not lose (PRD US-28).</summary>
+public sealed record RiskRuleResponse(
+    bool On,
+    int LookbackDays,
+    int HalfAt,
+    int FullAt,
+    int? PeakFromHour,
+    int? PeakUntilHour);
 
 public sealed record VenueMemberResponse(Guid UserId, string Email, string Role, string[] Permissions);
 
@@ -118,6 +141,8 @@ public static class VenueErrorCodes
     /// </summary>
     public const string InvalidGrace = "venue.invalid_grace";
     public const string InvalidDeposit = "venue.invalid_deposit";
+    public const string InvalidRiskRule = "venue.invalid_risk_rule";
+    public const string InvalidPeakHours = "venue.invalid_peak_hours";
 
     public const string CodeAlreadyUsed = "venue.code_already_used";
 

@@ -114,6 +114,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             // hours for nothing. Said here so that every venue already on the platform keeps
             // asking for the whole price, which is what it has always asked for (PRD US-28).
             venue.Property(v => v.DepositPercent).HasDefaultValue(Deposit.Everything);
+
+            // Beside the venue in its own row: there is one set of these and it is changed by
+            // changing it, not by adding a version (the bookings snapshot what they were asked).
+            // No database defaults, on purpose: a default of true on a bool whose CLR default is
+            // false is a column that can never be written false (the trap this file has met
+            // before). The migration fills the venues that existed and then drops the default.
+            venue.ComplexProperty(one => one.Risk);
         });
 
         builder.Entity<RefundRecord>(refund =>

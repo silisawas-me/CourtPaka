@@ -241,6 +241,7 @@ public sealed class CounterBookingTests(ApiTestFixture api) : IClassFixture<ApiT
             HoldExpiresAt = now,
             TotalBaht = 200m,
             DepositBaht = 200m,
+            DepositReason = DepositReason.VenueTerms,
             CancellationPolicyId = policyId,
         });
 

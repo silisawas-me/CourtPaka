@@ -61,6 +61,19 @@ export interface Venue extends VenueAddress {
    * A hundred is the whole of it, which is what a venue asks for until it says otherwise.
    */
   depositPercent: number;
+  /** When this venue asks for more than that share, and of whom (PRD US-28). */
+  risk: VenueRiskRule;
+}
+
+/** What a venue counts as too often, and which hours it will not lose (PRD US-28). */
+export interface VenueRiskRule {
+  on: boolean;
+  lookbackDays: number;
+  halfAt: number;
+  fullAt: number;
+  /** Null means the venue has named no peak, and then no hour is treated as one. */
+  peakFromHour: number | null;
+  peakUntilHour: number | null;
 }
 
 export interface VenueMember {
@@ -185,5 +198,10 @@ export class VenueService {
   /** How much of a booking's price has to arrive before the hours are held (PRD US-28). */
   setDeposit(venueId: string, percent: number): Observable<void> {
     return this.http.put<void>(`/api/venues/${encodeURIComponent(venueId)}/deposit`, { percent });
+  }
+
+  /** When this venue asks somebody for more than that, and of whom (PRD US-28). */
+  setRiskRule(venueId: string, rule: VenueRiskRule): Observable<void> {
+    return this.http.put<void>(`/api/venues/${encodeURIComponent(venueId)}/risk-rule`, rule);
   }
 }

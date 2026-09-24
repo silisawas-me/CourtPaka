@@ -141,6 +141,12 @@ public sealed class Booking
     /// </summary>
     public required decimal DepositBaht { get; init; }
 
+    /// <summary>
+    /// Why that much (PRD US-28). Written down with the amount, because the booker is told why
+    /// they are being asked and the venue has to be able to answer for it afterwards.
+    /// </summary>
+    public required DepositReason DepositReason { get; init; }
+
     /// <summary>The cancellation policy this booking is refunded under, copied in (PRD BR-05).</summary>
     public required Guid CancellationPolicyId { get; init; }
 
@@ -165,6 +171,7 @@ public sealed class Booking
         Guid cancellationPolicyId,
         IEnumerable<SlotPrice> slots,
         int depositPercent,
+        DepositReason depositReason,
         DateTimeOffset at)
     {
         var total = slots.Sum(slot => slot.BahtPerHour);
@@ -178,6 +185,7 @@ public sealed class Booking
             CancellationPolicyId = cancellationPolicyId,
             TotalBaht = total,
             DepositBaht = Deposit.Of(total, depositPercent),
+            DepositReason = depositReason,
         };
 
         booking.Slots.AddRange(slots.Select(slot => new BookingSlot
@@ -236,6 +244,7 @@ public sealed class Booking
 
             // Paid where it was made, so there was never a part of it to wait for.
             DepositBaht = slots.Sum(slot => slot.BahtPerHour),
+            DepositReason = DepositReason.VenueTerms,
         };
 
         booking.Slots.AddRange(slots.Select(slot => new BookingSlot

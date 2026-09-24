@@ -20,36 +20,6 @@
       @if (!canManage()) {
         <p class="muted" data-testid="read-only">{{ i18n.t('settings.readOnly') }}</p>
       }
-
-      <!--
-        How much of a price has to arrive before the hours are held (PRD US-28). Its own field on
-        the venue's own page rather than a rule buried in prices: what a venue asks for up front
-        is about who it trusts, not about what an hour costs.
-      -->
-      <div class="deposit">
-        <mat-form-field>
-          <mat-label>{{ i18n.t('settings.deposit') }}</mat-label>
-          <input
-            matInput
-            type="number"
-            min="10"
-            max="100"
-            step="5"
-            data-testid="deposit-percent"
-            [disabled]="!canManage() || savingDeposit()"
-            [value]="depositPercent()"
-            (change)="chooseDeposit($event)"
-          />
-          <span matTextSuffix>%</span>
-          <mat-hint>{{ i18n.t('settings.deposit.hint') }}</mat-hint>
-        </mat-form-field>
-
-        @if (depositError(); as key) {
-          <p class="form-error" data-testid="deposit-error">{{ i18n.t(key) }}</p>
-        } @else if (depositSaved()) {
-          <p class="muted" data-testid="deposit-saved">{{ i18n.t('settings.deposit.saved') }}</p>
-        }
-      </div>
     </mat-card-content>
   </mat-card>
 
@@ -297,4 +267,129 @@
     <app-price-bands [venueId]="current.id" [canManage]="canManage()" />
     <app-cancellation-policy [venueId]="current.id" [canManage]="canManage()" />
   </div>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('settings.deposit') }}</mat-card-title>
+    </mat-card-header>
+
+    <mat-card-content>
+      <!--
+        How much of a price has to arrive before the hours are held (PRD US-28). Its own field on
+        the venue's own page rather than a rule buried in prices: what a venue asks for up front
+        is about who it trusts, not about what an hour costs.
+      -->
+      <div class="deposit">
+        <mat-form-field>
+          <mat-label>{{ i18n.t('settings.deposit') }}</mat-label>
+          <input
+            matInput
+            type="number"
+            min="10"
+            max="100"
+            step="5"
+            data-testid="deposit-percent"
+            [disabled]="!canManage() || savingDeposit()"
+            [value]="depositPercent()"
+            (change)="chooseDeposit($event)"
+          />
+          <span matTextSuffix>%</span>
+          <mat-hint>{{ i18n.t('settings.deposit.hint') }}</mat-hint>
+        </mat-form-field>
+
+        @if (depositError(); as key) {
+          <p class="form-error" data-testid="deposit-error">{{ i18n.t(key) }}</p>
+        } @else if (depositSaved()) {
+          <p class="muted" data-testid="deposit-saved">{{ i18n.t('settings.deposit.saved') }}</p>
+        }
+      </div>
+
+      <!--
+        And when the venue asks somebody for more than that (PRD US-28). One form, saved together:
+        the thresholds only mean anything as a set, and a half-saved rule is a rule nobody chose.
+      -->
+      <form class="risk" [formGroup]="risk" (ngSubmit)="saveRisk()">
+        <p class="field-label">{{ i18n.t('settings.risk') }}</p>
+
+        <mat-slide-toggle formControlName="on" data-testid="risk-on">
+          {{ i18n.t('settings.risk.on') }}
+        </mat-slide-toggle>
+
+        <div class="risk-numbers">
+          <mat-form-field>
+            <mat-label>{{ i18n.t('settings.risk.lookback') }}</mat-label>
+            <input
+              matInput
+              type="number"
+              min="1"
+              max="365"
+              formControlName="lookbackDays"
+              data-testid="risk-lookback"
+            />
+          </mat-form-field>
+
+          <mat-form-field>
+            <mat-label>{{ i18n.t('settings.risk.halfAt') }}</mat-label>
+            <input
+              matInput
+              type="number"
+              min="1"
+              formControlName="halfAt"
+              data-testid="risk-half-at"
+            />
+          </mat-form-field>
+
+          <mat-form-field>
+            <mat-label>{{ i18n.t('settings.risk.fullAt') }}</mat-label>
+            <input
+              matInput
+              type="number"
+              min="1"
+              formControlName="fullAt"
+              data-testid="risk-full-at"
+            />
+          </mat-form-field>
+        </div>
+
+        <div class="risk-numbers">
+          <mat-form-field>
+            <mat-label>{{ i18n.t('settings.risk.peakFrom') }}</mat-label>
+            <select matNativeControl formControlName="peakFromHour" data-testid="risk-peak-from">
+              <option [ngValue]="null">—</option>
+              @for (hour of openingHours; track hour) {
+                <option [ngValue]="hour">{{ hour }}:00</option>
+              }
+            </select>
+          </mat-form-field>
+
+          <mat-form-field>
+            <mat-label>{{ i18n.t('settings.risk.peakUntil') }}</mat-label>
+            <select matNativeControl formControlName="peakUntilHour" data-testid="risk-peak-until">
+              <option [ngValue]="null">—</option>
+              @for (hour of closingHours; track hour) {
+                <option [ngValue]="hour">{{ hour }}:00</option>
+              }
+            </select>
+          </mat-form-field>
+        </div>
+
+        <p class="muted">{{ i18n.t('settings.risk.hint') }}</p>
+
+        @if (riskError(); as key) {
+          <p class="form-error" data-testid="risk-error">{{ i18n.t(key) }}</p>
+        } @else if (riskSaved()) {
+          <p class="muted" data-testid="risk-saved">{{ i18n.t('settings.deposit.saved') }}</p>
+        }
+
+        <button
+          matButton="filled"
+          type="submit"
+          data-testid="save-risk"
+          [disabled]="!canManage() || savingRisk()"
+        >
+          {{ i18n.t('settings.risk.save') }}
+        </button>
+      </form>
+    </mat-card-content>
+  </mat-card>
 }

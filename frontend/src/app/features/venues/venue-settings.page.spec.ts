@@ -7,6 +7,7 @@ import { DATE_LOCALES } from '../../core/i18n/locales';
 import { TRANSLATIONS } from '../../testing/translations';
 import {
   check,
+  clickOn,
   isDisabled,
   isOn,
   elementOf,
@@ -30,6 +31,14 @@ function venue(overrides: Record<string, unknown> = {}) {
     role: 'Owner',
     permissions: ['VerifySlip', 'ManageBookings', 'CloseCourt', 'ViewReports', 'ManageSettings'],
     depositPercent: 100,
+    risk: {
+      on: true,
+      lookbackDays: 60,
+      halfAt: 2,
+      fullAt: 3,
+      peakFromHour: null,
+      peakUntilHour: null,
+    },
     ...overrides,
   };
 }
@@ -443,5 +452,47 @@ describe('VenueSettingsPage', () => {
     // And the field goes back to what the venue is actually on, so the refused number is not
     // left on screen reading as the one in force.
     expect((elementOf(fixture, 'deposit-percent') as HTMLInputElement).value).toBe('100');
+  });
+
+  /**
+   * The thresholds only mean anything as a set, so they are saved as one — and the page sends
+   * what was filled in rather than judging it, because the server's refusal is what it would have
+   * to translate (PRD US-28, US-23).
+   */
+  it('saves the whole rule about who is asked for more', () => {
+    render();
+
+    setInput(fixture, '[data-testid="risk-lookback"]', '90');
+    setInput(fixture, '[data-testid="risk-half-at"]', '1');
+    setInput(fixture, '[data-testid="risk-full-at"]', '4');
+    clickOn(fixture, 'save-risk');
+
+    const request = httpMock.expectOne('/api/venues/v1/risk-rule');
+    expect(request.request.body).toEqual({
+      on: true,
+      lookbackDays: 90,
+      halfAt: 1,
+      fullAt: 4,
+      peakFromHour: null,
+      peakUntilHour: null,
+    });
+    request.flush(null, { status: 204, statusText: 'No Content' });
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, 'risk-saved')).not.toBeNull();
+  });
+
+  it('translates a rule the server will not take', () => {
+    render();
+
+    setInput(fixture, '[data-testid="risk-full-at"]', '1');
+    clickOn(fixture, 'save-risk');
+
+    httpMock
+      .expectOne('/api/venues/v1/risk-rule')
+      .flush({ code: 'venue.invalid_risk_rule' }, { status: 400, statusText: 'Bad Request' });
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'risk-error')).toBe(TRANSLATIONS.th['error.venue.invalid_risk_rule']);
   });
 });

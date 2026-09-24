@@ -46,6 +46,7 @@ public static class VenueEndpoints
         // How long the counter waits for somebody is a setting like the prices are (PRD US-24).
         venue.MapPut("/grace", SetGraceAsync).RequireAuthorization(VenuePolicies.Settings);
         venue.MapPut("/deposit", SetDepositAsync).RequireAuthorization(VenuePolicies.Settings);
+        venue.MapPut("/risk-rule", SetRiskRuleAsync).RequireAuthorization(VenuePolicies.Settings);
         venue.MapPut("/notifications", ChooseNotificationsAsync)
             .RequireAuthorization(VenuePolicies.OwnChoice);
         venue.MapGet("/members", ListMembersAsync).RequireAuthorization(VenuePolicies.Member);
@@ -664,6 +665,42 @@ public static class VenueEndpoints
         return TypedResults.NoContent();
     }
 
+    /// <summary>
+    /// When this venue asks somebody for more than its usual share (PRD US-28). The whole rule can
+    /// be turned off: a venue that would rather not keep a count of who let it down is entitled to
+    /// not keep one.
+    /// </summary>
+    private static async Task<Results<NoContent, ProblemHttpResult>> SetRiskRuleAsync(
+        Guid venueId,
+        RiskRuleRequest request,
+        AppDbContext database,
+        CancellationToken cancellationToken)
+    {
+        if (!DepositRisk.AreThresholds(request.LookbackDays, request.HalfAt, request.FullAt))
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, VenueErrorCodes.InvalidRiskRule);
+        }
+
+        if (!VenueRiskRule.IsAWindow(request.PeakFromHour, request.PeakUntilHour))
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, VenueErrorCodes.InvalidPeakHours);
+        }
+
+        await database.Venues
+            .Where(venue => venue.Id == venueId)
+            .ExecuteUpdateAsync(
+                set => set
+                    .SetProperty(venue => venue.Risk.On, request.On)
+                    .SetProperty(venue => venue.Risk.LookbackDays, request.LookbackDays)
+                    .SetProperty(venue => venue.Risk.HalfAt, request.HalfAt)
+                    .SetProperty(venue => venue.Risk.FullAt, request.FullAt)
+                    .SetProperty(venue => venue.Risk.PeakFromHour, request.PeakFromHour)
+                    .SetProperty(venue => venue.Risk.PeakUntilHour, request.PeakUntilHour),
+                cancellationToken);
+
+        return TypedResults.NoContent();
+    }
+
     private static async Task<Results<NoContent, ProblemHttpResult, NotFound>> ChangePermissionsAsync(
         Guid venueId,
         Guid userId,
@@ -776,7 +813,14 @@ public static class VenueEndpoints
                     ? VenuePermissions.All
                     : membership.Permissions),
             membership.WantsSlipEmails,
-            venue.DepositPercent);
+            venue.DepositPercent,
+            new RiskRuleResponse(
+                venue.Risk.On,
+                venue.Risk.LookbackDays,
+                venue.Risk.HalfAt,
+                venue.Risk.FullAt,
+                venue.Risk.PeakFromHour,
+                venue.Risk.PeakUntilHour));
 
     private static VenueMemberResponse ToResponse(VenueMembership membership) =>
         new(

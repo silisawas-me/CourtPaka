@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import {
   FormBuilder,
   FormControl,
@@ -100,6 +100,32 @@ export class VenueSettingsPage {
   protected readonly savingDeposit = signal(false);
   protected readonly depositSaved = signal(false);
   protected readonly depositError = signal<string | null>(null);
+
+  /**
+   * When this venue asks somebody for more than its usual share (PRD US-28). One form saved
+   * together: the thresholds only mean anything as a set.
+   */
+  protected readonly risk = this.formBuilder.nonNullable.group({
+    on: true,
+    lookbackDays: 60,
+    halfAt: 2,
+    fullAt: 3,
+    peakFromHour: this.formBuilder.control<number | null>(null),
+    peakUntilHour: this.formBuilder.control<number | null>(null),
+  });
+
+  protected readonly savingRisk = signal(false);
+  protected readonly riskSaved = signal(false);
+  protected readonly riskError = signal<string | null>(null);
+
+  /**
+   * A read-only venue gets a read-only form, not a form with a dead button: filling one in and
+   * being refused at the end is worse than being told at the start (PRD US-20).
+   */
+  private readonly riskIsTheirs = effect(() => {
+    const allowed = this.canManage();
+    untracked(() => (allowed ? this.risk.enable() : this.risk.disable()));
+  });
 
   /** ManageSettings is what this page is for, and a frozen venue refuses every write (PRD US-20). */
   protected readonly canManage = computed(() => {
@@ -351,6 +377,9 @@ export class VenueSettingsPage {
         this.schedules.set(schedules);
         this.loading.set(false);
 
+        // The form shows what the venue is on, not the defaults it was built with.
+        this.risk.setValue(venue.risk);
+
         const current = this.inForce();
         if (current) {
           this.editWeek(current);
@@ -359,6 +388,34 @@ export class VenueSettingsPage {
       error: (error: unknown) => {
         this.pageError.set(errorKey(error));
         this.loading.set(false);
+      },
+    });
+  }
+
+  /**
+   * Sends the rule as filled in and lets the server judge it (US-23): the page keeps no copy of
+   * what counts as sensible, so it cannot disagree with the refusal it would have to translate.
+   */
+  protected saveRisk(): void {
+    if (!this.canManage() || this.savingRisk()) {
+      return;
+    }
+
+    const rule = this.risk.getRawValue();
+
+    this.savingRisk.set(true);
+    this.riskError.set(null);
+    this.riskSaved.set(false);
+
+    this.venues.setRiskRule(this.venueId(), rule).subscribe({
+      next: () => {
+        this.savingRisk.set(false);
+        this.riskSaved.set(true);
+        this.venue.update((venue) => (venue ? { ...venue, risk: rule } : venue));
+      },
+      error: (failure: unknown) => {
+        this.savingRisk.set(false);
+        this.riskError.set(errorKey(failure));
       },
     });
   }
