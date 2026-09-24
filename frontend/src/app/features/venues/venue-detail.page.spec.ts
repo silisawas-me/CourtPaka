@@ -54,20 +54,13 @@ describe('VenueDetailPage', () => {
 
   afterEach(() => httpMock.verify());
 
-  const NOTHING_WAITING = { slipsToCheck: 0, bookingsWithMoneyWaiting: 0 };
-
-  function render(
-    role: 'Owner' | 'Staff',
-    members: unknown[],
-    attention: object = NOTHING_WAITING,
-  ): void {
+  function render(role: 'Owner' | 'Staff', members: unknown[]): void {
     signInAs(role === 'Owner' ? OWNER.email : STAFF.email);
     fixture = TestBed.createComponent(VenueDetailPage);
     fixture.componentRef.setInput('venueId', 'v1');
     fixture.detectChanges();
     httpMock.expectOne('/api/venues/v1').flush(venueAs(role));
     httpMock.expectOne('/api/venues/v1/members').flush(members);
-    httpMock.expectOne('/api/venues/v1/attention').flush(attention);
     fixture.detectChanges();
     if (role === 'Owner') {
       httpMock.expectOne('/api/venues/v1/invitations').flush([]);
@@ -167,7 +160,6 @@ describe('VenueDetailPage', () => {
       .expectOne('/api/venues/v2')
       .flush({ ...venueAs('Owner'), id: 'v2', name: 'Second Court' });
     httpMock.expectOne('/api/venues/v2/members').flush([OWNER]);
-    httpMock.expectOne('/api/venues/v2/attention').flush(NOTHING_WAITING);
     fixture.detectChanges();
     httpMock.expectOne('/api/venues/v2/invitations').flush([]);
     fixture.detectChanges();
@@ -216,7 +208,6 @@ describe('VenueDetailPage', () => {
     fixture.detectChanges();
     httpMock.expectOne('/api/venues/v1').flush({ ...venueAs('Owner'), status: 'Suspended' });
     httpMock.expectOne('/api/venues/v1/members').flush([OWNER, STAFF]);
-    httpMock.expectOne('/api/venues/v1/attention').flush(NOTHING_WAITING);
     fixture.detectChanges();
 
     const element = fixture.nativeElement as HTMLElement;
@@ -271,19 +262,8 @@ describe('VenueDetailPage', () => {
     expect(textOf(fixture, 'invite-error')).toBe(TRANSLATIONS.th['error.venue.already_member']);
   });
 
-  it('puts the number of things waiting on the door it belongs to', () => {
-    render('Owner', [OWNER], { slipsToCheck: 3, bookingsWithMoneyWaiting: 1 });
-
-    expect(textOf(fixture, 'slips-waiting')).toContain('3');
-    expect(textOf(fixture, 'money-waiting')).toContain('1');
-  });
-
-  it('says nothing where there is nothing waiting', () => {
-    render('Owner', [OWNER]);
-
-    expect(elementOf(fixture, 'slips-waiting')).toBeNull();
-    expect(elementOf(fixture, 'money-waiting')).toBeNull();
-  });
+  // What is waiting is drawn beside the doors by the venue's shell, on every one of its pages —
+  // `app.spec.ts` is where that is checked.
 
   it('sends the choice about slip mail as it is switched', () => {
     render('Owner', [OWNER]);

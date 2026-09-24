@@ -36,8 +36,8 @@
         {{ i18n.t('settings.title') }}
       </a>
       <!--
-        The number sits on the door it belongs to. A counter opens the page that has work on it,
-        so what it needs to know is which one that is (PRD US-17).
+        The doors again, big enough for a thumb. The numbers beside them are the shell's job now:
+        it draws them on every page of the venue, not only on this one (PRD US-17).
       -->
       <a
         matButton
@@ -45,9 +45,6 @@
         data-testid="venue-bookings-link"
       >
         {{ i18n.t('venueBookings.title') }}
-        @if (attention()?.bookingsWithMoneyWaiting; as waiting) {
-          <span class="badge badge-waiting" data-testid="money-waiting">{{ waiting }}</span>
-        }
       </a>
       <!--
         Its own door rather than a panel inside the settings, because it is its own permission:
@@ -73,9 +70,6 @@
         data-testid="slip-queue-link"
       >
         {{ i18n.t('slipQueue.title') }}
-        @if (attention()?.slipsToCheck; as waiting) {
-          <span class="badge badge-waiting" data-testid="slips-waiting">{{ waiting }}</span>
-        }
       </a>
     </mat-card-actions>
 

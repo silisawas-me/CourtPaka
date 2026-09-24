@@ -21,13 +21,6 @@
       <mat-datepicker #picker />
     </mat-form-field>
   </mat-card-content>
-
-  <mat-card-actions>
-    <a matButton [routerLink]="['/venues', venueId()]">{{ i18n.t('settings.backToVenue') }}</a>
-    <a matButton [routerLink]="['/venues', venueId(), 'bookings']">
-      {{ i18n.t('venueBookings.title') }}
-    </a>
-  </mat-card-actions>
 </mat-card>
 
 @if (loading()) {

@@ -1,4 +1,4 @@
-/** The bar stays put while a long settings page scrolls under it. */
+// The bar stays put while a long settings page scrolls under it.
 .bar {
   position: sticky;
   top: 0;
@@ -17,13 +17,13 @@
   margin-left: 0.25rem;
 }
 
-/** The language in use is the filled one; the other reads as the thing you can switch to. */
+// The language in use is the filled one; the other reads as the thing you can switch to.
 .language.chosen {
   background: var(--mat-sys-secondary-container);
   color: var(--mat-sys-on-secondary-container);
 }
 
-/** Where the accent sits in the bar: the one action for someone with no account yet. */
+// Where the accent sits in the bar: the one action for someone with no account yet.
 .accent {
   background: var(--mat-sys-primary);
   color: var(--mat-sys-on-primary);
@@ -33,15 +33,13 @@
   display: contents;
 }
 
-/* The menu is the phone's copy of the nav, so it is not there when the bar can hold the links. */
+// The menu is the phone's copy of the nav, so it is not there when the bar can hold the links.
 .bar-menu-button {
   display: none;
 }
 
-/**
- * A phone has room for the brand, the language switch and one control. The links fold into a menu
- * rather than overflowing off the edge, which is what they used to do.
- */
+// A phone has room for the brand, the language switch and one control. The links fold into a menu
+// rather than overflowing off the edge, which is what they used to do.
 @media (max-width: 34rem) {
   .bar {
     padding-inline: 0.5rem;
@@ -56,10 +54,8 @@
   }
 }
 
-/**
- * The panel the phone's links fold into. It sits under the bar rather than over the page: a
- * booker who opens it has not left the page they were reading, and nothing needs a backdrop.
- */
+// The panel the phone's links fold into. It sits under the bar rather than over the page: a
+// booker who opens it has not left the page they were reading, and nothing needs a backdrop.
 .bar-menu {
   position: sticky;
   top: var(--mat-toolbar-standard-height, 4rem);
@@ -77,7 +73,7 @@
   }
 }
 
-/* Three bars, drawn rather than downloaded — the app ships no icon set. */
+// Three bars, drawn rather than downloaded — the app ships no icon set.
 .hamburger {
   position: relative;
   display: block;
@@ -105,7 +101,7 @@
     top: 6px;
   }
 
-  /* Open, it is a cross: the same control, saying what it will do next. */
+  // Open, it is a cross: the same control, saying what it will do next.
   &.open {
     background: transparent;
 
@@ -119,4 +115,82 @@
       rotate: -45deg;
     }
   }
+}
+
+// The venue's own shell (PRD US-25). On a desk the doors stand down the side, dark, so the day
+// itself is the only thing on a light ground; on a phone they lie along the bottom under a thumb
+// and the top bar stays where it was. The booker's pages are untouched: a visit that ends in a
+// booking is not a shift.
+
+// The venue's own pages get a second layout: the shell's doors down the side on a desk, along
+// the bottom on a phone. `app-venue-shell` lays out nothing of its own, so the sidebar and the
+// tab bar are items of this grid.
+:host.at-a-venue {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+// A grid item with `margin-inline: auto` has its stretch cancelled by the auto margins, and
+// `width: auto` then resolves to fit-content — which on a page whose content is a progress bar
+// is a column a few characters wide floating in the middle of a phone.
+:host.at-a-venue .shell {
+  width: 100%;
+}
+
+@media (min-width: 60rem) {
+  :host.at-a-venue {
+    grid-template-columns: 14rem minmax(0, 1fr);
+  }
+
+  // The sidebar is the navigation at this width, so the bar above it would be a second one —
+  // which is why the sidebar carries the rest of the app's doors in its foot. The bar stands
+  // down only once the sidebar is actually there: the shell arrives a chunk late, and a deploy
+  // can make that chunk never arrive at all. Until then the bar is the way out.
+  :host.at-a-venue:has(app-venue-shell) .bar,
+  :host.at-a-venue:has(app-venue-shell) .bar-menu {
+    display: none;
+  }
+
+  :host.at-a-venue .shell {
+    grid-column: 2;
+    grid-row: 1;
+    max-width: 68rem;
+    margin-inline: 0;
+    padding-inline: 1.5rem;
+  }
+}
+
+// Projected into the sidebar, so the app's own doors are written once and the shell has no
+// opinion about who is signed in.
+.side-brand,
+.side-account a,
+.side-account button {
+  color: inherit;
+  text-decoration: none;
+}
+
+.side-brand {
+  padding: 0.25rem 0.5rem 0.5rem;
+  font: var(--mat-sys-title-medium);
+}
+
+.side-account {
+  display: grid;
+  justify-items: start;
+  gap: 0.15rem;
+}
+
+.side-who {
+  padding-inline: 0.6rem;
+  font: var(--mat-sys-label-small);
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  overflow-wrap: anywhere;
+}
+
+// Material draws a text button in the primary colour, which is a dark green — on a dark ground
+// that is a label nobody can read. The chosen one needs saying twice: its own rule sets an ink
+// meant for a light ground, and it outranks the group above by a class.
+.side-account .language.chosen {
+  background: color-mix(in srgb, currentColor 20%, transparent);
+  color: inherit;
 }

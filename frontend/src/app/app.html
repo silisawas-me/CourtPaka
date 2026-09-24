@@ -96,3 +96,53 @@
   }
   <router-outlet />
 </main>
+
+@defer (when venueId()) {
+  @if (venueId(); as venue) {
+    <app-venue-shell [venueId]="venue">
+      <a sideHead class="side-brand" routerLink="/">{{ i18n.t('app.name') }}</a>
+
+      <!--
+        The app's own doors, in the sidebar's foot: at this width the bar above is not drawn, so
+        without them somebody at a counter could not reach their own bookings or account. The same
+        list the bar lays out, so neither copy is the one somebody forgot.
+      -->
+      <nav
+        sideFoot
+        class="side-account"
+        data-testid="side-nav-account"
+        [attr.aria-label]="i18n.t('nav.label')"
+      >
+        @for (link of links(); track link.path) {
+          <a matButton [routerLink]="link.path" [attr.data-testid]="'side-' + link.testId">
+            {{ i18n.t(link.label) }}
+          </a>
+        }
+        @if (user(); as who) {
+          <!-- A LINE account may have no address at all (US-01), and an empty line is a puzzle. -->
+          @if (who.email; as address) {
+            <span class="side-who">{{ address }}</span>
+          }
+          <button matButton type="button" data-testid="side-sign-out" (click)="signOut()">
+            {{ i18n.t('nav.signOut') }}
+          </button>
+        }
+        <span class="languages" role="group" [attr.aria-label]="i18n.t('app.language')">
+          @for (option of languages; track option) {
+            <button
+              matButton
+              type="button"
+              class="language"
+              [class.chosen]="i18n.language() === option"
+              [attr.aria-pressed]="i18n.language() === option"
+              [attr.data-testid]="'side-language-' + option"
+              (click)="switchLanguage(option)"
+            >
+              {{ i18n.t('app.language.short.' + option) }}
+            </button>
+          }
+        </span>
+      </nav>
+    </app-venue-shell>
+  }
+}

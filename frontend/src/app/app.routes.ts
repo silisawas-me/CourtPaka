@@ -36,29 +36,34 @@ export const routes: Routes = [
   },
   {
     path: 'venues/:venueId/bookings',
+    data: { venueShell: true },
     loadComponent: () =>
       import('./features/venues/venue-bookings.page').then((m) => m.VenueBookingsPage),
     canActivate: [authGuard],
   },
   {
     path: 'venues/:venueId/money',
+    data: { venueShell: true },
     loadComponent: () => import('./features/venues/money.page').then((m) => m.MoneyPage),
     canActivate: [authGuard],
   },
   {
     path: 'venues/:venueId/dashboard',
+    data: { venueShell: true },
     loadComponent: () =>
       import('./features/venues/venue-dashboard.page').then((m) => m.VenueDashboardPage),
     canActivate: [authGuard],
   },
   {
     path: 'venues/:venueId/closures',
+    data: { venueShell: true },
     loadComponent: () =>
       import('./features/venues/court-closures.page').then((m) => m.CourtClosuresPage),
     canActivate: [authGuard],
   },
   {
     path: 'venues/:venueId/slip-queue',
+    data: { venueShell: true },
     loadComponent: () => import('./features/venues/slip-queue.page').then((m) => m.SlipQueuePage),
     canActivate: [authGuard],
   },
@@ -116,12 +121,14 @@ export const routes: Routes = [
   },
   {
     path: 'venues/:venueId',
+    data: { venueShell: true },
     canActivate: [authGuard],
     loadComponent: () =>
       import('./features/venues/venue-detail.page').then((m) => m.VenueDetailPage),
   },
   {
     path: 'venues/:venueId/settings',
+    data: { venueShell: true },
     canActivate: [authGuard],
     loadComponent: () =>
       import('./features/venues/venue-settings.page').then((m) => m.VenueSettingsPage),

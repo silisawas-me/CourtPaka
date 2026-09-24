@@ -1,10 +1,11 @@
 import { HttpTestingController } from '@angular/common/http/testing';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, DeferBlockState, TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
 import { App } from './app';
 import { AuthService } from './core/auth/auth.service';
 import { TranslationService } from './core/i18n/translation.service';
 import { TRANSLATIONS } from './testing/translations';
-import { check, clickOn, elementOf, pageProviders, textOf } from './testing/dom';
+import { check, clickOn, elementOf, pageProviders, signInAs, textOf } from './testing/dom';
 
 describe('App shell', () => {
   let fixture: ComponentFixture<App>;
@@ -95,5 +96,141 @@ describe('App shell', () => {
     clickOn(fixture, 'nav-book-menu');
 
     expect(elementOf(fixture, 'bar-menu')).toBeNull();
+  });
+});
+
+describe("A venue's own shell", () => {
+  let fixture: ComponentFixture<App>;
+  let httpMock: HttpTestingController;
+  let router: Router;
+
+  beforeEach(async () => {
+    localStorage.clear();
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: pageProviders([
+        { path: 'book', children: [] },
+        // A venue's page is a venue's page because the route says so, not because its URL has an
+        // id in it — `book/:venueId` is the booker's grid and carries the same parameter.
+        {
+          path: 'venues/:venueId/bookings',
+          children: [],
+          data: { venueShell: true },
+        },
+        { path: 'venues/:venueId/money', children: [], data: { venueShell: true } },
+        { path: 'venues/apply', children: [] },
+        { path: 'book/:venueId', children: [] },
+      ]),
+    }).compileComponents();
+
+    httpMock = TestBed.inject(HttpTestingController);
+    signInAs('staff@example.com');
+    router = TestBed.inject(Router);
+
+    fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+  });
+
+  afterEach(() => httpMock.verify());
+
+  /** The shell is deferred, so nothing of it exists until a venue's page asks for it. */
+  async function showShell(): Promise<void> {
+    const blocks = await fixture.getDeferBlocks();
+    await blocks[0].render(DeferBlockState.Complete);
+    fixture.detectChanges();
+  }
+
+  /** The counts are what decide where a shift looks next (PRD US-17), so they come with the shell. */
+  it("draws the venue's doors with what is waiting behind them", async () => {
+    await router.navigate(['/venues', 'v1', 'bookings']);
+    fixture.detectChanges();
+    await showShell();
+
+    httpMock.expectOne('/api/venues/v1/attention').flush({
+      slipsToCheck: 3,
+      bookingsWithMoneyWaiting: 0,
+    });
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'nav-slip-queue-waiting')).toBe('3');
+    // Nothing waiting is no number at all, not a zero to read past.
+    expect(elementOf(fixture, 'nav-money-waiting')).toBeNull();
+    expect(elementOf(fixture, 'nav-slip-queue')?.getAttribute('href')).toBe(
+      '/venues/v1/slip-queue',
+    );
+    // The app's own doors travel with it, because the bar above is not drawn beside a sidebar.
+    expect(elementOf(fixture, 'side-nav-account')).not.toBeNull();
+  });
+
+  it("leaves the booker's pages alone", async () => {
+    // The class the shell hangs on is the whole answer: no venue, no second layout, and the
+    // deferred sidebar is never asked for.
+    const shellIsUp = () => (fixture.nativeElement as HTMLElement).classList.contains('at-a-venue');
+
+    await router.navigate(['/book']);
+    fixture.detectChanges();
+    expect(shellIsUp()).toBe(false);
+
+    // A grid has a venue in its URL and is nobody's shift.
+    await router.navigate(['/book', 'v1']);
+    fixture.detectChanges();
+    expect(shellIsUp()).toBe(false);
+
+    // Neither is applying to join, however much the URL looks like a venue's.
+    await router.navigate(['/venues/apply']);
+    fixture.detectChanges();
+    expect(shellIsUp()).toBe(false);
+
+    await router.navigate(['/venues', 'v1', 'bookings']);
+    fixture.detectChanges();
+    expect(shellIsUp()).toBe(true);
+    await showShell();
+    httpMock.expectOne('/api/venues/v1/attention').flush({
+      slipsToCheck: 0,
+      bookingsWithMoneyWaiting: 0,
+    });
+  });
+
+  /**
+   * The number says which door to open next, so it has to be read again once somebody has been
+   * through one — a count that answers for the state an hour ago is worse than no count.
+   */
+  it('reads the counts again as the shift moves between the doors', async () => {
+    await router.navigate(['/venues', 'v1', 'bookings']);
+    fixture.detectChanges();
+    await showShell();
+
+    httpMock.expectOne('/api/venues/v1/attention').flush({
+      slipsToCheck: 3,
+      bookingsWithMoneyWaiting: 0,
+    });
+    fixture.detectChanges();
+    expect(textOf(fixture, 'nav-slip-queue-waiting')).toBe('3');
+
+    await router.navigate(['/venues', 'v1', 'money']);
+    fixture.detectChanges();
+
+    httpMock.expectOne('/api/venues/v1/attention').flush({
+      slipsToCheck: 0,
+      bookingsWithMoneyWaiting: 0,
+    });
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, 'nav-slip-queue-waiting')).toBeNull();
+  });
+
+  /** A venue whose counts cannot be read still has doors; only the numbers go missing. */
+  it('draws the doors even when the counts cannot be read', async () => {
+    await router.navigate(['/venues', 'v2', 'money']);
+    fixture.detectChanges();
+    await showShell();
+
+    httpMock
+      .expectOne('/api/venues/v2/attention')
+      .flush(null, { status: 403, statusText: 'Forbidden' });
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, 'nav-money')).not.toBeNull();
+    expect(elementOf(fixture, 'nav-money-waiting')).toBeNull();
   });
 });

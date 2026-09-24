@@ -7,7 +7,7 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { catchError, map, of, switchMap, tap } from 'rxjs';
 import { ApiError, errorKey } from '../../core/http/api-error';
 import { AppDatePipe, AppDateTimePipe } from '../../core/i18n/app-date.pipe';
@@ -34,7 +34,6 @@ const NOTE_MAX_LENGTH = 400;
   selector: 'app-money-page',
   imports: [
     ReactiveFormsModule,
-    RouterLink,
     FieldError,
     MatButtonModule,
     MatCardModule,

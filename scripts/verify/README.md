@@ -14,7 +14,7 @@ They sign in as the seeded accounts (`owner@courtpaka.local` / `staff@courtpaka.
 `DevPassword1`) and write screenshots next to themselves. Each check prints PASS or FAIL and the
 script exits non-zero if anything failed.
 
-Six rules worth keeping.
+Eight rules worth keeping.
 
 1. Set up the state the script needs through the API before driving the UI, and make it state the
    script can create again — `harness.new_booker()` registers a fresh booker rather than reusing a
@@ -32,12 +32,19 @@ Six rules worth keeping.
 5. Check the positive next to the negative. "The day past the window is not offered" passes on
    its own when the calendar is simply showing another month — pair it with "the last day of the
    window is offered" so a check that stopped reaching its subject fails instead of passing.
-6. Never hard-code what the seed put there. The scripts run in sequence against one database and
+6. Remember the caretaker is awake. It sweeps every 10 s locally and acts on the same data the
+   script is driving — it hands a waiting place an offer, lets a hold lapse, sends a booker's
+   mail. A check that depends on something *not* having happened yet is a race the script loses
+   on a slow machine, so arrange the state so the job cannot act (a booker who already holds
+   hours is skipped when offers go out, which is what `waitlist.py` relies on) rather than
+   hoping to get there first.
+7. Never hard-code what the seed put there. The scripts run in sequence against one database and
    the earlier ones add courts, so ask the API how many to expect rather than writing the number.
 
 | Script | Covers |
 |---|---|
 | `venue_ui.py` | Sign-in redirects, venue detail, members and permissions (US-14) |
+| `venue_shell.py` | The venue's own navigation: the sidebar on a desk, the tabs on a phone (US-25) |
 | `venue_settings.py` | Courts and opening hours (US-11) |
 | `venue_pricing.py` | Prices and the cancellation policy (US-11) |
 | `booking_grid.py` | Venue search and the court-by-hour grid (US-02) |
@@ -48,7 +55,7 @@ Six rules worth keeping.
 | `waitlist.py` | Joining and leaving the queue for a full day (US-27) |
 | `line_login.py` | Signing in with LINE, against the stand-in LINE (US-01) |
 
-7. **Ask for the state you need; do not assume the script before you left it.**
+8. **Ask for the state you need; do not assume the script before you left it.**
    `venue_settings.py` edits the seeded venue's opening hours because that is what it is about,
    and it leaves them wherever its last check left them. Every script that books an hour calls
    `ensure_bookable()` first, which puts the venue back to 06:00–22:00 every day. This was found

@@ -304,7 +304,6 @@
   "search.none": "ไม่พบสนามที่ตรงกับที่ค้น",
   "search.subtitle": "ค้นจากชื่อสนาม เขต หรือจังหวัด",
   "search.title": "หาสนามแบด",
-  "settings.backToVenue": "← กลับไปหน้าสนาม",
   "settings.courts.add": "เพิ่มคอร์ท",
   "settings.courts.backFrom": "กลับมาใช้ตั้งแต่",
   "settings.courts.inUse": "เปิดใช้งาน",
@@ -642,5 +641,14 @@
   "dashboard.bookings": "จำนวนการจอง",
   "dashboard.refundDue": "ยอดต้องคืน",
   "dashboard.refunded": "ยอดคืนแล้ว",
-  "dashboard.download": "ดาวน์โหลดสรุปรายได้ (CSV)"
+  "dashboard.download": "ดาวน์โหลดสรุปรายได้ (CSV)",
+  "nav.venueLabel": "เมนูของสนาม",
+  "nav.atTheCounter": "หน้างาน",
+  "nav.behindTheCounter": "หลังบ้าน",
+  "nav.tab.today": "วันนี้",
+  "nav.tab.slips": "สลิป",
+  "nav.tab.money": "เงิน",
+  "nav.tab.reports": "รายงาน",
+  "nav.tab.more": "สนาม",
+  "venues.detail": "หน้าสนาม"
 }

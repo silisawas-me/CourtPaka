@@ -22,7 +22,6 @@
   </mat-card-content>
 
   <mat-card-actions>
-    <a matButton [routerLink]="['/venues', venueId()]">{{ i18n.t('settings.backToVenue') }}</a>
     @if (!selling()) {
       <button
         matButton="filled"
