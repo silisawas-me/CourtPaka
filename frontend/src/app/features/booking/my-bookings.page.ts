@@ -8,6 +8,7 @@ import { courtsOf, hoursOf } from '../../core/bookings/hours';
 import { errorKey } from '../../core/http/api-error';
 import { WaitlistEntry, WaitlistService } from '../../core/bookings/waitlist.service';
 import { AppDatePipe } from '../../core/i18n/app-date.pipe';
+import { BahtPipe } from '../../core/i18n/baht.pipe';
 import { bookingTone, StatusChip } from '../../shared/status-chip';
 import { TranslationService } from '../../core/i18n/translation.service';
 
@@ -24,6 +25,7 @@ import { TranslationService } from '../../core/i18n/translation.service';
 @Component({
   selector: 'app-my-bookings-page',
   imports: [
+    BahtPipe,
     RouterLink,
     MatButtonModule,
     MatCardModule,

@@ -1,6 +1,5 @@
-using CourtBooking.Api.Identity;
-
 using CourtBooking.Api.Bookings;
+using CourtBooking.Api.Identity;
 
 namespace CourtBooking.Api.Venues;
 
@@ -34,6 +33,13 @@ public sealed class Venue
     /// court in a mall do not wait the same.
     /// </summary>
     public int GraceMinutes { get; set; } = VenueDecisions.DefaultGraceMinutes;
+
+    /// <summary>
+    /// How much of a booking's price has to arrive before its hours are held, as a percentage
+    /// (PRD US-28). All of it unless the venue says otherwise, which is how the system has always
+    /// worked; asking for less is what makes the rest of the price something the desk collects.
+    /// </summary>
+    public int DepositPercent { get; set; } = Deposit.Everything;
 
     /// <summary>
     /// Where the money goes and who the venue is for tax (PRD US-10). Owned by the venue rather

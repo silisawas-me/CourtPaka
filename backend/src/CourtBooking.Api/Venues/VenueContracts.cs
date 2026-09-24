@@ -67,6 +67,11 @@ public sealed record ChangePermissionsRequest(string[] Permissions);
 public sealed record GraceRequest(int Minutes);
 
 /// <summary>
+/// How much of a booking's price this venue asks for before it holds the hours (PRD US-28).
+/// </summary>
+public sealed record DepositRequest(int Percent);
+
+/// <summary>
 /// A venue always arrives with what the caller may do there, so screens and guards never have to
 /// work it out from the member list (PRD US-14).
 /// </summary>
@@ -84,7 +89,12 @@ public sealed record VenueResponse(
     /// Whether this member wants to hear each time a slip arrives here (PRD US-17). It belongs to
     /// the reader rather than to the venue, which is why it travels with role and permissions.
     /// </summary>
-    bool WantsSlipEmails);
+    bool WantsSlipEmails,
+    /// <summary>
+    /// How much of a booking's price this venue asks for up front, as a percentage (PRD US-28).
+    /// A hundred is the whole of it, which is what every venue asks for until it says otherwise.
+    /// </summary>
+    int DepositPercent);
 
 public sealed record VenueMemberResponse(Guid UserId, string Email, string Role, string[] Permissions);
 
@@ -107,6 +117,7 @@ public static class VenueErrorCodes
     /// nothing, up to an hour (PRD US-24).
     /// </summary>
     public const string InvalidGrace = "venue.invalid_grace";
+    public const string InvalidDeposit = "venue.invalid_deposit";
 
     public const string CodeAlreadyUsed = "venue.code_already_used";
 

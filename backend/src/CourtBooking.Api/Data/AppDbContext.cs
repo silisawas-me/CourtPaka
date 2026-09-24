@@ -109,6 +109,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             // Same reason as Booking.Arrival: a venue that existed before this waits fifteen
             // minutes like everybody else, not zero (PRD US-24).
             venue.Property(v => v.GraceMinutes).HasDefaultValue(VenueDecisions.DefaultGraceMinutes);
+
+            // The CLR default of an int is 0, and a venue that asks for nothing up front holds
+            // hours for nothing. Said here so that every venue already on the platform keeps
+            // asking for the whole price, which is what it has always asked for (PRD US-28).
+            venue.Property(v => v.DepositPercent).HasDefaultValue(Deposit.Everything);
         });
 
         builder.Entity<RefundRecord>(refund =>
@@ -225,6 +230,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         builder.Entity<Booking>(booking =>
         {
             booking.Property(b => b.TotalBaht).HasPrecision(10, 2);
+            booking.Property(b => b.DepositBaht).HasPrecision(10, 2);
             booking.Property(b => b.RefundDueBaht).HasPrecision(10, 2);
             booking.Property(b => b.CustomerName).HasMaxLength(Booking.CustomerNameMaxLength);
             booking.Property(b => b.CustomerPhone).HasMaxLength(Booking.CustomerPhoneMaxLength);

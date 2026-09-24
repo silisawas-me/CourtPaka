@@ -56,6 +56,11 @@ export interface Booking {
   paymentState: PaymentState;
   refundDueBaht: number;
   refundedBaht: number;
+  /**
+   * What had to arrive to hold these hours (PRD US-28). The same as the price unless the venue
+   * asked for a share of it up front, and then the difference is paid at the venue.
+   */
+  depositBaht: number;
   cancellation: CancellationOffer;
 }
 
@@ -66,6 +71,10 @@ export interface Booking {
  */
 export interface PaymentDetails {
   totalBaht: number;
+  /** What has to arrive now to keep the hours, and what the code is made out for (PRD US-28). */
+  depositBaht: number;
+  /** What is left for the desk once it has. Zero where the venue asks for the whole price. */
+  payAtVenueBaht: number;
   holdExpiresAt: string;
   accountName: string;
   /** Null when the venue's account is not one a bank app would accept. */

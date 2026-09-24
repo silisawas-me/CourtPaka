@@ -89,7 +89,15 @@
 
               <dl class="money">
                 <dt>{{ i18n.t('booking.total') }}</dt>
-                <dd>{{ booking.totalBaht }}</dd>
+                <dd>{{ booking.totalBaht | baht: i18n.locale() }}</dd>
+
+                <!-- Held on a deposit, so the rest is owed at the desk (PRD US-28). -->
+                @if (booking.depositBaht < booking.totalBaht) {
+                  <dt>{{ i18n.t('myBookings.payAtVenue') }}</dt>
+                  <dd data-testid="pay-at-venue">
+                    {{ booking.totalBaht - booking.depositBaht | baht: i18n.locale() }}
+                  </dd>
+                }
 
                 @if (booking.refundDueBaht > 0) {
                   <dt>{{ i18n.t('myBookings.refundDue') }}</dt>

@@ -17,6 +17,7 @@ import { catchError, EMPTY, Observable, switchMap, tap } from 'rxjs';
 import { Booking } from '../../core/bookings/booking.service';
 import { errorKey } from '../../core/http/api-error';
 import { AppDateTimePipe } from '../../core/i18n/app-date.pipe';
+import { BahtPipe } from '../../core/i18n/baht.pipe';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { SlipQueueItem, SlipQueueService } from '../../core/venues/slip-queue.service';
 import { FieldError } from '../../shared/field-error';
@@ -40,6 +41,7 @@ function written(control: AbstractControl<string>): ValidationErrors | null {
 @Component({
   selector: 'app-slip-queue-page',
   imports: [
+    BahtPipe,
     ReactiveFormsModule,
     RouterLink,
     FieldError,

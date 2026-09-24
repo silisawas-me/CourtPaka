@@ -52,6 +52,7 @@ Eight rules worth keeping.
 | `payment.py` | The countdown, sending the slip, and who may read it (US-04) |
 | `slip_queue.py` | The venue looking at a slip and deciding (US-12) |
 | `counter_money.py` | Money taken at the desk and the day's count (US-26) |
+| `deposit.py` | A venue asking for part of the price up front (US-28) |
 | `waitlist.py` | Joining and leaving the queue for a full day (US-27) |
 | `line_login.py` | Signing in with LINE, against the stand-in LINE (US-01) |
 

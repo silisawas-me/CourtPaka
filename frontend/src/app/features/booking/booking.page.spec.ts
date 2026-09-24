@@ -13,6 +13,7 @@ function booking(overrides: Record<string, unknown> = {}) {
     createdAt: '2026-09-20T11:00:00Z',
     holdExpiresAt: '2026-09-20T11:15:00Z',
     totalBaht: 600,
+    depositBaht: 600,
     slots: [
       { courtId: 'c1', courtName: 'Court 1', date: '2026-09-21', hour: 18, bahtPerHour: 300 },
       { courtId: 'c1', courtName: 'Court 1', date: '2026-09-21', hour: 19, bahtPerHour: 300 },
@@ -65,6 +66,8 @@ describe('BookingPage', () => {
     for (const request of asked) {
       request.flush({
         totalBaht: 600,
+        depositBaht: 600,
+        payAtVenueBaht: 0,
         holdExpiresAt: '2026-09-20T11:15:00Z',
         accountName: 'บริษัท ทดสอบ จำกัด',
         promptPayPayload: payload,
@@ -229,5 +232,25 @@ describe('BookingPage', () => {
     fixture.detectChanges();
 
     expect(textOf(fixture, 'page-error')).toBe(TRANSLATIONS.th['error.booking.not_found']);
+  });
+
+  /**
+   * A venue may hold the hours for part of the price and take the rest at the desk (PRD US-28).
+   * Both numbers are said, because the one in the code is not the price and somebody who reads
+   * only the price arrives at the counter thinking they have paid.
+   */
+  it('says what to transfer now and what is left for the venue', () => {
+    render(booking({ totalBaht: 600, depositBaht: 200 }));
+
+    expect(textOf(fixture, 'booking-total')).toContain('600');
+    expect(textOf(fixture, 'booking-deposit')).toContain('200');
+    expect(textOf(fixture, 'booking-at-venue')).toContain('400');
+  });
+
+  it('says nothing about a deposit where the whole price is asked for', () => {
+    render(booking());
+
+    expect(elementOf(fixture, 'booking-deposit')).toBeNull();
+    expect(elementOf(fixture, 'booking-at-venue')).toBeNull();
   });
 });

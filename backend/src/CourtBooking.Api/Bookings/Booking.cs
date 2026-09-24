@@ -133,6 +133,14 @@ public sealed class Booking
     /// <summary>The sum of the slots, in baht, as they were priced at creation (PRD BR-05).</summary>
     public required decimal TotalBaht { get; init; }
 
+    /// <summary>
+    /// What had to arrive before these hours were held, in baht (PRD US-28). A snapshot like the
+    /// price beside it: the venue can change what it asks for tomorrow, and a booking made today
+    /// was held on today's terms (BR-05). Equal to <see cref="TotalBaht"/> unless the venue asks
+    /// for less, which is what makes the rest of the price something the desk collects.
+    /// </summary>
+    public required decimal DepositBaht { get; init; }
+
     /// <summary>The cancellation policy this booking is refunded under, copied in (PRD BR-05).</summary>
     public required Guid CancellationPolicyId { get; init; }
 
@@ -156,8 +164,10 @@ public sealed class Booking
         Guid bookerUserId,
         Guid cancellationPolicyId,
         IEnumerable<SlotPrice> slots,
+        int depositPercent,
         DateTimeOffset at)
     {
+        var total = slots.Sum(slot => slot.BahtPerHour);
         var booking = new Booking
         {
             VenueId = venueId,
@@ -166,7 +176,8 @@ public sealed class Booking
             CreatedAt = at,
             HoldExpiresAt = at + HoldFor,
             CancellationPolicyId = cancellationPolicyId,
-            TotalBaht = slots.Sum(slot => slot.BahtPerHour),
+            TotalBaht = total,
+            DepositBaht = Deposit.Of(total, depositPercent),
         };
 
         booking.Slots.AddRange(slots.Select(slot => new BookingSlot
@@ -222,6 +233,9 @@ public sealed class Booking
             HoldExpiresAt = at,
             CancellationPolicyId = cancellationPolicyId,
             TotalBaht = slots.Sum(slot => slot.BahtPerHour),
+
+            // Paid where it was made, so there was never a part of it to wait for.
+            DepositBaht = slots.Sum(slot => slot.BahtPerHour),
         };
 
         booking.Slots.AddRange(slots.Select(slot => new BookingSlot

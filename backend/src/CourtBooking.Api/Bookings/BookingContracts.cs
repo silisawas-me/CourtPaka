@@ -61,6 +61,11 @@ public sealed record BookingResponse(
     /// been recorded and this is nothing.
     /// </summary>
     decimal RefundedBaht,
+    /// <summary>
+    /// What had to arrive to hold these hours (PRD US-28). The same as the price unless the venue
+    /// asked for a share of it up front, and then the difference is the desk's to collect.
+    /// </summary>
+    decimal DepositBaht,
     /// <summary>What letting this booking go would mean right now (PRD US-05).</summary>
     CancellationOfferResponse Cancellation);
 
@@ -71,6 +76,14 @@ public sealed record BookingResponse(
 /// </summary>
 public sealed record PaymentResponse(
     decimal TotalBaht,
+    /// <summary>
+    /// What has to arrive now to keep the hours (PRD US-28). The same as the price unless the
+    /// venue asks for a share of it up front, and it is this amount — never the price — that the
+    /// code carries, so that what a bank app fills in is what the venue is waiting for.
+    /// </summary>
+    decimal DepositBaht,
+    /// <summary>What is left for the desk once the deposit has arrived. Zero when there is none.</summary>
+    decimal PayAtVenueBaht,
     DateTimeOffset HoldExpiresAt,
     string AccountName,
     /// <summary>Null when the venue's account is not one a bank app would accept.</summary>
@@ -205,6 +218,11 @@ public sealed record SlipQueueItemResponse(
     string? BookerEmail,
     string? BookerPhone,
     decimal TotalBaht,
+    /// <summary>
+    /// What the slip should be for (PRD US-28): the whole price unless the venue asks for a share
+    /// of it up front, in which case the rest is the desk's to collect and the slip is not short.
+    /// </summary>
+    decimal DepositBaht,
     DateTimeOffset SlipUploadedAt,
     DateTimeOffset StartsAt,
     bool PlaysSoon,

@@ -25,22 +25,38 @@ public static class Refunds
         BookingStatus.NoShow,
     ];
 
-    /// <summary>The amount owed for a booking, from where it ended and the share it ended with.</summary>
+    /// <summary>
+    /// The amount owed for a booking, from where it ended, the share it ended with, and how much
+    /// of it the venue is actually holding (PRD 6.2, US-28).
+    ///
+    /// A venue cannot give back more than it has. A booking held on a deposit has had part of its
+    /// price arrive, so a policy that gives everything back gives back the deposit, not the price.
+    /// </summary>
+    /// <param name="heldBaht">
+    /// What the venue is holding for this booking: the receipts written against it (PRD US-26).
+    /// Ignored where the payment state already says the whole of it arrived — that answer is
+    /// older than receipts are, and some bookings reached it without one.
+    /// </param>
     public static decimal DueFor(
         BookingStatus status,
         PaymentState payment,
         decimal totalBaht,
-        int refundPercent) =>
-        Endings.Contains(status) ? Share(totalBaht, refundPercent, payment) : 0m;
+        int refundPercent,
+        decimal heldBaht) =>
+        Endings.Contains(status)
+            ? Math.Min(Share(totalBaht, refundPercent), Holding(payment, totalBaht, heldBaht))
+            : 0m;
 
     /// <summary>
-    /// A share of a booking in baht, to the satang — nothing at all unless the money arrived.
-    /// Rounded away from zero, so a half satang goes to the booker rather than the venue.
+    /// A share of a booking in baht, to the satang. Rounded away from zero, so a half satang goes
+    /// to the booker rather than the venue.
     /// </summary>
-    private static decimal Share(decimal totalBaht, int percent, PaymentState payment) =>
-        payment == PaymentState.Received
-            ? Math.Round(totalBaht * percent / 100m, 2, MidpointRounding.AwayFromZero)
-            : 0m;
+    private static decimal Share(decimal totalBaht, int percent) =>
+        Math.Round(totalBaht * percent / 100m, 2, MidpointRounding.AwayFromZero);
+
+    /// <summary>What the venue has of this booking's money, which is the ceiling on what it owes.</summary>
+    private static decimal Holding(PaymentState payment, decimal totalBaht, decimal heldBaht) =>
+        payment == PaymentState.Received ? totalBaht : Math.Max(0m, heldBaht);
 
     /// <summary>The whole of it. A venue that refuses hours it took money for keeps none (PRD 6.1).</summary>
     public const int AllOfIt = 100;

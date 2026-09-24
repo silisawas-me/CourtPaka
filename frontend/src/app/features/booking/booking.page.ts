@@ -12,6 +12,7 @@ import {
 } from '../../core/bookings/booking.service';
 import { errorKey } from '../../core/http/api-error';
 import { AppDatePipe } from '../../core/i18n/app-date.pipe';
+import { BahtPipe } from '../../core/i18n/baht.pipe';
 import { TranslationService } from '../../core/i18n/translation.service';
 
 /** The countdown ticks once a second; anything faster only redraws the same number. */
@@ -27,7 +28,14 @@ const TICK_MS = 1000;
  */
 @Component({
   selector: 'app-booking-page',
-  imports: [RouterLink, MatButtonModule, MatCardModule, MatProgressBarModule, AppDatePipe],
+  imports: [
+    RouterLink,
+    MatButtonModule,
+    MatCardModule,
+    MatProgressBarModule,
+    AppDatePipe,
+    BahtPipe,
+  ],
   templateUrl: './booking.page.html',
   styleUrl: './booking.page.scss',
 })

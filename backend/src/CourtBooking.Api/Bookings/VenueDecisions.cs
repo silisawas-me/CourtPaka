@@ -62,6 +62,7 @@ public static class VenueDecisions
         CancellationReason? reason,
         bool? paymentReceived,
         bool byOwner,
+        decimal heldBaht,
         DateTimeOffset now)
     {
         if (Played(booking) is not { } played)
@@ -76,7 +77,7 @@ public static class VenueDecisions
             // Letting a hold go at the counter is the same nothing as the booker letting it go,
             // and needs no more said about it (PRD 6.1).
             case BookingStatus.Held:
-                return Cancellation.For(booking, status, now);
+                return Cancellation.For(booking, status, now, heldBaht);
 
             // The venue is the one who can see the bank account, so here it says outright whether
             // the money arrived, and that is what settles the amount (PRD 6.1, 6.2).
@@ -85,7 +86,12 @@ public static class VenueDecisions
 
             case BookingStatus.PendingVerification:
                 return paymentReceived.Value
-                    ? Give(booking, BookingStatus.Cancelled, Refunds.AllOfIt, PaymentState.Received)
+                    ? Give(
+                        booking,
+                        BookingStatus.Cancelled,
+                        Refunds.AllOfIt,
+                        PaymentState.Received,
+                        heldBaht)
                     : Give(booking, BookingStatus.Cancelled, 0, PaymentState.NotReceived);
 
             case BookingStatus.Confirmed when reason is null:
@@ -96,7 +102,7 @@ public static class VenueDecisions
             // arrives in the branches below. A venue cancelling halfway through is giving up the
             // rest of the booking, which the terms have an answer for (PRD 6.1).
             case BookingStatus.Confirmed:
-                return ForReason(booking, reason.Value, playStartsAt, now);
+                return ForReason(booking, reason.Value, playStartsAt, heldBaht, now);
 
             // What was played is written down; correcting it is the owner's, and only while the
             // day is still fresh (PRD 6.1).
@@ -113,7 +119,7 @@ public static class VenueDecisions
 
             case BookingStatus.Completed:
                 return StillCorrectable(playEndsAt, now)
-                    ? ForReason(booking, reason.Value, playStartsAt, now)
+                    ? ForReason(booking, reason.Value, playStartsAt, heldBaht, now)
                     : Shut(booking, BookingErrorCodes.TooLateToCorrect);
 
             default:
@@ -198,12 +204,18 @@ public static class VenueDecisions
         Booking booking,
         CancellationReason reason,
         DateTimeOffset playStartsAt,
+        decimal heldBaht,
         DateTimeOffset now) =>
         reason switch
         {
             // The venue could not honour it, so the venue keeps nothing.
             CancellationReason.VenueInitiated =>
-                Give(booking, BookingStatus.Cancelled, Refunds.AllOfIt, booking.PaymentState),
+                Give(
+                    booking,
+                    BookingStatus.Cancelled,
+                    Refunds.AllOfIt,
+                    booking.PaymentState,
+                    heldBaht),
 
             // There was never any money to give back, and the record should say so.
             CancellationReason.PaymentNotReceived =>
@@ -215,7 +227,8 @@ public static class VenueDecisions
                 booking,
                 BookingStatus.Cancelled,
                 policy.RefundPercentFor(now, playStartsAt),
-                booking.PaymentState),
+                booking.PaymentState,
+                heldBaht),
 
             // A reason nobody named is not one of the three, and nothing is decided on it.
             _ => Shut(booking, BookingErrorCodes.ReasonNotAllowedHere),
@@ -239,12 +252,17 @@ public static class VenueDecisions
     private static bool StillCorrectable(DateTimeOffset playEndsAt, DateTimeOffset now) =>
         now >= playEndsAt && now < playEndsAt + CorrectionWindow;
 
+    /// <param name="heldBaht">
+    /// What the venue is holding for this booking (PRD US-28). Left at nothing where the ending
+    /// gives nothing back, since no share of a price can then exceed it.
+    /// </param>
     private static Cancellation.Offer Give(
         Booking booking,
         BookingStatus landing,
         int percent,
-        PaymentState payment) =>
-        Cancellation.Offer.Giving(booking, landing, percent, payment);
+        PaymentState payment,
+        decimal heldBaht = 0m) =>
+        Cancellation.Offer.Giving(booking, landing, percent, payment, heldBaht);
 
     private static Cancellation.Offer Shut(Booking booking, string code) =>
         Cancellation.Offer.Refusing(code, booking.PaymentState);

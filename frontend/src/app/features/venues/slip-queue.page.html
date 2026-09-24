@@ -46,7 +46,12 @@
                 >
                   <!-- Whichever the venue can reach this booker by (PRD US-01). -->
                   <span class="queue-item-who">{{ item.bookerEmail ?? item.bookerPhone }}</span>
-                  <span class="queue-item-baht">{{ item.totalBaht }}</span>
+                  <!--
+                    What the slip should say, which is what the venue is checking it against —
+                    a deposit is not the price, and a slip short of the price is not short
+                    (PRD US-28, BR-07).
+                  -->
+                  <span class="queue-item-baht">{{ item.depositBaht | baht: i18n.locale() }}</span>
                   <span class="queue-item-when muted">
                     {{ item.slipUploadedAt | appDateTime: i18n.locale() }}
                   </span>
@@ -73,7 +78,11 @@
         <mat-card class="decision" data-testid="decision">
           <mat-card-header>
             <mat-card-title data-testid="decision-baht">
-              {{ i18n.t('booking.total') }}: {{ booking.totalBaht }}
+              {{ i18n.t('booking.total') }}: {{ booking.totalBaht | baht: i18n.locale() }}
+              @if (booking.depositBaht < booking.totalBaht) {
+                · {{ i18n.t('slipQueue.deposit') }}:
+                {{ booking.depositBaht | baht: i18n.locale() }}
+              }
             </mat-card-title>
             <mat-card-subtitle data-testid="decision-who">{{
               booking.bookerEmail ?? booking.bookerPhone

@@ -29,7 +29,25 @@
           </li>
         }
       </ul>
-      <p data-testid="booking-total">{{ i18n.t('booking.total') }}: {{ held.totalBaht }}</p>
+      <p data-testid="booking-total">
+        {{ i18n.t('booking.total') }}: {{ held.totalBaht | baht: i18n.locale() }}
+      </p>
+
+      <!--
+        A venue may ask for part of the price to hold the hours and take the rest at the desk
+        (PRD US-28). Both numbers are said here, because the one in the code is not the price and
+        somebody who reads only the price arrives thinking they have paid.
+      -->
+      @if (held.depositBaht < held.totalBaht) {
+        <p data-testid="booking-deposit">
+          {{ i18n.t('booking.deposit.now') }}:
+          {{ held.depositBaht | baht: i18n.locale() }}
+        </p>
+        <p class="muted" data-testid="booking-at-venue">
+          {{ i18n.t('booking.deposit.atVenue') }}:
+          {{ held.totalBaht - held.depositBaht | baht: i18n.locale() }}
+        </p>
+      }
     </mat-card-content>
   </mat-card>
 

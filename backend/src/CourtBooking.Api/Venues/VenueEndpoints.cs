@@ -45,6 +45,7 @@ public static class VenueEndpoints
         venue.MapGet("/attention", WaitingForAsync).RequireAuthorization(VenuePolicies.Member);
         // How long the counter waits for somebody is a setting like the prices are (PRD US-24).
         venue.MapPut("/grace", SetGraceAsync).RequireAuthorization(VenuePolicies.Settings);
+        venue.MapPut("/deposit", SetDepositAsync).RequireAuthorization(VenuePolicies.Settings);
         venue.MapPut("/notifications", ChooseNotificationsAsync)
             .RequireAuthorization(VenuePolicies.OwnChoice);
         venue.MapGet("/members", ListMembersAsync).RequireAuthorization(VenuePolicies.Member);
@@ -637,6 +638,32 @@ public static class VenueEndpoints
         return TypedResults.NoContent();
     }
 
+    /// <summary>
+    /// How much of a booking's price has to arrive before this venue holds the hours (PRD US-28).
+    /// Asking for less than the whole makes the rest something the desk collects, which is a
+    /// venue's own call: a court that can chase a no-show over the counter carries less risk than
+    /// one that cannot.
+    /// </summary>
+    private static async Task<Results<NoContent, ProblemHttpResult>> SetDepositAsync(
+        Guid venueId,
+        DepositRequest request,
+        AppDbContext database,
+        CancellationToken cancellationToken)
+    {
+        if (!Deposit.IsAShare(request.Percent))
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, VenueErrorCodes.InvalidDeposit);
+        }
+
+        await database.Venues
+            .Where(venue => venue.Id == venueId)
+            .ExecuteUpdateAsync(
+                set => set.SetProperty(venue => venue.DepositPercent, request.Percent),
+                cancellationToken);
+
+        return TypedResults.NoContent();
+    }
+
     private static async Task<Results<NoContent, ProblemHttpResult, NotFound>> ChangePermissionsAsync(
         Guid venueId,
         Guid userId,
@@ -748,7 +775,8 @@ public static class VenueEndpoints
                 membership.Role == VenueRole.Owner
                     ? VenuePermissions.All
                     : membership.Permissions),
-            membership.WantsSlipEmails);
+            membership.WantsSlipEmails,
+            venue.DepositPercent);
 
     private static VenueMemberResponse ToResponse(VenueMembership membership) =>
         new(
