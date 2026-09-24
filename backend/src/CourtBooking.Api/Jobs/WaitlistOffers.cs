@@ -119,9 +119,14 @@ public sealed class WaitlistOffers(
         foreach (var day in waiting.GroupBy(entry => (entry.VenueId, entry.Date)))
         {
             // A venue the platform has stopped is not selling, and a queue is a sale (PRD US-20).
-            if (!await database.Venues.AnyAsync(
-                    venue => venue.Id == day.Key.VenueId && venue.Status == VenueStatus.Approved,
-                    cancellationToken))
+            // What it asks for up front comes back with it: an offer is an ordinary hold, and an
+            // ordinary hold is held on the venue's own terms (PRD US-28).
+            var selling = await database.Venues
+                .Where(venue => venue.Id == day.Key.VenueId && venue.Status == VenueStatus.Approved)
+                .Select(venue => (int?)venue.DepositPercent)
+                .SingleOrDefaultAsync(cancellationToken);
+
+            if (selling is not { } depositPercent)
             {
                 continue;
             }
@@ -131,7 +136,7 @@ public sealed class WaitlistOffers(
 
             foreach (var entry in day)
             {
-                if (await OfferOneAsync(entry, floor, now, cancellationToken))
+                if (await OfferOneAsync(entry, floor, depositPercent, now, cancellationToken))
                 {
                     offered++;
 
@@ -153,6 +158,7 @@ public sealed class WaitlistOffers(
     private async Task<bool> OfferOneAsync(
         WaitlistEntry entry,
         VenueDay floor,
+        int depositPercent,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
@@ -192,7 +198,13 @@ public sealed class WaitlistOffers(
 
         var policyId = await BookingEndpoints.InForcePolicyIdAsync(
             database, entry.VenueId, cancellationToken);
-        var booking = Booking.Hold(entry.VenueId, entry.BookerUserId, policyId, priced.Slots, now);
+        var booking = Booking.Hold(
+            entry.VenueId,
+            entry.BookerUserId,
+            policyId,
+            priced.Slots,
+            depositPercent,
+            now);
 
         // The same write everybody else's booking goes through: the advisory lock, the exclusion
         // constraint, and a refusal if somebody took the hours in between (PRD BR-04).

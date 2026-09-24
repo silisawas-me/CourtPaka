@@ -249,7 +249,6 @@ public static class VenueDashboard
             .AsNoTracking()
             .Where(booking =>
                 touching.Contains(booking.Id)
-                && booking.PaymentState == PaymentState.Received
                 && (booking.Status == BookingStatus.Confirmed
                     || booking.Status == BookingStatus.Completed
                     || booking.Status == BookingStatus.NoShow
@@ -260,6 +259,13 @@ public static class VenueDashboard
                 booking.Channel,
                 booking.TotalBaht,
                 booking.RefundDueBaht,
+                booking.PaymentState,
+                booking.DepositBaht,
+                // What arrived, which since deposits is not always the price (PRD US-28). A
+                // booking the venue is holding nothing for is not revenue, whatever it cost.
+                Taken = database.PaymentReceipts
+                    .Where(receipt => receipt.BookingId == booking.Id)
+                    .Sum(receipt => (decimal?)receipt.AmountBaht) ?? 0m,
                 // What has actually gone back, which is not what is owed: US-18 lets a venue send
                 // it in parts, and the two numbers are both worth reporting (PRD 7.3).
                 Refunded = database.RefundRecords
@@ -282,7 +288,18 @@ public static class VenueDashboard
                 continue;
             }
 
-            var keeps = booking.TotalBaht - booking.RefundDueBaht;
+            var held = Math.Min(
+                booking.TotalBaht,
+                Takings.HeldFor(booking.PaymentState, booking.Taken, booking.DepositBaht));
+
+            // Money that never arrived is not revenue, and a booking held on a deposit is revenue
+            // for the deposit until the desk collects the rest (PRD US-28).
+            if (held <= 0m)
+            {
+                continue;
+            }
+
+            var keeps = held - booking.RefundDueBaht;
             var day = PlatformRequirements.BangkokDateAndHour(booking.FirstStart).Date;
             var so_far = byDay.GetValueOrDefault(day);
 

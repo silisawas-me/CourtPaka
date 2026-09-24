@@ -438,6 +438,15 @@ def ensure_bookable(browser, venue_id) -> None:
         if shut["liftedAt"] is None:
             page.request.post(f"{BASE}/api/venues/{venue_id}/closures/{shut['id']}/lift")
 
+    # And asking for the whole price up front, which is what every script that reads an amount
+    # assumes. deposit.py lowers it because that is what it is about (PRD US-28), and a venue left
+    # asking for a quarter turns every "the code is for the price" check into a puzzle.
+    whole = page.request.put(
+        f"{BASE}/api/venues/{venue_id}/deposit", data={"percent": 100}
+    )
+    if whole.status != 204:
+        raise RuntimeError(f"Could not reset the deposit: {whole.status} {whole.text()}")
+
     page.close()
 
 

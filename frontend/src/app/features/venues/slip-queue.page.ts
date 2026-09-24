@@ -3,6 +3,7 @@ import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import {
   AbstractControl,
   FormBuilder,
+  FormControl,
   ReactiveFormsModule,
   ValidationErrors,
   Validators,
@@ -17,6 +18,7 @@ import { catchError, EMPTY, Observable, switchMap, tap } from 'rxjs';
 import { Booking } from '../../core/bookings/booking.service';
 import { errorKey } from '../../core/http/api-error';
 import { AppDateTimePipe } from '../../core/i18n/app-date.pipe';
+import { BahtPipe } from '../../core/i18n/baht.pipe';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { SlipQueueItem, SlipQueueService } from '../../core/venues/slip-queue.service';
 import { FieldError } from '../../shared/field-error';
@@ -40,6 +42,7 @@ function written(control: AbstractControl<string>): ValidationErrors | null {
 @Component({
   selector: 'app-slip-queue-page',
   imports: [
+    BahtPipe,
     ReactiveFormsModule,
     RouterLink,
     FieldError,
@@ -143,13 +146,21 @@ export class SlipQueuePage {
     this.rejection.reset({ reason: '', paymentReceived: null });
   }
 
+  /**
+   * What the venue reads off the slip, when a bank app let the booker type over the amount. Empty
+   * is the ordinary answer: the code carried the amount and that is what arrived.
+   */
+  protected readonly arrived = new FormControl<number | null>(null);
+
   protected confirm(): void {
     const bookingId = this.openedId();
     if (bookingId === null || this.deciding()) {
       return;
     }
 
-    this.decide(this.slips.confirm(this.venueId(), bookingId), bookingId);
+    // What the person looking at the slip says arrived, where it is not what was asked for. Left
+    // alone it is null, and the server takes the amount the booking was held on (PRD US-28).
+    this.decide(this.slips.confirm(this.venueId(), bookingId, this.arrived.value), bookingId);
   }
 
   protected reject(): void {
@@ -176,6 +187,8 @@ export class SlipQueuePage {
         // working rather than choosing again.
         this.deciding.set(false);
         this.queue.update((items) => items.filter((item) => item.bookingId !== bookingId));
+        // The next slip is a different slip, and last one's amount is not an answer about it.
+        this.arrived.reset();
         this.openNext();
       },
       error: (failure: unknown) => {

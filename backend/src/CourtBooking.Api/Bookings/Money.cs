@@ -116,6 +116,15 @@ public static class Takings
         Math.Max(0m, decimal.Round(totalBaht - takenBaht, 2, MidpointRounding.AwayFromZero));
 
     /// <summary>
+    /// What the venue has of a booking's money (PRD US-26, US-28). The receipts, except where the
+    /// payment state says the money arrived and no receipt says how much — bookings reached that
+    /// answer before receipts existed, and what arrived was what was asked for. Every booking made
+    /// before deposits were possible was asked for its whole price.
+    /// </summary>
+    public static decimal HeldFor(PaymentState payment, decimal takenBaht, decimal askedBaht) =>
+        Math.Max(0m, payment == PaymentState.Received ? Math.Max(takenBaht, askedBaht) : takenBaht);
+
+    /// <summary>
     /// Whether money may still be taken for this booking (PRD US-26). Something has to be owed,
     /// and the booking has to be one the venue is going to honour or has already played: a
     /// booking that was turned away or let go owes nothing forwards, and money against it would

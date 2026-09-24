@@ -41,11 +41,13 @@ public static class Cancellation
             Booking booking,
             BookingStatus landing,
             int percent,
-            PaymentState payment) =>
+            PaymentState payment,
+            decimal heldBaht) =>
             new(
                 null,
                 percent,
-                Refunds.DueFor(landing, payment, booking.TotalBaht, percent),
+                Refunds.DueFor(
+                    landing, payment, booking.TotalBaht, percent, heldBaht, booking.DepositBaht),
                 payment);
 
         /// <summary>A door that is shut, and why. Nothing moves, so nothing is owed.</summary>
@@ -61,7 +63,15 @@ public static class Cancellation
     /// The status is handed in rather than read off the booking, because a hold whose time is up
     /// and a confirmed booking whose hours are behind it both read as something else (PRD 9.2).
     /// </summary>
-    public static Offer For(Booking booking, BookingStatus status, DateTimeOffset now)
+    /// <param name="heldBaht">
+    /// What the venue is holding for this booking (PRD US-26, US-28). A booking held on a deposit
+    /// has had part of its price arrive, and a venue cannot give back more than it has.
+    /// </param>
+    public static Offer For(
+        Booking booking,
+        BookingStatus status,
+        DateTimeOffset now,
+        decimal heldBaht)
     {
         // A booking always has hours; one read without them cannot be spoken for.
         if (booking.Slots.Count == 0)
@@ -78,7 +88,7 @@ public static class Cancellation
             case BookingStatus.Held:
                 return booking.HoldExpiresAt <= now
                     ? Offer.Refusing(BookingErrorCodes.NotCancellable, booking.PaymentState)
-                    : Offer.Giving(booking, BookingStatus.Cancelled, 0, booking.PaymentState);
+                    : Offer.Giving(booking, BookingStatus.Cancelled, 0, booking.PaymentState, heldBaht);
 
             // The money may well be at the venue; only the venue can say. Until it does, the
             // booking owes nothing and sits in the venue's list of things to settle (PRD 6.2).
@@ -89,7 +99,8 @@ public static class Cancellation
                         booking,
                         BookingStatus.Cancelled,
                         Refunds.AllOfIt,
-                        PaymentState.Unconfirmed);
+                        PaymentState.Unconfirmed,
+                        heldBaht);
 
             // The venue has the money, so the terms the booking was made under decide the rest.
             // Only this answer needs those terms, so only this answer insists on having them: a
@@ -101,7 +112,8 @@ public static class Cancellation
                         booking,
                         BookingStatus.Cancelled,
                         policy.RefundPercentFor(now, playStartsAt),
-                        booking.PaymentState);
+                        booking.PaymentState,
+                        heldBaht);
 
             default:
                 return Offer.Refusing(BookingErrorCodes.NotCancellable, booking.PaymentState);

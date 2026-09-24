@@ -347,6 +347,7 @@ public sealed class VenueScenario(ApiTestFixture api)
             CreatedAt = DateTimeOffset.UtcNow,
             HoldExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),
             TotalBaht = released.Sum(slot => slot.BahtPerHour),
+            DepositBaht = released.Sum(slot => slot.BahtPerHour),
             CancellationPolicyId = original.CancellationPolicyId,
         };
 

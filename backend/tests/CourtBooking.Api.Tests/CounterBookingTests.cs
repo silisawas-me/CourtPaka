@@ -240,6 +240,7 @@ public sealed class CounterBookingTests(ApiTestFixture api) : IClassFixture<ApiT
             CreatedAt = now,
             HoldExpiresAt = now,
             TotalBaht = 200m,
+            DepositBaht = 200m,
             CancellationPolicyId = policyId,
         });
 

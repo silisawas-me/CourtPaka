@@ -181,18 +181,31 @@ public static class BookingEndpoints
         }
 
         var status = BookedSlots.StatusAt(booking, now);
-        var offer = Cancellation.For(booking, status, now);
+
+        await using var transaction =
+            await database.Database.BeginTransactionAsync(cancellationToken);
+
+        // A booking held on a deposit has had only part of its price arrive, and a venue cannot
+        // give back more than it is holding (PRD US-28). Read behind the same lock the desk takes,
+        // so a payment landing at this moment is either in this number or waits for it.
+        await CounterMoneyEndpoints.QueueForTheMoneyAsync(database, bookingId, cancellationToken);
+
+        var taken = await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken);
+        var offer = Cancellation.For(booking, status, now, taken);
 
         if (offer.Refused is { } refused)
         {
+            await transaction.RollbackAsync(cancellationToken);
             return ApiProblem.Of(StatusCodes.Status409Conflict, refused);
         }
 
         var refundDue = Refunds.DueFor(
-            BookingStatus.Cancelled, offer.Payment, booking.TotalBaht, offer.RefundPercent);
-
-        await using var transaction =
-            await database.Database.BeginTransactionAsync(cancellationToken);
+            BookingStatus.Cancelled,
+            offer.Payment,
+            booking.TotalBaht,
+            offer.RefundPercent,
+            taken,
+            booking.DepositBaht);
 
         // The hours go back on sale the moment they are given up (PRD 6.1). Before the booking
         // row, which is the order BookedSlots.ReleaseAsync explains and every writer keeps.
@@ -318,6 +331,18 @@ public static class BookingEndpoints
             })
             .ToDictionaryAsync(row => row.BookingId, row => row.Baht, cancellationToken);
 
+        // What has been taken against each booking, which caps what a cancellation could give
+        // back (PRD US-28). Grouped like the refunds above rather than asked per booking.
+        var taken = await database.PaymentReceipts
+            .Where(receipt => bookingIds.Contains(receipt.BookingId))
+            .GroupBy(receipt => receipt.BookingId)
+            .Select(receipts => new
+            {
+                BookingId = receipts.Key,
+                Baht = receipts.Sum(receipt => receipt.AmountBaht),
+            })
+            .ToDictionaryAsync(row => row.BookingId, row => row.Baht, cancellationToken);
+
         // When the newest slip arrived. The tiebreak that SlipDownload.NewestFirst applies decides
         // which slip is the current one; the latest moment is the same either way, and asking for
         // it per booking rather than per set would be a query each.
@@ -340,7 +365,8 @@ public static class BookingEndpoints
                 now,
                 BookedSlots.StatusAt(booking, now),
                 slipTimes.TryGetValue(booking.Id, out var uploaded) ? uploaded : null,
-                sentBack.GetValueOrDefault(booking.Id))),
+                sentBack.GetValueOrDefault(booking.Id),
+                taken.GetValueOrDefault(booking.Id))),
         ];
     }
 
@@ -426,7 +452,8 @@ public static class BookingEndpoints
         }
 
         var policyId = await InForcePolicyIdAsync(database, venue.Id, cancellationToken);
-        var booking = Booking.Hold(venue.Id, bookerId, policyId, priced.Slots, now);
+        var booking = Booking.Hold(
+            venue.Id, bookerId, policyId, priced.Slots, venue.DepositPercent, now);
 
         if (await WriteNewAsync(database, booking, timeProvider, cancellationToken)
             is { } refused)
@@ -572,6 +599,7 @@ public static class BookingEndpoints
             .Select(booking => new
             {
                 booking.TotalBaht,
+                booking.DepositBaht,
                 booking.HoldExpiresAt,
                 Account = booking.Venue!.Business.PromptPayId,
                 AccountName = booking.Venue!.Business.PromptPayAccountName,
@@ -585,11 +613,13 @@ public static class BookingEndpoints
 
         return TypedResults.Ok(new PaymentResponse(
             paying.TotalBaht,
+            paying.DepositBaht,
+            Takings.OutstandingOf(paying.TotalBaht, paying.DepositBaht),
             paying.HoldExpiresAt,
             paying.AccountName,
             // Null where the venue's account is not something a bank app would take. The page
             // says so rather than drawing a code that is refused at the counter (PRD US-10).
-            PromptPay.For(paying.Account, paying.TotalBaht)));
+            PromptPay.For(paying.Account, paying.DepositBaht)));
     }
 
     /// <summary>
@@ -671,7 +701,8 @@ public static class BookingEndpoints
         DateTimeOffset now,
         BookingStatus status,
         DateTimeOffset? slipUploadedAt = null,
-        decimal sentBackBaht = 0m) =>
+        decimal sentBackBaht = 0m,
+        decimal takenBaht = 0m) =>
         new(
             booking.Id,
             booking.VenueId,
@@ -687,15 +718,30 @@ public static class BookingEndpoints
             // Made outside this system and written down after the fact, so this is the sum of
             // what the venue says it sent (PRD 6.2, BR-06, US-18).
             sentBackBaht,
-            Offer(booking, now, status));
+            booking.DepositBaht,
+            StillToPay(booking, status, takenBaht),
+            Offer(booking, now, status, takenBaht));
+
+    /// <summary>
+    /// What the booker still owes at the desk. The same question the venue's own day list asks,
+    /// answered by the same rule: a booking that was let go has a difference between its price and
+    /// what was paid, and nobody owes it (PRD US-26).
+    /// </summary>
+    private static decimal StillToPay(Booking booking, BookingStatus status, decimal takenBaht)
+    {
+        var outstanding = Takings.OutstandingOf(booking.TotalBaht, takenBaht);
+
+        return Takings.CanTake(status, booking.PaymentState, outstanding) ? outstanding : 0m;
+    }
 
     /// <summary>What letting this booking go would come to, as the page reads it.</summary>
     private static CancellationOfferResponse Offer(
         Booking booking,
         DateTimeOffset now,
-        BookingStatus status)
+        BookingStatus status,
+        decimal takenBaht)
     {
-        var offer = Cancellation.For(booking, status, now);
+        var offer = Cancellation.For(booking, status, now, takenBaht);
 
         return new CancellationOfferResponse(
             offer.Allowed, offer.RefundPercent, offer.RefundBaht, offer.AwaitsVenue);

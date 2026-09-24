@@ -29,7 +29,27 @@
           </li>
         }
       </ul>
-      <p data-testid="booking-total">{{ i18n.t('booking.total') }}: {{ held.totalBaht }}</p>
+      <p data-testid="booking-total">
+        {{ i18n.t('booking.total') }}: {{ held.totalBaht | baht: i18n.locale() }}
+      </p>
+
+      <!--
+        A venue may ask for part of the price to hold the hours and take the rest at the desk
+        (PRD US-28). Both numbers come from the server's answer about paying, which is the one
+        that also decides what the code is made out for — and both are said, because somebody who
+        reads only the price arrives thinking they have paid.
+      -->
+      @if (payment(); as how) {
+        @if (how.payAtVenueBaht > 0) {
+          <p data-testid="booking-deposit">
+            {{ i18n.t('booking.deposit.now') }}: {{ how.depositBaht | baht: i18n.locale() }}
+          </p>
+          <p class="muted" data-testid="booking-at-venue">
+            {{ i18n.t('booking.deposit.atVenue') }}:
+            {{ how.payAtVenueBaht | baht: i18n.locale() }}
+          </p>
+        }
+      }
     </mat-card-content>
   </mat-card>
 

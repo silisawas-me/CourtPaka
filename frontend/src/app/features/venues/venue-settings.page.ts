@@ -95,6 +95,12 @@ export class VenueSettingsPage {
   protected readonly addingCourt = signal(false);
   protected readonly savingHours = signal(false);
 
+  /** What this venue asks for up front, and how the last attempt to change it went (PRD US-28). */
+  protected readonly depositPercent = computed(() => this.venue()?.depositPercent ?? 100);
+  protected readonly savingDeposit = signal(false);
+  protected readonly depositSaved = signal(false);
+  protected readonly depositError = signal<string | null>(null);
+
   /** ManageSettings is what this page is for, and a frozen venue refuses every write (PRD US-20). */
   protected readonly canManage = computed(() => {
     const venue = this.venue();
@@ -353,6 +359,36 @@ export class VenueSettingsPage {
       error: (error: unknown) => {
         this.pageError.set(errorKey(error));
         this.loading.set(false);
+      },
+    });
+  }
+
+  /**
+   * The share of a price this venue asks for before it holds hours (PRD US-28). Sent as typed and
+   * judged by the server: 10 to 100 is the server's rule, and a page with its own copy of it is a
+   * page that can disagree with the answer (US-23).
+   */
+  protected chooseDeposit(event: Event): void {
+    const field = event.target as HTMLInputElement;
+    const percent = Number(field.value);
+
+    this.savingDeposit.set(true);
+    this.depositError.set(null);
+    this.depositSaved.set(false);
+
+    this.venues.setDeposit(this.venueId(), percent).subscribe({
+      next: () => {
+        this.savingDeposit.set(false);
+        this.depositSaved.set(true);
+        // The venue on hand is what the field reads, so it moves with what was saved.
+        this.venue.update((venue) => (venue ? { ...venue, depositPercent: percent } : venue));
+      },
+      error: (failure: unknown) => {
+        this.savingDeposit.set(false);
+        this.depositError.set(errorKey(failure));
+        // The field holds what was typed, and the venue is still on what it was: a refused number
+        // left on screen reads as the number in force.
+        field.value = String(this.depositPercent());
       },
     });
   }

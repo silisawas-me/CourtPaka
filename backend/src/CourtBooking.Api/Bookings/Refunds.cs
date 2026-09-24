@@ -6,11 +6,11 @@ namespace CourtBooking.Api.Bookings;
 /// and the share that ending gives back — and every screen that shows an amount has to agree
 /// about it.
 ///
-/// The money only comes back if it went in: a booking whose payment state is anything but
-/// <see cref="PaymentState.Received"/> owes nothing, whatever happened to it. That is why the
-/// share is stored on the booking and the amount is worked out from it each time: the venue can
-/// say weeks later that the money did arrive (US-13), and the booker must then be owed what they
-/// were shown when they cancelled, not what today's terms would give.
+/// The money only comes back if it went in, and never more of it than went in: a venue holding a
+/// deposit owes at most the deposit (US-28). That is why the share is stored on the booking and
+/// the amount is worked out from it each time: the venue can say weeks later that the money did
+/// arrive (US-13), and the booker must then be owed what they were shown when they cancelled,
+/// not what today's terms would give.
 /// </summary>
 public static class Refunds
 {
@@ -25,22 +25,44 @@ public static class Refunds
         BookingStatus.NoShow,
     ];
 
-    /// <summary>The amount owed for a booking, from where it ended and the share it ended with.</summary>
+    /// <summary>
+    /// The amount owed for a booking: what the venue is holding, less what its terms let it keep
+    /// (PRD 6.2, US-28).
+    ///
+    /// The share is of the price, not of the payment. A booking cancelled under terms that give
+    /// half of it back leaves the venue entitled to the other half of the price — so a booker who
+    /// has paid a quarter of it as a deposit gets nothing back, and one who paid all of it gets
+    /// half. Taking a share of what happens to have arrived instead would hand the venue's whole
+    /// cancellation fee to anybody paying a deposit.
+    /// </summary>
+    /// <param name="takenBaht">
+    /// The receipts written against this booking (PRD US-26): what the venue actually holds.
+    /// </param>
+    /// <param name="askedBaht">
+    /// What had to arrive to hold the hours. Read only where the payment state says the money
+    /// arrived and no receipt says how much — bookings reached that answer before receipts
+    /// existed, and for every one of them it is the whole price (the migration says so).
+    /// </param>
     public static decimal DueFor(
         BookingStatus status,
         PaymentState payment,
         decimal totalBaht,
-        int refundPercent) =>
-        Endings.Contains(status) ? Share(totalBaht, refundPercent, payment) : 0m;
+        int refundPercent,
+        decimal takenBaht,
+        decimal askedBaht) =>
+        Endings.Contains(status)
+            ? Owed(Takings.HeldFor(payment, takenBaht, askedBaht), Kept(totalBaht, refundPercent))
+            : 0m;
 
     /// <summary>
-    /// A share of a booking in baht, to the satang — nothing at all unless the money arrived.
-    /// Rounded away from zero, so a half satang goes to the booker rather than the venue.
+    /// What its terms let the venue keep, in baht: the part of the price the share does not give
+    /// back. Rounded away from zero on the share, so a half satang goes to the booker.
     /// </summary>
-    private static decimal Share(decimal totalBaht, int percent, PaymentState payment) =>
-        payment == PaymentState.Received
-            ? Math.Round(totalBaht * percent / 100m, 2, MidpointRounding.AwayFromZero)
-            : 0m;
+    private static decimal Kept(decimal totalBaht, int percent) =>
+        totalBaht - Math.Round(totalBaht * percent / 100m, 2, MidpointRounding.AwayFromZero);
+
+    /// <summary>What is left of what the venue holds once it has kept what it may. Never below nothing.</summary>
+    private static decimal Owed(decimal holding, decimal kept) => Math.Max(0m, holding - kept);
 
     /// <summary>The whole of it. A venue that refuses hours it took money for keeps none (PRD 6.1).</summary>
     public const int AllOfIt = 100;

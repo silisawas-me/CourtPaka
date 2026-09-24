@@ -38,14 +38,15 @@ def waiting_booking(browser, venue_id):
 
 def day_not_counted_yet(page, venue_id):
     """The most recent day this venue has not closed. A day is counted once and stays counted,
-    so a script that always closed today would only work the first time it was ever run."""
-    for back in range(14):
+    so a script that always closed today would only work the first time it was ever run — and a
+    fortnight of them is a fortnight of runs, which a day of development gets through."""
+    for back in range(365):
         day = venue_today() - datetime.timedelta(days=back)
         answer = page.request.get(
             f"{BASE}/api/venues/{venue_id}/money?date={day.isoformat()}")
         if answer.status == 200 and answer.json()["closed"] is None:
             return day
-    raise RuntimeError("Every day of the last fortnight has been counted already")
+    raise RuntimeError("Every day of the last year has been counted already")
 
 
 with sync_playwright() as p:

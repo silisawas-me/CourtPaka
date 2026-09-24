@@ -151,8 +151,8 @@ public static class VenueBookingEndpoints
             venueId,
             bookingId,
             BookingStatus.Cancelled,
-            (booking, status, now) => VenueDecisions.CancelOffer(
-                booking, status, reason, request.PaymentReceived, byOwner, now),
+            (booking, status, taken, now) => VenueDecisions.CancelOffer(
+                booking, status, reason, request.PaymentReceived, byOwner, taken, now),
             recorded,
             reason,
             Hours.ReleaseAll,
@@ -305,7 +305,8 @@ public static class VenueBookingEndpoints
             bookingId,
             BookingStatus.NoShow,
             // The venue's own wait, which the rule takes rather than assumes (PRD US-24).
-            (booking, status, now) => VenueDecisions.NoShowOffer(booking, status, now, venue.GraceMinutes),
+            (booking, status, _, now) =>
+                VenueDecisions.NoShowOffer(booking, status, now, venue.GraceMinutes),
             reason: null,
             cause: null,
             Hours.ReleaseRemaining,
@@ -345,7 +346,7 @@ public static class VenueBookingEndpoints
             venueId,
             bookingId,
             BookingStatus.Completed,
-            (booking, status, now) => VenueDecisions.PlayedAfterAllOffer(
+            (booking, status, _, now) => VenueDecisions.PlayedAfterAllOffer(
                 booking, status, request.Reason, byOwner, now),
             recorded,
             cause: null,
@@ -387,14 +388,21 @@ public static class VenueBookingEndpoints
                 StatusCodes.Status409Conflict, BookingErrorCodes.NothingToSettle);
         }
 
+        await using var transaction =
+            await database.Database.BeginTransactionAsync(cancellationToken);
+
+        await CounterMoneyEndpoints.QueueForTheMoneyAsync(database, bookingId, cancellationToken);
+
         // The share was written down when the booking ended; this is what turns it into an amount
         // (PRD 6.2). Nothing about where the booking stands changes.
         var payment = request.PaymentReceived ? PaymentState.Received : PaymentState.NotReceived;
         var refundDue = Refunds.DueFor(
-            booking.Status, payment, booking.TotalBaht, booking.RefundPercent);
-
-        await using var transaction =
-            await database.Database.BeginTransactionAsync(cancellationToken);
+            booking.Status,
+            payment,
+            booking.TotalBaht,
+            booking.RefundPercent,
+            await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken),
+            booking.DepositBaht);
 
         var settled = await database.Bookings
             .Where(candidate =>
@@ -443,7 +451,7 @@ public static class VenueBookingEndpoints
         Guid venueId,
         Guid bookingId,
         BookingStatus decided,
-        Func<Booking, BookingStatus, DateTimeOffset, Cancellation.Offer> ask,
+        Func<Booking, BookingStatus, decimal, DateTimeOffset, Cancellation.Offer> ask,
         string? reason,
         CancellationReason? cause,
         Hours hours,
@@ -468,14 +476,22 @@ public static class VenueBookingEndpoints
         // (PRD 9.2) — but the row still says what it says, so that is what the write has to find.
         var stored = booking.Status;
         var status = BookedSlots.StatusAt(booking, now);
-        var offer = ask(booking, status, now);
-        if (offer.Refused is { } refused)
-        {
-            return Refusal(refused);
-        }
 
         await using var transaction =
             await database.Database.BeginTransactionAsync(cancellationToken);
+
+        // What the venue is holding, which is the ceiling on what any of these endings can give
+        // back (PRD US-28). Behind the lock the desk takes, so a payment landing at this moment is
+        // either counted here or waits for this to finish.
+        await CounterMoneyEndpoints.QueueForTheMoneyAsync(database, bookingId, cancellationToken);
+
+        var taken = await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken);
+        var offer = ask(booking, status, taken, now);
+        if (offer.Refused is { } refused)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return Refusal(refused);
+        }
 
         // Slots before the booking row, which is the order every writer keeps (BookedSlots).
         switch (hours)
@@ -850,7 +866,7 @@ public static class VenueBookingEndpoints
             sentBackBaht,
             Refunds.OutstandingOf(booking.RefundDueBaht, sentBackBaht),
             BookingSlotResponse.Of(booking, courtNames),
-            Doors(booking, status, byOwner, outstanding, graceMinutes, now));
+            Doors(booking, status, byOwner, takenBaht, outstanding, graceMinutes, now));
     }
 
     /// <summary>
@@ -863,6 +879,7 @@ public static class VenueBookingEndpoints
         Booking booking,
         BookingStatus status,
         bool byOwner,
+        decimal takenBaht,
         decimal outstandingBaht,
         int graceMinutes,
         DateTimeOffset now)
@@ -871,7 +888,7 @@ public static class VenueBookingEndpoints
         // gives the real one when it presses.
         var cancelling = VenueDecisions.CancelOffer(
             booking, status, CancellationReason.VenueInitiated, paymentReceived: false,
-            byOwner, now);
+            byOwner, takenBaht, now);
 
         return new VenueBookingActionsResponse(
             cancelling.Allowed,
@@ -883,7 +900,7 @@ public static class VenueBookingEndpoints
                 .PlayedAfterAllOffer(booking, status, "recorded wrongly", byOwner, now)
                 .Allowed,
             Takings.CanTake(status, booking.PaymentState, outstandingBaht),
-            cancelling.Allowed ? Choices(booking, status, byOwner, now) : []);
+            cancelling.Allowed ? Choices(booking, status, byOwner, takenBaht, now) : []);
     }
 
     /// <summary>
@@ -895,11 +912,12 @@ public static class VenueBookingEndpoints
         Booking booking,
         BookingStatus status,
         bool byOwner,
+        decimal takenBaht,
         DateTimeOffset now) =>
         [
             .. Enum.GetValues<CancellationReason>()
                 .Select(reason => (reason, offer: VenueDecisions.CancelOffer(
-                    booking, status, reason, paymentReceived: null, byOwner, now)))
+                    booking, status, reason, paymentReceived: null, byOwner, takenBaht, now)))
                 .Where(choice => choice.offer.Allowed)
                 .Select(choice => new CancelChoiceResponse(
                     choice.reason.ToString(), choice.offer.RefundBaht)),

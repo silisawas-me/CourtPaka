@@ -10,6 +10,8 @@ export interface SlipQueueItem {
   bookerEmail: string | null;
   bookerPhone: string | null;
   totalBaht: number;
+  /** What the slip should be for (PRD US-28): the price, or the share asked for up front. */
+  depositBaht: number;
   slipUploadedAt: string;
   startsAt: string;
   /** The hours start within the hour, so this one is worth looking at first. */
@@ -36,8 +38,14 @@ export class SlipQueueService {
     return this.http.get(this.slipUrl(venueId, bookingId), { responseType: 'blob' });
   }
 
-  confirm(venueId: string, bookingId: string): Observable<Booking> {
-    return this.http.post<Booking>(`/api/venues/${venueId}/slip-queue/${bookingId}/confirm`, null);
+  /**
+   * Accepts the slip, and says how much it shows if that is not what was asked for (PRD US-28).
+   * Null means the amount the booker's code was made out for, which is the ordinary case.
+   */
+  confirm(venueId: string, bookingId: string, amountBaht: number | null): Observable<Booking> {
+    return this.http.post<Booking>(`/api/venues/${venueId}/slip-queue/${bookingId}/confirm`, {
+      amountBaht,
+    });
   }
 
   reject(

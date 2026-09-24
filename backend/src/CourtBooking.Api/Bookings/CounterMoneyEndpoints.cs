@@ -176,20 +176,7 @@ public static class CounterMoneyEndpoints
 
         await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
 
-        // The same lock every writer of this booking's money takes, so two people at two tills
-        // cannot both read "900 owed" and both take it (US-18 does this for refunds).
-        await database.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT pg_advisory_xact_lock(hashtextextended({bookingId.ToString()}, 0))",
-            cancellationToken);
-
-        // And the booking row itself, for as long as this takes. The advisory lock above only
-        // holds off other tills; a slip being answered or a booking being cancelled writes the
-        // row without it, and a deposit receipted against a booking that was turned away a
-        // moment ago is money the venue cannot account for (PRD US-26). A share lock is enough:
-        // those writers take the row exclusively and will wait (AccountGate does the same).
-        await database.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT 1 FROM \"Bookings\" WHERE \"Id\" = {bookingId} FOR SHARE",
-            cancellationToken);
+        await QueueForTheMoneyAsync(database, bookingId, cancellationToken);
 
         // With its hours, because what a booking reads as depends on them: a hold whose fifteen
         // minutes are up is Expired and owes nothing forwards (PRD 9.2).
@@ -568,6 +555,30 @@ public static class CounterMoneyEndpoints
     }
 
     /// <summary>What has been taken for one booking so far.</summary>
+    /// <summary>
+    /// Queues this request behind everybody else who is about to read what a booking has had paid
+    /// against it and then write from that reading (PRD US-26, US-18). Two reads of "900 owed"
+    /// that both act on it is money the venue cannot account for, and the reading has to happen
+    /// inside the transaction that acts on it or the lock buys nothing.
+    ///
+    /// The advisory lock holds off the other tills; the share lock on the row holds this behind
+    /// anything taking the booking itself — a slip being answered, a cancellation — because those
+    /// take the row exclusively and this would otherwise read a state they are about to change.
+    /// </summary>
+    internal static async Task QueueForTheMoneyAsync(
+        AppDbContext database,
+        Guid bookingId,
+        CancellationToken cancellationToken)
+    {
+        await database.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({bookingId.ToString()}, 0))",
+            cancellationToken);
+
+        await database.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT 1 FROM \"Bookings\" WHERE \"Id\" = {bookingId} FOR SHARE",
+            cancellationToken);
+    }
+
     public static async Task<decimal> TakenAsync(
         AppDbContext database,
         Guid bookingId,

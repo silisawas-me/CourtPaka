@@ -56,6 +56,11 @@ export interface Venue extends VenueAddress {
   permissions: VenuePermission[];
   /** Whether this member wants to hear each time a slip arrives here (PRD US-17). */
   wantsSlipEmails: boolean;
+  /**
+   * How much of a booking's price this venue asks for before it holds the hours (PRD US-28).
+   * A hundred is the whole of it, which is what a venue asks for until it says otherwise.
+   */
+  depositPercent: number;
 }
 
 export interface VenueMember {
@@ -175,5 +180,10 @@ export class VenueService {
   /** Whether this member wants to hear each time a slip arrives here (PRD US-17). */
   chooseSlipEmails(venueId: string, wantsSlipEmails: boolean): Observable<void> {
     return this.http.put<void>(`/api/venues/${venueId}/notifications`, { wantsSlipEmails });
+  }
+
+  /** How much of a booking's price has to arrive before the hours are held (PRD US-28). */
+  setDeposit(venueId: string, percent: number): Observable<void> {
+    return this.http.put<void>(`/api/venues/${encodeURIComponent(venueId)}/deposit`, { percent });
   }
 }

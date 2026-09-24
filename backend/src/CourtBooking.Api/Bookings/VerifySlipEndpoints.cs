@@ -78,6 +78,7 @@ public static class VerifySlipEndpoints
             {
                 booking.Id,
                 booking.TotalBaht,
+                booking.DepositBaht,
                 BookerEmail = booking.Booker!.Email,
                 BookerPhone = booking.Booker.PhoneNumber,
                 StartsAt = booking.Slots.Min(slot => slot.StartsAt),
@@ -101,6 +102,7 @@ public static class VerifySlipEndpoints
                 // The one way left to reach a booker who has no address here (PRD US-01).
                 booking.BookerEmail is null ? booking.BookerPhone : null,
                 booking.TotalBaht,
+                booking.DepositBaht,
                 booking.Latest!.UploadedAt,
                 booking.StartsAt,
                 // Said plainly rather than left to the page to work out, so the venue's view and
@@ -137,6 +139,7 @@ public static class VerifySlipEndpoints
     private static Task<Results<Ok<BookingResponse>, ProblemHttpResult>> ConfirmAsync(
         Guid venueId,
         Guid bookingId,
+        ConfirmSlipRequest? request,
         CurrentVenue venue,
         VenueNotifications notifications,
         AppDbContext database,
@@ -149,6 +152,7 @@ public static class VerifySlipEndpoints
             BookingStatus.Confirmed,
             PaymentState.Received,
             reason: null,
+            request?.AmountBaht,
             venue,
             notifications,
             database,
@@ -176,6 +180,9 @@ public static class VerifySlipEndpoints
             BookingStatus.Rejected,
             request.PaymentReceived ? PaymentState.Received : PaymentState.NotReceived,
             request.Reason,
+            // A rejection records what arrived so it can be sent back; the venue read it off the
+            // slip in front of it, and there is nowhere else to ask.
+            request.AmountBaht,
             venue,
             notifications,
             database,
@@ -189,6 +196,7 @@ public static class VerifySlipEndpoints
         BookingStatus decided,
         PaymentState payment,
         string? reason,
+        decimal? amountBaht,
         CurrentVenue venue,
         VenueNotifications notifications,
         AppDbContext database,
@@ -205,6 +213,7 @@ public static class VerifySlipEndpoints
             .Select(candidate => new
             {
                 candidate.TotalBaht,
+                candidate.DepositBaht,
                 LastHourEndsAt = candidate.Slots.Max(slot => slot.EndsAt),
             })
             .SingleOrDefaultAsync(cancellationToken);
@@ -234,10 +243,51 @@ public static class VerifySlipEndpoints
         // A rejection gives back everything; a confirmation gives back nothing. The share is
         // written down so that a later answer about the money lands on the same number (PRD 6.2).
         var refundPercent = decided == BookingStatus.Rejected ? Refunds.AllOfIt : 0;
-        var refundDue = Refunds.DueFor(landed, payment, booking.TotalBaht, refundPercent);
 
+        // What the venue is holding before this decision writes anything: a deposit taken at the
+        // desk, or an earlier slip. A booking turned away gives back what arrived, which is not
+        // always its price (PRD US-28).
         await using var transaction =
             await database.Database.BeginTransactionAsync(cancellationToken);
+
+        // Behind everybody else about to read what this booking has had paid against it: the desk
+        // can take part of a deposit booking without moving its status, so the conditional update
+        // below would not catch it and the receipt written here would count the same money twice
+        // (PRD US-26).
+        await CounterMoneyEndpoints.QueueForTheMoneyAsync(database, bookingId, cancellationToken);
+
+        var taken = await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken);
+
+        // What the slip was for: the deposit, less anything already taken against it. For a venue
+        // that asks for the whole price — which is every venue until one says otherwise — this is
+        // the price, and everything below reads as it always has (PRD US-28).
+        // What the venue says arrived. Left unsaid, it is what was asked for — the amount the
+        // booker's code was made out for. A venue that can see its own account is the only one who
+        // can say otherwise, and a transfer of more than the deposit has to be recorded as what it
+        // was or the desk asks for it twice (PRD US-28).
+        var owing = Takings.OutstandingOf(booking.TotalBaht, taken);
+        var arrived = amountBaht is { } said
+            ? decimal.Round(said, 2, MidpointRounding.AwayFromZero)
+            : Takings.OutstandingOf(booking.DepositBaht, taken);
+
+        if (amountBaht is not null && (arrived <= 0m || arrived > owing))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, SlipErrorCodes.InvalidAmount);
+        }
+
+        var transferred = payment == PaymentState.Received ? arrived : 0m;
+
+        // `Received` means the venue has all of it. A booking held on a deposit is confirmed with
+        // its balance still to come, so it says NotReceived and the desk's door stays open for the
+        // rest (PRD US-26). What the venue actually holds is the receipts, not this.
+        var holding = taken + transferred;
+        var settled = payment == PaymentState.Received && holding < booking.TotalBaht
+            ? PaymentState.NotReceived
+            : payment;
+
+        var refundDue = Refunds.DueFor(
+            landed, settled, booking.TotalBaht, refundPercent, holding, booking.DepositBaht);
 
         // A booking that was turned away stops holding its hours; they go back on sale (PRD 6.1).
         // Before the booking row, not after: that is the order every writer takes these two
@@ -261,7 +311,7 @@ public static class VerifySlipEndpoints
             .ExecuteUpdateAsync(
                 set => set
                     .SetProperty(candidate => candidate.Status, landed)
-                    .SetProperty(candidate => candidate.PaymentState, payment)
+                    .SetProperty(candidate => candidate.PaymentState, settled)
                     .SetProperty(candidate => candidate.RefundPercent, refundPercent)
                     .SetProperty(candidate => candidate.RefundDueBaht, refundDue),
                 cancellationToken);
@@ -285,12 +335,6 @@ public static class VerifySlipEndpoints
         // What it covers is whatever the desk has not already taken — a deposit paid at the
         // counter and the rest transferred is two receipts, not one of them overwritten and not
         // a booking whose receipts never reach its price.
-        var transferred = payment == PaymentState.Received
-            ? Takings.OutstandingOf(
-                booking.TotalBaht,
-                await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken))
-            : 0m;
-
         if (transferred > 0)
         {
             database.PaymentReceipts.Add(new PaymentReceipt
@@ -316,7 +360,7 @@ public static class VerifySlipEndpoints
 
         // Turning a booking away after the money arrived leaves the venue owing it back, and
         // nothing else would say so (PRD US-17, BR-06).
-        await notifications.MoneyMayBeWaitingAsync(venueId, bookingId, refundDue, payment);
+        await notifications.MoneyMayBeWaitingAsync(venueId, bookingId, refundDue, settled);
 
         return TypedResults.Ok(await BookingEndpoints.ReadBookingAsync(
             database, bookingId, now, cancellationToken));

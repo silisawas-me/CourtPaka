@@ -130,5 +130,6 @@ public sealed class BookingTransitionTests
             Guid.CreateVersion7(),
             Guid.CreateVersion7(),
             [new SlotPrice(Guid.CreateVersion7(), DateTimeOffset.UtcNow.AddDays(1), 200m)],
+            Deposit.Everything,
             DateTimeOffset.UtcNow);
 }

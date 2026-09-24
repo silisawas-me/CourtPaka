@@ -29,6 +29,7 @@ function venue(overrides: Record<string, unknown> = {}) {
     status: 'Approved',
     role: 'Owner',
     permissions: ['VerifySlip', 'ManageBookings', 'CloseCourt', 'ViewReports', 'ManageSettings'],
+    depositPercent: 100,
     ...overrides,
   };
 }
@@ -404,5 +405,43 @@ describe('VenueSettingsPage', () => {
 
     expect(textOf(fixture, 'venue-name')).toBe('Second Court');
     expect(textOf(fixture, 'no-courts')).toBe(TRANSLATIONS.th['settings.courts.none']);
+  });
+
+  /**
+   * What a venue asks for before it holds hours is its own call (PRD US-28), and the page sends
+   * what was typed rather than judging it: the range is the server's rule, and a second copy of
+   * it here is a copy that can disagree with the refusal (US-23).
+   */
+  it('sends the share the venue asks for up front', () => {
+    render();
+
+    setInput(fixture, '[data-testid="deposit-percent"]', '50');
+    (elementOf(fixture, 'deposit-percent') as HTMLInputElement).dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const request = httpMock.expectOne('/api/venues/v1/deposit');
+    expect(request.request.body).toEqual({ percent: 50 });
+    request.flush(null, { status: 204, statusText: 'No Content' });
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, 'deposit-saved')).not.toBeNull();
+  });
+
+  it('translates a share the server will not take', () => {
+    render();
+
+    setInput(fixture, '[data-testid="deposit-percent"]', '5');
+    (elementOf(fixture, 'deposit-percent') as HTMLInputElement).dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    httpMock
+      .expectOne('/api/venues/v1/deposit')
+      .flush({ code: 'venue.invalid_deposit' }, { status: 400, statusText: 'Bad Request' });
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'deposit-error')).toBe(TRANSLATIONS.th['error.venue.invalid_deposit']);
+    // And the field goes back to what the venue is actually on, so the refused number is not
+    // left on screen reading as the one in force.
+    expect((elementOf(fixture, 'deposit-percent') as HTMLInputElement).value).toBe('100');
   });
 });
