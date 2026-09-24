@@ -41,26 +41,42 @@ public static class DepositRisk
     /// <summary>The most a venue may look back. A year of a booker's misses is not a habit.</summary>
     public const int MaxLookbackDays = 365;
 
+    /// <summary>
+    /// The most misses a venue may wait for. Past this the rule is one that never applies, which
+    /// is a setting that looks on and is not — turning it off says that, and says it plainly.
+    /// </summary>
+    public const int MaxMisses = 50;
+
     /// <summary>Whether a set of thresholds is one a venue may ask for.</summary>
     public static bool AreThresholds(int lookbackDays, int halfAt, int fullAt) =>
         lookbackDays is > 0 and <= MaxLookbackDays
-        && halfAt > 0
-        && fullAt >= halfAt;
+        && halfAt is > 0 and <= MaxMisses
+        && fullAt >= halfAt
+        && fullAt <= MaxMisses;
 
     /// <summary>
     /// How many times this booker has been recorded as not turning up here, inside the venue's
     /// own window (PRD US-28). By the hours that went unused rather than by when the venue
     /// pressed the button: a miss belongs to the evening it happened on.
     /// </summary>
+    /// <param name="rule">
+    /// The venue's own. A venue that turned the rule off is not asked the question at all — what
+    /// it said is that it would rather not keep a count of who let it down.
+    /// </param>
     public static Task<int> MissesAsync(
         AppDbContext database,
         Guid venueId,
         Guid bookerUserId,
-        int lookbackDays,
+        VenueRiskRule rule,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var since = now.AddDays(-lookbackDays);
+        if (!rule.On)
+        {
+            return Task.FromResult(0);
+        }
+
+        var since = now.AddDays(-rule.LookbackDays);
 
         return database.Bookings
             .AsNoTracking()

@@ -99,6 +99,9 @@ public sealed class DepositRiskTests(ApiTestFixture api) : IClassFixture<ApiTest
     [InlineData(366, 2, 3)]
     [InlineData(60, 0, 3)]
     [InlineData(60, 3, 2)]
+    // A rule nobody could ever meet is a rule that looks on and is not; turning it off says so.
+    [InlineData(60, 2, 51)]
+    [InlineData(60, 51, 60)]
     public void Thresholds_that_make_no_sense_are_not_thresholds(
         int lookback,
         int halfAt,

@@ -457,7 +457,7 @@ public static class BookingEndpoints
         // unused here is asked for more of the next ones, and the venue's own terms are the floor
         // — the rule only ever asks for more.
         var misses = await DepositRisk.MissesAsync(
-            database, venue.Id, bookerId, venue.Risk.LookbackDays, now, cancellationToken);
+            database, venue.Id, bookerId, venue.Risk, now, cancellationToken);
 
         var (percent, reason) = DepositRisk.Asks(
             venue.Risk,
@@ -475,16 +475,17 @@ public static class BookingEndpoints
         }
 
         // What was asked of this booker and why, which is the record of the rule having applied
-        // (PRD US-28: a tier that changes has to be answerable for afterwards).
+        // (PRD US-28: a tier that changes has to be answerable for afterwards). The count itself
+        // is not written down here: it is a number about a person, a log line outlives the
+        // account it is about (PDPA, S-15), and the booking row it is joined to says it anyway.
         if (reason != DepositReason.VenueTerms)
         {
             AppEvents.For(loggers).LogInformation(
-                "deposit_required {BookingId} {VenueId} {DepositBaht} {Reason} {Misses}",
+                "deposit_required {BookingId} {VenueId} {DepositBaht} {Reason}",
                 booking.Id,
                 venue.Id,
                 booking.DepositBaht,
-                reason.ToString(),
-                misses);
+                reason.ToString());
         }
 
         AppEvents.For(loggers).LogInformation(

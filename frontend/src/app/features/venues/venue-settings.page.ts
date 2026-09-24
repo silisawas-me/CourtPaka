@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import {
   FormBuilder,
   FormControl,
@@ -117,6 +117,15 @@ export class VenueSettingsPage {
   protected readonly savingRisk = signal(false);
   protected readonly riskSaved = signal(false);
   protected readonly riskError = signal<string | null>(null);
+
+  /**
+   * A read-only venue gets a read-only form, not a form with a dead button: filling one in and
+   * being refused at the end is worse than being told at the start (PRD US-20).
+   */
+  private readonly riskIsTheirs = effect(() => {
+    const allowed = this.canManage();
+    untracked(() => (allowed ? this.risk.enable() : this.risk.disable()));
+  });
 
   /** ManageSettings is what this page is for, and a frozen venue refuses every write (PRD US-20). */
   protected readonly canManage = computed(() => {

@@ -204,7 +204,7 @@ public sealed class WaitlistOffers(
         // Offered hours are held on the same terms as hours somebody picked themselves, risk and
         // all: a queue is a way of asking, not a way round what the asking costs (PRD US-28).
         var misses = await DepositRisk.MissesAsync(
-            database, entry.VenueId, entry.BookerUserId, risk.LookbackDays, now, cancellationToken);
+            database, entry.VenueId, entry.BookerUserId, risk, now, cancellationToken);
 
         var (percent, reason) = DepositRisk.Asks(
             risk, depositPercent, misses, DepositRisk.TouchesPeak(risk, priced.Slots));
