@@ -37,12 +37,24 @@ with sync_playwright() as p:
     check("the top bar stands down on a desk", not desk.locator("mat-toolbar.bar").is_visible())
     check("the bottom bar is for thumbs, not desks", not desk.locator(".tabs").is_visible())
 
-    # Every door leads somewhere, which is the only thing a list of links can get wrong.
-    for door in ("nav-slip-queue", "nav-money", "nav-dashboard", "nav-settings", "nav-closures"):
+    # Every door leads where it says, which is the only thing a list of links can get wrong —
+    # so the page it lands on is named here, not merely required to be one of this venue's.
+    doors = {
+        "nav-slip-queue": "slip-queue",
+        "nav-money": "money",
+        "nav-dashboard": "dashboard",
+        "nav-settings": "settings",
+        "nav-closures": "closures",
+    }
+    for door, page in doors.items():
         desk.click(f"[data-testid={door}]")
-        desk.wait_for_load_state("networkidle")
-        landed = desk.url.startswith(f"{BASE}/venues/{venue_id}/")
-        check(f"{door} leads into this venue", landed and "error" not in desk.url)
+        wanted = f"{BASE}/venues/{venue_id}/{page}"
+        try:
+            desk.wait_for_url(f"{wanted}**", timeout=10_000)
+            landed = True
+        except Exception:
+            landed = False
+        check(f"{door} leads to {page}", landed)
 
     desk.goto(f"{BASE}/book")
     desk.wait_for_selector("[data-testid=venue-results]")

@@ -130,20 +130,30 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+// A grid item with `margin-inline: auto` has its stretch cancelled by the auto margins, and
+// `width: auto` then resolves to fit-content — which on a page whose content is a progress bar
+// is a column a few characters wide floating in the middle of a phone.
+:host.at-a-venue .shell {
+  width: 100%;
+}
+
 @media (min-width: 60rem) {
   :host.at-a-venue {
     grid-template-columns: 14rem minmax(0, 1fr);
   }
 
   // The sidebar is the navigation at this width, so the bar above it would be a second one —
-  // which is why the sidebar carries the rest of the app's doors in its foot.
-  :host.at-a-venue .bar,
-  :host.at-a-venue .bar-menu {
+  // which is why the sidebar carries the rest of the app's doors in its foot. The bar stands
+  // down only once the sidebar is actually there: the shell arrives a chunk late, and a deploy
+  // can make that chunk never arrive at all. Until then the bar is the way out.
+  :host.at-a-venue:has(app-venue-shell) .bar,
+  :host.at-a-venue:has(app-venue-shell) .bar-menu {
     display: none;
   }
 
   :host.at-a-venue .shell {
     grid-column: 2;
+    grid-row: 1;
     max-width: 68rem;
     margin-inline: 0;
     padding-inline: 1.5rem;
@@ -178,7 +188,9 @@
 }
 
 // Material draws a text button in the primary colour, which is a dark green — on a dark ground
-// that is a label nobody can read.
+// that is a label nobody can read. The chosen one needs saying twice: its own rule sets an ink
+// meant for a light ground, and it outranks the group above by a class.
 .side-account .language.chosen {
-  background: color-mix(in srgb, currentColor 18%, transparent);
+  background: color-mix(in srgb, currentColor 20%, transparent);
+  color: inherit;
 }

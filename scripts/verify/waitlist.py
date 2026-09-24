@@ -34,7 +34,8 @@ with sync_playwright() as p:
     # waiting long enough to be read and given up: somebody already holding hours is skipped when
     # the caretaker hands out an offer (S-22), and it sweeps every 10 s here. Without it the place
     # is offered mid-script and cannot be stood down from, because an offer is not a place in a
-    # queue any more.
+    # queue any more. The hold lasts 15 minutes (BR-02), so everything down to "standing down
+    # gives the place up" has to happen inside that — it takes about one.
     take_first_free_hour(page, venue_id, day + datetime.timedelta(days=1))
     page.goto(f"{BASE}/book/{venue_id}?date={day.isoformat()}")
     # The card is not carried by every visit to the grid (PRD 8's LCP target): pressing the

@@ -9,13 +9,13 @@
 }
 
 .tabs {
-  // After the page, wherever the app's grid puts its rows.
-  order: 1;
   position: sticky;
   bottom: 0;
   z-index: 2;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  // A floor of 0, or a long label in another language takes more than its fifth and the
+  // last tab is pushed off a screen that does not scroll sideways.
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   background: var(--mat-sys-surface);
   border-top: 1px solid var(--mat-sys-outline-variant);
   // Clear of the home indicator on a phone that has one.
@@ -24,7 +24,6 @@
 
 .tab {
   display: flex;
-  gap: 0.25rem;
   align-items: center;
   justify-content: center;
   // A thumb needs a target, whatever the label's length.
@@ -34,6 +33,7 @@
   color: var(--mat-sys-on-surface-variant);
   text-align: center;
   text-decoration: none;
+  overflow: hidden;
 }
 
 .tab.on {
@@ -96,15 +96,18 @@
   }
 }
 
-// Where you are, marked down the edge rather than by colour alone.
-.side-link.on {
-  box-shadow: inset 3px 0 0 var(--status-playing);
+.side-link:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: inherit;
 }
 
-.side-link:hover,
+// Where you are, marked down the edge and by weight — a pointer resting on a door must not look
+// like the door being read, and the edge has to be light to be seen on a dark rail at all.
 .side-link.on {
-  background: color-mix(in srgb, currentColor 13%, transparent);
+  background: color-mix(in srgb, currentColor 22%, transparent);
   color: inherit;
+  font-weight: 500;
+  box-shadow: inset 3px 0 0 currentColor;
 }
 
 .side-foot {

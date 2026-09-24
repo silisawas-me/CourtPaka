@@ -1,7 +1,7 @@
 import { Component, computed, inject, input } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
-import { RouterLink, RouterLinkActive } from '@angular/router';
-import { catchError, of, switchMap } from 'rxjs';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { catchError, filter, map, merge, of, switchMap } from 'rxjs';
 import { TranslationService } from '../core/i18n/translation.service';
 import { VenueService } from '../core/venues/venue.service';
 import { VENUE_BACK_OF_HOUSE, VENUE_TABS, VENUE_WORK, VenueLink, waitingOn } from './venue-nav';
@@ -33,19 +33,28 @@ interface Door {
 })
 export class VenueShell {
   private readonly venues = inject(VenueService);
+  private readonly router = inject(Router);
 
   protected readonly i18n = inject(TranslationService);
 
   readonly venueId = input.required<string>();
 
   /**
-   * What is waiting at this venue, asked once per venue rather than by every page that draws a
-   * door (PRD US-17). A venue whose counts cannot be read draws no numbers — the doors still
-   * work, and the server decides those anyway. `switchMap` drops the answer for the venue that
-   * was left, which would otherwise land last and put its counts under these doors.
+   * What is waiting at this venue (PRD US-17), read when the shell arrives and again on every
+   * move between its pages — which is when the number can have changed, because the move is
+   * usually somebody having just dealt with one of them. A venue whose counts cannot be read
+   * draws no numbers: the doors still work, and the server decides those anyway. `switchMap`
+   * drops the answer for the venue that was left, which would otherwise land last and put its
+   * counts under these doors.
    */
   private readonly attention = toSignal(
-    toObservable(this.venueId).pipe(
+    merge(
+      toObservable(this.venueId),
+      this.router.events.pipe(
+        filter((event) => event instanceof NavigationEnd),
+        map(() => this.venueId()),
+      ),
+    ).pipe(
       switchMap((venueId) => this.venues.attention(venueId).pipe(catchError(() => of(null)))),
       takeUntilDestroyed(),
     ),

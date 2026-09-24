@@ -23,7 +23,7 @@
         >
           <span>{{ i18n.t(door.label) }}</span>
           @if (door.waiting; as count) {
-            <span class="badge tone-waiting" [attr.data-testid]="door.testId + '-waiting'">
+            <span class="badge badge-waiting" [attr.data-testid]="door.testId + '-waiting'">
               {{ count }}
             </span>
           }
@@ -55,7 +55,7 @@
     >
       {{ i18n.t(tab.short) }}
       @if (tab.waiting; as count) {
-        <span class="badge tone-waiting">{{ count }}</span>
+        <span class="badge badge-waiting">{{ count }}</span>
       }
     </a>
   }
