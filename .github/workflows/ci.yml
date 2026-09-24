@@ -149,6 +149,7 @@ jobs:
         with:
           name: flow-screenshots
           path: scripts/verify/shots
+          retention-days: 7
 
       - name: What the API said
         if: failure()
@@ -175,9 +176,12 @@ jobs:
       - name: Fail on High alerts
         run: python3 scripts/ci/zap_high.py zap/report.json
 
+      # Only when the scan says something. A report nobody opens still spends the storage the
+      # next run needs, and a full store fails the upload — which failed the gate that had passed.
       - name: Keep the report
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: zap-report
           path: zap/report.json
+          retention-days: 7
