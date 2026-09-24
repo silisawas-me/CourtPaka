@@ -46,7 +46,8 @@ public static class Cancellation
             new(
                 null,
                 percent,
-                Refunds.DueFor(landing, payment, booking.TotalBaht, percent, heldBaht),
+                Refunds.DueFor(
+                    landing, payment, booking.TotalBaht, percent, heldBaht, booking.DepositBaht),
                 payment);
 
         /// <summary>A door that is shut, and why. Nothing moves, so nothing is owed.</summary>

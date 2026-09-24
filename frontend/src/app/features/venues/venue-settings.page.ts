@@ -369,7 +369,8 @@ export class VenueSettingsPage {
    * page that can disagree with the answer (US-23).
    */
   protected chooseDeposit(event: Event): void {
-    const percent = Number((event.target as HTMLInputElement).value);
+    const field = event.target as HTMLInputElement;
+    const percent = Number(field.value);
 
     this.savingDeposit.set(true);
     this.depositError.set(null);
@@ -385,6 +386,9 @@ export class VenueSettingsPage {
       error: (failure: unknown) => {
         this.savingDeposit.set(false);
         this.depositError.set(errorKey(failure));
+        // The field holds what was typed, and the venue is still on what it was: a refused number
+        // left on screen reads as the number in force.
+        field.value = String(this.depositPercent());
       },
     });
   }

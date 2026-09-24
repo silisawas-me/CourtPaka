@@ -38,8 +38,14 @@ export class SlipQueueService {
     return this.http.get(this.slipUrl(venueId, bookingId), { responseType: 'blob' });
   }
 
-  confirm(venueId: string, bookingId: string): Observable<Booking> {
-    return this.http.post<Booking>(`/api/venues/${venueId}/slip-queue/${bookingId}/confirm`, null);
+  /**
+   * Accepts the slip, and says how much it shows if that is not what was asked for (PRD US-28).
+   * Null means the amount the booker's code was made out for, which is the ordinary case.
+   */
+  confirm(venueId: string, bookingId: string, amountBaht: number | null): Observable<Booking> {
+    return this.http.post<Booking>(`/api/venues/${venueId}/slip-queue/${bookingId}/confirm`, {
+      amountBaht,
+    });
   }
 
   reject(

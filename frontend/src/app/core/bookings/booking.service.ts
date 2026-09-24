@@ -61,6 +61,12 @@ export interface Booking {
    * asked for a share of it up front, and then the difference is paid at the venue.
    */
   depositBaht: number;
+  /**
+   * What is still owed at the venue, decided by the server (PRD US-28). Nought unless this is a
+   * booking the venue will honour and its price has not all arrived — a booking that was let go
+   * has a difference too, and nobody owes it.
+   */
+  toPayBaht: number;
   cancellation: CancellationOffer;
 }
 

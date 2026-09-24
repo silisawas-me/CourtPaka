@@ -388,6 +388,11 @@ public static class VenueBookingEndpoints
                 StatusCodes.Status409Conflict, BookingErrorCodes.NothingToSettle);
         }
 
+        await using var transaction =
+            await database.Database.BeginTransactionAsync(cancellationToken);
+
+        await CounterMoneyEndpoints.QueueForTheMoneyAsync(database, bookingId, cancellationToken);
+
         // The share was written down when the booking ended; this is what turns it into an amount
         // (PRD 6.2). Nothing about where the booking stands changes.
         var payment = request.PaymentReceived ? PaymentState.Received : PaymentState.NotReceived;
@@ -396,10 +401,8 @@ public static class VenueBookingEndpoints
             payment,
             booking.TotalBaht,
             booking.RefundPercent,
-            await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken));
-
-        await using var transaction =
-            await database.Database.BeginTransactionAsync(cancellationToken);
+            await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken),
+            booking.DepositBaht);
 
         var settled = await database.Bookings
             .Where(candidate =>
@@ -474,18 +477,21 @@ public static class VenueBookingEndpoints
         var stored = booking.Status;
         var status = BookedSlots.StatusAt(booking, now);
 
+        await using var transaction =
+            await database.Database.BeginTransactionAsync(cancellationToken);
+
         // What the venue is holding, which is the ceiling on what any of these endings can give
-        // back (PRD US-28). Read before the transaction: a receipt written in the same moment can
-        // only mean the venue holds more, and more is something it settles afterwards (US-13).
+        // back (PRD US-28). Behind the lock the desk takes, so a payment landing at this moment is
+        // either counted here or waits for this to finish.
+        await CounterMoneyEndpoints.QueueForTheMoneyAsync(database, bookingId, cancellationToken);
+
         var taken = await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken);
         var offer = ask(booking, status, taken, now);
         if (offer.Refused is { } refused)
         {
+            await transaction.RollbackAsync(cancellationToken);
             return Refusal(refused);
         }
-
-        await using var transaction =
-            await database.Database.BeginTransactionAsync(cancellationToken);
 
         // Slots before the booking row, which is the order every writer keeps (BookedSlots).
         switch (hours)

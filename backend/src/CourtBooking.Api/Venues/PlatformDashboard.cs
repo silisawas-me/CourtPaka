@@ -120,6 +120,11 @@ public static class PlatformDashboard
                 booking.PaymentState,
                 booking.TotalBaht,
                 booking.RefundDueBaht,
+                booking.DepositBaht,
+                // What arrived, which since deposits is not always the price (PRD US-28).
+                Taken = database.PaymentReceipts
+                    .Where(receipt => receipt.BookingId == booking.Id)
+                    .Sum(receipt => (decimal?)receipt.AmountBaht) ?? 0m,
                 FirstStart = booking.Slots.Min(slot => slot.StartsAt),
                 LastEnd = booking.Slots.Max(slot => slot.EndsAt),
             })
@@ -141,12 +146,17 @@ public static class PlatformDashboard
                 var gmv = mine
                     .Where(booking =>
                         booking.Channel == BookingChannel.Online
-                        && booking.PaymentState == PaymentState.Received
                         && (booking.Status is BookingStatus.Completed
                                 or BookingStatus.NoShow
                                 or BookingStatus.Cancelled
                             || (booking.Status == BookingStatus.Confirmed && booking.LastEnd <= now)))
-                    .Sum(booking => booking.TotalBaht - booking.RefundDueBaht);
+                    .Sum(booking => Math.Max(
+                        0m,
+                        Math.Min(
+                            booking.TotalBaht,
+                            Takings.HeldFor(
+                                booking.PaymentState, booking.Taken, booking.DepositBaht))
+                        - booking.RefundDueBaht));
 
                 return new PlatformVenueFigures(
                     venue.Id,

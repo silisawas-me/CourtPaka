@@ -230,6 +230,23 @@
                 {{ i18n.t('common.cancel') }}
               </button>
             } @else {
+              <!--
+                What the slip says, where the bank app let the booker type over the amount the
+                code carried (PRD US-28). Left empty it is what the booking was held on, which is
+                what the queue shows beside it — so the ordinary case is one press.
+              -->
+              <mat-form-field class="arrived">
+                <mat-label>{{ i18n.t('slipQueue.arrived') }}</mat-label>
+                <input
+                  matInput
+                  type="number"
+                  min="1"
+                  data-testid="arrived"
+                  [formControl]="arrived"
+                  [placeholder]="'' + booking.depositBaht"
+                />
+              </mat-form-field>
+
               <button
                 matButton="filled"
                 type="button"

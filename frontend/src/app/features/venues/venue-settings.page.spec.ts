@@ -440,5 +440,8 @@ describe('VenueSettingsPage', () => {
     fixture.detectChanges();
 
     expect(textOf(fixture, 'deposit-error')).toBe(TRANSLATIONS.th['error.venue.invalid_deposit']);
+    // And the field goes back to what the venue is actually on, so the refused number is not
+    // left on screen reading as the one in force.
+    expect((elementOf(fixture, 'deposit-percent') as HTMLInputElement).value).toBe('100');
   });
 });

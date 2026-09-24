@@ -61,13 +61,13 @@ describe('BookingPage', () => {
    * A booking with money owing also asks where to send it (PRD US-04). Answered with no payload,
    * so nothing here waits on the QR encoder — the tests that are about the code say so.
    */
-  function answerHowToPay(payload: string | null = null): void {
+  function answerHowToPay(payload: string | null = null, deposit = 600): void {
     const asked = httpMock.match('/api/bookings/b1/payment');
     for (const request of asked) {
       request.flush({
         totalBaht: 600,
-        depositBaht: 600,
-        payAtVenueBaht: 0,
+        depositBaht: deposit,
+        payAtVenueBaht: 600 - deposit,
         holdExpiresAt: '2026-09-20T11:15:00Z',
         accountName: 'บริษัท ทดสอบ จำกัด',
         promptPayPayload: payload,
@@ -240,7 +240,12 @@ describe('BookingPage', () => {
    * only the price arrives at the counter thinking they have paid.
    */
   it('says what to transfer now and what is left for the venue', () => {
-    render(booking({ totalBaht: 600, depositBaht: 200 }));
+    fixture = TestBed.createComponent(BookingPage);
+    fixture.componentRef.setInput('bookingId', 'b1');
+    fixture.detectChanges();
+    httpMock.expectOne('/api/bookings/b1').flush(booking({ depositBaht: 200 }));
+    fixture.detectChanges();
+    answerHowToPay(null, 200);
 
     expect(textOf(fixture, 'booking-total')).toContain('600');
     expect(textOf(fixture, 'booking-deposit')).toContain('200');

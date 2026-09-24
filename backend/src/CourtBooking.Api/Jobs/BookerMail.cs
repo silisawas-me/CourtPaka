@@ -73,6 +73,11 @@ public sealed class BookerMail(
         // A row whose From and To are the same is not a move: it is the venue settling whether
         // the money arrived (BookingTransitions.Settled), and it is told as that. Read as a move,
         // it would tell the booker a second time that their booking was cancelled — by the venue.
+        //
+        // Only where the booking itself ended, though. The desk taking the balance of a booking
+        // held on a deposit writes the same shape of row against a booking that is still standing
+        // (PRD US-26, US-28), and there is nothing to tell somebody who just paid at the counter
+        // in person — least of all that the booking they are about to play was cancelled.
         var moves = await database.BookingStatusChanges
             .AsNoTracking()
             .Where(change =>
@@ -90,9 +95,16 @@ public sealed class BookerMail(
                 change.BookingId,
                 change.To,
                 Settled = change.From == change.To,
+                Ended = change.Booking!.Status == BookingStatus.Cancelled
+                    || change.Booking.Status == BookingStatus.Rejected,
                 change.ChangedAt,
             })
             .ToListAsync(cancellationToken);
+
+        // The desk's own settle rows are dropped rather than left to be told wrongly. Their
+        // receipt row stays unwritten, which is right: nothing was sent, so nothing is recorded
+        // as sent, and the row is dropped again on every sweep by the same rule.
+        moves.RemoveAll(move => move.Settled && !move.Ended);
 
         var refunds = await database.RefundRecords
             .AsNoTracking()

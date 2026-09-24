@@ -182,13 +182,20 @@ public static class BookingEndpoints
 
         var status = BookedSlots.StatusAt(booking, now);
 
+        await using var transaction =
+            await database.Database.BeginTransactionAsync(cancellationToken);
+
         // A booking held on a deposit has had only part of its price arrive, and a venue cannot
-        // give back more than it is holding (PRD US-28).
+        // give back more than it is holding (PRD US-28). Read behind the same lock the desk takes,
+        // so a payment landing at this moment is either in this number or waits for it.
+        await CounterMoneyEndpoints.QueueForTheMoneyAsync(database, bookingId, cancellationToken);
+
         var taken = await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken);
         var offer = Cancellation.For(booking, status, now, taken);
 
         if (offer.Refused is { } refused)
         {
+            await transaction.RollbackAsync(cancellationToken);
             return ApiProblem.Of(StatusCodes.Status409Conflict, refused);
         }
 
@@ -197,10 +204,8 @@ public static class BookingEndpoints
             offer.Payment,
             booking.TotalBaht,
             offer.RefundPercent,
-            taken);
-
-        await using var transaction =
-            await database.Database.BeginTransactionAsync(cancellationToken);
+            taken,
+            booking.DepositBaht);
 
         // The hours go back on sale the moment they are given up (PRD 6.1). Before the booking
         // row, which is the order BookedSlots.ReleaseAsync explains and every writer keeps.
@@ -714,7 +719,20 @@ public static class BookingEndpoints
             // what the venue says it sent (PRD 6.2, BR-06, US-18).
             sentBackBaht,
             booking.DepositBaht,
+            StillToPay(booking, status, takenBaht),
             Offer(booking, now, status, takenBaht));
+
+    /// <summary>
+    /// What the booker still owes at the desk. The same question the venue's own day list asks,
+    /// answered by the same rule: a booking that was let go has a difference between its price and
+    /// what was paid, and nobody owes it (PRD US-26).
+    /// </summary>
+    private static decimal StillToPay(Booking booking, BookingStatus status, decimal takenBaht)
+    {
+        var outstanding = Takings.OutstandingOf(booking.TotalBaht, takenBaht);
+
+        return Takings.CanTake(status, booking.PaymentState, outstanding) ? outstanding : 0m;
+    }
 
     /// <summary>What letting this booking go would come to, as the page reads it.</summary>
     private static CancellationOfferResponse Offer(

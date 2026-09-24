@@ -9,6 +9,7 @@ function item(overrides: Record<string, unknown> = {}) {
     bookingId: 'b1',
     bookerEmail: 'player@example.com',
     totalBaht: 400,
+    depositBaht: 400,
     slipUploadedAt: '2026-09-20T11:00:00Z',
     startsAt: '2026-09-21T11:00:00Z',
     playsSoon: false,
@@ -89,7 +90,10 @@ describe('SlipQueuePage', () => {
 
     clickOn(fixture, 'confirm');
 
-    httpMock.expectOne('/api/venues/v1/slip-queue/b1/confirm').flush({});
+    const decision = httpMock.expectOne('/api/venues/v1/slip-queue/b1/confirm');
+    // Nothing typed: the server takes what the booking was held on (PRD US-28).
+    expect(decision.request.body).toEqual({ amountBaht: null });
+    decision.flush({});
     fixture.detectChanges();
     httpMock.expectOne('/api/venues/v1/slip-queue/b2/slip').flush(new Blob(['slip']));
     fixture.detectChanges();
@@ -240,5 +244,21 @@ describe('SlipQueuePage', () => {
     fixture.detectChanges();
 
     expect(elementOf(fixture, 'page-error')).not.toBeNull();
+  });
+
+  /**
+   * A bank app lets the payer type over the amount the code carried, so the venue looking at the
+   * slip is the one who can say what arrived — and the desk would otherwise ask for it again
+   * (PRD US-28).
+   */
+  it('sends the amount the venue read off the slip', () => {
+    render([item({ depositBaht: 100 })]);
+
+    setInput(fixture, '[data-testid="arrived"]', '400');
+    clickOn(fixture, 'confirm');
+
+    const decision = httpMock.expectOne('/api/venues/v1/slip-queue/b1/confirm');
+    expect(decision.request.body).toEqual({ amountBaht: 400 });
+    decision.flush({});
   });
 });

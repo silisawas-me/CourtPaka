@@ -658,5 +658,6 @@
   "settings.deposit": "เก็บมัดจำก่อนจอง",
   "settings.deposit.hint": "ส่วนของราคาที่ผู้จองต้องโอนก่อนระบบจะกันคอร์ทให้ ที่เหลือเก็บที่สนาม (10–100%)",
   "settings.deposit.saved": "บันทึกแล้ว",
-  "error.venue.invalid_deposit": "สัดส่วนมัดจำต้องอยู่ระหว่าง 10% ถึง 100%"
+  "error.venue.invalid_deposit": "สัดส่วนมัดจำต้องอยู่ระหว่าง 10% ถึง 100%",
+  "slipQueue.arrived": "ยอดที่เห็นในสลิป"
 }

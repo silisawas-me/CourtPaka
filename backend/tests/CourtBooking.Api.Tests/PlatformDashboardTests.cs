@@ -69,8 +69,10 @@ public sealed class PlatformDashboardTests(ApiTestFixture api) : IClassFixture<A
 
         var cancelled = await ConfirmedOnlineAsync(owner, venue.Id, courts[0], 10);
         await EndAsync(cancelled, BookingStatus.Cancelled, PaymentState.Received, refundDue: 50m);
-        var unsettled = await ConfirmedOnlineAsync(owner, venue.Id, courts[0], 11);
-        await EndAsync(unsettled, BookingStatus.Cancelled, PaymentState.Unconfirmed, refundDue: 0m);
+        // Cancelled while its slip was still waiting, so nobody has said the money arrived and
+        // no receipt says it did either — which is the only way a booking reaches Unconfirmed.
+        var (_, waiting) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 11);
+        await EndAsync(waiting.Id, BookingStatus.Cancelled, PaymentState.Unconfirmed, refundDue: 0m);
         var noShow = await ConfirmedOnlineAsync(owner, venue.Id, courts[0], 12);
         await EndAsync(noShow, BookingStatus.NoShow, PaymentState.Received, refundDue: 0m);
 

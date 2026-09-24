@@ -66,6 +66,12 @@ public sealed record BookingResponse(
     /// asked for a share of it up front, and then the difference is the desk's to collect.
     /// </summary>
     decimal DepositBaht,
+    /// <summary>
+    /// What is still owed at the venue, worked out by the server (PRD US-28, US-26). Nought
+    /// unless the booking is one the venue is going to honour and is still short of its price —
+    /// a cancelled booking has a difference too, and it is not something anybody owes.
+    /// </summary>
+    decimal ToPayBaht,
     /// <summary>What letting this booking go would mean right now (PRD US-05).</summary>
     CancellationOfferResponse Cancellation);
 
@@ -198,6 +204,12 @@ public static class SlipErrorCodes
     /// <summary>The venue looked at something that is no longer waiting to be looked at.</summary>
     public const string NotAwaitingVerification = "slip.not_awaiting_verification";
 
+    /// <summary>
+    /// The amount the venue read off the slip is not one this booking could have been paid: nought
+    /// or less, or more than it still owes (PRD US-28).
+    /// </summary>
+    public const string InvalidAmount = "slip.invalid_amount";
+
     public const string ReasonRequired = "slip.reason_required";
     public const string ReasonTooLong = "slip.reason_too_long";
 }
@@ -206,7 +218,14 @@ public static class SlipErrorCodes
 /// Turning a booking away. Both answers are required: why, and whether the money arrived — the
 /// second decides what goes back (PRD 6.1, 6.2).
 /// </summary>
-public sealed record RejectSlipRequest(string Reason, bool PaymentReceived);
+public sealed record RejectSlipRequest(
+    string Reason,
+    bool PaymentReceived,
+    /// <summary>
+    /// How much arrived, where the venue can see it is not what was asked for (PRD US-28). Null
+    /// means what was asked for, which is what the booker's code carried.
+    /// </summary>
+    decimal? AmountBaht = null);
 
 /// <summary>
 /// One booking waiting for the venue to look at its slip (PRD US-12). It names the booker by the
@@ -234,6 +253,14 @@ public sealed record SlipQueueItemResponse(
 /// money arrived, and one already paid for needs a reason.
 /// </summary>
 public sealed record VenueCancelRequest(string? Reason, bool? PaymentReceived, string? Note);
+
+/// <summary>
+/// The venue accepting a slip, and how much it says arrived (PRD US-12, US-28). Null means what
+/// was asked for — which is the whole price unless the venue takes deposits, and is what the
+/// booker's code was made out for either way. A number says the slip shows something else, which
+/// a venue reading its own bank account is the only one who can tell.
+/// </summary>
+public sealed record ConfirmSlipRequest(decimal? AmountBaht);
 
 /// <summary>The venue saying, at last, whether the money arrived (PRD US-13, 6.2).</summary>
 public sealed record SettlePaymentRequest(bool PaymentReceived);

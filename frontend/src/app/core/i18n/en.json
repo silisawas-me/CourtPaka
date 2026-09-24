@@ -658,5 +658,6 @@
   "settings.deposit": "Deposit taken up front",
   "settings.deposit.hint": "The share of the price a booker transfers before the court is held. The rest is collected at the venue (10-100%).",
   "settings.deposit.saved": "Saved",
-  "error.venue.invalid_deposit": "The deposit share has to be between 10% and 100%."
+  "error.venue.invalid_deposit": "The deposit share has to be between 10% and 100%.",
+  "slipQueue.arrived": "Amount on the slip"
 }

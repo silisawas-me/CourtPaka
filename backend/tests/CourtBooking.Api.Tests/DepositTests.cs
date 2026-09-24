@@ -1,8 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using CourtBooking.Api.Bookings;
+using CourtBooking.Api.Data;
+using CourtBooking.Api.Localization;
 using CourtBooking.Api.Tests.Infrastructure;
 using CourtBooking.Api.Venues;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CourtBooking.Api.Tests;
 
@@ -38,11 +42,10 @@ public sealed class DepositTests(ApiTestFixture api) : IClassFixture<ApiTestFixt
 
     /// <summary>
     /// The venue cannot give back more than it is holding. A booking held on a deposit has had
-    /// part of its price arrive, so a policy that gives everything back gives back that part.
+    /// part of its price arrive, so terms that give everything back give back that part.
     /// </summary>
     [Fact]
-    public void A_refund_never_exceeds_what_arrived()
-    {
+    public void A_refund_never_exceeds_what_arrived() =>
         Assert.Equal(
             300m,
             Refunds.DueFor(
@@ -50,25 +53,41 @@ public sealed class DepositTests(ApiTestFixture api) : IClassFixture<ApiTestFixt
                 PaymentState.NotReceived,
                 totalBaht: 600m,
                 refundPercent: Refunds.AllOfIt,
-                heldBaht: 300m));
+                takenBaht: 300m,
+                askedBaht: 300m));
 
-        // Half the price, of which the venue holds all of it: the terms decide, not the till.
+    /// <summary>
+    /// The share is of the price, not of the payment. Terms that give half of a 600 booking back
+    /// leave the venue entitled to 300 of it — so a booker who paid 300 as a deposit is owed
+    /// nothing, and one who paid all of it is owed 300. Taking half of what happened to arrive
+    /// would hand the venue's whole cancellation fee to anybody paying a deposit.
+    /// </summary>
+    [Theory]
+    [InlineData(300, 0)]
+    [InlineData(450, 150)]
+    [InlineData(600, 300)]
+    public void What_the_terms_let_the_venue_keep_comes_out_of_what_it_holds(
+        decimal taken,
+        decimal owed) =>
         Assert.Equal(
-            300m,
+            owed,
             Refunds.DueFor(
                 BookingStatus.Cancelled,
                 PaymentState.NotReceived,
                 totalBaht: 600m,
                 refundPercent: 50,
-                heldBaht: 600m));
-    }
+                takenBaht: taken,
+                askedBaht: 300m));
 
     /// <summary>
-    /// The older answer still stands on its own: a venue that says it has the money has it,
-    /// whatever the receipts say — some bookings reached that answer before receipts existed.
+    /// The older answer still stands on its own, but only for what was asked for: a venue saying
+    /// the money arrived about a booking held on a 300 deposit is saying 300 arrived, not 600.
+    /// Every booking made before deposits existed was asked for its whole price, so those are
+    /// unchanged (the migration says so).
     /// </summary>
     [Fact]
-    public void A_venue_that_says_it_has_the_money_owes_the_share_of_it() =>
+    public void A_venue_that_says_it_has_the_money_has_what_it_asked_for()
+    {
         Assert.Equal(
             600m,
             Refunds.DueFor(
@@ -76,7 +95,19 @@ public sealed class DepositTests(ApiTestFixture api) : IClassFixture<ApiTestFixt
                 PaymentState.Received,
                 totalBaht: 600m,
                 refundPercent: Refunds.AllOfIt,
-                heldBaht: 0m));
+                takenBaht: 0m,
+                askedBaht: 600m));
+
+        Assert.Equal(
+            300m,
+            Refunds.DueFor(
+                BookingStatus.Cancelled,
+                PaymentState.Received,
+                totalBaht: 600m,
+                refundPercent: Refunds.AllOfIt,
+                takenBaht: 0m,
+                askedBaht: 300m));
+    }
 
     [Fact]
     public async Task A_venue_asks_for_a_share_and_the_code_carries_it()
@@ -191,5 +222,110 @@ public sealed class DepositTests(ApiTestFixture api) : IClassFixture<ApiTestFixt
             booker, venue.Id, VenueScenario.Today.AddDays(1), (courts[0], 9));
 
         Assert.Equal(booking.TotalBaht, booking.DepositBaht);
+    }
+
+    /// <summary>
+    /// The venue answering "the money arrived" weeks later is answering about the deposit, which
+    /// is what it asked for. Before this was said out loud, a 25% booking cancelled at that point
+    /// left the venue owing four times what it had been sent (PRD 6.2, US-13).
+    /// </summary>
+    [Fact]
+    public async Task Settling_a_deposit_booking_owes_back_the_deposit()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync(baht: 400m);
+        await owner.PutAsJsonAsync($"/api/venues/{venue.Id}/deposit", new DepositRequest(25));
+
+        var (booker, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 9);
+
+        // Cancelled while the slip was still waiting: nobody has said whether the money arrived.
+        var cancelled = await VenueScenario.ReadAsync<BookingResponse>(
+            await booker.PostAsync($"/api/bookings/{booking.Id}/cancel", null));
+        Assert.Equal(nameof(PaymentState.Unconfirmed), cancelled.PaymentState);
+        Assert.Equal(0m, cancelled.RefundDueBaht);
+
+        var settled = await VenueScenario.ReadAsync<VenueBookingResponse>(
+            await owner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/bookings/{booking.Id}/settle-payment",
+                new SettlePaymentRequest(true)));
+
+        Assert.Equal(100m, settled.RefundDueBaht);
+    }
+
+    /// <summary>
+    /// A booker can type over the amount in a bank app. The venue is looking at the slip, so it
+    /// is the one who can say what actually arrived — and if it could not, the desk would ask for
+    /// money that is already in the account (PRD US-28, BR-07).
+    /// </summary>
+    [Fact]
+    public async Task The_venue_records_what_the_slip_says_arrived()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync(baht: 400m);
+        await owner.PutAsJsonAsync($"/api/venues/{venue.Id}/deposit", new DepositRequest(25));
+
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 9);
+
+        var confirmed = await VenueScenario.ReadAsync<BookingResponse>(
+            await owner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/slip-queue/{booking.Id}/confirm",
+                new ConfirmSlipRequest(400m)));
+
+        // All of it arrived, so the venue has the money and the desk is asked for nothing.
+        Assert.Equal(nameof(PaymentState.Received), confirmed.PaymentState);
+        Assert.Equal(0m, confirmed.ToPayBaht);
+    }
+
+    [Fact]
+    public async Task A_slip_cannot_be_recorded_as_more_than_the_booking_costs()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync(baht: 400m);
+        await owner.PutAsJsonAsync($"/api/venues/{venue.Id}/deposit", new DepositRequest(25));
+
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 9);
+
+        var refused = await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/slip-queue/{booking.Id}/confirm",
+            new ConfirmSlipRequest(401m));
+
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal(SlipErrorCodes.InvalidAmount, await refused.ErrorCodeAsync());
+    }
+
+    /// <summary>
+    /// What the venue is holding is what it earned, so a booking played on a deposit alone is
+    /// revenue for the deposit — not nothing, and not its price (PRD US-15).
+    /// </summary>
+    [Fact]
+    public async Task A_deposit_that_was_played_is_revenue_for_what_arrived()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync(baht: 400m);
+        await owner.PutAsJsonAsync($"/api/venues/{venue.Id}/deposit", new DepositRequest(25));
+
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 9);
+        await owner.PostAsync($"/api/venues/{venue.Id}/slip-queue/{booking.Id}/confirm", null);
+
+        // Moved into yesterday, so the hours are played and the money is revenue rather than
+        // still to come.
+        var yesterday = VenueScenario.Today.AddDays(-1);
+        await PlayOnAsync(booking.Id, yesterday, 9);
+
+        var figures = await VenueScenario.ReadAsync<DashboardResponse>(
+            await owner.GetAsync(
+                $"/api/venues/{venue.Id}/dashboard?from={yesterday:yyyy-MM-dd}&to={yesterday:yyyy-MM-dd}"));
+
+        Assert.Equal(100m, figures.OnlineBaht);
+    }
+
+    /// <summary>Puts a booking's hours on a day that is over, in the database.</summary>
+    private async Task PlayOnAsync(Guid bookingId, DateOnly date, int hour)
+    {
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var starts = PlatformRequirements.BangkokHour(date, hour);
+
+        await database.BookingSlots
+            .Where(slot => slot.BookingId == bookingId)
+            .ExecuteUpdateAsync(set => set
+                .SetProperty(slot => slot.StartsAt, starts)
+                .SetProperty(slot => slot.EndsAt, starts.AddHours(1)));
     }
 }
