@@ -365,13 +365,15 @@ describe('AvailabilityPage', () => {
   });
 
   it('forgets the hours picked when the day changes', () => {
-    render();
+    // Both days are said out loud: leaving one to the page's default makes the test pass or fail
+    // by what the calendar says today.
+    render(day({ date: '2026-09-19' }), '2026-09-19');
     pickHour('c1', 18);
     expect(elementOf(fixture, 'booking-summary')).not.toBeNull();
 
-    fixture.componentRef.setInput('date', '2026-09-25');
+    fixture.componentRef.setInput('date', '2026-09-20');
     fixture.detectChanges();
-    expectRead().flush(day({ date: '2026-09-25' }));
+    expectRead().flush(day({ date: '2026-09-20' }));
     fixture.detectChanges();
 
     expect(elementOf(fixture, 'booking-summary')).toBeNull();
