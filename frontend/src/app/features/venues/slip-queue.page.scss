@@ -75,14 +75,18 @@
 }
 
 /* Two different kinds of unusual: one is about time, the other about trust. */
+/*
+ * The two things the queue says about a slip, in the meanings the whole app uses: hours about to
+ * be played are not sure yet, and a slip seen before is a risk (PRD BR-07, US-12).
+ */
 .badge-soon {
-  background: var(--mat-sys-tertiary-container);
-  color: var(--mat-sys-on-tertiary-container);
+  background: var(--status-waiting-soft);
+  color: var(--status-waiting-ink);
 }
 
 .badge-repeat {
-  background: var(--mat-sys-error-container);
-  color: var(--mat-sys-on-error-container);
+  background: var(--status-risk-soft);
+  color: var(--status-risk-ink);
 }
 
 .repeat-warning {

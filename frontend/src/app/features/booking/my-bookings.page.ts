@@ -8,6 +8,7 @@ import { courtsOf, hoursOf } from '../../core/bookings/hours';
 import { errorKey } from '../../core/http/api-error';
 import { WaitlistEntry, WaitlistService } from '../../core/bookings/waitlist.service';
 import { AppDatePipe } from '../../core/i18n/app-date.pipe';
+import { bookingTone, StatusChip } from '../../shared/status-chip';
 import { TranslationService } from '../../core/i18n/translation.service';
 
 /**
@@ -22,7 +23,14 @@ import { TranslationService } from '../../core/i18n/translation.service';
  */
 @Component({
   selector: 'app-my-bookings-page',
-  imports: [RouterLink, MatButtonModule, MatCardModule, MatProgressBarModule, AppDatePipe],
+  imports: [
+    RouterLink,
+    MatButtonModule,
+    MatCardModule,
+    MatProgressBarModule,
+    AppDatePipe,
+    StatusChip,
+  ],
   templateUrl: './my-bookings.page.html',
   styleUrl: './my-bookings.page.scss',
 })
@@ -30,6 +38,9 @@ export class MyBookingsPage {
   private readonly bookings = inject(BookingService);
 
   protected readonly i18n = inject(TranslationService);
+
+  /** The colour a status carries, from the one place that decides it (PRD US-25). */
+  protected readonly bookingTone = bookingTone;
 
   private readonly history = signal<BookingHistory>({ upcoming: [], past: [] });
 

@@ -157,9 +157,11 @@
                   {{ booking.bookerEmail ?? booking.bookerPhone ?? i18n.t('booker.deleted') }}
                 }
               </span>
-              <span class="badge booking-status" [class.badge-on]="booking.status === 'Confirmed'">
-                {{ i18n.t('booking.status.' + booking.status) }}
-              </span>
+              <app-status-chip
+                class="booking-status"
+                [label]="i18n.t('booking.status.' + booking.status)"
+                [tone]="bookingTone(booking.status)"
+              />
               <span class="booking-baht">{{ booking.totalBaht }}</span>
             </div>
 
