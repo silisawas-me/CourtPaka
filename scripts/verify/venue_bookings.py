@@ -90,6 +90,20 @@ with sync_playwright() as p:
         page,
     )
 
+    # What the day is waiting for, gathered from the rows themselves (PRD US-25). Which lines are
+    # shown depends on what else this shared venue has on the day, so what is checked is the
+    # mechanism: there is a list, and pressing a line lands on the booking that line names.
+    lines = page.locator("[data-testid=needs-doing] [data-testid^=chore-]")
+    check("the day says what it is waiting for", lines.count() > 0, page)
+
+    first = lines.first.get_attribute("data-testid")
+    about = first.rsplit("-", 5)[-5:]
+    lines.first.click()
+    check(
+        "and a line leads to the booking it is about",
+        page.locator(f"[data-testid=booking-{'-'.join(about)}]").is_visible(),
+    )
+
     # 1. Settling it turns the stored share into an amount (6.2).
     page.click(f"[data-testid=settle-{given_up['id']}]")
     expect(page.locator("[data-testid=settle-note]")).to_be_visible()

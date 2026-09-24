@@ -672,5 +672,12 @@
   "settings.risk.hint": "Counted at this venue only. The rule can only ask for more than your usual share, never less.",
   "settings.risk.save": "Save the rule",
   "error.venue.invalid_risk_rule": "Those thresholds do not work: look back between 1 and 365 days, and the full tier cannot be lower than the half tier.",
-  "error.venue.invalid_peak_hours": "Peak hours have to be a range, or both left empty."
+  "error.venue.invalid_peak_hours": "Peak hours have to be a range, or both left empty.",
+  "board.needsDoing": "Needs doing now",
+  "board.needs.checkIn": "Check in",
+  "board.needs.noShow": "Nobody came",
+  "board.needs.takeMoney": "Take money",
+  "board.needs.settle": "Say if it arrived",
+  "board.needs.refund": "Send back",
+  "board.needs.more": "Waiting as well:"
 }
