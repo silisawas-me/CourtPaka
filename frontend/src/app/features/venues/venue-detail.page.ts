@@ -15,7 +15,6 @@ import { TranslationService } from '../../core/i18n/translation.service';
 import {
   STAFF_DEFAULT_PERMISSIONS,
   Venue,
-  VenueAttention,
   VenueInvitation,
   VenueMember,
   VenuePermission,
@@ -57,9 +56,6 @@ export class VenueDetailPage {
 
   protected readonly venue = signal<Venue | null>(null);
   protected readonly members = signal<VenueMember[]>([]);
-
-  /** What is waiting here for this reader, which is what the numbers beside the doors say. */
-  protected readonly attention = signal<VenueAttention | null>(null);
 
   /** The one notice that can be turned off, and it is turned off per venue (PRD US-17). */
   protected readonly slipEmails = signal(true);
@@ -212,17 +208,13 @@ export class VenueDetailPage {
     this.pageError.set(null);
     this.memberError.set(null);
 
-    this.attention.set(null);
-
     forkJoin({
       venue: this.venues.get(venueId),
       members: this.venues.members(venueId),
-      attention: this.venues.attention(venueId),
     }).subscribe({
-      next: ({ venue, members, attention }) => {
+      next: ({ venue, members }) => {
         this.venue.set(venue);
         this.members.set(members);
-        this.attention.set(attention);
         // Set from what the server holds rather than left at its default, so the switch never
         // says something the venue did not choose.
         this.slipEmails.set(venue.wantsSlipEmails);

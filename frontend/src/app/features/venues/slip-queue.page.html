@@ -17,10 +17,6 @@
         {{ i18n.t('slipQueue.waiting') }}: {{ queue().length }}
       </mat-card-subtitle>
     </mat-card-header>
-
-    <mat-card-actions>
-      <a matButton [routerLink]="['/venues', venueId()]">{{ i18n.t('settings.backToVenue') }}</a>
-    </mat-card-actions>
   </mat-card>
 
   @if (queue().length === 0) {

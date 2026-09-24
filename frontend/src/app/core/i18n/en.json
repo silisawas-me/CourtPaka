@@ -304,7 +304,6 @@
   "search.none": "No venue matches that.",
   "search.subtitle": "By venue name, district or province",
   "search.title": "Find a court",
-  "settings.backToVenue": "← Back to the venue",
   "settings.courts.add": "Add court",
   "settings.courts.backFrom": "Back in use from",
   "settings.courts.inUse": "In use",
@@ -642,5 +641,14 @@
   "dashboard.bookings": "Bookings",
   "dashboard.refundDue": "Owed back",
   "dashboard.refunded": "Sent back",
-  "dashboard.download": "Download the summary (CSV)"
+  "dashboard.download": "Download the summary (CSV)",
+  "nav.venueLabel": "This venue",
+  "nav.atTheCounter": "At the counter",
+  "nav.behindTheCounter": "Behind the counter",
+  "nav.tab.today": "Today",
+  "nav.tab.slips": "Slips",
+  "nav.tab.money": "Money",
+  "nav.tab.reports": "Reports",
+  "nav.tab.more": "Venue",
+  "venues.detail": "The venue"
 }

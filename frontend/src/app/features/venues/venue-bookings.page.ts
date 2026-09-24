@@ -6,7 +6,6 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 import { courtsOf, hoursOf } from '../../core/bookings/hours';
 import { VenueWaitlistEntry, WaitlistService } from '../../core/bookings/waitlist.service';
@@ -57,7 +56,6 @@ const PAYMENT_METHODS: PaymentMethod[] = ['Cash', 'PromptPay', 'Card'];
     DayBoard,
     StatusChip,
     ReactiveFormsModule,
-    RouterLink,
     FieldError,
     MatButtonModule,
     MatCardModule,

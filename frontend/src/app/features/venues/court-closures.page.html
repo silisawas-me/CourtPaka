@@ -3,10 +3,6 @@
     <mat-card-title>{{ i18n.t('closures.title') }}</mat-card-title>
     <mat-card-subtitle>{{ i18n.t('closures.subtitle') }}</mat-card-subtitle>
   </mat-card-header>
-
-  <mat-card-actions>
-    <a matButton [routerLink]="['/venues', venueId()]">{{ i18n.t('settings.backToVenue') }}</a>
-  </mat-card-actions>
 </mat-card>
 
 @if (loading()) {

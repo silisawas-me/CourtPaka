@@ -12,6 +12,7 @@ from harness import (
     pick_date,
     seeded_venue_id,
     sign_in,
+    take_first_free_hour,
     venue_today,
 )
 from playwright.sync_api import expect, sync_playwright
@@ -29,6 +30,12 @@ with sync_playwright() as p:
     page = browser.new_page(viewport={"width": 390, "height": 844})
     email = new_booker(page)
     sign_in(page, email)
+    # This booker holds an hour of another day, which is what keeps their place in the queue
+    # waiting long enough to be read and given up: somebody already holding hours is skipped when
+    # the caretaker hands out an offer (S-22), and it sweeps every 10 s here. Without it the place
+    # is offered mid-script and cannot be stood down from, because an offer is not a place in a
+    # queue any more.
+    take_first_free_hour(page, venue_id, day + datetime.timedelta(days=1))
     page.goto(f"{BASE}/book/{venue_id}?date={day.isoformat()}")
     # The card is not carried by every visit to the grid (PRD 8's LCP target): pressing the
     # placeholder is what fetches it, the same bargain the calendar makes.

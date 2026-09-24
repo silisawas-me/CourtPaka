@@ -1,0 +1,62 @@
+<!--
+  The venue's own doors, down the side of every one of its pages (PRD US-25). A counter that has
+  to go back to the venue page to reach the slip queue reads the day twice; these are the same
+  doors the phone lays along the bottom, from one list, with the counts that decide where to look
+  next. On a phone this is not drawn at all — the bar above and the tabs below are what a thumb
+  can reach.
+-->
+<aside class="side" [attr.aria-label]="i18n.t('nav.venueLabel')">
+  <!-- Whose app this is, and the way out of the venue: the app's, not the shell's, to name. -->
+  <ng-content select="[sideHead]" />
+
+  @for (group of groups(); track group.heading) {
+    <p class="side-group">{{ i18n.t(group.heading) }}</p>
+    <nav class="side-nav" [attr.aria-label]="i18n.t(group.heading)">
+      @for (door of group.doors; track door.testId) {
+        <a
+          class="side-link"
+          routerLinkActive="on"
+          ariaCurrentWhenActive="page"
+          [routerLinkActiveOptions]="{ exact: door.exact }"
+          [routerLink]="door.path"
+          [attr.data-testid]="door.testId"
+        >
+          <span>{{ i18n.t(door.label) }}</span>
+          @if (door.waiting; as count) {
+            <span class="badge tone-waiting" [attr.data-testid]="door.testId + '-waiting'">
+              {{ count }}
+            </span>
+          }
+        </a>
+      }
+    </nav>
+  }
+
+  <!-- The rest of the app: whoever is signed in still has an account and bookings of their own. -->
+  <div class="side-foot">
+    <ng-content select="[sideFoot]" />
+  </div>
+</aside>
+
+<!--
+  The same doors along the bottom, where a thumb is. Five of them, because a sixth is a row
+  nobody can hit, and the last one is the venue's own page — which is where everything that is
+  not part of a shift lives.
+-->
+<nav class="tabs" [attr.aria-label]="i18n.t('nav.venueLabel')">
+  @for (tab of tabs(); track tab.testId) {
+    <a
+      class="tab"
+      routerLinkActive="on"
+      ariaCurrentWhenActive="page"
+      [routerLinkActiveOptions]="{ exact: tab.exact }"
+      [routerLink]="tab.path"
+      [attr.data-testid]="tab.tabTestId"
+    >
+      {{ i18n.t(tab.short) }}
+      @if (tab.waiting; as count) {
+        <span class="badge tone-waiting">{{ count }}</span>
+      }
+    </a>
+  }
+</nav>
