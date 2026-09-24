@@ -90,8 +90,8 @@
 .board-cell.closed {
   background: repeating-linear-gradient(
     135deg,
-    var(--mat-sys-surface-variant) 0 6px,
-    color-mix(in srgb, var(--mat-sys-surface-variant) 50%, transparent) 6px 12px
+    var(--status-risk-soft) 0 6px,
+    var(--mat-sys-surface) 6px 12px
   );
 }
 
@@ -104,22 +104,26 @@
   overflow: hidden;
 }
 
-/* Being played on right now. The one thing on the floor that is happening. */
+/*
+ * The three readings, in the colours the whole app now uses for them. The one being played is
+ * solid rather than tinted: it is the only thing on the floor that is happening, and on a board
+ * of tints a solid block is what the eye lands on first.
+ */
 .board-block.playing {
-  background: var(--mat-sys-primary);
+  background: var(--status-playing);
   color: var(--mat-sys-on-primary);
 }
 
 /* Somebody is expected: paid for, not here yet. */
 .board-block.confirmed {
-  background: var(--mat-sys-secondary-container);
-  color: var(--mat-sys-on-secondary-container);
+  background: var(--status-confirmed-soft);
+  color: var(--status-confirmed-ink);
 }
 
 /* Still waiting on something — a slip to be looked at, a person to say they are coming. */
 .board-block.waiting {
-  background: var(--mat-sys-tertiary-container);
-  color: var(--mat-sys-on-tertiary-container);
+  background: var(--status-waiting-soft);
+  color: var(--status-waiting-ink);
 }
 
 .board-who {

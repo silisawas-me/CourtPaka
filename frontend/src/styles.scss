@@ -49,6 +49,44 @@ html {
   );
 }
 
+/**
+ * The four things a status can mean, and the only place their colours are written (US-25, US-26).
+ *
+ * Material's palette is generated from one green, so its secondary and tertiary containers are
+ * shades of the same idea: put three of them side by side on a board and nobody can say which
+ * means "paid for" and which means "still waiting". These four are chosen to be told apart
+ * across a counter, and each is a pair — the ink is picked to stay readable on its own ground,
+ * because a status is usually small bold text on a tint.
+ *
+ * They are meanings, not decorations: use them for what a row *is*, never to make something
+ * pretty. Everything else still comes from var(--mat-sys-*).
+ */
+:root {
+  /* Being played, or money in hand. The CourtPaka green the whole theme is built from. */
+  --status-playing: #1d7a4c;
+  --status-playing-soft: #e2f2e9;
+  --status-playing-ink: #14603a;
+
+  /* Settled and ahead of us: somebody has paid and is expected. */
+  --status-confirmed: #2c5bb5;
+  --status-confirmed-soft: #e6edfb;
+  --status-confirmed-ink: #1f4590;
+
+  /* Not sure yet — a slip nobody has checked, somebody who has not said they are coming. */
+  --status-waiting: #a86a12;
+  --status-waiting-soft: #fbf0dc;
+  --status-waiting-ink: #7a4e0c;
+
+  /* Lost, shut, or owed back. */
+  --status-risk: #be4638;
+  --status-risk-soft: #fbe7e4;
+  --status-risk-ink: #9a3327;
+
+  /* Over and settled: it happened, and there is nothing to do about it. */
+  --status-done-soft: #eef1ee;
+  --status-done-ink: #5c6a70;
+}
+
 :root {
   --page-gutter: 1rem;
   --page-width: 64rem;
@@ -194,6 +232,35 @@ a {
 .badge-on {
   background: var(--mat-sys-secondary-container);
   color: var(--mat-sys-on-secondary-container);
+}
+
+/**
+ * The four tones a status chip can carry. One class per meaning, so a screen says what a row is
+ * rather than picking a colour it likes — and so changing what "waiting" looks like is one edit.
+ */
+.tone-playing {
+  background: var(--status-playing-soft);
+  color: var(--status-playing-ink);
+}
+
+.tone-confirmed {
+  background: var(--status-confirmed-soft);
+  color: var(--status-confirmed-ink);
+}
+
+.tone-waiting {
+  background: var(--status-waiting-soft);
+  color: var(--status-waiting-ink);
+}
+
+.tone-risk {
+  background: var(--status-risk-soft);
+  color: var(--status-risk-ink);
+}
+
+.tone-done {
+  background: var(--status-done-soft);
+  color: var(--status-done-ink);
 }
 
 /** One editable band or step: its fields on one line where there is room, stacked where there is not. */

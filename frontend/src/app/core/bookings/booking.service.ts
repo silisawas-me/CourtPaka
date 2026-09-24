@@ -14,6 +14,9 @@ export interface BookingSlot extends BookingSlotRequest {
   bahtPerHour: number;
 }
 
+/** Whether the venue considers itself paid (PRD 6.2). Unanswered is not the same as unpaid. */
+export type PaymentState = 'NotReceived' | 'Received' | 'Unconfirmed';
+
 export type BookingStatus =
   | 'Held'
   | 'PendingVerification'
@@ -50,7 +53,7 @@ export interface Booking {
   /** When the booker last sent a slip, if they have (PRD US-04). */
   slipUploadedAt: string | null;
   /** Whether the venue has the money, and what it owes back (PRD 6.2). */
-  paymentState: 'NotReceived' | 'Received' | 'Unconfirmed';
+  paymentState: PaymentState;
   refundDueBaht: number;
   refundedBaht: number;
   cancellation: CancellationOffer;

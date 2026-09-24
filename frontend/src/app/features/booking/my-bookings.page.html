@@ -74,9 +74,10 @@
             <mat-card-header>
               <mat-card-title>{{ booking.venueName }}</mat-card-title>
               <mat-card-subtitle>
-                <span class="badge" [class.badge-on]="booking.status === 'Confirmed'">
-                  {{ i18n.t('booking.status.' + booking.status) }}
-                </span>
+                <app-status-chip
+                  [label]="i18n.t('booking.status.' + booking.status)"
+                  [tone]="bookingTone(booking.status)"
+                />
               </mat-card-subtitle>
             </mat-card-header>
 

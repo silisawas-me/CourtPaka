@@ -23,6 +23,7 @@ import {
   VenueBookingsService,
 } from '../../core/venues/venue-bookings.service';
 import { FieldError } from '../../shared/field-error';
+import { bookingTone, StatusChip } from '../../shared/status-chip';
 import { Availability, PublicVenueService } from '../../core/venues/public-venue.service';
 import { CounterBooking } from './counter-booking';
 import { DayBoard } from './day-board';
@@ -54,6 +55,7 @@ const PAYMENT_METHODS: PaymentMethod[] = ['Cash', 'PromptPay', 'Card'];
   imports: [
     CounterBooking,
     DayBoard,
+    StatusChip,
     ReactiveFormsModule,
     RouterLink,
     FieldError,
@@ -78,6 +80,9 @@ export class VenueBookingsPage {
 
   protected readonly i18n = inject(TranslationService);
   protected readonly noteMaxLength = NOTE_MAX_LENGTH;
+
+  /** The colour a status carries, from the one place that decides it (PRD US-25). */
+  protected readonly bookingTone = bookingTone;
   protected readonly refundMethods = REFUND_METHODS;
   protected readonly paymentMethods = PAYMENT_METHODS;
 

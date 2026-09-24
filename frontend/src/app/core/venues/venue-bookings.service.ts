@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { BookingSlot, BookingStatus } from '../bookings/booking.service';
+import { BookingSlot, BookingStatus, PaymentState } from '../bookings/booking.service';
 
 /** Why the venue turned a booking away. Each answer settles a different amount (PRD 6.1). */
 export type CancellationReason = 'CustomerRequest' | 'VenueInitiated' | 'PaymentNotReceived';
@@ -69,7 +69,7 @@ export interface VenueBooking {
   arrivedAt: string | null;
   /** When being late turns into not having come, which is the venue's own wait (PRD US-24). */
   graceEndsAt: string;
-  paymentState: 'NotReceived' | 'Received' | 'Unconfirmed';
+  paymentState: PaymentState;
   totalBaht: number;
   /** What the venue has taken for this booking so far, and what that leaves (PRD US-26). */
   takenBaht: number;
