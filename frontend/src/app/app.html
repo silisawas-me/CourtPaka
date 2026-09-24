@@ -107,7 +107,10 @@
           </a>
         }
         @if (user(); as who) {
-          <span class="side-who">{{ who.email }}</span>
+          <!-- A LINE account may have no address at all (US-01), and an empty line is a puzzle. -->
+          @if (who.email; as address) {
+            <span class="side-who">{{ address }}</span>
+          }
           <button matButton type="button" data-testid="side-sign-out" (click)="signOut()">
             {{ i18n.t('nav.signOut') }}
           </button>

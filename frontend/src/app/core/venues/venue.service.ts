@@ -169,7 +169,7 @@ export class VenueService {
   }
   /** What is waiting here for the person asking (PRD US-17). */
   attention(venueId: string): Observable<VenueAttention> {
-    return this.http.get<VenueAttention>(`/api/venues/${venueId}/attention`);
+    return this.http.get<VenueAttention>(`/api/venues/${encodeURIComponent(venueId)}/attention`);
   }
 
   /** Whether this member wants to hear each time a slip arrives here (PRD US-17). */
