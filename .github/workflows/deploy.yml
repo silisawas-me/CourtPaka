@@ -94,7 +94,9 @@ jobs:
           path: |
             migrate-linux-x64
             migrate-linux-arm64
-          retention-days: 7
+          # The bundle is a hand-off to the next job in the same run, not something to keep:
+          # at ~110 MB a copy, a week of them is the whole store.
+          retention-days: 1
 
   deploy:
     needs: build
