@@ -672,5 +672,12 @@
   "settings.risk.hint": "นับเฉพาะการไม่มาที่สนามนี้ · กฎนี้ขอเพิ่มได้อย่างเดียว ไม่เคยขอน้อยกว่าที่สนามตั้งไว้",
   "settings.risk.save": "บันทึกกฎ",
   "error.venue.invalid_risk_rule": "เกณฑ์ไม่ถูกต้อง: ย้อนหลังต้องอยู่ระหว่าง 1 ถึง 365 วัน และจำนวนครั้งของขั้นเต็มต้องไม่น้อยกว่าขั้นครึ่ง",
-  "error.venue.invalid_peak_hours": "ช่วงพีคต้องเป็นช่วงเวลา หรือเว้นว่างทั้งคู่"
+  "error.venue.invalid_peak_hours": "ช่วงพีคต้องเป็นช่วงเวลา หรือเว้นว่างทั้งคู่",
+  "board.needsDoing": "ต้องจัดการตอนนี้",
+  "board.needs.checkIn": "เช็กอิน",
+  "board.needs.noShow": "ยังไม่มา",
+  "board.needs.takeMoney": "รับเงิน",
+  "board.needs.settle": "ยืนยันว่าเงินเข้า",
+  "board.needs.refund": "ต้องคืนเงิน",
+  "board.needs.more": "และอีก"
 }

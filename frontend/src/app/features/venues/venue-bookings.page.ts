@@ -10,6 +10,7 @@ import { Observable } from 'rxjs';
 import { courtsOf, hoursOf } from '../../core/bookings/hours';
 import { VenueWaitlistEntry, WaitlistService } from '../../core/bookings/waitlist.service';
 import { AppDatePipe, AppDateTimePipe } from '../../core/i18n/app-date.pipe';
+import { BahtPipe } from '../../core/i18n/baht.pipe';
 import { errorKey } from '../../core/http/api-error';
 import { plainDate, venueToday } from '../../core/i18n/plain-date';
 import { TranslationService } from '../../core/i18n/translation.service';
@@ -25,6 +26,7 @@ import { FieldError } from '../../shared/field-error';
 import { bookingTone, StatusChip } from '../../shared/status-chip';
 import { Availability, PublicVenueService } from '../../core/venues/public-venue.service';
 import { CounterBooking } from './counter-booking';
+import { ChoreKind, needsDoing } from './needs-doing';
 import { DayBoard } from './day-board';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 import { provideLocalizedDateAdapter } from '../../shared/localized-date-adapter';
@@ -49,9 +51,13 @@ const PAYMENT_METHODS: PaymentMethod[] = ['Cash', 'PromptPay', 'Card'];
  * the money is shown before it is pressed, and the answer comes from the server, which is also
  * what decides it.
  */
+/** Enough to act on without becoming the day's list a second time. */
+const ChoresShown = 5;
+
 @Component({
   selector: 'app-venue-bookings-page',
   imports: [
+    BahtPipe,
     CounterBooking,
     DayBoard,
     StatusChip,
@@ -132,6 +138,25 @@ export class VenueBookingsPage {
   private readonly clock = signal(new Date());
 
   protected readonly todayCount = computed(() => this.bookings$().length);
+
+  /**
+   * What is waiting to be done on this day (PRD US-25). Gathered from the rows the page already
+   * has — every door in it is one the server said was open — because a counter reading twenty
+   * rows to find the two that need something is reading nineteen rows for nothing.
+   */
+  protected readonly chores = computed(() =>
+    needsDoing(
+      this.bookings$(),
+      (booking) =>
+        booking.channel === 'Staff'
+          ? booking.customerName
+          : (booking.bookerEmail ?? booking.bookerPhone),
+      (booking) => this.hours(booking),
+    ),
+  );
+
+  /** How many are not shown, so a long list says so rather than ending without saying. */
+  protected readonly moreChores = computed(() => Math.max(0, this.chores().length - ChoresShown));
 
   /**
    * What the day took, counted from what was actually written down as taken rather than from the
@@ -499,6 +524,25 @@ export class VenueBookingsPage {
   }
 
   /** A block on the board was pressed: put that row where the counter is looking. */
+  /** The first few, because a list of everything is the day's list again (PRD US-25). */
+  protected readonly firstChores = computed(() => this.chores().slice(0, ChoresShown));
+
+  /**
+   * Which of the five colours a chore carries. Somebody at the desk is the day going right, a
+   * booking nobody came for is not, and money is money waiting (`shared/status-chip.ts` holds the
+   * same mapping for a booking's own status).
+   */
+  protected toneOf(kind: ChoreKind): string {
+    switch (kind) {
+      case 'checkIn':
+        return 'playing';
+      case 'noShow':
+        return 'risk';
+      default:
+        return 'waiting';
+    }
+  }
+
   protected reveal(bookingId: string): void {
     document
       .querySelector(`[data-testid="booking-${bookingId}"]`)

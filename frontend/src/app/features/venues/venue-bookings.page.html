@@ -63,24 +63,72 @@
         (picked)="sellAt($event)"
       />
 
+      <!--
+        The day in four numbers. Tiles rather than a run of label-and-value, because these are
+        read from across a counter and the number is what is being read — the money that has not
+        arrived carries the waiting colour when there is any, and nothing when there is not.
+      -->
       <dl class="today" data-testid="today-numbers">
-        <div>
+        <div class="tile">
           <dt>{{ i18n.t('board.bookings') }}</dt>
           <dd data-testid="today-bookings">{{ todayCount() }}</dd>
         </div>
-        <div>
+        <div class="tile">
           <dt>{{ i18n.t('board.used') }}</dt>
           <dd data-testid="today-used">{{ todayUsed() }}</dd>
         </div>
-        <div>
+        <div class="tile">
           <dt>{{ i18n.t('board.taken') }}</dt>
-          <dd data-testid="today-taken">{{ todayTaken() }}</dd>
+          <dd data-testid="today-taken">{{ todayTaken() | baht: i18n.locale() }}</dd>
         </div>
-        <div>
+        <div class="tile" [class.tile-waiting]="todayOwed() > 0">
           <dt>{{ i18n.t('board.owed') }}</dt>
-          <dd data-testid="today-owed">{{ todayOwed() }}</dd>
+          <dd data-testid="today-owed">{{ todayOwed() | baht: i18n.locale() }}</dd>
         </div>
       </dl>
+    </mat-card-content>
+  </mat-card>
+}
+
+<!--
+  What the day is waiting for, above everything but the floor itself (PRD US-25). Every line is a
+  door the server already said was open; pressing one goes to the row it belongs to rather than
+  acting from here, because the row is where the question is asked and answered.
+-->
+@if (firstChores().length > 0) {
+  <mat-card data-testid="needs-doing">
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('board.needsDoing') }}</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <ul class="stack">
+        @for (chore of firstChores(); track chore.kind + chore.bookingId) {
+          <li class="entry">
+            <button
+              class="chore"
+              type="button"
+              [attr.data-testid]="'chore-' + chore.kind + '-' + chore.bookingId"
+              (click)="reveal(chore.bookingId)"
+            >
+              <span class="badge" [class]="'tone-' + toneOf(chore.kind)">
+                {{ i18n.t('board.needs.' + chore.kind) }}
+              </span>
+              <span class="chore-when">{{ chore.when }}</span>
+              <span class="chore-who muted">{{ chore.who ?? i18n.t('booker.deleted') }}</span>
+              <span class="spacer"></span>
+              @if (chore.baht !== null) {
+                <span class="chore-baht">{{ chore.baht | baht: i18n.locale() }}</span>
+              }
+            </button>
+          </li>
+        }
+      </ul>
+
+      @if (moreChores() > 0) {
+        <p class="muted" data-testid="more-chores">
+          {{ i18n.t('board.needs.more') }} {{ moreChores() }}
+        </p>
+      }
     </mat-card-content>
   </mat-card>
 }

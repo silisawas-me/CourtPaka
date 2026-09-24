@@ -222,11 +222,22 @@
  * The day in four numbers, above the floor it counts. A row of pairs rather than cards: the
  * counter reads them at a glance beside the board, and four cards would take the whole screen.
  */
+/*
+ * The day in four numbers, read from across a counter — so each one is a tile with the number
+ * carrying the weight, not a label with a value after it. They wrap rather than scroll: on a
+ * phone two rows of two is still four numbers, and a row that scrolls sideways hides one.
+ */
 .today {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.5rem;
   margin: 0;
+}
+
+.tile {
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--mat-sys-corner-medium);
+  background: var(--mat-sys-surface-container-high);
 
   dt {
     font: var(--mat-sys-label-medium);
@@ -234,9 +245,53 @@
   }
 
   dd {
-    margin: 0;
-    font: var(--mat-sys-title-medium);
+    margin: 0.125rem 0 0;
+    font: var(--mat-sys-headline-small);
   }
+}
+
+/* Money that has not arrived, when there is any. Nothing owed is an ordinary tile. */
+.tile-waiting {
+  background: var(--status-waiting-soft);
+
+  dt,
+  dd {
+    color: var(--status-waiting-ink);
+  }
+}
+
+/*
+ * A whole line is the target: the thing being pressed is "this booking", and a small link at the
+ * end of a row is a thing somebody has to aim at while holding a card machine.
+ */
+.chore {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.25rem 0;
+  border: 0;
+  background: none;
+  font: var(--mat-sys-body-medium);
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.chore-when {
+  font-variant-numeric: tabular-nums;
+}
+
+/* An address is long and is the least of what this line is for, so it gives way first. */
+.chore-who {
+  flex: 1 1 8rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.chore-baht {
+  font-variant-numeric: tabular-nums;
 }
 
 /* What is known about whether this person is coming, under the line that names them. */
