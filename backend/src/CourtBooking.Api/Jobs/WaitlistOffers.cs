@@ -226,6 +226,20 @@ public sealed class WaitlistOffers(
             return false;
         }
 
+        // Said here as well as where a booker picks hours themselves: the event is the record of
+        // the rule having applied, and somebody who did not choose these hours is the most likely
+        // of anybody to ask why they were asked for more (PRD US-28). After the write, so it is
+        // only said of hours that were actually held.
+        if (reason != DepositReason.VenueTerms)
+        {
+            AppEvents.For(loggers).LogInformation(
+                "deposit_required {BookingId} {VenueId} {DepositBaht} {Reason}",
+                booking.Id,
+                entry.VenueId,
+                booking.DepositBaht,
+                reason.ToString());
+        }
+
         var claimed = await database.WaitlistEntries
             .Where(one => one.Id == entry.Id && one.State == WaitlistState.Waiting)
             .ExecuteUpdateAsync(

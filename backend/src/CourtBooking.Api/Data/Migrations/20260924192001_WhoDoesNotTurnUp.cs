@@ -71,11 +71,33 @@ namespace CourtBooking.Api.Data.Migrations
 
             migrationBuilder.Sql(
                 @"ALTER TABLE ""Bookings"" ALTER COLUMN ""DepositReason"" DROP DEFAULT;");
+
+            // And the rule itself is held at the database, the way the share beside it is: a row
+            // written by anything but the endpoint — a data fix, a partial restore — with a
+            // threshold of nought would floor every booker at half and tell every one of them
+            // they have a history here (PRD US-28).
+            migrationBuilder.Sql(
+                @"ALTER TABLE ""Venues"" ADD CONSTRAINT ""CK_Venues_RiskIsCountable"" "
+                + @"CHECK (""Risk_LookbackDays"" BETWEEN 1 AND 365 "
+                + @"AND ""Risk_HalfAt"" BETWEEN 1 AND 50 "
+                + @"AND ""Risk_FullAt"" BETWEEN ""Risk_HalfAt"" AND 50);");
+
+            migrationBuilder.Sql(
+                @"ALTER TABLE ""Venues"" ADD CONSTRAINT ""CK_Venues_PeakIsAWindow"" "
+                + @"CHECK ((""Risk_PeakFromHour"" IS NULL AND ""Risk_PeakUntilHour"" IS NULL) "
+                + @"OR (""Risk_PeakFromHour"" BETWEEN 0 AND 23 "
+                + @"AND ""Risk_PeakUntilHour"" BETWEEN 1 AND 24 "
+                + @"AND ""Risk_PeakFromHour"" < ""Risk_PeakUntilHour""));");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.Sql(
+                @"ALTER TABLE ""Venues"" DROP CONSTRAINT IF EXISTS ""CK_Venues_PeakIsAWindow"";");
+            migrationBuilder.Sql(
+                @"ALTER TABLE ""Venues"" DROP CONSTRAINT IF EXISTS ""CK_Venues_RiskIsCountable"";");
+
             migrationBuilder.DropColumn(
                 name: "Risk_FullAt",
                 table: "Venues");

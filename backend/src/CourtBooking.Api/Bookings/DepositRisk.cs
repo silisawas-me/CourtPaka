@@ -110,16 +110,32 @@ public static class DepositRisk
 
         if (noShows >= rule.FullAt && atPeak)
         {
-            return (Deposit.Everything, DepositReason.ManyNoShowsAtPeak);
+            return Raised(venuePercent, Deposit.Everything, DepositReason.ManyNoShowsAtPeak);
         }
 
         if (noShows >= rule.HalfAt)
         {
-            return (Math.Max(venuePercent, Half), DepositReason.SomeNoShows);
+            return Raised(venuePercent, Half, DepositReason.SomeNoShows);
         }
 
         return (venuePercent, DepositReason.VenueTerms);
     }
+
+    /// <summary>
+    /// The tier's floor against the venue's own share, and the reason only where the floor is
+    /// actually higher.
+    ///
+    /// Somebody charged exactly what the person beside them is charged has not been asked for
+    /// more, and must not be told they have: a venue asking for the whole price already asks for
+    /// the most there is, which is every venue until one says otherwise — and being told you are
+    /// paying for a history when you are paying the ordinary amount is both false and a thing
+    /// said about somebody for no reason.
+    /// </summary>
+    private static (int Percent, DepositReason Reason) Raised(
+        int venuePercent,
+        int floor,
+        DepositReason reason) =>
+        floor > venuePercent ? (floor, reason) : (venuePercent, DepositReason.VenueTerms);
 }
 
 /// <summary>

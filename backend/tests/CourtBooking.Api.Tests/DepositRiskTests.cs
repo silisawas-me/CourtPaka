@@ -48,12 +48,23 @@ public sealed class DepositRiskTests(ApiTestFixture api) : IClassFixture<ApiTest
             (50, DepositReason.SomeNoShows),
             DepositRisk.Asks(Rule(), venuePercent: 25, noShows: 2, atPeak: false));
 
-    /// <summary>The rule raises a floor; it never lowers one a venue has set for itself.</summary>
-    [Fact]
-    public void A_venue_that_asks_for_more_than_half_keeps_asking_for_it() =>
+    /// <summary>
+    /// The rule raises a floor; it never lowers one a venue has set for itself — and where the
+    /// floor is already higher, nothing was raised, so nobody is told they were asked for more.
+    /// A venue asking for the whole price is every venue until one says otherwise.
+    /// </summary>
+    [Theory]
+    [InlineData(80, 2, false, 80)]
+    [InlineData(Deposit.Everything, 2, false, Deposit.Everything)]
+    [InlineData(Deposit.Everything, 5, true, Deposit.Everything)]
+    public void Asking_the_ordinary_amount_is_not_asking_for_more(
+        int venuePercent,
+        int noShows,
+        bool atPeak,
+        int expected) =>
         Assert.Equal(
-            (80, DepositReason.SomeNoShows),
-            DepositRisk.Asks(Rule(), venuePercent: 80, noShows: 2, atPeak: false));
+            (expected, DepositReason.VenueTerms),
+            DepositRisk.Asks(Rule(), venuePercent, noShows, atPeak));
 
     [Fact]
     public void Three_misses_at_the_hours_the_venue_will_not_lose_is_the_whole_price() =>

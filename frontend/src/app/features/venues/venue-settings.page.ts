@@ -393,11 +393,6 @@ export class VenueSettingsPage {
   }
 
   /**
-   * The share of a price this venue asks for before it holds hours (PRD US-28). Sent as typed and
-   * judged by the server: 10 to 100 is the server's rule, and a page with its own copy of it is a
-   * page that can disagree with the answer (US-23).
-   */
-  /**
    * Sends the rule as filled in and lets the server judge it (US-23): the page keeps no copy of
    * what counts as sensible, so it cannot disagree with the refusal it would have to translate.
    */
@@ -425,6 +420,11 @@ export class VenueSettingsPage {
     });
   }
 
+  /**
+   * The share of a price this venue asks for before it holds hours (PRD US-28). Sent as typed and
+   * judged by the server: 10 to 100 is the server's rule, and a page with its own copy of it is a
+   * page that can disagree with the answer (US-23).
+   */
   protected chooseDeposit(event: Event): void {
     const field = event.target as HTMLInputElement;
     const percent = Number(field.value);

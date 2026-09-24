@@ -90,9 +90,17 @@ with sync_playwright() as p:
     # 4. A rule that makes no sense is refused, and the page says which one in the reader's words.
     owner.reload()
     owner.wait_for_selector("[data-testid=risk-full-at]")
+    # Asked of the server, not of the select: Angular writes a native select's value as
+    # "<index>: <value>", so reading the control can never come back empty whatever the form holds
+    # — a check that cannot fail is not a check (README rule 4).
+    saved = owner.request.get(f"{BASE}/api/venues/{venue_id}").json()["risk"]
     check(
-        "the hours it named are still there after a reload",
-        owner.input_value("[data-testid=risk-peak-from]") != "",
+        "the hours it named are what the venue reads back",
+        (saved["peakFromHour"], saved["peakUntilHour"]) == (18, 22),
+    )
+    check(
+        "and the form shows them rather than the defaults",
+        owner.locator("[data-testid=risk-peak-from] option:checked").inner_text().strip() == "18:00",
     )
 
     owner.fill("[data-testid=risk-full-at]", "1")

@@ -73,16 +73,16 @@ export interface Booking {
 }
 
 /**
- * How to pay for a booking that is waiting for money (PRD US-04). The payload is the string a
- * bank app reads out of the QR — built by the server, because the amount and the account in it
- * are rules about money, not decoration.
- */
-/**
  * Why a booking was asked for what it was asked for (PRD US-28): what the venue asks everybody,
  * or what it asks somebody who has left hours unused here.
  */
 export type DepositReason = 'VenueTerms' | 'SomeNoShows' | 'ManyNoShowsAtPeak';
 
+/**
+ * How to pay for a booking that is waiting for money (PRD US-04). The payload is the string a
+ * bank app reads out of the QR — built by the server, because the amount and the account in it
+ * are rules about money, not decoration.
+ */
 export interface PaymentDetails {
   totalBaht: number;
   /** What has to arrive now to keep the hours, and what the code is made out for (PRD US-28). */
