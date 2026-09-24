@@ -39,7 +39,7 @@ function booking(
       ...can,
     },
     ...overrides,
-  } as VenueBooking;
+  };
 }
 
 const who = (one: VenueBooking) => one.bookerEmail;
@@ -58,7 +58,7 @@ describe('what the day is waiting for', () => {
     const chores = needsDoing(
       [
         booking('money', { takeMoney: true }, { toPayBaht: 300 }),
-        booking('gone', { noShow: true }),
+        booking('gone', { noShow: true }, { arrival: 'Reminded' }),
         booking('here', { checkIn: true }),
       ],
       who,
@@ -66,6 +66,48 @@ describe('what the day is waiting for', () => {
     );
 
     expect(chores.map((chore) => chore.kind)).toEqual(['checkIn', 'noShow', 'takeMoney']);
+  });
+
+  /**
+   * A turn each, so a rush of arrivals cannot bury the money. Six people to check in at seven
+   * o'clock would otherwise fill every line a counter is shown, and the slip nobody has answered
+   * for would be a number at the bottom.
+   */
+  it('gives every kind a turn before any kind gets a second', () => {
+    const chores = needsDoing(
+      [
+        booking('a', { checkIn: true }),
+        booking('b', { checkIn: true }),
+        booking('c', { checkIn: true }),
+        booking('d', { takeMoney: true }, { toPayBaht: 300 }),
+        booking('e', { settlePayment: true }),
+      ],
+      who,
+      when,
+    );
+
+    expect(chores.map((chore) => chore.kind)).toEqual([
+      'checkIn',
+      'takeMoney',
+      'settle',
+      'checkIn',
+      'checkIn',
+    ]);
+  });
+
+  /**
+   * The door to record a no-show stays open for a day after the hours are played, because that
+   * is how a venue corrects what it wrote (PRD 6.1). A list headed "needs doing now" must not
+   * read that as nobody having come — least of all about somebody who was checked in.
+   */
+  it('does not say nobody came about a booking that was played', () => {
+    const played = booking('done', { noShow: true }, { status: 'Completed', arrival: 'Arrived' });
+    const arrived = booking('here', { noShow: true }, { arrival: 'Arrived' });
+    const nobody = booking('empty', { noShow: true }, { arrival: 'Confirmed' });
+
+    expect(
+      needsDoing([played, arrived, nobody], who, when).map((chore) => chore.bookingId),
+    ).toEqual(['empty']);
   });
 
   it('carries the amount for the chores that are about money', () => {
@@ -98,7 +140,7 @@ describe('what the day is waiting for', () => {
 
   /**
    * The rule the venue's own rows follow: a booking that was let go has a difference between its
-   * price and what was paid, and nobody owes it (PRD US-26).
+   * price and what was paid, and nobody owes it, and the door is what says so (PRD US-26).
    */
   it('does not ask for money the door says is not owed', () => {
     const chores = needsDoing([booking('b1', { takeMoney: false }, { toPayBaht: 300 })], who, when);

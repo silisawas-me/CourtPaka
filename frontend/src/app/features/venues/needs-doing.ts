@@ -45,7 +45,30 @@ export function needsDoing(
     })),
   );
 
-  return chores.sort((one, other) => ORDER.indexOf(one.kind) - ORDER.indexOf(other.kind));
+  return spread(chores);
+}
+
+/**
+ * A turn each, in the order above, until there is nothing left.
+ *
+ * Sorting by kind and then showing the first few would hide whole kinds on exactly the evening
+ * they matter: six people to check in at seven o'clock, and the slip nobody has answered for and
+ * the six hundred baht that never arrived are both below the fold, counted and not named. Every
+ * kind that has anything says so, and the order decides who says it first.
+ */
+function spread(chores: readonly Chore[]): Chore[] {
+  const queues = ORDER.map((kind) => chores.filter((chore) => chore.kind === kind));
+  const spread: Chore[] = [];
+
+  for (let turn = 0; spread.length < chores.length; turn++) {
+    for (const queue of queues) {
+      if (turn < queue.length) {
+        spread.push(queue[turn]);
+      }
+    }
+  }
+
+  return spread;
 }
 
 /** Everything one booking is waiting for. A booking can be waiting for more than one thing. */
@@ -56,13 +79,18 @@ function kindsFor(booking: VenueBooking): ChoreKind[] {
     kinds.push('checkIn');
   }
 
-  if (booking.can.noShow) {
+  // `can.noShow` is open on a booking that has already been played, because that is the door the
+  // venue corrects a record through for a day afterwards (PRD 6.1, US-13). On its own row that
+  // reads as "change what I wrote"; in a list headed "needs doing now" it would say nobody came —
+  // about somebody who was checked in at the desk. Only hours being played, with nobody here.
+  if (booking.can.noShow && booking.status === 'Confirmed' && booking.arrival !== 'Arrived') {
     kinds.push('noShow');
   }
 
   // The door, not the difference: a booking that was let go has a difference between its price
-  // and what was paid, and nobody owes it (PRD US-26).
-  if (booking.can.takeMoney && booking.toPayBaht > 0) {
+  // and what was paid, and nobody owes it (PRD US-26). The door already carries the amount being
+  // above nothing, and a second copy of that rule here is a rule that can disagree.
+  if (booking.can.takeMoney) {
     kinds.push('takeMoney');
   }
 

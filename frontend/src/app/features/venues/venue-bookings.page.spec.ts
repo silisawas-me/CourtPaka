@@ -648,4 +648,35 @@ describe('VenueBookingsPage', () => {
       expect(elementOf(fixture, 'booking-b1')).not.toBeNull();
     });
   });
+
+  /**
+   * The box is the page's own wiring around the rule: who each line names, and the five it shows
+   * before it starts counting (PRD US-25). What goes on the list at all is `needs-doing.spec.ts`.
+   */
+  it('names whoever the row would name, and counts what it does not show', () => {
+    const waiting = { ...booking().can, settlePayment: true };
+
+    render([
+      booking({
+        bookingId: 'staff',
+        channel: 'Staff',
+        customerName: 'คุณเอ',
+        bookerEmail: null,
+        can: waiting,
+      }),
+      booking({ bookingId: 'gone', bookerEmail: null, bookerPhone: null, can: waiting }),
+      ...['a', 'b', 'c', 'd'].map((id) => booking({ bookingId: id, can: waiting })),
+    ]);
+
+    expect(textOf(fixture, 'chore-settle-staff')).toContain('คุณเอ');
+    // An address that is gone is said as gone rather than left blank (PRD S-15).
+    expect(textOf(fixture, 'chore-settle-gone')).toContain(TRANSLATIONS.th['booker.deleted']);
+    expect(textOf(fixture, 'more-chores')).toContain('1');
+  });
+
+  it('says nothing where the day is waiting for nothing', () => {
+    render([booking()]);
+
+    expect(elementOf(fixture, 'needs-doing')).toBeNull();
+  });
 });

@@ -23,7 +23,7 @@ import {
   VenueBookingsService,
 } from '../../core/venues/venue-bookings.service';
 import { FieldError } from '../../shared/field-error';
-import { bookingTone, StatusChip } from '../../shared/status-chip';
+import { bookingTone, StatusChip, StatusTone } from '../../shared/status-chip';
 import { Availability, PublicVenueService } from '../../core/venues/public-venue.service';
 import { CounterBooking } from './counter-booking';
 import { ChoreKind, needsDoing } from './needs-doing';
@@ -523,19 +523,18 @@ export class VenueBookingsPage {
     });
   }
 
-  /** A block on the board was pressed: put that row where the counter is looking. */
   /** The first few, because a list of everything is the day's list again (PRD US-25). */
   protected readonly firstChores = computed(() => this.chores().slice(0, ChoresShown));
 
   /**
-   * Which of the five colours a chore carries. Somebody at the desk is the day going right, a
-   * booking nobody came for is not, and money is money waiting (`shared/status-chip.ts` holds the
-   * same mapping for a booking's own status).
+   * Which of the five colours a chore carries. Somebody expected at the desk is the same blue a
+   * confirmed booking wears — the green is for money in and hours being played (`styles.scss`) —
+   * a booking nobody came for is the red, and money waiting is the amber.
    */
-  protected toneOf(kind: ChoreKind): string {
+  protected toneOf(kind: ChoreKind): StatusTone {
     switch (kind) {
       case 'checkIn':
-        return 'playing';
+        return 'confirmed';
       case 'noShow':
         return 'risk';
       default:
@@ -543,10 +542,15 @@ export class VenueBookingsPage {
     }
   }
 
+  /** A block on the board or a line above was pressed: put that row where the counter is looking. */
   protected reveal(bookingId: string): void {
-    document
-      .querySelector(`[data-testid="booking-${bookingId}"]`)
-      ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const row = document.querySelector<HTMLElement>(`[data-testid="booking-${bookingId}"]`);
+    row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+
+    // And the reader with it. Scrolling moves the window; somebody on a keyboard or a screen
+    // reader is still where they were, and a control that moves nothing they can tell is a
+    // control that did nothing. The row takes focus without joining the tab order.
+    row?.focus({ preventScroll: true });
   }
 
   /** An empty hour was pressed: open the counter's own form at it (PRD US-13, US-25). */

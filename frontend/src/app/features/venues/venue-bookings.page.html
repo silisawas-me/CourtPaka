@@ -95,7 +95,7 @@
   door the server already said was open; pressing one goes to the row it belongs to rather than
   acting from here, because the row is where the question is asked and answered.
 -->
-@if (firstChores().length > 0) {
+@if (!loading() && !pageError() && firstChores().length > 0) {
   <mat-card data-testid="needs-doing">
     <mat-card-header>
       <mat-card-title>{{ i18n.t('board.needsDoing') }}</mat-card-title>
@@ -110,9 +110,10 @@
               [attr.data-testid]="'chore-' + chore.kind + '-' + chore.bookingId"
               (click)="reveal(chore.bookingId)"
             >
-              <span class="badge" [class]="'tone-' + toneOf(chore.kind)">
-                {{ i18n.t('board.needs.' + chore.kind) }}
-              </span>
+              <app-status-chip
+                [label]="i18n.t('board.needs.' + chore.kind)"
+                [tone]="toneOf(chore.kind)"
+              />
               <span class="chore-when">{{ chore.when }}</span>
               <span class="chore-who muted">{{ chore.who ?? i18n.t('booker.deleted') }}</span>
               <span class="spacer"></span>
@@ -185,7 +186,7 @@
       -->
       <ul class="day" data-testid="day-list">
         @for (booking of bookings$(); track booking.bookingId) {
-          <li class="booking" [attr.data-testid]="'booking-' + booking.bookingId">
+          <li class="booking" tabindex="-1" [attr.data-testid]="'booking-' + booking.bookingId">
             <div class="booking-line">
               <span class="booking-when">{{ hours(booking) }}</span>
               <span class="booking-courts muted">{{ courts(booking) }}</span>

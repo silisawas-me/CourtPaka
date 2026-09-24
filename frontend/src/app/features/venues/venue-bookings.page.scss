@@ -219,10 +219,6 @@
 }
 
 /*
- * The day in four numbers, above the floor it counts. A row of pairs rather than cards: the
- * counter reads them at a glance beside the board, and four cards would take the whole screen.
- */
-/*
  * The day in four numbers, read from across a counter — so each one is a tile with the number
  * carrying the weight, not a label with a value after it. They wrap rather than scroll: on a
  * phone two rows of two is still four numbers, and a row that scrolls sideways hides one.
@@ -277,6 +273,21 @@
   color: inherit;
   text-align: start;
   cursor: pointer;
+
+  &:hover {
+    background: color-mix(in srgb, var(--mat-sys-primary) 6%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 2px;
+  }
+}
+
+/* The row a chore led to, so arriving there is visible rather than only scrolled to. */
+.booking:focus-visible {
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: 2px;
 }
 
 .chore-when {
