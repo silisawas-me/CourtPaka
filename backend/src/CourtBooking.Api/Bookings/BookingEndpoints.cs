@@ -452,13 +452,39 @@ public static class BookingEndpoints
         }
 
         var policyId = await InForcePolicyIdAsync(database, venue.Id, cancellationToken);
+
+        // What this booker has to put down, and why (PRD US-28). Somebody who has left hours
+        // unused here is asked for more of the next ones, and the venue's own terms are the floor
+        // — the rule only ever asks for more.
+        var misses = await DepositRisk.MissesAsync(
+            database, venue.Id, bookerId, venue.Risk.LookbackDays, now, cancellationToken);
+
+        var (percent, reason) = DepositRisk.Asks(
+            venue.Risk,
+            venue.DepositPercent,
+            misses,
+            DepositRisk.TouchesPeak(venue.Risk, priced.Slots));
+
         var booking = Booking.Hold(
-            venue.Id, bookerId, policyId, priced.Slots, venue.DepositPercent, now);
+            venue.Id, bookerId, policyId, priced.Slots, percent, reason, now);
 
         if (await WriteNewAsync(database, booking, timeProvider, cancellationToken)
             is { } refused)
         {
             return Refuse(loggers, StatusCodes.Status409Conflict, refused, bookerId);
+        }
+
+        // What was asked of this booker and why, which is the record of the rule having applied
+        // (PRD US-28: a tier that changes has to be answerable for afterwards).
+        if (reason != DepositReason.VenueTerms)
+        {
+            AppEvents.For(loggers).LogInformation(
+                "deposit_required {BookingId} {VenueId} {DepositBaht} {Reason} {Misses}",
+                booking.Id,
+                venue.Id,
+                booking.DepositBaht,
+                reason.ToString(),
+                misses);
         }
 
         AppEvents.For(loggers).LogInformation(
@@ -600,6 +626,7 @@ public static class BookingEndpoints
             {
                 booking.TotalBaht,
                 booking.DepositBaht,
+                booking.DepositReason,
                 booking.HoldExpiresAt,
                 Account = booking.Venue!.Business.PromptPayId,
                 AccountName = booking.Venue!.Business.PromptPayAccountName,
@@ -614,6 +641,7 @@ public static class BookingEndpoints
         return TypedResults.Ok(new PaymentResponse(
             paying.TotalBaht,
             paying.DepositBaht,
+            paying.DepositReason.ToString(),
             Takings.OutstandingOf(paying.TotalBaht, paying.DepositBaht),
             paying.HoldExpiresAt,
             paying.AccountName,
@@ -719,6 +747,7 @@ public static class BookingEndpoints
             // what the venue says it sent (PRD 6.2, BR-06, US-18).
             sentBackBaht,
             booking.DepositBaht,
+            booking.DepositReason.ToString(),
             StillToPay(booking, status, takenBaht),
             Offer(booking, now, status, takenBaht));
 

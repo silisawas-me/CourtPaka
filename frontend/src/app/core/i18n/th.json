@@ -659,5 +659,18 @@
   "settings.deposit.hint": "ส่วนของราคาที่ผู้จองต้องโอนก่อนระบบจะกันคอร์ทให้ ที่เหลือเก็บที่สนาม (10–100%)",
   "settings.deposit.saved": "บันทึกแล้ว",
   "error.venue.invalid_deposit": "สัดส่วนมัดจำต้องอยู่ระหว่าง 10% ถึง 100%",
-  "slipQueue.arrived": "ยอดที่เห็นในสลิป"
+  "slipQueue.arrived": "ยอดที่เห็นในสลิป",
+  "booking.deposit.why.SomeNoShows": "สนามขอมัดจำมากขึ้นเพราะมีประวัติจองแล้วไม่มาที่สนามนี้",
+  "booking.deposit.why.ManyNoShowsAtPeak": "ชั่วโมงนี้เป็นช่วงที่สนามเสียหายมากถ้าไม่มีคนมา และมีประวัติจองแล้วไม่มา จึงต้องจ่ายเต็มจำนวนก่อน",
+  "settings.risk": "มัดจำตามประวัติการไม่มา",
+  "settings.risk.on": "ใช้กฎนี้",
+  "settings.risk.lookback": "ย้อนหลัง (วัน)",
+  "settings.risk.halfAt": "ขอครึ่งหนึ่งเมื่อไม่มาครบ (ครั้ง)",
+  "settings.risk.fullAt": "ขอเต็มจำนวนเมื่อไม่มาครบ (ครั้ง)",
+  "settings.risk.peakFrom": "ช่วงพีคตั้งแต่",
+  "settings.risk.peakUntil": "ถึง",
+  "settings.risk.hint": "นับเฉพาะการไม่มาที่สนามนี้ · กฎนี้ขอเพิ่มได้อย่างเดียว ไม่เคยขอน้อยกว่าที่สนามตั้งไว้",
+  "settings.risk.save": "บันทึกกฎ",
+  "error.venue.invalid_risk_rule": "เกณฑ์ไม่ถูกต้อง: ย้อนหลังต้องอยู่ระหว่าง 1 ถึง 365 วัน และจำนวนครั้งของขั้นเต็มต้องไม่น้อยกว่าขั้นครึ่ง",
+  "error.venue.invalid_peak_hours": "ช่วงพีคต้องเป็นช่วงเวลา หรือเว้นว่างทั้งคู่"
 }

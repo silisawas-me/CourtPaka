@@ -659,5 +659,18 @@
   "settings.deposit.hint": "The share of the price a booker transfers before the court is held. The rest is collected at the venue (10-100%).",
   "settings.deposit.saved": "Saved",
   "error.venue.invalid_deposit": "The deposit share has to be between 10% and 100%.",
-  "slipQueue.arrived": "Amount on the slip"
+  "slipQueue.arrived": "Amount on the slip",
+  "booking.deposit.why.SomeNoShows": "This venue asks for a larger deposit because of bookings not used here before.",
+  "booking.deposit.why.ManyNoShowsAtPeak": "These are hours the venue cannot afford to lose, and there are bookings not used here before, so the whole amount is due up front.",
+  "settings.risk": "Deposit by no-show history",
+  "settings.risk.on": "Use this rule",
+  "settings.risk.lookback": "Look back (days)",
+  "settings.risk.halfAt": "Ask for half after this many misses",
+  "settings.risk.fullAt": "Ask for all of it after this many",
+  "settings.risk.peakFrom": "Peak hours from",
+  "settings.risk.peakUntil": "until",
+  "settings.risk.hint": "Counted at this venue only. The rule can only ask for more than your usual share, never less.",
+  "settings.risk.save": "Save the rule",
+  "error.venue.invalid_risk_rule": "Those thresholds do not work: look back between 1 and 365 days, and the full tier cannot be lower than the half tier.",
+  "error.venue.invalid_peak_hours": "Peak hours have to be a range, or both left empty."
 }

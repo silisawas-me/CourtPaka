@@ -42,6 +42,13 @@ public sealed class Venue
     public int DepositPercent { get; set; } = Deposit.Everything;
 
     /// <summary>
+    /// When this venue asks for more than that, and of whom (PRD US-28). Somebody who has left
+    /// hours unused is asked for more of the next ones; a venue that would rather not ask turns
+    /// the whole rule off.
+    /// </summary>
+    public VenueRiskRule Risk { get; set; } = new();
+
+    /// <summary>
     /// Where the money goes and who the venue is for tax (PRD US-10). Owned by the venue rather
     /// than kept beside it, because a venue without it cannot be paid and cannot issue a
     /// document — there is no useful state where it is absent.

@@ -447,6 +447,22 @@ def ensure_bookable(browser, venue_id) -> None:
     if whole.status != 204:
         raise RuntimeError(f"Could not reset the deposit: {whole.status} {whole.text()}")
 
+    # And counting misses the way the product says, with no hour treated as peak. deposit_risk.py
+    # moves these because that is what it is about (PRD US-28).
+    counting = page.request.put(
+        f"{BASE}/api/venues/{venue_id}/risk-rule",
+        data={
+            "on": True,
+            "lookbackDays": 60,
+            "halfAt": 2,
+            "fullAt": 3,
+            "peakFromHour": None,
+            "peakUntilHour": None,
+        },
+    )
+    if counting.status != 204:
+        raise RuntimeError(f"Could not reset the risk rule: {counting.status} {counting.text()}")
+
     page.close()
 
 

@@ -49,6 +49,16 @@
             {{ how.payAtVenueBaht | baht: i18n.locale() }}
           </p>
         }
+
+        <!--
+          And why, where it is not simply what this venue asks everybody (PRD US-28). Somebody
+          asked for more than the person beside them is owed the reason.
+        -->
+        @if (how.depositReason !== 'VenueTerms') {
+          <p class="muted" data-testid="deposit-reason">
+            {{ i18n.t('booking.deposit.why.' + how.depositReason) }}
+          </p>
+        }
       }
     </mat-card-content>
   </mat-card>

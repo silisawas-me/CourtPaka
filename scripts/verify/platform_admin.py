@@ -119,7 +119,9 @@ with sync_playwright() as p:
 
     # 6. Approved, it appears on the booker's side.
     admin.reload()
-    admin.wait_for_selector("[data-testid=venue-list]")
+    # The row itself, not the list: the list is not drawn at all when the filter in force has
+    # nothing in it, and whether some other script left a venue waiting is not this one's business.
+    admin.wait_for_selector(f"[data-testid=open-{venue['id']}]")
     admin.click(f"[data-testid=open-{venue['id']}]")
     with admin.expect_response(lambda r: "/approve" in r.url) as approved:
         admin.click("[data-testid=approve]")
@@ -130,7 +132,7 @@ with sync_playwright() as p:
 
     # 7. Suspended, it disappears again — but keeps its own doors open.
     admin.reload()
-    admin.wait_for_selector("[data-testid=venue-list]")
+    admin.wait_for_selector("[data-testid=filter-Approved]")
     admin.click("[data-testid=filter-Approved]")
     admin.wait_for_selector(f"[data-testid=open-{venue['id']}]")
     admin.click(f"[data-testid=open-{venue['id']}]")
@@ -154,7 +156,7 @@ with sync_playwright() as p:
 
     # 8. Lifting it puts the venue back.
     admin.reload()
-    admin.wait_for_selector("[data-testid=venue-list]")
+    admin.wait_for_selector("[data-testid=filter-Suspended]")
     admin.click("[data-testid=filter-Suspended]")
     admin.wait_for_selector(f"[data-testid=open-{venue['id']}]")
     admin.click(f"[data-testid=open-{venue['id']}]")

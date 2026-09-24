@@ -61,6 +61,8 @@ export interface Booking {
    * asked for a share of it up front, and then the difference is paid at the venue.
    */
   depositBaht: number;
+  /** Why that much was asked for (PRD US-28). A name the page turns into a sentence. */
+  depositReason: DepositReason;
   /**
    * What is still owed at the venue, decided by the server (PRD US-28). Nought unless this is a
    * booking the venue will honour and its price has not all arrived — a booking that was let go
@@ -75,10 +77,17 @@ export interface Booking {
  * bank app reads out of the QR — built by the server, because the amount and the account in it
  * are rules about money, not decoration.
  */
+/**
+ * Why a booking was asked for what it was asked for (PRD US-28): what the venue asks everybody,
+ * or what it asks somebody who has left hours unused here.
+ */
+export type DepositReason = 'VenueTerms' | 'SomeNoShows' | 'ManyNoShowsAtPeak';
+
 export interface PaymentDetails {
   totalBaht: number;
   /** What has to arrive now to keep the hours, and what the code is made out for (PRD US-28). */
   depositBaht: number;
+  depositReason: DepositReason;
   /** What is left for the desk once it has. Zero where the venue asks for the whole price. */
   payAtVenueBaht: number;
   holdExpiresAt: string;
