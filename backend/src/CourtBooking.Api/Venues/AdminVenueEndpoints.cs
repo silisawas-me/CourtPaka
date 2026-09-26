@@ -33,6 +33,10 @@ public static class AdminVenueEndpoints
         admin.MapPost("/{venueId:guid}/reject", RejectAsync);
         admin.MapPost("/{venueId:guid}/suspend", SuspendAsync);
         admin.MapPost("/{venueId:guid}/reinstate", ReinstateAsync);
+
+        // What the platform charges this venue (PRD US-21). The platform's own decision, so it
+        // lives with the platform's own screens rather than under the venue's doors.
+        admin.MapCommissionRateEndpoints();
     }
 
     /// <summary>

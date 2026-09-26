@@ -96,3 +96,29 @@
 .history-why {
   flex-basis: 100%;
 }
+
+/*
+ * What the platform charges this venue (PRD US-21). A section of the application rather than a
+ * screen of its own, because the last rate is what an admin needs in front of them to decide the
+ * next one — the same reason the venue's own history is on this page.
+ */
+.commission {
+  display: grid;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+
+  h4 {
+    font: var(--mat-sys-title-small);
+    margin: 0;
+  }
+
+  /* A percentage is three digits and a point; a date is as long as Thai writes one. */
+  .rate {
+    width: 8rem;
+  }
+
+  .rate-from {
+    width: 13rem;
+  }
+}

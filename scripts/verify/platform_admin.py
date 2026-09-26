@@ -1,5 +1,7 @@
 """The platform deciding which venues may trade on it (US-20)."""
 
+import datetime
+
 from harness import (
     BASE,
     OWNER,
@@ -8,6 +10,7 @@ from harness import (
     login,
     new_booker,
     sign_in,
+    venue_today,
 )
 from playwright.sync_api import expect, sync_playwright
 
@@ -85,6 +88,43 @@ with sync_playwright() as p:
         "0105561000000" in admin.locator("[data-testid=tax-id]").inner_text(),
         admin,
     )
+
+    # 3b. What the platform charges this venue (US-21). The rate is the platform's own decision,
+    # so it is read and set on the platform's own screen.
+    admin.wait_for_selector("[data-testid=commission]")
+    check(
+        "a venue with no rate agreed says so rather than saying it is charged nothing",
+        "%" not in admin.locator("[data-testid=commission-today]").inner_text(),
+        admin,
+    )
+
+    admin.fill("[data-testid=rate-percent]", "12.5")
+    with admin.expect_response(lambda r: "/commission" in r.url and r.request.method == "POST") as agreed:
+        admin.click("[data-testid=save-rate]")
+    check("a rate can be agreed", agreed.value.status == 200)
+    check("and it is what the venue is charged today", agreed.value.json()["todayPercent"] == 12.5)
+
+    expect(admin.locator("[data-testid=commission-history]")).to_be_visible()
+    check(
+        "and the page shows it",
+        "12.5%" in admin.locator("[data-testid=commission-today]").inner_text(),
+        admin,
+    )
+
+    # A rate is added, never edited: the old one is what the days before the new one are charged.
+    yesterday = (venue_today() - datetime.timedelta(days=1)).isoformat()
+    backwards = admin.request.post(
+        f"{BASE}/api/admin/venues/{venue['id']}/commission",
+        data={"percent": 5, "effectiveFrom": yesterday, "note": None},
+    )
+    check("a rate cannot start on a day already charged", backwards.status == 400)
+    check(
+        "and the refusal says which rule it is",
+        backwards.json().get("code") == "venue.rate_starts_in_the_past",
+    )
+
+    refused = anyone.request.get(f"{BASE}/api/admin/venues/{venue['id']}/commission")
+    check("and a venue cannot read what it is charged", refused.status in (401, 403))
 
     # 4. Turning it away needs a reason, and the reason reaches the venue.
     admin.click("[data-testid=reject]")

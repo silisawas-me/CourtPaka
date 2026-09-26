@@ -36,6 +36,26 @@ export interface AdminVenueDetail {
 export type VenueDecision = 'approve' | 'reject' | 'suspend' | 'reinstate';
 
 /** The platform deciding which venues may trade on it (PRD US-20). */
+/** One rate the platform has charged a venue, and who agreed it (PRD US-21). */
+export interface CommissionRate {
+  percent: number;
+  effectiveFrom: string;
+  setAt: string;
+  /** Null once that admin's account has been closed; the rate stands either way. */
+  setByEmail: string | null;
+  note: string | null;
+}
+
+/**
+ * What a venue is charged today, and every rate it has been charged. `todayPercent` is null
+ * where the platform has never agreed one — which is not nought: nought is a rate somebody
+ * chose, and null is a question nobody has answered.
+ */
+export interface CommissionRates {
+  todayPercent: number | null;
+  rates: CommissionRate[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class AdminVenuesService {
   private readonly http = inject(HttpClient);
@@ -48,6 +68,25 @@ export class AdminVenuesService {
 
   one(venueId: string): Observable<AdminVenueDetail> {
     return this.http.get<AdminVenueDetail>(`/api/admin/venues/${venueId}`);
+  }
+
+  /** What this venue is charged today, and every rate it has ever been charged (PRD US-21). */
+  commission(venueId: string): Observable<CommissionRates> {
+    return this.http.get<CommissionRates>(`/api/admin/venues/${venueId}/commission`);
+  }
+
+  /** Agrees a rate from a date. The answer is the whole history, the newest first. */
+  setCommission(
+    venueId: string,
+    percent: number,
+    effectiveFrom: string,
+    note?: string,
+  ): Observable<CommissionRates> {
+    return this.http.post<CommissionRates>(`/api/admin/venues/${venueId}/commission`, {
+      percent,
+      effectiveFrom,
+      note: note ?? null,
+    });
   }
 
   decide(venueId: string, decision: VenueDecision, reason?: string): Observable<AdminVenue> {

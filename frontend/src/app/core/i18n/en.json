@@ -212,6 +212,8 @@
   "error.tooManyRequests": "Too many requests. Wait a moment and try again.",
   "error.unknown": "Something went wrong. Please try again.",
   "error.venue.agreement_out_of_date": "The agreement has changed. Reload and read it again.",
+  "error.venue.invalid_rate": "A rate is between 0 and 100, to at most two decimal places.",
+  "error.venue.rate_starts_in_the_past": "A rate cannot start in the past: those days have already been charged at the rate in force then.",
   "error.venue.already_member": "That person is already a member of this venue",
   "error.venue.code_already_used": "That venue code is already taken",
   "error.venue.invalid_address_line": "An address is needed.",
@@ -695,5 +697,11 @@
   "board.needs.refund": "Send back",
   "board.needs.more": "Waiting as well:",
   "settings.courts.outOfUse": "Out of use",
-  "settings.sections": "On this page"
+  "settings.sections": "On this page",
+  "admin.commission.title": "Commission",
+  "admin.commission.today": "Charged today",
+  "admin.commission.none": "No rate agreed yet",
+  "admin.commission.percent": "Rate (%)",
+  "admin.commission.from": "From",
+  "admin.commission.save": "Save rate"
 }

@@ -212,6 +212,8 @@
   "error.tooManyRequests": "ทำรายการถี่เกินไป กรุณารอสักครู่แล้วลองใหม่",
   "error.unknown": "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
   "error.venue.agreement_out_of_date": "ข้อตกลงมีเวอร์ชันใหม่แล้ว โหลดหน้านี้ใหม่แล้วอ่านอีกครั้ง",
+  "error.venue.invalid_rate": "อัตราต้องอยู่ระหว่าง 0 ถึง 100 และมีทศนิยมไม่เกิน 2 ตำแหน่ง",
+  "error.venue.rate_starts_in_the_past": "อัตราเริ่มใช้ย้อนหลังไม่ได้ เพราะวันที่ผ่านไปแล้วถูกคิดตามอัตราเดิมไปแล้ว",
   "error.venue.already_member": "อีเมลนี้เป็นสมาชิกของสนามอยู่แล้ว",
   "error.venue.code_already_used": "รหัสสนามนี้ถูกใช้ไปแล้ว กรุณาใช้รหัสอื่น",
   "error.venue.invalid_address_line": "กรุณากรอกที่อยู่",
@@ -695,5 +697,11 @@
   "board.needs.refund": "ต้องคืนเงิน",
   "board.needs.more": "และอีก",
   "settings.courts.outOfUse": "ปิดใช้งาน",
-  "settings.sections": "หัวข้อในหน้านี้"
+  "settings.sections": "หัวข้อในหน้านี้",
+  "admin.commission.title": "ค่าคอมมิชชัน",
+  "admin.commission.today": "อัตราที่ใช้อยู่วันนี้",
+  "admin.commission.none": "ยังไม่ได้ตกลงอัตรา",
+  "admin.commission.percent": "อัตรา (%)",
+  "admin.commission.from": "เริ่มใช้วันที่",
+  "admin.commission.save": "บันทึกอัตรา"
 }
