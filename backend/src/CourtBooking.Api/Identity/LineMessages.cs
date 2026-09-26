@@ -90,8 +90,26 @@ public sealed class LineMessenger(
         }
     }
 
-    private static string Short(string text) =>
-        text.Length <= MostCharacters ? text : text[..MostCharacters];
+    /// <summary>
+    /// Cut to what LINE will take, never through the middle of a character. Thai letters are one
+    /// unit each, but a venue with an emoji in its name is two, and half of one is not a letter —
+    /// it is a byte sequence that is no longer text.
+    /// </summary>
+    private static string Short(string text)
+    {
+        if (text.Length <= MostCharacters)
+        {
+            return text;
+        }
+
+        var cut = MostCharacters;
+        if (char.IsHighSurrogate(text[cut - 1]))
+        {
+            cut--;
+        }
+
+        return text[..cut];
+    }
 }
 
 /// <summary>

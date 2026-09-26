@@ -65,11 +65,11 @@ public sealed class LineNoticeTests(ApiTestFixture api) : IClassFixture<ApiTestF
     }
 
     /// <summary>
-    /// A deployment with no channel access token has nothing to push with, so everybody is
-    /// written to as before and nothing has to be switched off (PRD US-34).
+    /// A deployment with no channel access token has nothing to push with, so everybody who has
+    /// an address is written to as before and nothing has to be switched off (PRD US-34).
     /// </summary>
     [Fact]
-    public async Task Without_a_channel_nobody_is_pushed_to()
+    public async Task Without_a_channel_the_address_is_written_to_as_before()
     {
         api.LineMessages.IsEnabled = false;
 
@@ -81,6 +81,32 @@ public sealed class LineNoticeTests(ApiTestFixture api) : IClassFixture<ApiTestF
 
         Assert.NotEmpty(api.Emails.To(email));
         Assert.Equal(BookerChannel.Email, await SentByAsync(booking.Id, BookerNoticeKind.Held));
+    }
+
+    /// <summary>
+    /// And the one it changes for: a LINE booker on a deployment that cannot push is back to
+    /// where they were before this story, which is nowhere. Not quietly written to the address
+    /// LINE shared — nobody has said that address is theirs (PRD US-01, US-34).
+    /// </summary>
+    [Fact]
+    public async Task Without_a_channel_a_LINE_booker_is_where_they_were_before()
+    {
+        api.LineMessages.IsEnabled = false;
+
+        var shared = scenario.NewEmail();
+        var (_, venue, courts) = await scenario.BookableVenueAsync();
+        var (booker, lineUserId) = await scenario.SignedInWithLineAsync(shared);
+        var booking = await VenueScenario.HoldAsync(booker, venue.Id, Tomorrow, (courts[0], 6));
+
+        await SweepAsync();
+
+        Assert.Empty(api.LineMessages.To(lineUserId));
+        Assert.Empty(AboutBookings(shared));
+
+        // Claimed — the sweep will not come back to it — and never delivered, which is exactly
+        // what this story was built to stop happening.
+        Assert.Equal(1, await ClaimedAsync(booking.Id, BookerNoticeKind.Held));
+        Assert.Null(await SentByAsync(booking.Id, BookerNoticeKind.Held));
     }
 
     /// <summary>

@@ -384,12 +384,26 @@ public sealed class BookerMail(
                 CancellationToken.None);
         }
 
-        // Which way it went. Written after, because until now it had not gone anywhere.
-        await database.BookerNotices
-            .Where(one => one.SourceId == due.SourceId && one.Kind == due.Kind)
-            .ExecuteUpdateAsync(
-                set => set.SetProperty(one => one.SentBy, reach.Channel),
-                CancellationToken.None);
+        // Which way it went. Written after, because until now it had not gone anywhere — and
+        // wrapped, because by this point it has. A failure here is a note not taken, not a
+        // message not sent: letting it fall through would hand a delivered message to the catch
+        // that logs "could not tell the booker", and the row would say it never went out.
+        try
+        {
+            await database.BookerNotices
+                .Where(one => one.SourceId == due.SourceId && one.Kind == due.Kind)
+                .ExecuteUpdateAsync(
+                    set => set.SetProperty(one => one.SentBy, reach.Channel),
+                    CancellationToken.None);
+        }
+        catch (Exception failure)
+        {
+            loggers.CreateLogger<BookerMail>().LogWarning(
+                failure,
+                "Told the booker of {BookingId} about {Kind} by {Channel}, and could not write "
+                    + "down which way it went.",
+                due.BookingId, due.Kind, reach.Channel);
+        }
 
         // Somebody has now been asked whether they are coming, which is what the counter reads
         // as Reminded (PRD US-24). Written after the message, because it is about a message that
