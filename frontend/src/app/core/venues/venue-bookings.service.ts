@@ -194,6 +194,11 @@ export interface Refunds {
   sentBackBaht: number;
   outstandingBaht: number;
   records: RefundRecord[];
+  /**
+   * The most the person reading may write down in one record (PRD US-18), or null where they
+   * have no ceiling. The server decides it; the page only repeats what it said.
+   */
+  yourLimitBaht: number | null;
 }
 
 /** The counter's side of the bookings a venue has taken (PRD US-13). */

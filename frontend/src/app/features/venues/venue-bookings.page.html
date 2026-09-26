@@ -670,6 +670,17 @@
                           [appFieldError]="refundForm.controls.amountBaht"
                           testId="amount-error"
                         ></mat-error>
+                        <!--
+                          What this person may send in one record, said before they type rather
+                          than after they are refused (PRD US-18). The server decides it; this
+                          only repeats what it said about the reader.
+                        -->
+                        @if (sent.yourLimitBaht !== null) {
+                          <mat-hint data-testid="refund-limit">
+                            {{ i18n.t('refunds.yourLimit') }}
+                            {{ sent.yourLimitBaht | baht: i18n.locale() }}
+                          </mat-hint>
+                        }
                       </mat-form-field>
 
                       <mat-form-field class="field">

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using CourtBooking.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CourtBooking.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260926080856_WhatAMemberMaySendBack")]
+    partial class WhatAMemberMaySendBack
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -401,6 +404,9 @@ namespace CourtBooking.Api.Data.Migrations
                     b.Property<Guid>("BookingId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateOnly>("CountsOn")
+                        .HasColumnType("date");
+
                     b.Property<int>("Method")
                         .HasColumnType("integer");
 
@@ -423,7 +429,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("ReceivedByUserId");
 
-                    b.HasIndex("VenueId", "ReceivedAt");
+                    b.HasIndex("VenueId", "CountsOn");
 
                     b.ToTable("PaymentReceipts", t =>
                         {

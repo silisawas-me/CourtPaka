@@ -3,12 +3,12 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TRANSLATIONS } from '../../testing/translations';
 import {
   check,
+  controlOf,
   elementOf,
   isDisabled,
   isOn,
   pageProviders,
   signInAs,
-  controlOf,
   textOf,
 } from '../../testing/dom';
 import { VenueDetailPage } from './venue-detail.page';
@@ -290,5 +290,51 @@ describe('VenueDetailPage', () => {
     // The switch must never say something the server does not hold.
     expect(isOn(fixture, 'slip-emails')).toBe(true);
     expect(elementOf(fixture, 'slip-emails-error')).not.toBeNull();
+  });
+
+  /**
+   * Holding the permission is being given the work, not being trusted with any amount of the
+   * venue's money (PRD US-18). The owner says the number, on the row that carries the permission
+   * it qualifies.
+   */
+  it('sends what the owner trusts a member with, keeping the permissions they already had', () => {
+    render('Owner', [OWNER, STAFF]);
+
+    // The test id is on the input itself, the way every other number field on this page does it.
+    const input = controlOf(fixture, '[data-testid="refund-limit-u2"]') as HTMLInputElement;
+    input.value = '500';
+    input.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const sent = httpMock.expectOne('/api/venues/v1/members/u2/permissions');
+    expect(sent.request.body).toEqual({
+      permissions: ['VerifySlip', 'ManageBookings', 'CloseCourt'],
+      refundLimitBaht: 500,
+    });
+    sent.flush(null);
+    fixture.detectChanges();
+
+    expect(input.value).toBe('500');
+  });
+
+  /**
+   * Ticking a permission must not quietly take away what somebody was trusted with, so a request
+   * that is not about the limit says nothing about it (PRD US-18).
+   */
+  it('says nothing about the limit when only a permission changed', () => {
+    render('Owner', [OWNER, STAFF]);
+
+    check(fixture, '[data-testid="permission-u2-ViewReports"]');
+
+    const sent = httpMock.expectOne('/api/venues/v1/members/u2/permissions');
+    expect(sent.request.body).not.toHaveProperty('refundLimitBaht');
+    sent.flush(null);
+  });
+
+  /** The owner has no ceiling, so there is no number to set against their own row. */
+  it('offers no limit against the owner', () => {
+    render('Owner', [OWNER, STAFF]);
+
+    expect(elementOf(fixture, 'refund-limit-u1')).toBeNull();
   });
 });

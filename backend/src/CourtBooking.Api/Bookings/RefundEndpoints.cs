@@ -45,6 +45,7 @@ public static class RefundEndpoints
     private static async Task<Results<Ok<RefundsResponse>, ProblemHttpResult>> ListAsync(
         Guid venueId,
         Guid bookingId,
+        CurrentVenue venue,
         AppDbContext database,
         CancellationToken cancellationToken)
     {
@@ -54,7 +55,7 @@ public static class RefundEndpoints
             return ApiProblem.Of(StatusCodes.Status404NotFound, BookingErrorCodes.NotFound);
         }
 
-        return TypedResults.Ok(await ReadAsync(database, booking, cancellationToken));
+        return TypedResults.Ok(await ReadAsync(database, booking, venue.Require(), cancellationToken));
     }
 
     /// <summary>
@@ -85,6 +86,19 @@ public static class RefundEndpoints
         if (amount <= 0)
         {
             return ApiProblem.Of(StatusCodes.Status400BadRequest, RefundErrorCodes.AmountNotPositive);
+        }
+
+        // What this person may send back at all, before anything is read about the booking:
+        // it is a fact about who is asking (PRD US-18). The amount they may is part of the
+        // refusal, because the answer is to hand the booker to somebody who can send it.
+        var membership = venue.Require();
+        if (!RefundLimits.Allows(membership, amount))
+        {
+            return ApiProblem.Of(
+                StatusCodes.Status403Forbidden,
+                RefundErrorCodes.OverTheLimit,
+                "limitBaht",
+                membership.RefundLimitBaht);
         }
 
         var note = request.Note?.Trim();
@@ -132,7 +146,7 @@ public static class RefundEndpoints
             RefundedOn = request.RefundedOn,
             Method = method,
             Note = string.IsNullOrEmpty(note) ? null : note,
-            RecordedByUserId = venue.Require().UserId,
+            RecordedByUserId = membership.UserId,
             RecordedAt = timeProvider.GetUtcNow(),
         });
 
@@ -143,7 +157,7 @@ public static class RefundEndpoints
             "refund_recorded {BookingId} {VenueId} {AmountBaht} {Method}",
             bookingId, venueId, amount, method);
 
-        return TypedResults.Ok(await ReadAsync(database, booking, cancellationToken));
+        return TypedResults.Ok(await ReadAsync(database, booking, venue.Require(), cancellationToken));
     }
 
     /// <summary>
@@ -218,7 +232,7 @@ public static class RefundEndpoints
                 refundId, bookingId);
         }
 
-        return TypedResults.Ok(await ReadAsync(database, booking, cancellationToken));
+        return TypedResults.Ok(await ReadAsync(database, booking, venue.Require(), cancellationToken));
     }
 
     /// <summary>
@@ -257,6 +271,7 @@ public static class RefundEndpoints
     private static async Task<RefundsResponse> ReadAsync(
         AppDbContext database,
         Booking booking,
+        VenueMembership member,
         CancellationToken cancellationToken)
     {
         var records = await database.RefundRecords
@@ -283,6 +298,7 @@ public static class RefundEndpoints
             booking.RefundDueBaht,
             sentBack,
             Refunds.OutstandingOf(booking.RefundDueBaht, sentBack),
-            [.. records]);
+            [.. records],
+            member.RefundCeiling);
     }
 }

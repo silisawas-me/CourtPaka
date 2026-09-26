@@ -169,6 +169,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             // nobody asked to stop (PRD US-17).
             member.Property(m => m.WantsSlipEmails).HasDefaultValue(true);
 
+            // Money, so it is stored like every other amount (PRD US-18).
+            member.Property(m => m.RefundLimitBaht).HasPrecision(10, 2);
+
             // One row per person per venue: permissions are the venue's answer about that person.
             member.HasIndex(m => new { m.VenueId, m.UserId }).IsUnique();
             member.HasOne(m => m.Venue)
@@ -522,6 +525,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<MembershipChange>(change =>
         {
+            change.Property(c => c.RefundLimitBefore).HasPrecision(10, 2);
+            change.Property(c => c.RefundLimitAfter).HasPrecision(10, 2);
             // A venue's roster over time, read one venue at a time (PRD 8, US-14).
             change.HasIndex(c => new { c.VenueId, c.ChangedAt });
             change.HasOne(c => c.Venue)

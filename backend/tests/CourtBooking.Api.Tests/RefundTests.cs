@@ -294,6 +294,135 @@ public sealed class RefundTests(ApiTestFixture api) : IClassFixture<ApiTestFixtu
         return (owner, venue, booking);
     }
 
+    /// <summary>
+    /// Holding the permission is being given the work, not being trusted with any amount of the
+    /// venue's money (PRD US-18). Nothing until the owner says a number, and the refusal says
+    /// what the number is — because the answer is to hand the booker to somebody who can send it.
+    /// </summary>
+    [Fact]
+    public async Task Staff_start_able_to_send_back_nothing_and_are_told_so()
+    {
+        var (owner, venue, booking) = await OwedInFullAsync();
+        var staff = await scenario.StaffClientAsync(
+            owner, venue.Id, nameof(VenuePermissions.ManageBookings));
+
+        var refused = await SendAsync(staff, venue.Id, booking.Id, 1m);
+
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+        Assert.Equal(RefundErrorCodes.OverTheLimit, await refused.ErrorCodeAsync());
+        Assert.Equal(0m, await LimitInRefusalAsync(refused));
+    }
+
+    [Fact]
+    public async Task What_the_owner_trusts_them_with_is_what_they_may_send()
+    {
+        var (owner, venue, booking) = await OwedInFullAsync();
+        var staff = await scenario.StaffClientAsync(
+            owner, venue.Id, nameof(VenuePermissions.ManageBookings));
+        var who = await MemberIdAsync(owner, venue.Id);
+
+        await SetLimitAsync(owner, venue.Id, who, 100m);
+
+        // A baht over is a baht over, and they are told the number to work with.
+        var refused = await SendAsync(staff, venue.Id, booking.Id, 100.01m);
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+        Assert.Equal(100m, await LimitInRefusalAsync(refused));
+
+        var written = await RecordAsync(staff, venue.Id, booking.Id, 100m);
+        Assert.Equal(100m, written.SentBackBaht);
+
+        // And the owner is held to nothing: there is nobody above them to raise a ceiling.
+        var rest = await RecordAsync(owner, venue.Id, booking.Id, booking.TotalBaht - 100m);
+        Assert.Equal(booking.TotalBaht, rest.SentBackBaht);
+    }
+
+    /// <summary>
+    /// A number somebody was trusted with is as much a permission as a flag is, so it is written
+    /// into the same history (PRD US-18, PRD 8).
+    /// </summary>
+    [Fact]
+    public async Task Changing_what_they_may_send_is_recorded_like_any_other_permission()
+    {
+        var (owner, venue, _) = await OwedInFullAsync();
+        await scenario.StaffClientAsync(owner, venue.Id, nameof(VenuePermissions.ManageBookings));
+        var who = await MemberIdAsync(owner, venue.Id);
+
+        await SetLimitAsync(owner, venue.Id, who, 250m);
+        await SetLimitAsync(owner, venue.Id, who, 500m);
+
+        var history = await scenario.MembershipHistoryAsync(venue.Id, who);
+        var raised = history
+            .Where(change => change.Kind == MembershipChangeKind.PermissionsChanged)
+            .ToArray();
+
+        Assert.Equal(2, raised.Length);
+        Assert.Equal([0m, 250m], raised.Select(change => change.RefundLimitBefore));
+        Assert.Equal([250m, 500m], raised.Select(change => change.RefundLimitAfter));
+    }
+
+    /// <summary>
+    /// A caller changing only what somebody may do must not silently take away what they were
+    /// trusted with — the limit is left out of such a request, and left alone (PRD US-18).
+    /// </summary>
+    [Fact]
+    public async Task Changing_permissions_alone_leaves_the_limit_where_it_was()
+    {
+        var (owner, venue, booking) = await OwedInFullAsync();
+        var staff = await scenario.StaffClientAsync(
+            owner, venue.Id, nameof(VenuePermissions.ManageBookings));
+        var who = await MemberIdAsync(owner, venue.Id);
+        await SetLimitAsync(owner, venue.Id, who, 100m);
+
+        var changed = await owner.PutAsJsonAsync(
+            $"/api/venues/{venue.Id}/members/{who}/permissions",
+            new ChangePermissionsRequest(
+                [nameof(VenuePermissions.ManageBookings), nameof(VenuePermissions.VerifySlip)]));
+        Assert.Equal(HttpStatusCode.NoContent, changed.StatusCode);
+
+        var written = await RecordAsync(staff, venue.Id, booking.Id, 100m);
+        Assert.Equal(100m, written.SentBackBaht);
+    }
+
+    /// <summary>A number that could not be a limit at all is refused before anything is stored.</summary>
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(1_000_001)]
+    public async Task A_limit_that_is_not_an_amount_is_refused(decimal baht)
+    {
+        var (owner, venue, _) = await OwedInFullAsync();
+        await scenario.StaffClientAsync(owner, venue.Id, nameof(VenuePermissions.ManageBookings));
+        var who = await MemberIdAsync(owner, venue.Id);
+
+        var refused = await owner.PutAsJsonAsync(
+            $"/api/venues/{venue.Id}/members/{who}/permissions",
+            new ChangePermissionsRequest([nameof(VenuePermissions.ManageBookings)], baht));
+
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal(VenueErrorCodes.InvalidRefundLimit, await refused.ErrorCodeAsync());
+    }
+
+    /// <summary>The one staff member of the venue the setup just made.</summary>
+    private async Task<Guid> MemberIdAsync(HttpClient owner, Guid venueId)
+    {
+        var members = await scenario.GetMembersAsync(owner, venueId);
+        return members.Single(member => member.Role == nameof(VenueRole.Staff)).UserId;
+    }
+
+    private static async Task SetLimitAsync(
+        HttpClient owner, Guid venueId, Guid userId, decimal baht)
+    {
+        var set = await owner.PutAsJsonAsync(
+            $"/api/venues/{venueId}/members/{userId}/permissions",
+            new ChangePermissionsRequest([nameof(VenuePermissions.ManageBookings)], baht));
+        Assert.Equal(HttpStatusCode.NoContent, set.StatusCode);
+    }
+
+    /// <summary>The amount the refusal says they may send, which is the point of saying it.</summary>
+    private static async Task<decimal> LimitInRefusalAsync(HttpResponseMessage refused) =>
+        (await refused.Content.ReadFromJsonAsync<LimitProblem>())!.LimitBaht;
+
+    private sealed record LimitProblem(decimal LimitBaht);
+
     /// <summary>The booker of the booking the last setup made, for the one check that asks them.</summary>
     private HttpClient? _booker;
 
