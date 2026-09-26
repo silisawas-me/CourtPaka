@@ -500,7 +500,38 @@ Story ชุดนี้มาจาก prototype ที่ใช้คุยก
 | **Load** | 200 virtual users ดูตาราง + สร้างการจอง 20 รายการ/นาที เป็นเวลา 10 นาที: error < 1% และ API p95 ≤ 800 ms ⚠️ S-16 | k6 บนเครื่อง PRD ก่อนเปิดให้สนามใช้ (สิ้น M3) |
 | **Backup** | Backup database ทุกวัน เก็บ 14 วัน · ทดสอบกู้คืนเดือนละครั้ง | บันทึกผลการทดสอบกู้คืน |
 | **Usability** | Mobile-first, ติดตั้งเป็น PWA ได้ · TH/EN (US-23) · แสดงวันที่และตัวเลขตาม locale | Playwright E2E บน viewport มือถือ |
-| **Observability** | Structured logging + ระบบติดตาม error · ส่ง event ทุกครั้งที่สถานะการจองเปลี่ยน (`booking_{status}` ครบทุกสถานะในหัวข้อ 6.1) + `venue_page_viewed`, `slip_uploaded`, `slip_replaced`, `refund_recorded`, `refund_voided`, `venue_applied`, `venue_approved`, `venue_suspended`, `commission_invoiced`, `commission_payment_submitted`, `commission_paid`, `complaint_opened` | ตรวจว่ามี event ครบใน E2E test |
+| **Observability** | Structured logging + ระบบติดตาม error · ส่ง event ของ product ตามรายการในหัวข้อ 8.1 | ตรวจว่ามี event ครบใน E2E test และไม่มี event ที่ไม่ได้อยู่ในรายการ |
+
+### 8.1 Event ของ product
+
+รายการนี้คือ event ทั้งหมดที่ระบบส่ง ใช้เป็นทั้งข้อกำหนดและสัญญากับ sink ที่จัดกลุ่มตาม template
+
+**กฎ**
+- ชื่อ event ต้องเป็น**คำแรกของ template** (`"venue_approved {VenueId}"` ไม่ใช่ `"venue_{Status}"`) มิฉะนั้น sink ที่จัดกลุ่มตาม template จะรวมเรื่องคนละเรื่องเป็นอันเดียวกัน
+- ทุก event ไปที่ category เดียวคือ `CourtBooking.Events` เพื่อให้แยกออกจาก log ทั่วไปได้
+- **ห้ามส่ง event ที่ไม่มีในรายการนี้** และเพิ่ม event ใหม่ต้องเพิ่มชื่อที่นี่ด้วย (มี test บังคับทั้งสองทาง)
+- ห้ามใส่ข้อมูลที่ระบุตัวบุคคลหรือสถิติเกี่ยวกับตัวบุคคลลงใน event เพราะ log อยู่นานกว่าบัญชีที่มันพูดถึง (PDPA, ⚠️ S-15) — ให้อ้างด้วย id แล้วไปอ่านจากแถวแทน
+
+| กลุ่ม | Event | Story |
+|---|---|---|
+| การจอง | `booking_{status}` ครบทุกสถานะในหัวข้อ 6.1 (`booking_held`, `booking_pending_verification`, `booking_confirmed`, `booking_completed`, `booking_cancelled`, `booking_expired`, `booking_rejected`, `booking_no_show`) | US-03, 05, 12, 13 |
+| | `booking_refused` (การจองที่ถูกปฏิเสธตอนสร้าง) · `deposit_required` | US-03, US-28 |
+| | `booking_arrival_reminded`, `booking_arrival_confirmed`, `booking_arrival_arrived` | US-24 |
+| | `booking_hours_extended`, `booking_hours_moved` | US-29 |
+| | `booking_payment_settled` | US-13 |
+| สลิปและเงิน | `slip_uploaded`, `slip_replaced`, `slip_reminder_sent` | US-04, US-17 |
+| | `refund_recorded`, `refund_voided` · `payment_taken`, `day_closed` | US-18, US-26 |
+| สนาม | `venue_applied`, `venue_approved`, `venue_rejected`, `venue_suspended`, `venue_pending` | US-10, US-20 |
+| | `venue_page_viewed` · `venue_dashboard_viewed` · `platform_dashboard_viewed` | US-02, US-15, US-22 |
+| | `court_closed`, `court_reopened` | US-11 |
+| | `venue_notified`, `booker_notified` | US-17, US-06 |
+| บัญชีผู้ใช้ | `line_signed_in`, `line_registered` · `account_deleted` · `user_suspended`, `user_reinstated` | US-01, US-22 |
+| เรื่องร้องเรียน | `complaint_opened`, `complaint_resolved`, `complaint_slip_viewed` | US-22 |
+| คิวรอ | `waitlist_joined`, `waitlist_left`, `waitlist_offered`, `waitlist_taken`, `waitlist_offer_lapsed` | US-27 |
+| จองประจำ | `series_agreed`, `series_changed`, `series_stopped`, `series_week_booked`, `series_week_missed` | US-30 |
+| แพ็กเกจ | `package_offered`, `package_sold`, `package_hours_used`, `package_expired` | US-31 |
+| ของที่ขายและค่าใช้จ่าย | `shop_item_added`, `shop_sold`, `shop_sale_cancelled` · `stock_counted` · `venue_spent` | US-32, US-33 |
+| คอมมิชชัน ⏳ | `commission_invoiced`, `commission_payment_submitted`, `commission_paid` | US-21 (ยังไม่ได้ทำ) |
 
 ## 9. แนวทางทางเทคนิค
 
