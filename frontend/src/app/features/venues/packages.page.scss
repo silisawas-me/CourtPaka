@@ -9,36 +9,6 @@
   min-width: 0;
 }
 
-.offers,
-.methods {
-  border: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1.25rem;
-
-  legend {
-    padding: 0;
-    margin-bottom: 0.35rem;
-    color: var(--mat-sys-on-surface-variant);
-    font: var(--mat-sys-body-medium);
-  }
-}
-
-/** An offer is a name and a price, and the price is why somebody picks it — so both are shown. */
-.offer-choice,
-.method-choice {
-  display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
-  cursor: pointer;
-
-  input {
-    accent-color: var(--mat-sys-primary);
-  }
-}
-
 .offer-name {
   font-weight: 500;
 }
@@ -164,17 +134,6 @@
 
   .field {
     max-width: 28rem;
-  }
-}
-
-/** Three numbers that belong to one sentence: so many hours, for so much, for so long. */
-.numbers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 1rem;
-
-  .number {
-    flex: 0 1 10rem;
   }
 }
 

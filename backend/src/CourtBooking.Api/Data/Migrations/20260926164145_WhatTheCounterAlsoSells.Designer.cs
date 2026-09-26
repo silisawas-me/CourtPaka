@@ -1017,6 +1017,8 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("VenueId", "PaidOn");
 
+                    b.HasIndex("VenueId", "RecordedAt");
+
                     b.ToTable("Spends", t =>
                         {
                             t.HasCheckConstraint("CK_Spends_IsMoney", "\"AmountBaht\" > 0");
@@ -1059,6 +1061,8 @@ namespace CourtBooking.Api.Data.Migrations
                     b.HasIndex("ByUserId");
 
                     b.HasIndex("SaleId");
+
+                    b.HasIndex("SpendId");
 
                     b.HasIndex("ItemId", "At");
 
@@ -2392,11 +2396,18 @@ namespace CourtBooking.Api.Data.Migrations
                         .HasForeignKey("SaleId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("CourtBooking.Api.Bookings.Spend", "Spend")
+                        .WithMany()
+                        .HasForeignKey("SpendId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("By");
 
                     b.Navigation("Item");
 
                     b.Navigation("Sale");
+
+                    b.Navigation("Spend");
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Bookings.WaitlistEntry", b =>

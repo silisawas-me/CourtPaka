@@ -9,13 +9,6 @@
   min-width: 0;
 }
 
-.board,
-.sales {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
 .line,
 .sale {
   display: flex;
@@ -42,6 +35,8 @@
  */
 .line-left {
   margin-left: auto;
+  min-width: 2.5rem;
+  text-align: right;
   font: var(--mat-sys-title-medium);
   font-variant-numeric: tabular-nums;
 }
@@ -62,18 +57,18 @@
   }
 }
 
-/** One press each way, with what is in the basket between them. */
+/**
+ * Straight after the number it is changing. A second `margin-left: auto` here would split the
+ * free space with the one above it and leave the count stranded halfway across the row.
+ */
 .line-count {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  margin-left: auto;
-
-  button {
-    min-width: 3rem;
-  }
+  gap: 0.25rem;
+  margin-left: 0.5rem;
 }
 
+/** The number between the two buttons: wide enough that 1 and 10 do not move them. */
 .in-basket {
   min-width: 1.5rem;
   text-align: center;
@@ -81,12 +76,14 @@
   font-variant-numeric: tabular-nums;
 }
 
-/** What is being rung up, set apart from the board it was rung up from. */
+/** What is being rung up, set apart from the board above it because it is about to be money. */
 .basket {
   margin-top: 1rem;
-  padding: 0.85rem;
-  border-radius: var(--mat-sys-corner-medium);
-  background: var(--mat-sys-surface-container-low);
+  padding-top: 1rem;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .total {
@@ -113,45 +110,9 @@
   }
 }
 
-.methods {
-  border: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1.25rem;
-
-  legend {
-    padding: 0;
-    margin-bottom: 0.35rem;
-    color: var(--mat-sys-on-surface-variant);
-    font: var(--mat-sys-body-medium);
-  }
-}
-
-.method-choice,
-.counted-choice {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  cursor: pointer;
-
-  input {
-    accent-color: var(--mat-sys-primary);
-  }
-}
-
-/** A row of numbers that belong to one sentence: a name, a price, a unit. */
-.numbers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 1rem;
-
-  .field {
-    flex: 1 1 14rem;
-  }
-
-  .number {
-    flex: 0 1 10rem;
-  }
+/** Counting one shelf, opened from the line it is about, so the answer is beside the question. */
+.counting {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--mat-sys-outline-variant);
 }

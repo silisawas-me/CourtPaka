@@ -47,9 +47,7 @@ public sealed class PackageExpiry(
 
             // Behind the package's own lock, so a sale spending the last of its hours at this
             // moment is either counted here or waits for this to finish (PRD US-26's rule).
-            await database.Database.ExecuteSqlInterpolatedAsync(
-                $"SELECT pg_advisory_xact_lock(hashtextextended({package.Id.ToString()}, 0))",
-                cancellationToken);
+            await Locks.OnAsync(database, package.Id, cancellationToken);
 
             // Claimed first. Whoever sets this is the one who writes the row; anybody else who
             // was about to finds it taken and leaves it alone.

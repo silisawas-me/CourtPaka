@@ -33,16 +33,13 @@ public static class ShopEndpoints
 
         shop.MapGet("/items", BoardAsync);
         shop.MapGet("/sales", SalesAsync);
-        shop.MapGet("/spending", SpendingAsync);
 
         // Selling is selling, which is what a suspension stops.
         shop.MapPost("/sales", SellAsync)
             .RequireAuthorization(VenuePolicies.Needs(VenuePermissions.ManageBookings));
         shop.MapPost("/sales/{saleId:guid}/cancel", CancelSaleAsync);
 
-        // Money out, and counting the shelf. Neither is selling, so both stay open.
-        shop.MapPost("/spending", SpendAsync);
-        shop.MapPost("/spending/{spendId:guid}/void", VoidSpendAsync);
+        // Counting the shelf is not selling, so it stays open at a suspended venue.
         shop.MapPost("/items/{itemId:guid}/count", CountAsync);
 
         // The board is a setting, like a price list (PRD US-14).
@@ -50,6 +47,31 @@ public static class ShopEndpoints
             .RequireAuthorization(VenuePolicies.Needs(VenuePermissions.ManageSettings));
         shop.MapPost("/items/{itemId:guid}/withdraw", WithdrawItemAsync)
             .RequireAuthorization(VenuePolicies.Needs(VenuePermissions.ManageSettings));
+
+        MapSpendingEndpoints(venue);
+    }
+
+    /// <summary>
+    /// What the venue paid out (PRD US-33). Its own door, not the shop's: four of the five kinds
+    /// — the water bill, wages, a repair — have nothing to do with what the counter sells, and
+    /// reading them is a report while writing one is a shift's work. So the AC gives the two
+    /// halves different permissions, and a group cannot answer for both.
+    /// </summary>
+    private static void MapSpendingEndpoints(RouteGroupBuilder venue)
+    {
+        var spending = venue.MapGroup("/spending");
+
+        // Neither reading nor writing is selling, so a suspension stops neither: money that has
+        // already left has to be accounted for, and the bills keep arriving (PRD US-20).
+        spending.RequireAuthorization(
+            VenuePolicies.NeedsEvenWhenSuspended(VenuePermissions.ManageBookings));
+
+        spending.MapGet("/", SpendingAsync)
+            .RequireAuthorization(
+                VenuePolicies.NeedsEvenWhenSuspended(VenuePermissions.ViewReports));
+
+        spending.MapPost("/", SpendAsync);
+        spending.MapPost("/{spendId:guid}/void", VoidSpendAsync);
     }
 
     /// <summary>
@@ -65,38 +87,13 @@ public static class ShopEndpoints
     private static async Task<ShopItemResponse[]> ItemsAsync(
         AppDbContext database,
         Guid venueId,
-        CancellationToken cancellationToken)
-    {
-        var items = await database.ShopItems
-            .AsNoTracking()
-            .Where(one => one.VenueId == venueId)
-            .OrderBy(one => one.WithdrawnAt != null)
-            .ThenBy(one => one.Name)
-            .Select(one => new
-            {
-                Item = one,
-                Left = database.StockEntries
-                    .Where(entry => entry.ItemId == one.Id)
-                    .Sum(entry => (int?)entry.Quantity) ?? 0,
-            })
-            .ToListAsync(cancellationToken);
-
-        return
+        CancellationToken cancellationToken) =>
         [
-            .. items.Select(one => new ShopItemResponse(
-                one.Item.Id,
-                one.Item.Name,
-                one.Item.PriceBaht,
-                one.Item.Unit,
-                one.Item.Counted,
-                one.Item.TellMeAt,
-                // Nothing for what is not counted: a racquet to hire has no number, and a zero
-                // beside it would read as none left (PRD US-32).
-                one.Item.Counted ? one.Left : null,
-                Shop.RunningLow(one.Item.Counted, one.Left, one.Item.TellMeAt),
-                one.Item.WithdrawnAt)),
+            .. (await OnTheShelfAsync(database, venueId, null, cancellationToken))
+                .OrderBy(one => one.Item.WithdrawnAt != null)
+                .ThenBy(one => one.Item.Name, StringComparer.Ordinal)
+                .Select(one => Drawn(one.Item, one.Left)),
         ];
-    }
 
     private static async Task<Results<Created<ShopItemResponse>, ProblemHttpResult>> AddItemAsync(
         Guid venueId,
@@ -141,10 +138,9 @@ public static class ShopEndpoints
         AppEvents.For(loggers).LogInformation(
             "shop_item_added {ItemId} {VenueId} {PriceBaht}", item.Id, venueId, item.PriceBaht);
 
-        return TypedResults.Created(
-            $"/api/venues/{venueId}/shop/items",
-            (await ItemsAsync(database, venueId, cancellationToken))
-                .Single(one => one.ItemId == item.Id));
+        // Nothing can be on the shelf of a thing that did not exist a moment ago, so the board
+        // does not need reading to say so.
+        return TypedResults.Created($"/api/venues/{venueId}/shop/items", Drawn(item, 0));
     }
 
     private static async Task<Results<Ok<ShopItemResponse>, ProblemHttpResult>> WithdrawItemAsync(
@@ -166,8 +162,7 @@ public static class ShopEndpoints
                     .SetProperty(one => one.WithdrawnByUserId, membership.UserId),
                 cancellationToken);
 
-        var drawn = (await ItemsAsync(database, venueId, cancellationToken))
-            .SingleOrDefault(one => one.ItemId == itemId);
+        var drawn = await OneItemAsync(database, venueId, itemId, cancellationToken);
 
         if (drawn is null)
         {
@@ -188,35 +183,20 @@ public static class ShopEndpoints
         CancellationToken cancellationToken)
     {
         var day = date ?? PlatformRequirements.BangkokToday(timeProvider);
-        var from = PlatformRequirements.BangkokHour(day, 0);
-        var until = PlatformRequirements.BangkokHour(day.AddDays(1), 0);
+
+        // The till's day, not midnight to midnight: a tube sold after the count belongs to the
+        // same day as the money it was paid with, or the shop's book and the drawer's disagree
+        // and nobody can say which is right (PRD US-26, US-32).
+        var (from, until) = await Takings.TillDayAsync(database, venueId, day, cancellationToken);
 
         var sales = await database.ShopSales
             .AsNoTracking()
+            .Include(one => one.Lines)
             .Where(one => one.VenueId == venueId && one.SoldAt >= from && one.SoldAt < until)
             .OrderByDescending(one => one.SoldAt)
-            .Select(one => new
-            {
-                Sale = one,
-                Lines = one.Lines
-                    .OrderBy(line => line.Name)
-                    .Select(line => new ShopSaleLineResponse(
-                        line.ItemId, line.Name, line.Quantity, line.EachBaht))
-                    .ToList(),
-            })
             .ToListAsync(cancellationToken);
 
-        return TypedResults.Ok<ShopSaleResponse[]>(
-        [
-            .. sales.Select(one => new ShopSaleResponse(
-                one.Sale.Id,
-                one.Sale.BookingId,
-                one.Sale.TotalBaht,
-                one.Sale.SoldAt,
-                one.Sale.CancelledAt,
-                one.Sale.CancelReason,
-                [.. one.Lines])),
-        ]);
+        return TypedResults.Ok<ShopSaleResponse[]>([.. sales.Select(Drawn)]);
     }
 
     /// <summary>
@@ -271,41 +251,35 @@ public static class ShopEndpoints
 
         var wanted = asked.Select(line => line.ItemId).ToList();
 
-        // Queued on every line, in one fixed order, before any of them is read: two counters
-        // selling the last tube at the same moment would otherwise both read one left.
-        foreach (var itemId in wanted.OrderBy(one => one))
-        {
-            await database.Database.ExecuteSqlInterpolatedAsync(
-                $"SELECT pg_advisory_xact_lock(hashtextextended({itemId.ToString()}, 0))",
-                cancellationToken);
-        }
+        // Queued on every line before any of them is read: two counters selling the last tube at
+        // the same moment would otherwise both read one left.
+        await Locks.OnAsync(database, wanted, cancellationToken);
 
-        var items = await database.ShopItems
-            .AsNoTracking()
-            .Where(one => one.VenueId == venueId && wanted.Contains(one.Id))
-            .ToListAsync(cancellationToken);
+        var shelf = await OnTheShelfAsync(database, venueId, wanted, cancellationToken);
 
-        if (items.Count != asked.Length || items.Any(one => one.WithdrawnAt is not null))
+        if (shelf.Count != asked.Length || shelf.Any(one => one.Item.WithdrawnAt is not null))
         {
             await transaction.RollbackAsync(cancellationToken);
             return ApiProblem.Of(StatusCodes.Status404NotFound, ShopErrorCodes.ItemUnknown);
         }
 
-        var left = await LeftAsync(database, wanted, cancellationToken);
+        var items = shelf.Select(one => one.Item).ToList();
+        var left = shelf.ToDictionary(one => one.Item.Id, one => one.Left);
 
         var sale = new ShopSale
         {
             VenueId = venueId,
             BookingId = request.BookingId,
-            TotalBaht = asked.Sum(line =>
-                items.Single(one => one.Id == line.ItemId).PriceBaht * line.Quantity),
             SoldAt = now,
             SoldByUserId = membership.UserId,
         };
 
+        var board = items.ToDictionary(one => one.Id);
+        var lines = new List<ShopSaleLine>(asked.Length);
+
         foreach (var line in asked)
         {
-            var item = items.Single(one => one.Id == line.ItemId);
+            var item = board[line.ItemId];
 
             // Nothing is sold that is not there. What is not counted has no number to be short
             // of — a racquet to hire is the venue's own business (PRD US-32).
@@ -316,7 +290,7 @@ public static class ShopEndpoints
                     StatusCodes.Status409Conflict, ShopErrorCodes.NotEnoughStock);
             }
 
-            sale.Lines.Add(new ShopSaleLine
+            lines.Add(new ShopSaleLine
             {
                 SaleId = sale.Id,
                 ItemId = item.Id,
@@ -341,7 +315,7 @@ public static class ShopEndpoints
             }
         }
 
-        database.ShopSales.Add(sale);
+        database.ShopSales.Add(sale.Selling(lines));
 
         // The money is in the venue's hands as the line is rung up, so the day's count is told
         // about it the same way every other kind of money is (PRD US-26).
@@ -366,9 +340,7 @@ public static class ShopEndpoints
             sale.TotalBaht,
             paidBy);
 
-        return TypedResults.Created(
-            $"/api/venues/{venueId}/shop/sales",
-            await OneSaleAsync(database, venueId, sale.Id, cancellationToken));
+        return TypedResults.Created($"/api/venues/{venueId}/shop/sales", Drawn(sale));
     }
 
     /// <summary>
@@ -390,7 +362,7 @@ public static class ShopEndpoints
 
         if (BookingStatusChange.Recorded(request.Reason) is not { } reason)
         {
-            return ApiProblem.Of(StatusCodes.Status400BadRequest, SlipErrorCodes.ReasonTooLong);
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, ShopErrorCodes.ReasonNeeded);
         }
 
         await using var transaction =
@@ -426,13 +398,15 @@ public static class ShopEndpoints
                 StatusCodes.Status409Conflict, ShopErrorCodes.SaleAlreadyCancelled);
         }
 
-        var counted = await database.ShopItems
+        // Only what has a number goes back on a shelf, and the line's own row says which those
+        // are — asking the whole board would read every item the venue sells to classify three.
+        var goingBack = await database.ShopSaleLines
             .AsNoTracking()
-            .Where(one => one.VenueId == venueId && one.Counted)
-            .Select(one => one.Id)
+            .Where(line => line.SaleId == saleId && line.Item!.Counted)
+            .Select(line => new { line.ItemId, line.Quantity })
             .ToListAsync(cancellationToken);
 
-        foreach (var line in sale.Lines.Where(line => counted.Contains(line.ItemId)))
+        foreach (var line in goingBack)
         {
             database.StockEntries.Add(new StockEntry
             {
@@ -445,26 +419,10 @@ public static class ShopEndpoints
             });
         }
 
-        // The money leaving is written down where money leaving is written down: an expense, so
-        // the day's cash count is right whichever way the money went (PRD US-26, US-33).
-        var handedBack = await database.PaymentReceipts
-            .AsNoTracking()
-            .Where(receipt => receipt.SaleId == saleId)
-            .Select(receipt => new { receipt.AmountBaht, receipt.Method })
-            .SingleAsync(cancellationToken);
-
-        database.Spends.Add(new Spend
-        {
-            VenueId = venueId,
-            Kind = SpendKind.Stock,
-            AmountBaht = handedBack.AmountBaht,
-            PaidOn = PlatformRequirements.BangkokDateAndHour(now).Date,
-            PaidBy = handedBack.Method,
-            Note = reason.Length == 0 ? null : reason,
-            RecordedAt = now,
-            RecordedByUserId = membership.UserId,
-        });
-
+        // The money handed back needs no row of its own: this cancellation and the receipt the
+        // sale was paid with say it, and the drawer reads them (Takings, PRD US-26). Writing it as
+        // an expense would file a customer's refund under what the venue bought, and the day's
+        // figures would lose the sale twice — once by not counting it, once by paying for it.
         await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -474,8 +432,10 @@ public static class ShopEndpoints
             venueId,
             sale.TotalBaht);
 
-        return TypedResults.Ok(
-            await OneSaleAsync(database, venueId, saleId, cancellationToken));
+        sale.CancelledAt = now;
+        sale.CancelReason = reason.Length == 0 ? null : reason;
+
+        return TypedResults.Ok(Drawn(sale));
     }
 
     /// <summary>What this venue paid out, newest first (PRD US-33).</summary>
@@ -487,9 +447,7 @@ public static class ShopEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var today = PlatformRequirements.BangkokToday(timeProvider);
-        var first = from ?? new DateOnly(today.Year, today.Month, 1);
-        var last = to ?? first.AddMonths(1).AddDays(-1);
+        var (first, last) = PlatformRequirements.MonthOr(from, to, timeProvider);
 
         return TypedResults.Ok(
             await database.Spends
@@ -581,9 +539,7 @@ public static class ShopEndpoints
         ShopItem? item = null;
         if (request.ItemId is { } itemId)
         {
-            await database.Database.ExecuteSqlInterpolatedAsync(
-                $"SELECT pg_advisory_xact_lock(hashtextextended({itemId.ToString()}, 0))",
-                cancellationToken);
+            await Locks.OnAsync(database, itemId, cancellationToken);
 
             item = await database.ShopItems
                 .AsNoTracking()
@@ -636,7 +592,7 @@ public static class ShopEndpoints
             spend.AmountBaht);
 
         return TypedResults.Created(
-            $"/api/venues/{venueId}/shop/spending",
+            $"/api/venues/{venueId}/spending",
             Drawn(spend));
     }
 
@@ -656,10 +612,9 @@ public static class ShopEndpoints
         var membership = venue.Require();
         var now = timeProvider.GetUtcNow();
 
-        var reason = request.Reason?.Trim();
-        if (string.IsNullOrEmpty(reason) || reason.Length > Spend.NoteMaxLength)
+        if (Shop.Said(request.Reason, Spend.NoteMaxLength) is not { } reason)
         {
-            return ApiProblem.Of(StatusCodes.Status400BadRequest, SpendErrorCodes.NoteTooLong);
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, SpendErrorCodes.ReasonNeeded);
         }
 
         var voided = await database.Spends
@@ -703,15 +658,14 @@ public static class ShopEndpoints
         var membership = venue.Require();
         var now = timeProvider.GetUtcNow();
 
-        var reason = request.Reason?.Trim();
-        if (string.IsNullOrEmpty(reason) || reason.Length > StockEntry.ReasonMaxLength)
+        if (Shop.Said(request.Reason, StockEntry.ReasonMaxLength) is not { } reason)
         {
-            return ApiProblem.Of(StatusCodes.Status400BadRequest, SpendErrorCodes.NoteTooLong);
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, ShopErrorCodes.ReasonNeeded);
         }
 
         if (request.Counted is not { } shelf || shelf < 0)
         {
-            return ApiProblem.Of(StatusCodes.Status400BadRequest, ShopErrorCodes.NotASale);
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, ShopErrorCodes.InvalidCount);
         }
 
         await using var transaction =
@@ -721,31 +675,25 @@ public static class ShopEndpoints
             $"SELECT pg_advisory_xact_lock(hashtextextended({itemId.ToString()}, 0))",
             cancellationToken);
 
-        var item = await database.ShopItems
-            .AsNoTracking()
-            .SingleOrDefaultAsync(
-                one => one.Id == itemId
-                    && one.VenueId == venueId
-                    && one.Counted
-                    && one.WithdrawnAt == null,
-                cancellationToken);
+        var found = (await OnTheShelfAsync(database, venueId, [itemId], cancellationToken))
+            .SingleOrDefault(one =>
+                one.Item.Counted && one.Item.WithdrawnAt == null);
 
-        if (item is null)
+        if (found.Item is null)
         {
             await transaction.RollbackAsync(cancellationToken);
             return ApiProblem.Of(StatusCodes.Status404NotFound, ShopErrorCodes.ItemUnknown);
         }
 
-        var left = (await LeftAsync(database, [itemId], cancellationToken))
-            .GetValueOrDefault(itemId);
-
         // A count that agrees with the ledger moves nothing, and a row of nothing says nothing.
-        if (shelf != left)
+        var by = shelf - found.Left;
+
+        if (by != 0)
         {
             database.StockEntries.Add(new StockEntry
             {
                 ItemId = itemId,
-                Quantity = shelf - left,
+                Quantity = by,
                 Move = StockMove.Counted,
                 Reason = reason,
                 At = now,
@@ -757,41 +705,75 @@ public static class ShopEndpoints
 
         await transaction.CommitAsync(cancellationToken);
 
-        if (shelf != left)
+        if (by != 0)
         {
             AppEvents.For(loggers).LogInformation(
-                "stock_counted {ItemId} {VenueId} {By}", itemId, venueId, shelf - left);
+                "stock_counted {ItemId} {VenueId} {By}", itemId, venueId, by);
         }
 
-        return TypedResults.Ok(
-            (await ItemsAsync(database, venueId, cancellationToken))
-                .Single(one => one.ItemId == itemId));
+        return TypedResults.Ok(Drawn(found.Item, shelf));
     }
 
-    /// <summary>How many of each of these there are: the sum of the movements, and nothing else.</summary>
-    private static async Task<Dictionary<Guid, int>> LeftAsync(
-        AppDbContext database,
-        IReadOnlyCollection<Guid> itemIds,
-        CancellationToken cancellationToken) =>
-        (await database.StockEntries
-            .Where(entry => itemIds.Contains(entry.ItemId))
-            .GroupBy(entry => entry.ItemId)
-            .Select(entries => new { ItemId = entries.Key, Left = entries.Sum(one => one.Quantity) })
-            .ToListAsync(cancellationToken))
-        .ToDictionary(one => one.ItemId, one => one.Left);
-
-    private static async Task<ShopSaleResponse> OneSaleAsync(
+    /// <summary>
+    /// The venue's things and how many of each are there: one row per item, the balance being the
+    /// sum of its movements and nothing else. The one place that answers "how many are left", so
+    /// that a rule about which movements count cannot be true of one screen and not another.
+    /// </summary>
+    /// <param name="itemIds">Only these, or every one of the venue's when null.</param>
+    private static async Task<List<(ShopItem Item, int Left)>> OnTheShelfAsync(
         AppDbContext database,
         Guid venueId,
-        Guid saleId,
-        CancellationToken cancellationToken)
-    {
-        var sale = await database.ShopSales
-            .AsNoTracking()
-            .Include(one => one.Lines)
-            .SingleAsync(one => one.Id == saleId && one.VenueId == venueId, cancellationToken);
+        IReadOnlyCollection<Guid>? itemIds,
+        CancellationToken cancellationToken) =>
+        [
+            .. (await database.ShopItems
+                .AsNoTracking()
+                .Where(one =>
+                    one.VenueId == venueId
+                    && (itemIds == null || itemIds.Contains(one.Id)))
+                .Select(one => new
+                {
+                    Item = one,
+                    Left = database.StockEntries
+                        .Where(entry => entry.ItemId == one.Id)
+                        .Sum(entry => (int?)entry.Quantity) ?? 0,
+                })
+                .ToListAsync(cancellationToken))
+                .Select(one => (one.Item, one.Left)),
+        ];
 
-        return new ShopSaleResponse(
+    /// <summary>One line of the board, or nothing when this venue has no such line.</summary>
+    private static async Task<ShopItemResponse?> OneItemAsync(
+        AppDbContext database,
+        Guid venueId,
+        Guid itemId,
+        CancellationToken cancellationToken) =>
+        (await OnTheShelfAsync(database, venueId, [itemId], cancellationToken))
+            .Select(one => Drawn(one.Item, one.Left))
+            .SingleOrDefault();
+
+    private static ShopItemResponse Drawn(ShopItem item, int left) =>
+        new(
+            item.Id,
+            item.Name,
+            item.PriceBaht,
+            item.Unit,
+            item.Counted,
+            item.TellMeAt,
+
+            // Nothing for what is not counted: a racquet to hire has no number, and a zero beside
+            // it would read as none left (PRD US-32).
+            item.Counted ? left : null,
+            Shop.RunningLow(item.Counted, left, item.TellMeAt),
+            item.WithdrawnAt);
+
+    /// <summary>
+    /// One trip to the counter as a screen reads it. Shaped from the rows in hand: a sale that was
+    /// just written or just taken back is already known down to its lines, and asking the database
+    /// to say it back is a round trip that can only agree.
+    /// </summary>
+    private static ShopSaleResponse Drawn(ShopSale sale) =>
+        new(
             sale.Id,
             sale.BookingId,
             sale.TotalBaht,
@@ -800,11 +782,10 @@ public static class ShopEndpoints
             sale.CancelReason,
             [
                 .. sale.Lines
-                    .OrderBy(line => line.Name)
+                    .OrderBy(line => line.Name, StringComparer.Ordinal)
                     .Select(line => new ShopSaleLineResponse(
                         line.ItemId, line.Name, line.Quantity, line.EachBaht)),
             ]);
-    }
 
     private static SpendResponse Drawn(Spend spend) =>
         new(

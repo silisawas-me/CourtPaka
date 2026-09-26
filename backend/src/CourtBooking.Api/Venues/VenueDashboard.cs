@@ -179,9 +179,7 @@ public static class VenueDashboard
         CancellationToken cancellationToken)
     {
         // This month, when nothing is asked for: the question an owner opens the page with.
-        var today = PlatformRequirements.BangkokToday(timeProvider);
-        var first = from ?? new DateOnly(today.Year, today.Month, 1);
-        var last = to ?? first.AddMonths(1).AddDays(-1);
+        var (first, last) = PlatformRequirements.MonthOr(from, to, timeProvider);
 
         if (last < first || last.DayNumber - first.DayNumber + 1 > MaxDays)
         {
@@ -243,12 +241,14 @@ public static class VenueDashboard
 
         var sellableHours = days.Sum(day => day.SellableHours);
         var bookedHours = days.Sum(day => day.BookedHours);
+        var onlineBaht = days.Sum(day => day.OnlineBaht);
+        var staffBaht = days.Sum(day => day.StaffBaht);
 
         return new DashboardResponse(
             first,
             last,
-            days.Sum(day => day.OnlineBaht),
-            days.Sum(day => day.StaffBaht),
+            onlineBaht,
+            staffBaht,
             await AdvanceAsync(database, venueId, now, cancellationToken),
             sellableHours,
             bookedHours,
@@ -261,11 +261,7 @@ public static class VenueDashboard
             await RecoveryAsync(database, venueId, since, until, cancellationToken),
             await OwedHoursAsync(database, venueId, now, cancellationToken),
             await TradeAsync(
-                database,
-                venueId,
-                first,
-                last,
-                days.Sum(day => day.OnlineBaht) + days.Sum(day => day.StaffBaht),
+                database, venueId, first, last, since, until, onlineBaht + staffBaht,
                 cancellationToken));
     }
 
@@ -281,12 +277,11 @@ public static class VenueDashboard
         Guid venueId,
         DateOnly first,
         DateOnly last,
+        DateTimeOffset since,
+        DateTimeOffset until,
         decimal courtBaht,
         CancellationToken cancellationToken)
     {
-        var from = PlatformRequirements.BangkokHour(first, 0);
-        var until = PlatformRequirements.BangkokHour(last.AddDays(1), 0);
-
         // A sale that was taken back is not money the venue has, and the row that says so is the
         // cancellation rather than a deletion (PRD US-32).
         var shop = await database.ShopSales
@@ -294,7 +289,7 @@ public static class VenueDashboard
             .Where(sale =>
                 sale.VenueId == venueId
                 && sale.CancelledAt == null
-                && sale.SoldAt >= from
+                && sale.SoldAt >= since
                 && sale.SoldAt < until)
             .SumAsync(sale => (decimal?)sale.TotalBaht, cancellationToken) ?? 0m;
 

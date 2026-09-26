@@ -25,7 +25,7 @@
     </mat-card-header>
 
     <mat-card-content>
-      @if (onSale().length === 0) {
+      @if (ringing().length === 0) {
         <p class="muted" data-testid="nothing-on-the-board">
           {{ i18n.t('shop.nothingOnTheBoard') }}
         </p>
@@ -34,15 +34,21 @@
           One press each way. A counter is holding money in one hand, so the thing it does most —
           "one more of those" — is a button, not a number to type.
         -->
-        <ul class="board" data-testid="board">
-          @for (one of onSale(); track one.itemId) {
-            <li class="line" [class.low]="one.runningLow" [attr.data-testid]="'item-' + one.itemId">
-              <span class="line-name">{{ one.name }}</span>
-              <span class="muted">{{ one.priceBaht | baht: i18n.locale() }} / {{ one.unit }}</span>
+        <ul class="plain-list" data-testid="board">
+          @for (line of ringing(); track line.item.itemId) {
+            <li
+              class="line"
+              [class.low]="line.item.runningLow"
+              [attr.data-testid]="'item-' + line.item.itemId"
+            >
+              <span class="line-name">{{ line.item.name }}</span>
+              <span class="muted">
+                {{ line.item.priceBaht | baht: i18n.locale() }} / {{ line.item.unit }}
+              </span>
 
-              @if (one.counted) {
-                <span class="line-left" [attr.data-testid]="'left-' + one.itemId">
-                  {{ one.left }}
+              @if (line.item.counted) {
+                <span class="line-left" [attr.data-testid]="'left-' + line.item.itemId">
+                  {{ line.item.left }}
                 </span>
               }
 
@@ -50,23 +56,23 @@
                 <button
                   matButton
                   type="button"
-                  [attr.data-testid]="'less-' + one.itemId"
-                  [attr.aria-label]="i18n.t('shop.oneFewer') + ' ' + one.name"
-                  [disabled]="inBasket(one.itemId) === 0"
-                  (click)="add(one, -1)"
+                  [attr.data-testid]="'less-' + line.item.itemId"
+                  [attr.aria-label]="i18n.t('shop.oneFewer') + ' ' + line.item.name"
+                  [disabled]="line.quantity === 0"
+                  (click)="add(line, -1)"
                 >
                   −
                 </button>
-                <span class="in-basket" [attr.data-testid]="'basket-' + one.itemId">
-                  {{ inBasket(one.itemId) }}
+                <span class="in-basket" [attr.data-testid]="'basket-' + line.item.itemId">
+                  {{ line.quantity }}
                 </span>
                 <button
                   matButton="filled"
                   type="button"
-                  [attr.data-testid]="'more-' + one.itemId"
-                  [attr.aria-label]="i18n.t('shop.oneMore') + ' ' + one.name"
-                  [disabled]="one.counted && inBasket(one.itemId) >= (one.left ?? 0)"
-                  (click)="add(one, 1)"
+                  [attr.data-testid]="'more-' + line.item.itemId"
+                  [attr.aria-label]="i18n.t('shop.oneMore') + ' ' + line.item.name"
+                  [disabled]="line.quantity >= line.most"
+                  (click)="add(line, 1)"
                 >
                   +
                 </button>
@@ -128,10 +134,10 @@
     </mat-card-header>
 
     <mat-card-content>
-      @if (nothingSold()) {
+      @if (sales().length === 0) {
         <p class="muted" data-testid="nothing-sold">{{ i18n.t('shop.nothingSold') }}</p>
       } @else {
-        <ul class="sales" data-testid="sales">
+        <ul class="plain-list" data-testid="sales">
           @for (sale of sales(); track sale.saleId) {
             <li
               class="sale"
@@ -214,6 +220,44 @@
           </mat-form-field>
         </div>
 
+        <!--
+          A delivery is one expense that also fills a shelf, so it is said once, here. Offered only
+          for money spent on stock, and only against something the venue counts (PRD US-33).
+        -->
+        @if (spend.controls.kind.value === 'Stock' && countedItems().length > 0) {
+          <fieldset class="methods" data-testid="bought-what">
+            <legend>{{ i18n.t('shop.boughtWhat') }}</legend>
+            <label class="method-choice">
+              <input type="radio" formControlName="itemId" value="" data-testid="bought-nothing" />
+              <span>{{ i18n.t('shop.boughtNothing') }}</span>
+            </label>
+            @for (one of countedItems(); track one.itemId) {
+              <label class="method-choice">
+                <input
+                  type="radio"
+                  formControlName="itemId"
+                  [value]="one.itemId"
+                  [attr.data-testid]="'bought-' + one.itemId"
+                />
+                <span>{{ one.name }}</span>
+              </label>
+            }
+          </fieldset>
+
+          @if (spend.controls.itemId.value !== '') {
+            <mat-form-field class="number">
+              <mat-label>{{ i18n.t('shop.boughtHowMany') }}</mat-label>
+              <input
+                matInput
+                type="number"
+                inputmode="numeric"
+                data-testid="bought-how-many"
+                formControlName="quantity"
+              />
+            </mat-form-field>
+          }
+        }
+
         <fieldset class="methods">
           <legend>{{ i18n.t('shop.paidOutBy') }}</legend>
           @for (method of methods; track method) {
@@ -243,7 +287,7 @@
       </div>
 
       @if (spending().length > 0) {
-        <ul class="sales" data-testid="spending">
+        <ul class="plain-list" data-testid="spending">
           @for (one of spending(); track one.spendId) {
             <li
               class="sale"
@@ -319,7 +363,7 @@
             </mat-form-field>
           </div>
 
-          <label class="counted-choice">
+          <label class="method-choice">
             <input type="checkbox" data-testid="item-counted" formControlName="counted" />
             <span>{{ i18n.t('shop.itemCounted') }}</span>
           </label>
@@ -364,7 +408,7 @@
         </div>
       }
 
-      <ul class="board" data-testid="board-settings">
+      <ul class="plain-list" data-testid="board-settings">
         @for (one of items(); track one.itemId) {
           <li
             class="line"
@@ -374,9 +418,29 @@
             <span class="line-name">{{ one.name }}</span>
             <span>{{ one.priceBaht | baht: i18n.locale() }} / {{ one.unit }}</span>
             @if (one.counted) {
-              <span class="muted">{{ i18n.t('shop.counted') }}</span>
+              <span class="muted">
+                {{ i18n.t('shop.counted') }}
+                @if (one.tellMeAt !== null) {
+                  · {{ i18n.t('shop.tellMeAt') }} {{ one.tellMeAt }}
+                }
+              </span>
             }
             @if (one.withdrawnAt === null) {
+              <!--
+                Counting is here rather than on the ring-up list: a shift that is selling does not
+                stop to count, and the person who does is the one looking at the board (PRD US-33).
+              -->
+              @if (one.counted) {
+                <button
+                  matButton
+                  type="button"
+                  [attr.data-testid]="'count-' + one.itemId"
+                  [disabled]="saving()"
+                  (click)="startCount(one)"
+                >
+                  {{ i18n.t('shop.count') }}
+                </button>
+              }
               <button
                 matButton
                 type="button"
@@ -390,6 +454,53 @@
           </li>
         }
       </ul>
+
+      @if (counting(); as one) {
+        <form class="stack counting" [formGroup]="count" novalidate data-testid="counting">
+          <p class="muted">{{ one.name }}</p>
+
+          <div class="numbers">
+            <mat-form-field class="number">
+              <mat-label>{{ i18n.t('shop.countedWhat') }}</mat-label>
+              <input
+                matInput
+                type="number"
+                inputmode="numeric"
+                data-testid="count-counted"
+                formControlName="counted"
+              />
+              <mat-error
+                [appFieldError]="count.controls.counted"
+                testId="count-counted-error"
+              ></mat-error>
+            </mat-form-field>
+
+            <mat-form-field class="field">
+              <mat-label>{{ i18n.t('shop.countWhy') }}</mat-label>
+              <input matInput data-testid="count-reason" formControlName="reason" />
+              <mat-error
+                [appFieldError]="count.controls.reason"
+                testId="count-reason-error"
+              ></mat-error>
+            </mat-form-field>
+          </div>
+
+          <div class="row">
+            <button
+              matButton="filled"
+              type="button"
+              data-testid="save-count"
+              [disabled]="saving()"
+              (click)="saveCount()"
+            >
+              {{ i18n.t('shop.saveCount') }}
+            </button>
+            <button matButton type="button" data-testid="cancel-count" (click)="counting.set(null)">
+              {{ i18n.t('shop.cancelCount') }}
+            </button>
+          </div>
+        </form>
+      }
     </mat-card-content>
   </mat-card>
 }

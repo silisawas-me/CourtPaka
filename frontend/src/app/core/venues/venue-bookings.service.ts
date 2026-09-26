@@ -115,8 +115,13 @@ export interface BookingHours {
   move: { hours: number; courts: FreeCourt[] } | null;
 }
 
-/** How money reached the venue (PRD US-26). */
-export type PaymentMethod = 'Cash' | 'PromptPay' | 'Card';
+/**
+ * How money reached the venue (PRD US-26). One list, in the order a counter reaches for them, so
+ * that a screen offering a choice of method cannot quietly be missing one.
+ */
+export const PAYMENT_METHODS = ['Cash', 'PromptPay', 'Card'] as const;
+
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 /** One amount the venue took, as the counter reads it back. */
 export interface PaymentReceipt {
@@ -158,7 +163,10 @@ export interface DayMoney {
   cashBaht: number;
   promptPayBaht: number;
   cardBaht: number;
+  /** Cash handed back: to a booker, or over the counter for a sale taken back (US-18, US-32). */
   cashRefundedBaht: number;
+  /** Cash the venue paid out. Out of the same drawer, but not back to anybody (US-33). */
+  cashPaidOutBaht: number;
   outstandingBaht: number;
   cashReceipts: PaymentReceipt[];
   closed: DailyClosing | null;

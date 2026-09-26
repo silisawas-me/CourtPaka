@@ -767,6 +767,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .HasForeignKey(one => one.SaleId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // The delivery it arrived on, the same way a sale is the sale it went out on: the row
+            // that says the stock came in and the row that says what it cost are one purchase, and
+            // an id with nothing holding it to the other end is a note, not a link.
+            entry.HasOne(one => one.Spend)
+                .WithMany()
+                .HasForeignKey(one => one.SpendId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             entry.HasOne(one => one.By)
                 .WithMany()
                 .HasForeignKey(one => one.ByUserId)
@@ -779,8 +787,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             spend.Property(one => one.Note).HasMaxLength(Spend.NoteMaxLength);
             spend.Property(one => one.VoidReason).HasMaxLength(Spend.NoteMaxLength);
 
-            // "What did this venue pay out, and when" is the whole of what is asked of it.
+            // "What did this venue pay out, and when" is the whole of what is asked of it —
+            // asked twice, because a report reads the date the venue says the money was paid and
+            // the drawer reads the moment the notes left it, and they are not the same day.
             spend.HasIndex(one => new { one.VenueId, one.PaidOn });
+            spend.HasIndex(one => new { one.VenueId, one.RecordedAt });
 
             spend.ToTable(table => table.HasCheckConstraint(
                 "CK_Spends_IsMoney", "\"AmountBaht\" > 0"));

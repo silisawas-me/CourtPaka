@@ -99,7 +99,20 @@ public sealed class ShopSale
     /// <summary>The booking it was rung up against, or null for somebody who only bought.</summary>
     public Guid? BookingId { get; init; }
 
-    public required decimal TotalBaht { get; init; }
+    /// <summary>
+    /// What it came to: the sum of its lines, each at the price it was rung up at. Stored so a
+    /// report never has to join to work out a total, and set from the lines rather than beside
+    /// them so the receipt cannot fail to add up to what was charged.
+    /// </summary>
+    public decimal TotalBaht { get; private set; }
+
+    /// <summary>The lines are the sale. Everything else about it is bookkeeping.</summary>
+    public ShopSale Selling(IEnumerable<ShopSaleLine> lines)
+    {
+        Lines.AddRange(lines);
+        TotalBaht = Lines.Sum(line => line.Baht);
+        return this;
+    }
 
     public required DateTimeOffset SoldAt { get; init; }
 
@@ -177,6 +190,8 @@ public sealed class StockEntry
 
     public ShopSale? Sale { get; init; }
 
+    public Spend? Spend { get; init; }
+
     public AppUser? By { get; init; }
 }
 
@@ -236,7 +251,6 @@ public static class Shop
     public const int MostLines = 20;
 
     /// <summary>How many of the sales that are over a venue is shown.</summary>
-    public const int FinishedShown = 20;
 
     /// <summary>Why this cannot go on the board, or null.</summary>
     public static string? Refusal(string? name, string? unit, decimal priceBaht, int? tellMeAt)
@@ -263,6 +277,17 @@ public static class Shop
 
     /// <summary>Whether a line is one somebody could actually be handed.</summary>
     public static bool IsAQuantity(int quantity) => quantity is > 0 and <= MostOfOneThing;
+
+    /// <summary>
+    /// What somebody wrote to explain a thing they did, or null if they wrote nothing usable.
+    /// One answer, because the three doors that insist on a reason — voiding an expense, taking a
+    /// sale back, saying the shelf holds a different number — insist on the same thing.
+    /// </summary>
+    public static string? Said(string? text, int most)
+    {
+        var said = text?.Trim();
+        return string.IsNullOrEmpty(said) || said.Length > most ? null : said;
+    }
 
     /// <summary>Whether there are few enough left to say so (PRD US-33).</summary>
     public static bool RunningLow(bool counted, int left, int? tellMeAt) =>
@@ -292,6 +317,12 @@ public static class ShopErrorCodes
 
     /// <summary>The booking it would be rung up against is not one of this venue's.</summary>
     public const string BookingUnknown = "shop.booking_unknown";
+
+    /// <summary>Nothing was written to say why, or too much was (PRD US-32, US-33).</summary>
+    public const string ReasonNeeded = "shop.reason_needed";
+
+    /// <summary>A shelf cannot hold fewer than none of something (PRD US-33).</summary>
+    public const string InvalidCount = "shop.invalid_count";
 }
 
 public static class SpendErrorCodes
@@ -300,6 +331,9 @@ public static class SpendErrorCodes
     public const string InvalidKind = "spend.invalid_kind";
     public const string InvalidDate = "spend.invalid_date";
     public const string NoteTooLong = "spend.note_too_long";
+
+    /// <summary>Nothing was written to say why it is being taken back (PRD US-33).</summary>
+    public const string ReasonNeeded = "spend.reason_needed";
     public const string NotFound = "spend.not_found";
     public const string AlreadyVoided = "spend.already_voided";
 

@@ -97,11 +97,12 @@ public sealed class ShopTests(ApiTestFixture api)
     }
 
     /// <summary>
-    /// Taking a sale back puts the stock on the shelf and writes down the money going out. Nothing
-    /// is deleted: what happened happened (PRD US-32).
+    /// Taking a sale back puts the stock on the shelf and takes the money out of the drawer, and
+    /// it does neither by writing an expense: the venue bought nothing. Nothing is deleted either —
+    /// what happened happened (PRD US-32).
     /// </summary>
     [Fact]
-    public async Task Taking_a_sale_back_returns_the_stock_and_records_the_money_going_out()
+    public async Task Taking_a_sale_back_returns_the_stock_and_the_money()
     {
         var (owner, venue, _) = await scenario.BookableVenueAsync();
         var item = await AddAsync(owner, venue.Id);
@@ -117,9 +118,13 @@ public sealed class ShopTests(ApiTestFixture api)
         Assert.Equal("ลูกค้าคืน", cancelled.CancelReason);
         Assert.Equal(10, (await BoardAsync(owner, venue.Id)).Single(one => one.ItemId == item.ItemId).Left);
 
-        // The money going back out is written where money going out is written.
+        // The drawer is lighter by what was handed back, and the cancellation is what says so.
+        var money = await MoneyAsync(owner, venue.Id);
+        Assert.Equal(270m, money.CashRefundedBaht);
+
+        // And it is not filed as something the venue bought: the only expense is the delivery.
         var spending = await SpendingAsync(owner, venue.Id);
-        Assert.Contains(spending, one => one.AmountBaht == 270m && one.VoidedAt is null);
+        Assert.Equal([700m], spending.Where(one => one.VoidedAt is null).Select(one => one.AmountBaht));
 
         // Once, and only once.
         var again = await owner.PostAsJsonAsync(
@@ -154,7 +159,7 @@ public sealed class ShopTests(ApiTestFixture api)
         var item = await AddAsync(owner, venue.Id);
 
         var halfway = await owner.PostAsJsonAsync(
-            $"/api/venues/{venue.Id}/shop/spending",
+            $"/api/venues/{venue.Id}/spending",
             new SpendRequest(
                 nameof(SpendKind.Stock), 500m, null, nameof(PaymentMethod.Cash), null,
                 item.ItemId, null));
@@ -164,7 +169,7 @@ public sealed class ShopTests(ApiTestFixture api)
 
         // And a thing bought under the wrong heading is not a purchase either.
         var mislabelled = await owner.PostAsJsonAsync(
-            $"/api/venues/{venue.Id}/shop/spending",
+            $"/api/venues/{venue.Id}/spending",
             new SpendRequest(
                 nameof(SpendKind.Wages), 500m, null, nameof(PaymentMethod.Cash), null,
                 item.ItemId, 5));
@@ -190,20 +195,25 @@ public sealed class ShopTests(ApiTestFixture api)
         // Paid out of the drawer, in cash.
         await VenueScenario.ReadAsync<SpendResponse>(
             await owner.PostAsJsonAsync(
-                $"/api/venues/{venue.Id}/shop/spending",
+                $"/api/venues/{venue.Id}/spending",
                 new SpendRequest(
                     nameof(SpendKind.Utilities), 60m, null, nameof(PaymentMethod.Cash),
                     "ค่าน้ำ", null, null)),
             HttpStatusCode.Created);
 
         var after = await MoneyAsync(owner, venue.Id);
-        Assert.Equal(before.CashRefundedBaht + 60m, after.CashRefundedBaht);
+
+        // Money the venue paid out is counted on its own: out of the same drawer, but not money
+        // handed back to anybody, and the page has to be able to say which it was.
+        Assert.Equal(before.CashPaidOutBaht + 60m, after.CashPaidOutBaht);
+        Assert.Equal(before.CashRefundedBaht, after.CashRefundedBaht);
 
         // Which is what the count expects to find.
         var counted = await VenueScenario.ReadAsync<DailyClosingResponse>(
             await owner.PostAsJsonAsync(
                 $"/api/venues/{venue.Id}/money/closing",
-                new CloseDayRequest(0m, after.CashBaht - after.CashRefundedBaht, null)));
+                new CloseDayRequest(
+                    0m, after.CashBaht - after.CashRefundedBaht - after.CashPaidOutBaht, null)));
 
         Assert.Equal(0m, counted.DifferenceBaht);
     }
@@ -216,7 +226,7 @@ public sealed class ShopTests(ApiTestFixture api)
 
         var spend = await VenueScenario.ReadAsync<SpendResponse>(
             await owner.PostAsJsonAsync(
-                $"/api/venues/{venue.Id}/shop/spending",
+                $"/api/venues/{venue.Id}/spending",
                 new SpendRequest(
                     nameof(SpendKind.Repairs), 1_200m, null, nameof(PaymentMethod.PromptPay),
                     "ซ่อมไฟ", null, null)),
@@ -224,7 +234,7 @@ public sealed class ShopTests(ApiTestFixture api)
 
         var voided = await VenueScenario.ReadAsync<SpendResponse>(
             await owner.PostAsJsonAsync(
-                $"/api/venues/{venue.Id}/shop/spending/{spend.SpendId}/void",
+                $"/api/venues/{venue.Id}/spending/{spend.SpendId}/void",
                 new ShopSaleCancelRequest("คีย์ผิด")));
 
         Assert.NotNull(voided.VoidedAt);
@@ -232,7 +242,7 @@ public sealed class ShopTests(ApiTestFixture api)
         Assert.Equal(1_200m, voided.AmountBaht);
 
         var again = await owner.PostAsJsonAsync(
-            $"/api/venues/{venue.Id}/shop/spending/{spend.SpendId}/void",
+            $"/api/venues/{venue.Id}/spending/{spend.SpendId}/void",
             new ShopSaleCancelRequest("อีกที"));
         Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
         Assert.Equal(SpendErrorCodes.AlreadyVoided, await again.ErrorCodeAsync());
@@ -306,7 +316,12 @@ public sealed class ShopTests(ApiTestFixture api)
                 $"/api/venues/{venue.Id}/shop/sales/{sale.SaleId}/cancel",
                 new ShopSaleCancelRequest("คืน"))).StatusCode);
 
-        Assert.Equal(before.Trade.ShopBaht, (await DashboardAsync(owner, venue.Id)).Trade.ShopBaht);
+        // Stops counting once, not twice. It used to write the money back out as an expense too,
+        // so a sale taken back cost the venue what it never earned.
+        var back = await DashboardAsync(owner, venue.Id);
+        Assert.Equal(before.Trade.ShopBaht, back.Trade.ShopBaht);
+        Assert.Equal(before.Trade.SpentBaht + 700m, back.Trade.SpentBaht);
+        Assert.Equal(after.Trade.LeftOverBaht - 180m, back.Trade.LeftOverBaht);
     }
 
     /// <summary>
@@ -325,7 +340,7 @@ public sealed class ShopTests(ApiTestFixture api)
             (await staff.GetAsync($"/api/venues/{venue.Id}/shop/sales")).StatusCode);
         Assert.Equal(
             HttpStatusCode.Forbidden,
-            (await staff.GetAsync($"/api/venues/{venue.Id}/shop/spending")).StatusCode);
+            (await staff.GetAsync($"/api/venues/{venue.Id}/spending")).StatusCode);
     }
 
     /// <summary>Selling is selling, and a suspension stops it (PRD US-20).</summary>
@@ -351,7 +366,7 @@ public sealed class ShopTests(ApiTestFixture api)
         Assert.Equal(
             HttpStatusCode.Created,
             (await owner.PostAsJsonAsync(
-                $"/api/venues/{venue.Id}/shop/spending",
+                $"/api/venues/{venue.Id}/spending",
                 new SpendRequest(
                     nameof(SpendKind.Utilities), 90m, null, nameof(PaymentMethod.Cash),
                     null, null, null))).StatusCode);
@@ -409,7 +424,7 @@ public sealed class ShopTests(ApiTestFixture api)
         PaymentMethod paidBy = PaymentMethod.PromptPay) =>
         await VenueScenario.ReadAsync<SpendResponse>(
             await owner.PostAsJsonAsync(
-                $"/api/venues/{venueId}/shop/spending",
+                $"/api/venues/{venueId}/spending",
                 new SpendRequest(
                     nameof(SpendKind.Stock), amount, null, paidBy.ToString(), null,
                     itemId, quantity)),
@@ -435,7 +450,7 @@ public sealed class ShopTests(ApiTestFixture api)
 
     private static async Task<SpendResponse[]> SpendingAsync(HttpClient owner, Guid venueId) =>
         await VenueScenario.ReadAsync<SpendResponse[]>(
-            await owner.GetAsync($"/api/venues/{venueId}/shop/spending"));
+            await owner.GetAsync($"/api/venues/{venueId}/spending"));
 
     private static async Task<DayMoneyResponse> MoneyAsync(HttpClient owner, Guid venueId) =>
         await VenueScenario.ReadAsync<DayMoneyResponse>(

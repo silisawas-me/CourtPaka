@@ -38,6 +38,21 @@ public static class PlatformRequirements
     /// Today in Thai time. Opening hours, closures and every report are counted by the Bangkok date,
     /// never the server's (PRD BR-10), so nothing may call DateTime.Today.
     /// </summary>
+    /// <summary>
+    /// The range a report was asked for, or this calendar month when it was not. Three screens
+    /// default the same way — the venue's dashboard, the platform's, and what a venue paid out —
+    /// and a fourth spelling of it is a fourth chance to pick a different month.
+    /// </summary>
+    public static (DateOnly First, DateOnly Last) MonthOr(
+        DateOnly? from,
+        DateOnly? to,
+        TimeProvider timeProvider)
+    {
+        var today = BangkokToday(timeProvider);
+        var first = from ?? new DateOnly(today.Year, today.Month, 1);
+        return (first, to ?? first.AddMonths(1).AddDays(-1));
+    }
+
     public static DateOnly BangkokToday(TimeProvider timeProvider) =>
         DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), BangkokTimeZone).DateTime);
 

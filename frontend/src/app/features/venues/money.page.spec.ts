@@ -16,6 +16,7 @@ function day(overrides: Record<string, unknown> = {}) {
     promptPayBaht: 300,
     cardBaht: 100,
     cashRefundedBaht: 0,
+    cashPaidOutBaht: 0,
     outstandingBaht: 200,
     cashReceipts: [
       {

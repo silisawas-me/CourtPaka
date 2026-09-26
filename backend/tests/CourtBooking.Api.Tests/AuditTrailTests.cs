@@ -148,7 +148,7 @@ public sealed class AuditTrailTests(ApiTestFixture api) : IClassFixture<ApiTestF
         Assert.Equal(
             HttpStatusCode.Created,
             (await venueOwner.PostAsJsonAsync(
-                $"/api/venues/{venue.Id}/shop/spending",
+                $"/api/venues/{venue.Id}/spending",
                 new SpendRequest(
                     nameof(SpendKind.Stock), 700m, null, nameof(PaymentMethod.PromptPay),
                     null, stock.ItemId, 10))).StatusCode);

@@ -11,11 +11,9 @@ import { AppDatePipe } from '../../core/i18n/app-date.pipe';
 import { BahtPipe } from '../../core/i18n/baht.pipe';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { HourPackage, PackagesService, PackageType } from '../../core/venues/packages.service';
+import { PAYMENT_METHODS } from '../../core/venues/venue-bookings.service';
 import { FieldError } from '../../shared/field-error';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
-
-/** How the money for a package came in. The same three the till counts (PRD US-26). */
-const METHODS = ['Cash', 'PromptPay', 'Card'] as const;
 
 /** As long as an offer's name on the board may be. The customer's own is Booking's, and longer. */
 const OFFER_NAME_MAX_LENGTH = 100;
@@ -55,7 +53,7 @@ export class PackagesPage {
   private readonly forms = inject(FormBuilder);
 
   protected readonly i18n = inject(TranslationService);
-  protected readonly methods = METHODS;
+  protected readonly methods = PAYMENT_METHODS;
   protected readonly nameMaxLength = OFFER_NAME_MAX_LENGTH;
 
   readonly venueId = input.required<string>();
@@ -105,7 +103,7 @@ export class PackagesPage {
       '',
       Validators.maxLength(CUSTOMER_PHONE_MAX_LENGTH),
     ),
-    paidBy: this.forms.nonNullable.control<string>(METHODS[0], Validators.required),
+    paidBy: this.forms.nonNullable.control<string>(PAYMENT_METHODS[0], Validators.required),
   });
 
   /** Putting an offer on the board. */

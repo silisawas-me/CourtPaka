@@ -181,6 +181,12 @@ namespace CourtBooking.Api.Data.Migrations
                         principalTable: "ShopSales",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_StockEntries_Spends_SpendId",
+                        column: x => x.SpendId,
+                        principalTable: "Spends",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateIndex(
@@ -229,6 +235,11 @@ namespace CourtBooking.Api.Data.Migrations
                 columns: new[] { "VenueId", "PaidOn" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_Spends_VenueId_RecordedAt",
+                table: "Spends",
+                columns: new[] { "VenueId", "RecordedAt" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_StockEntries_ByUserId",
                 table: "StockEntries",
                 column: "ByUserId");
@@ -237,6 +248,11 @@ namespace CourtBooking.Api.Data.Migrations
                 name: "IX_StockEntries_ItemId_At",
                 table: "StockEntries",
                 columns: new[] { "ItemId", "At" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_StockEntries_SpendId",
+                table: "StockEntries",
+                column: "SpendId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_StockEntries_SaleId",

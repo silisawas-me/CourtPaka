@@ -52,7 +52,7 @@ describe('ShopPage', () => {
 
     httpMock.expectOne('/api/venues/v1/shop/items').flush(items);
     httpMock.expectOne((request) => request.url === '/api/venues/v1/shop/sales').flush(sales);
-    httpMock.expectOne((request) => request.url === '/api/venues/v1/shop/spending').flush(spending);
+    httpMock.expectOne((request) => request.url === '/api/venues/v1/spending').flush(spending);
     fixture.detectChanges();
   }
 
@@ -94,7 +94,7 @@ describe('ShopPage', () => {
     expect(textOf(fixture, 'basket-i1')).toContain('2');
   });
 
-  it('takes the money and says how it came in', () => {
+  it('takes the money, says how it came in, and takes the stock off the shelf', () => {
     render([item()]);
 
     clickOn(fixture, 'more-i1');
@@ -114,11 +114,10 @@ describe('ShopPage', () => {
         lines: [{ itemId: 'i1', name: 'ลูกขนไก่', quantity: 1, eachBaht: 90 }],
       }),
     );
-
-    // What is left has changed, so the board is read again.
-    httpMock.expectOne('/api/venues/v1/shop/items').flush([item({ left: 9 })]);
     fixture.detectChanges();
 
+    // The sale's own lines say what left the shelf, so the counter's next press is against the
+    // right number without a second read of the board.
     expect(elementOf(fixture, 'sale-s1')).not.toBeNull();
     expect(textOf(fixture, 'left-i1')).toContain('9');
   });
@@ -131,7 +130,7 @@ describe('ShopPage', () => {
     expect(textOf(fixture, 'running-low')).toContain('1');
   });
 
-  it('takes a sale back and reads the shelf and the spending again', () => {
+  it('takes a sale back and puts the stock on the shelf again', () => {
     render([item()], [sale()]);
 
     clickOn(fixture, 'take-back-s1');
@@ -140,14 +139,13 @@ describe('ShopPage', () => {
     expect(request.request.body.reason).toBe(TRANSLATIONS.th['shop.takenBack']);
 
     request.flush(sale({ cancelledAt: '2026-09-26T05:00:00Z', cancelReason: 'คืน' }));
-    httpMock.expectOne('/api/venues/v1/shop/items').flush([item({ left: 12 })]);
-    httpMock.expectOne((request) => request.url === '/api/venues/v1/shop/spending').flush([]);
     fixture.detectChanges();
 
     expect(elementOf(fixture, 'taken-back-s1')).not.toBeNull();
+    expect(textOf(fixture, 'left-i1')).toContain('12');
   });
 
-  it('writes down money paid out', () => {
+  it('writes down money paid out, and lets the server say what day it is', () => {
     render([item()]);
 
     clickOn(fixture, 'kind-Utilities');
@@ -156,11 +154,16 @@ describe('ShopPage', () => {
     clickOn(fixture, 'spend-by-Cash');
     clickOn(fixture, 'record-spend');
 
-    const request = httpMock.expectOne('/api/venues/v1/shop/spending');
-    expect(request.request.body.kind).toBe('Utilities');
-    expect(request.request.body.amountBaht).toBe(450);
-    expect(request.request.body.paidBy).toBe('Cash');
-    expect(request.request.body.note).toBe('ค่าน้ำ');
+    const request = httpMock.expectOne('/api/venues/v1/spending');
+    expect(request.request.body).toEqual({
+      kind: 'Utilities',
+      amountBaht: 450,
+      paidOn: null,
+      paidBy: 'Cash',
+      note: 'ค่าน้ำ',
+      itemId: null,
+      quantity: null,
+    });
 
     request.flush({
       spendId: 'sp1',
@@ -178,13 +181,45 @@ describe('ShopPage', () => {
     expect(textOf(fixture, 'spent-this-month')).toContain('450');
   });
 
+  /** A delivery is one expense that also fills a shelf, said once (PRD US-33). */
+  it('buys stock in as one expense that fills the shelf', () => {
+    render([item()]);
+
+    setInput(fixture, '[data-testid="spend-amount"]', '700');
+    clickOn(fixture, 'kind-Stock');
+    fixture.detectChanges();
+
+    clickOn(fixture, 'bought-i1');
+    fixture.detectChanges();
+    setInput(fixture, '[data-testid="bought-how-many"]', '10');
+    clickOn(fixture, 'record-spend');
+
+    const request = httpMock.expectOne('/api/venues/v1/spending');
+    expect(request.request.body.itemId).toBe('i1');
+    expect(request.request.body.quantity).toBe(10);
+
+    request.flush({
+      spendId: 'sp2',
+      kind: 'Stock',
+      amountBaht: 700,
+      paidOn: '2026-09-26',
+      paidBy: 'Cash',
+      note: null,
+      voidedAt: null,
+      voidReason: null,
+    });
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'left-i1')).toContain('20');
+  });
+
   it('will not write down a payment of nothing', () => {
     render([item()]);
 
     setInput(fixture, '[data-testid="spend-amount"]', '0');
     clickOn(fixture, 'record-spend');
 
-    httpMock.expectNone('/api/venues/v1/shop/spending');
+    httpMock.expectNone('/api/venues/v1/spending');
     expect(textOf(fixture, 'spend-amount-error')).not.toBe('');
   });
 
@@ -217,5 +252,41 @@ describe('ShopPage', () => {
     fixture.detectChanges();
 
     expect(elementOf(fixture, 'board-i2')!.classList).toContain('old');
+  });
+
+  /** What the shelf actually holds, and why the ledger said otherwise (PRD US-33). */
+  it('counts a shelf and says why it did not match', () => {
+    render([item()]);
+
+    clickOn(fixture, 'count-i1');
+    fixture.detectChanges();
+
+    // It opens on what the ledger says, because most counts agree with it.
+    expect((elementOf(fixture, 'count-counted') as HTMLInputElement).value).toBe('10');
+
+    setInput(fixture, '[data-testid="count-counted"]', '8');
+    setInput(fixture, '[data-testid="count-reason"]', 'หายไปสองลูก');
+    clickOn(fixture, 'save-count');
+
+    const request = httpMock.expectOne('/api/venues/v1/shop/items/i1/count');
+    expect(request.request.body).toEqual({ counted: 8, reason: 'หายไปสองลูก' });
+
+    request.flush(item({ left: 8 }));
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, 'counting')).toBeNull();
+    expect(textOf(fixture, 'left-i1')).toContain('8');
+  });
+
+  it('will not save a count with no reason', () => {
+    render([item()]);
+
+    clickOn(fixture, 'count-i1');
+    fixture.detectChanges();
+    setInput(fixture, '[data-testid="count-counted"]', '8');
+    clickOn(fixture, 'save-count');
+
+    httpMock.expectNone('/api/venues/v1/shop/items/i1/count');
+    expect(textOf(fixture, 'count-reason-error')).not.toBe('');
   });
 });

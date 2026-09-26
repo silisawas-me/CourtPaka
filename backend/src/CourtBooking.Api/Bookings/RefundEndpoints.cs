@@ -112,8 +112,7 @@ public static class RefundEndpoints
         // double click — both read the same total, both find room for the whole of it, and both
         // write: a booking owing 1,000 ends up with 2,000 recorded against it and drops off the
         // list of what the venue still owes, in records nobody can edit (PRD BR-06).
-        await database.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT pg_advisory_xact_lock({LockKey(bookingId)})", cancellationToken);
+        await Locks.OnAsync(database, bookingId, cancellationToken);
 
         var outstanding = Refunds.OutstandingOf(
             booking.RefundDueBaht, await SentBackAsync(database, bookingId, cancellationToken));
@@ -219,18 +218,6 @@ public static class RefundEndpoints
         }
 
         return TypedResults.Ok(await ReadAsync(database, booking, cancellationToken));
-    }
-
-    /// <summary>
-    /// One number per booking, so that everybody writing against the same one waits for the
-    /// others rather than all of them reading the same total. Sharing a number with something
-    /// else only means queueing behind it, which costs a moment and nothing else.
-    /// </summary>
-    private static long LockKey(Guid bookingId)
-    {
-        Span<byte> id = stackalloc byte[16];
-        bookingId.TryWriteBytes(id);
-        return BitConverter.ToInt64(id[..8]) ^ BitConverter.ToInt64(id[8..]);
     }
 
     /// <summary>What counts towards what has been sent back: every record that still stands.</summary>

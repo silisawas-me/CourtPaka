@@ -66,6 +66,10 @@
           <dd data-testid="cash-refunded">{{ day.cashRefundedBaht | baht: i18n.locale() }}</dd>
         </div>
         <div>
+          <dt class="muted">{{ i18n.t('money.cashPaidOut') }}</dt>
+          <dd data-testid="cash-paid-out">{{ day.cashPaidOutBaht | baht: i18n.locale() }}</dd>
+        </div>
+        <div>
           <dt class="muted">{{ i18n.t('money.outstanding') }}</dt>
           <dd data-testid="outstanding">{{ day.outstandingBaht | baht: i18n.locale() }}</dd>
         </div>

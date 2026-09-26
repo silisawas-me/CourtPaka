@@ -48,7 +48,7 @@ namespace CourtBooking.Api.Data.Migrations
                     b.HasIndex("SourceId", "Kind")
                         .IsUnique();
 
-                    b.ToTable("BookerNotices");
+                    b.ToTable("BookerNotices", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Bookings.Booking", b =>
@@ -146,7 +146,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("VenueId", "CreatedAt");
 
-                    b.ToTable("Bookings", t =>
+                    b.ToTable("Bookings", null, t =>
                         {
                             t.HasCheckConstraint("CK_Bookings_BookerOrCustomer", "(\"Channel\" = 1 AND \"BookerUserId\" IS NOT NULL AND \"CustomerName\" IS NULL) OR (\"Channel\" = 2 AND \"BookerUserId\" IS NULL AND \"CustomerName\" IS NOT NULL AND (\"PaidAtCounter\" IS NOT NULL OR \"SeriesId\" IS NOT NULL OR \"PackageId\" IS NOT NULL))");
 
@@ -181,7 +181,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("BookingId", "ChangedAt");
 
-                    b.ToTable("BookingArrivalChanges");
+                    b.ToTable("BookingArrivalChanges", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Bookings.BookingSeries", b =>
@@ -254,7 +254,7 @@ namespace CourtBooking.Api.Data.Migrations
                         .IsUnique()
                         .HasFilter("\"State\" = 1");
 
-                    b.ToTable("BookingSeries", t =>
+                    b.ToTable("BookingSeries", null, t =>
                         {
                             t.HasCheckConstraint("CK_BookingSeries_HoursAreAWindow", "\"FromHour\" >= 0 AND \"UntilHour\" <= 24 AND \"FromHour\" < \"UntilHour\"");
                         });
@@ -294,7 +294,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("CourtId", "StartsAt");
 
-                    b.ToTable("BookingSlots");
+                    b.ToTable("BookingSlots", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Bookings.BookingSlotChange", b =>
@@ -338,7 +338,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("BookingId", "ChangedAt");
 
-                    b.ToTable("BookingSlotChanges");
+                    b.ToTable("BookingSlotChanges", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Bookings.BookingStatusChange", b =>
@@ -380,7 +380,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("BookingId", "ChangedAt");
 
-                    b.ToTable("BookingStatusChanges");
+                    b.ToTable("BookingStatusChanges", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Bookings.Complaint", b =>
@@ -429,7 +429,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("Status", "OpenedAt");
 
-                    b.ToTable("Complaints", t =>
+                    b.ToTable("Complaints", null, t =>
                         {
                             t.HasCheckConstraint("CK_Complaints_ResolvedSaysHow", "(\"Status\" = 1 AND \"ResolvedAt\" IS NULL AND \"Resolution\" IS NULL) OR (\"Status\" = 2 AND \"ResolvedAt\" IS NOT NULL AND \"ResolvedByUserId\" IS NOT NULL AND \"Resolution\" IS NOT NULL)");
                         });
@@ -480,7 +480,7 @@ namespace CourtBooking.Api.Data.Migrations
                     b.HasIndex("VenueId", "Date")
                         .IsUnique();
 
-                    b.ToTable("DailyClosings");
+                    b.ToTable("DailyClosings", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Bookings.HourPackage", b =>
@@ -531,7 +531,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("VenueId", "ExpiresOn", "ExpiredAt");
 
-                    b.ToTable("HourPackages", t =>
+                    b.ToTable("HourPackages", null, t =>
                         {
                             t.HasCheckConstraint("CK_HourPackages_WasSold", "\"HoursSold\" > 0 AND \"PriceBaht\" > 0");
                         });
@@ -569,7 +569,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("PackageId", "At");
 
-                    b.ToTable("PackageEntries", t =>
+                    b.ToTable("PackageEntries", null, t =>
                         {
                             t.HasCheckConstraint("CK_PackageEntries_HoursMoved", "\"Hours\" <> 0");
                         });
@@ -615,7 +615,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("VenueId", "WithdrawnAt", "CreatedAt");
 
-                    b.ToTable("PackageTypes", t =>
+                    b.ToTable("PackageTypes", null, t =>
                         {
                             t.HasCheckConstraint("CK_PackageTypes_IsAnOffer", "\"Hours\" > 0 AND \"Hours\" <= 200 AND \"PriceBaht\" > 0 AND \"ValidForDays\" > 0 AND \"ValidForDays\" <= 730");
                         });
@@ -668,7 +668,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("VenueId", "ReceivedAt");
 
-                    b.ToTable("PaymentReceipts", t =>
+                    b.ToTable("PaymentReceipts", null, t =>
                         {
                             t.HasCheckConstraint("CK_PaymentReceipts_AmountIsMoney", "\"AmountBaht\" > 0");
 
@@ -720,7 +720,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("BookingId", "UploadedAt");
 
-                    b.ToTable("PaymentSlips");
+                    b.ToTable("PaymentSlips", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Bookings.RefundRecord", b =>
@@ -772,7 +772,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("VoidedByUserId");
 
-                    b.ToTable("RefundRecords", t =>
+                    b.ToTable("RefundRecords", null, t =>
                         {
                             t.HasCheckConstraint("CK_RefundRecords_AmountIsMoney", "\"AmountBaht\" > 0");
                         });
@@ -803,7 +803,7 @@ namespace CourtBooking.Api.Data.Migrations
                     b.HasIndex("SeriesId", "Date")
                         .IsUnique();
 
-                    b.ToTable("SeriesMisses");
+                    b.ToTable("SeriesMisses", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Bookings.ShopItem", b =>
@@ -851,7 +851,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("VenueId", "WithdrawnAt", "Name");
 
-                    b.ToTable("ShopItems", t =>
+                    b.ToTable("ShopItems", null, t =>
                         {
                             t.HasCheckConstraint("CK_ShopItems_IsSomethingToSell", "\"PriceBaht\" > 0 AND (\"TellMeAt\" IS NULL OR \"TellMeAt\" >= 0)");
                         });
@@ -895,7 +895,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("VenueId", "SoldAt");
 
-                    b.ToTable("ShopSales", t =>
+                    b.ToTable("ShopSales", null, t =>
                         {
                             t.HasCheckConstraint("CK_ShopSales_CameToSomething", "\"TotalBaht\" > 0");
                         });
@@ -931,7 +931,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("SaleId");
 
-                    b.ToTable("ShopSaleLines", t =>
+                    b.ToTable("ShopSaleLines", null, t =>
                         {
                             t.HasCheckConstraint("CK_ShopSaleLines_IsALine", "\"Quantity\" > 0 AND \"Quantity\" <= 100 AND \"EachBaht\" > 0");
                         });
@@ -963,7 +963,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("ComplaintId", "ViewedAt");
 
-                    b.ToTable("SlipViewings");
+                    b.ToTable("SlipViewings", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Bookings.Spend", b =>
@@ -1014,7 +1014,9 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("VenueId", "PaidOn");
 
-                    b.ToTable("Spends", t =>
+                    b.HasIndex("VenueId", "RecordedAt");
+
+                    b.ToTable("Spends", null, t =>
                         {
                             t.HasCheckConstraint("CK_Spends_IsMoney", "\"AmountBaht\" > 0");
                         });
@@ -1057,9 +1059,11 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("SaleId");
 
+                    b.HasIndex("SpendId");
+
                     b.HasIndex("ItemId", "At");
 
-                    b.ToTable("StockEntries", t =>
+                    b.ToTable("StockEntries", null, t =>
                         {
                             t.HasCheckConstraint("CK_StockEntries_SomethingMoved", "\"Quantity\" <> 0");
                         });
@@ -1113,7 +1117,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("VenueId", "Date", "State", "AskedAt");
 
-                    b.ToTable("WaitlistEntries");
+                    b.ToTable("WaitlistEntries", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Identity.AccountStatusChange", b =>
@@ -1145,7 +1149,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("UserId", "ChangedAt");
 
-                    b.ToTable("AccountStatusChanges");
+                    b.ToTable("AccountStatusChanges", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Identity.AppUser", b =>
@@ -1249,7 +1253,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("UserId", "Type", "Version");
 
-                    b.ToTable("UserConsents");
+                    b.ToTable("UserConsents", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.CancellationPolicy", b =>
@@ -1271,7 +1275,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("VenueId", "CreatedAt");
 
-                    b.ToTable("CancellationPolicies");
+                    b.ToTable("CancellationPolicies", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.CancellationTier", b =>
@@ -1294,7 +1298,7 @@ namespace CourtBooking.Api.Data.Migrations
                     b.HasIndex("PolicyId", "HoursBefore")
                         .IsUnique();
 
-                    b.ToTable("CancellationTiers");
+                    b.ToTable("CancellationTiers", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.Court", b =>
@@ -1322,7 +1326,7 @@ namespace CourtBooking.Api.Data.Migrations
                     b.HasIndex("VenueId", "Name")
                         .IsUnique();
 
-                    b.ToTable("Courts");
+                    b.ToTable("Courts", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.CourtClosure", b =>
@@ -1365,7 +1369,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("CourtId", "StartsAt");
 
-                    b.ToTable("CourtClosures");
+                    b.ToTable("CourtClosures", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.CourtStatusChange", b =>
@@ -1393,7 +1397,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("CourtId", "EffectiveFrom");
 
-                    b.ToTable("CourtStatusChanges");
+                    b.ToTable("CourtStatusChanges", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.MembershipChange", b =>
@@ -1434,7 +1438,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("VenueId", "ChangedAt");
 
-                    b.ToTable("MembershipChanges");
+                    b.ToTable("MembershipChanges", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.OpeningHoursDay", b =>
@@ -1460,7 +1464,7 @@ namespace CourtBooking.Api.Data.Migrations
                     b.HasIndex("ScheduleId", "Day")
                         .IsUnique();
 
-                    b.ToTable("OpeningHoursDays");
+                    b.ToTable("OpeningHoursDays", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.OpeningHoursSchedule", b =>
@@ -1485,7 +1489,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("VenueId", "EffectiveFrom");
 
-                    b.ToTable("OpeningHoursSchedules");
+                    b.ToTable("OpeningHoursSchedules", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.PriceBand", b =>
@@ -1514,7 +1518,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("PriceListId", "Day", "FromHour");
 
-                    b.ToTable("PriceBands");
+                    b.ToTable("PriceBands", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.PriceList", b =>
@@ -1536,7 +1540,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("VenueId", "CreatedAt");
 
-                    b.ToTable("PriceLists");
+                    b.ToTable("PriceLists", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.Venue", b =>
@@ -1669,7 +1673,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("Province", "District");
 
-                    b.ToTable("Venues");
+                    b.ToTable("Venues", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.VenueInvitation", b =>
@@ -1714,7 +1718,7 @@ namespace CourtBooking.Api.Data.Migrations
                         .IsUnique()
                         .HasFilter("\"AcceptedAt\" IS NULL");
 
-                    b.ToTable("VenueInvitations");
+                    b.ToTable("VenueInvitations", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.VenueMembership", b =>
@@ -1750,7 +1754,7 @@ namespace CourtBooking.Api.Data.Migrations
                     b.HasIndex("VenueId", "UserId")
                         .IsUnique();
 
-                    b.ToTable("VenueMemberships");
+                    b.ToTable("VenueMemberships", (string)null);
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.VenueStatusChange", b =>
@@ -1784,7 +1788,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("VenueId", "ChangedAt");
 
-                    b.ToTable("VenueStatusChanges");
+                    b.ToTable("VenueStatusChanges", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
@@ -2389,11 +2393,18 @@ namespace CourtBooking.Api.Data.Migrations
                         .HasForeignKey("SaleId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("CourtBooking.Api.Bookings.Spend", "Spend")
+                        .WithMany()
+                        .HasForeignKey("SpendId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("By");
 
                     b.Navigation("Item");
 
                     b.Navigation("Sale");
+
+                    b.Navigation("Spend");
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Bookings.WaitlistEntry", b =>
