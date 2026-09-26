@@ -1,3 +1,5 @@
+using CourtBooking.Api.Bookings;
+using CourtBooking.Api.Venues;
 using System.Text.RegularExpressions;
 
 namespace CourtBooking.Api.Tests;
@@ -24,49 +26,48 @@ public sealed class EventNamesTests
     /// the placeholder, so those are listed in <see cref="Computed"/> instead.
     /// </summary>
     private static readonly Regex Emitted = new(
-        """\.Log\w+\(\s*\$?"([a-z][a-z0-9]*(?:_[a-z0-9]+)+)(?=[ "])""",
+        """\.Log\w+\(\s*(?:\w+\s*,\s*)?\$?"([a-z][a-z0-9]*(?:_[a-z0-9]+)+)(?=[ "])""",
         RegexOptions.Compiled);
 
     /// <summary>
-    /// The names built at run time, and where from. Each is a template whose first word is not a
-    /// literal, which PRD 8.1 allows only because the pieces are a closed set — so the set is
-    /// spelled out here and held to the list like any other name.
+    /// The names built at run time, from the same helpers the product builds them with. A regex
+    /// cannot evaluate <c>$"venue_{decided}"</c>, so these are worked out rather than matched —
+    /// and worked out from the enums rather than typed out here, because a list typed by hand
+    /// would not grow when somebody adds a status, and every test would go on passing while an
+    /// event nobody named went out of the door.
     /// </summary>
-    private static readonly string[] Computed =
-    [
-        // BookingTransitions.EventName(status), for every status in PRD 6.1.
-        "booking_held",
-        "booking_pending_verification",
-        "booking_confirmed",
-        "booking_completed",
-        "booking_cancelled",
-        "booking_expired",
-        "booking_rejected",
-        "booking_no_show",
+    private static IEnumerable<string> Computed()
+    {
+        // BookingTransitions.EventName(status), used directly, through EventTemplate, through
+        // SettledTemplate's sibling, and through VerifySlipEndpoints' lookup of announcements.
+        foreach (var status in Enum.GetValues<BookingStatus>())
+        {
+            yield return BookingTransitions.EventName(status);
+        }
 
-        // BookingTransitions.SettledTemplate.
-        "booking_payment_settled",
+        // BookingTransitions.SettledTemplate — the venue saying the money arrived after all.
+        yield return BookingTransitions.SettledTemplate.Split(' ')[0];
 
-        // VenueBookingEndpoints, one per BookingArrival a venue can move to (US-24). Unconfirmed
-        // is where an arrival starts, so nothing ever moves to it.
-        "booking_arrival_reminded",
-        "booking_arrival_confirmed",
-        "booking_arrival_arrived",
+        // VenueBookingEndpoints, one per arrival a venue can move a booking to (US-24). Nothing
+        // moves to Unconfirmed: it is where an arrival starts.
+        foreach (var arrival in Enum.GetValues<BookingArrival>().Where(one => one != BookingArrival.Unconfirmed))
+        {
+            yield return $"booking_arrival_{arrival.ToString().ToLowerInvariant()}";
+        }
 
-        // AdminVenueEndpoints, one per VenueStatus a decision lands on (US-20).
-        "venue_approved",
-        "venue_rejected",
-        "venue_suspended",
-        "venue_pending",
+        // AdminVenueEndpoints, one per status a decision lands on (US-20).
+        foreach (var status in Enum.GetValues<VenueStatus>())
+        {
+            yield return $"venue_{status.ToString().ToLowerInvariant()}";
+        }
 
-        // AdminUserEndpoints (US-22).
-        "user_suspended",
-        "user_reinstated",
-
-        // WaitlistOffers, on settling an offer (US-27).
-        "waitlist_taken",
-        "waitlist_offer_lapsed",
-    ];
+        // AdminUserEndpoints (US-22) and WaitlistOffers settling an offer (US-27). These two pairs
+        // are written out at their sites rather than derived from anything, so they are here.
+        yield return "user_suspended";
+        yield return "user_reinstated";
+        yield return "waitlist_taken";
+        yield return "waitlist_offer_lapsed";
+    }
 
     /// <summary>
     /// Named in PRD 8.1 and not sent by anything yet. US-21 has not been built, and its row in the
@@ -145,7 +146,7 @@ public sealed class EventNamesTests
             }
         }
 
-        foreach (var name in Computed)
+        foreach (var name in Computed())
         {
             sending.TryAdd(name, "built at run time");
         }
