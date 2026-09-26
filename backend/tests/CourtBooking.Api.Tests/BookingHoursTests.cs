@@ -110,6 +110,81 @@ public sealed class BookingHoursTests(ApiTestFixture api) : IClassFixture<ApiTes
         Assert.Equal(400m, cancelled.RefundDueBaht);
     }
 
+    /// <summary>
+    /// The slip queue settles money from a price it read before its own transaction, and that
+    /// price can now move (PRD US-29). Confirming after an evening has been run on must settle
+    /// against what the booking costs now, not against what it cost when the slip arrived —
+    /// otherwise the venue records itself as paid in full for an hour nobody paid for, and
+    /// `Takings.CanTake` then closes the only door left to collect it.
+    /// </summary>
+    [Fact]
+    public async Task A_slip_checked_after_the_evening_ran_on_does_not_pay_off_the_added_hour()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+
+        var extended = await Extend(owner, venue.Id, booking.Id);
+        Assert.Equal(400m, extended.TotalBaht);
+
+        // The slip is for the two hundred the booker was asked for, not for the four hundred.
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await owner.PostAsync(
+                $"/api/venues/{venue.Id}/slip-queue/{booking.Id}/confirm", null)).StatusCode);
+
+        var row = await Row(owner, venue.Id, booking.Id);
+        Assert.Equal(nameof(BookingStatus.Confirmed), row.Status);
+        Assert.Equal(200m, row.TakenBaht);
+
+        // The added hour is still owed, and there is still a door to collect it through.
+        Assert.Equal(200m, row.ToPayBaht);
+        Assert.True(row.Can.TakeMoney);
+        Assert.Equal(nameof(PaymentState.NotReceived), row.PaymentState);
+    }
+
+    /// <summary>
+    /// A booking still waiting to be checked keeps that status after its hours are played — only
+    /// a confirmed one reads as completed (PRD 9.2). An evening everybody has gone home from has
+    /// nothing to run on into either way.
+    /// </summary>
+    [Fact]
+    public async Task An_unchecked_booking_whose_evening_is_over_cannot_be_run_on()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        await scenario.PlayOutAsync(booking.Id);
+
+        await Refused(owner, venue.Id, booking.Id, "extend", BookingErrorCodes.HoursCannotChange);
+    }
+
+    /// <summary>
+    /// Half a group cannot be run on into an hour the other half is not playing, and one court
+    /// cannot take two courts' worth of the same hour. Neither door is offered (PRD US-29).
+    /// </summary>
+    [Fact]
+    public async Task A_booking_on_two_courts_at_once_is_offered_neither_door()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync(courts: 3);
+        var booker = await scenario.SignedInClientAsync();
+        var booking = await VenueScenario.HoldAsync(
+            booker, venue.Id, Tomorrow, (courts[0], 18), (courts[1], 18));
+        await VenueScenario.UploadAsync(booker, booking.Id, VenueScenario.Jpeg());
+        await owner.PostAsync($"/api/venues/{venue.Id}/slip-queue/{booking.Id}/confirm", null);
+
+        var possible = await VenueScenario.ReadAsync<BookingHoursResponse>(
+            await owner.GetAsync($"/api/venues/{venue.Id}/bookings/{booking.Id}/hours"));
+
+        Assert.Null(possible.Extend);
+        Assert.Null(possible.Move);
+
+        // And the row says the same, so the page draws no button to press.
+        var day = await VenueScenario.ReadAsync<VenueBookingResponse[]>(
+            await owner.GetAsync($"/api/venues/{venue.Id}/bookings?date={Tomorrow:yyyy-MM-dd}"));
+        var row = day.Single(one => one.BookingId == booking.Id);
+        Assert.False(row.Can.Extend);
+        Assert.False(row.Can.MoveCourt);
+    }
+
     [Fact]
     public async Task An_hour_somebody_else_holds_is_refused_with_the_courts_that_are_free()
     {

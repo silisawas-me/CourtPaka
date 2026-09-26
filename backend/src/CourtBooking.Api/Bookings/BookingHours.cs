@@ -89,7 +89,10 @@ public static class BookingHours
     /// Taken from the hours the booking still holds rather than from all of them, because a
     /// released hour is one somebody else may already be playing.
     /// </summary>
-    public static DateTimeOffset? NextHour(Booking booking, BookingStatus status)
+    public static DateTimeOffset? NextHour(
+        Booking booking,
+        BookingStatus status,
+        DateTimeOffset now)
     {
         if (!CanChange(status))
         {
@@ -97,7 +100,17 @@ public static class BookingHours
         }
 
         var holding = Holding(booking);
-        return holding.Count == 0 ? null : holding.Max(slot => slot.EndsAt);
+        if (holding.Count == 0)
+        {
+            return null;
+        }
+
+        // Asked of the clock and not only of the status. A booking still waiting to be checked
+        // keeps that status after its hours are played — only a confirmed one reads as completed
+        // (PRD 9.2) — and an evening everybody has gone home from has nothing to run on into,
+        // whichever of the two it is stored as.
+        var last = holding.Max(slot => slot.EndsAt);
+        return last > now ? last : null;
     }
 
     /// <summary>
@@ -105,19 +118,27 @@ public static class BookingHours
     /// is being played on (PRD US-29 — "the same court"). Where two courts end together, the
     /// lowest id, so asking twice gives the same answer.
     /// </summary>
-    public static Guid? SameCourt(Booking booking, BookingStatus status)
+    public static Guid? SameCourt(Booking booking, BookingStatus status, DateTimeOffset now)
     {
-        if (NextHour(booking, status) is not { } next)
+        if (NextHour(booking, status, now) is not { } next)
         {
             return null;
         }
 
-        return Holding(booking)
-            .Where(slot => slot.EndsAt == next)
-            .OrderBy(slot => slot.CourtId)
-            .Select(slot => slot.CourtId)
-            .First();
+        var last = Holding(booking).Where(slot => slot.EndsAt == next).ToList();
+
+        // A group playing its last hour across two courts has no "the same court" to run on
+        // into, and half of them would be sent home. Nothing is offered rather than half of it;
+        // the venue sells the extra hour as a booking of its own (PRD US-13).
+        return last.Count == 1 ? last[0].CourtId : null;
     }
+
+    /// <summary>
+    /// Whether the hours that could still move hold two courts at the same moment. One court
+    /// cannot take both, so neither door has anything to offer such a booking (PRD US-29).
+    /// </summary>
+    public static bool OnTwoCourtsAtOnce(IReadOnlyList<BookingSlot> hours) =>
+        hours.Select(slot => slot.StartsAt).Distinct().Count() != hours.Count;
 
     /// <summary>
     /// The hours of this booking that could still be played somewhere else: the ones that have not

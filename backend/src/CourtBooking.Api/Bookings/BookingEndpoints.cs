@@ -216,7 +216,13 @@ public static class BookingEndpoints
         var moving = database.Bookings.Where(candidate =>
             candidate.Id == bookingId
             && candidate.BookerUserId == bookerId
-            && candidate.Status == status);
+            && candidate.Status == status
+            // The price is no longer fixed once a booking is made: an evening that runs on
+            // raises it (PRD US-29). Every amount below was worked out from the price read
+            // before this transaction, so the write carries that price as its condition —
+            // an hour added in between leaves this changing nothing, and the venue is told
+            // to look again rather than settling money against a total that has moved.
+            && candidate.TotalBaht == booking.TotalBaht);
 
         // Letting go of a hold is only letting go while it is still a hold (PRD BR-02).
         if (status == BookingStatus.Held)

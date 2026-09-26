@@ -412,7 +412,13 @@ public static class VenueBookingEndpoints
             .Where(candidate =>
                 candidate.Id == bookingId
                 && candidate.VenueId == venueId
-                && candidate.PaymentState == PaymentState.Unconfirmed)
+                && candidate.PaymentState == PaymentState.Unconfirmed
+                // The price is no longer fixed once a booking is made: an evening that runs on
+                // raises it (PRD US-29). Every amount below was worked out from the price read
+                // before this transaction, so the write carries that price as its condition —
+                // an hour added in between leaves this changing nothing, and the venue is told
+                // to look again rather than settling money against a total that has moved.
+                && candidate.TotalBaht == booking.TotalBaht)
             .ExecuteUpdateAsync(
                 set => set
                     .SetProperty(candidate => candidate.PaymentState, payment)
@@ -519,7 +525,13 @@ public static class VenueBookingEndpoints
             .Where(candidate =>
                 candidate.Id == bookingId
                 && candidate.VenueId == venueId
-                && candidate.Status == stored)
+                && candidate.Status == stored
+                // The price is no longer fixed once a booking is made: an evening that runs on
+                // raises it (PRD US-29). Every amount below was worked out from the price read
+                // before this transaction, so the write carries that price as its condition —
+                // an hour added in between leaves this changing nothing, and the venue is told
+                // to look again rather than settling money against a total that has moved.
+                && candidate.TotalBaht == booking.TotalBaht)
             .ExecuteUpdateAsync(
                 set => set
                     .SetProperty(candidate => candidate.Status, decided)
@@ -907,8 +919,9 @@ public static class VenueBookingEndpoints
             // An hour to run on into, and hours that have not been played yet (PRD US-29). Both
             // are only whether the door is open — which court, and whether one is free, is the
             // hours endpoint's answer, because it depends on the rest of the day.
-            BookingHours.NextHour(booking, status) is not null,
-            BookingHours.Movable(booking, status, now).Count > 0,
+            BookingHours.SameCourt(booking, status, now) is not null,
+            BookingHours.Movable(booking, status, now) is { Count: > 0 } movable
+                && !BookingHours.OnTwoCourtsAtOnce(movable),
             cancelling.Allowed ? Choices(booking, status, byOwner, takenBaht, now) : []);
     }
 

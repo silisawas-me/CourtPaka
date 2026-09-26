@@ -63,7 +63,8 @@ internal static class BookingHourEndpoints
         var today = PlatformRequirements.BangkokToday(timeProvider);
 
         ExtendOptionResponse? extend = null;
-        if (BookingHours.NextHour(booking, status) is { } next)
+        if (BookingHours.NextHour(booking, status, now) is { } next
+            && BookingHours.SameCourt(booking, status, now) is { } sameCourt)
         {
             var (date, hour) = PlatformRequirements.BangkokDateAndHour(next);
             var asked = new[] { new BookingSlotRequest(Guid.Empty, date, hour) };
@@ -73,17 +74,17 @@ internal static class BookingHourEndpoints
             if (BookingValidation.Validate(asked, now, today, BookingChannel.Staff) is null)
             {
                 var day = await VenueDay.LoadAsync(database, venueId, date, now, cancellationToken);
-                extend = new ExtendOptionResponse(
-                    date,
-                    hour,
-                    BookingHours.SameCourt(booking, status),
-                    FreeCourts(day, [hour]));
+                extend = new ExtendOptionResponse(date, hour, sameCourt, FreeCourts(day, [hour]));
             }
         }
 
         MoveOptionResponse? move = null;
         var movable = BookingHours.Movable(booking, status, now);
-        if (movable.Count > 0)
+
+        // Nothing is offered where nothing could be done with it: one court cannot take two
+        // courts' worth of the same hour, and offering a court that the press would refuse is
+        // worse than offering none.
+        if (movable.Count > 0 && !BookingHours.OnTwoCourtsAtOnce(movable))
         {
             var hours = movable
                 .Select(slot => PlatformRequirements.BangkokDateAndHour(slot.StartsAt))
@@ -94,12 +95,11 @@ internal static class BookingHourEndpoints
 
             // Only a court free for every hour being moved. Half a move is not on offer: the
             // players would be told to change court in the middle of the game they were moved for.
+            // A court the booking is already on for those hours is not free for them, so the
+            // day's own answer has already left it out.
             move = new MoveOptionResponse(
                 movable.Count,
-                [
-                    .. FreeCourts(day, [.. hours.Select(one => one.Hour)], priced: false)
-                        .Where(court => movable.Any(slot => slot.CourtId != court.CourtId)),
-                ]);
+                FreeCourts(day, [.. hours.Select(one => one.Hour)], priced: false));
         }
 
         return TypedResults.Ok(new BookingHoursResponse(extend, move));
@@ -141,8 +141,8 @@ internal static class BookingHourEndpoints
         }
 
         var status = BookedSlots.StatusAt(booking, now);
-        if (BookingHours.NextHour(booking, status) is not { } next
-            || BookingHours.SameCourt(booking, status) is not { } sameCourt)
+        if (BookingHours.NextHour(booking, status, now) is not { } next
+            || BookingHours.SameCourt(booking, status, now) is not { } sameCourt)
         {
             return ApiProblem.Of(
                 StatusCodes.Status409Conflict, BookingErrorCodes.HoursCannotChange);
@@ -220,7 +220,13 @@ internal static class BookingHourEndpoints
         await CounterMoneyEndpoints.QueueForTheMoneyAsync(database, bookingId, cancellationToken);
         var taken = await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken);
 
-        var payment = booking.PaymentState == PaymentState.Received && taken >= booking.TotalBaht
+        if (booking.PaymentState == PaymentState.Received && taken < booking.TotalBaht)
+        {
+            return ApiProblem.Of(
+                StatusCodes.Status409Conflict, BookingErrorCodes.HoursCannotChange);
+        }
+
+        var payment = booking.PaymentState == PaymentState.Received
             ? PaymentState.NotReceived
             : booking.PaymentState;
 
@@ -229,7 +235,13 @@ internal static class BookingHourEndpoints
                 candidate.Id == bookingId
                 && candidate.VenueId == venueId
                 && candidate.Status == booking.Status
-                && candidate.PaymentState == booking.PaymentState)
+                && candidate.PaymentState == booking.PaymentState
+                // The price as it was when this hour was priced against it. Two people running
+                // the same evening on to two different courts take different locks and would
+                // otherwise both land, selling the booking one hour twice over and raising its
+                // price twice; the second finds the total already moved and is told to look
+                // again.
+                && candidate.TotalBaht == booking.TotalBaht)
             .ExecuteUpdateAsync(
                 set => set
                     .SetProperty(candidate => candidate.TotalBaht, candidate => candidate.TotalBaht + baht)
@@ -325,20 +337,16 @@ internal static class BookingHourEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, BookingErrorCodes.CourtUnknown);
         }
 
+        if (BookingHours.OnTwoCourtsAtOnce(movable))
+        {
+            return ApiProblem.Of(StatusCodes.Status409Conflict, BookingErrorCodes.HoursOverlap);
+        }
+
         var moving = movable.Where(slot => slot.CourtId != courtId).ToList();
         if (moving.Count == 0)
         {
             return ApiProblem.Of(
                 StatusCodes.Status409Conflict, BookingErrorCodes.AlreadyOnThatCourt);
-        }
-
-        // Two courts at the same hour cannot become one court at that hour. The database would
-        // say so — the second row collides with the first inside the exclusion constraint — but
-        // it is the venue's question, and it deserves an answer its screen can read (PRD US-23).
-        if (moving.Select(slot => slot.StartsAt).Distinct().Count() != moving.Count)
-        {
-            return ApiProblem.Of(
-                StatusCodes.Status409Conflict, BookingErrorCodes.HoursOverlap);
         }
 
         // Grouped by the venue's own day, because a booking that has been run on past midnight
