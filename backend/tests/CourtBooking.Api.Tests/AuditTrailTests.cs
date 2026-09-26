@@ -29,6 +29,7 @@ public sealed class AuditTrailTests(ApiTestFixture api) : IClassFixture<ApiTestF
     [InlineData("BookingSlotChanges")]
     [InlineData("PaymentReceipts")]
     [InlineData("DailyClosings")]
+    [InlineData("SeriesMisses")]
     public async Task A_history_row_cannot_be_changed_or_removed(string table)
     {
         await EveryHistoryHasARowAsync();
@@ -134,6 +135,23 @@ public sealed class AuditTrailTests(ApiTestFixture api) : IClassFixture<ApiTestF
         Assert.Equal(
             HttpStatusCode.OK,
             (await admin.GetAsync($"/api/admin/complaints/{complaint.Id}/slip")).StatusCode);
+
+        // A week a standing arrangement could not have, which is the row SeriesMisses keeps
+        // (PRD US-30). Agreed on an hour the venue is shut for, so the sweep has to report it.
+        var week = VenueScenario.Today.AddDays(9);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            (await venueOwner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/series",
+                new BookingSeriesRequest(
+                    courts[0], week.DayOfWeek.ToString(), 23, 24, "ก๊วนทดสอบ", null, week, week)))
+                .StatusCode);
+
+        using (var scope = api.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<Jobs.SeriesBookings>()
+                .WorkAsync(CancellationToken.None);
+        }
     }
 
     private async Task<bool> HasRowsAsync(string table)

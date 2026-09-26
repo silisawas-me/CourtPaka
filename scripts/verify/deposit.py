@@ -19,7 +19,11 @@ from harness import (
 from playwright.sync_api import sync_playwright
 
 check = Checks(__file__)
-tomorrow = venue_today() + datetime.timedelta(days=1)
+# Far enough out that the default terms still give the money back. The venue's policy returns
+# everything if the booking is let go more than 24 hours before play (Pricing.Default), so a
+# booking made for tomorrow morning stops being refundable some time in the afternoon — and the
+# checks below are about what comes back, not about what time this script happens to run.
+soon = venue_today() + datetime.timedelta(days=3)
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
@@ -48,7 +52,7 @@ with sync_playwright() as p:
     booker = browser.new_page(viewport={"width": 390, "height": 844})
     email = new_booker(booker)
     sign_in(booker, email)
-    booking = take_first_free_hour(booker, venue_id, tomorrow).json()
+    booking = take_first_free_hour(booker, venue_id, soon).json()
 
     price = booking["totalBaht"]
     deposit = booking["depositBaht"]
@@ -96,7 +100,7 @@ with sync_playwright() as p:
 
     # 4. The desk is left the rest to take (US-26).
     day = owner.request.get(
-        f"{BASE}/api/venues/{venue_id}/bookings?date={tomorrow.isoformat()}"
+        f"{BASE}/api/venues/{venue_id}/bookings?date={soon.isoformat()}"
     ).json()
     row = next(one for one in day if one["bookingId"] == booking["id"])
     check("the day says what arrived", row["takenBaht"] == deposit)

@@ -27,6 +27,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<WaitlistEntry> WaitlistEntries => Set<WaitlistEntry>();
 
+    public DbSet<BookingSeries> BookingSeries => Set<BookingSeries>();
+
+    public DbSet<SeriesMiss> SeriesMisses => Set<SeriesMiss>();
+
     public DbSet<CourtStatusChange> CourtStatusChanges => Set<CourtStatusChange>();
 
     public DbSet<OpeningHoursSchedule> OpeningHoursSchedules => Set<OpeningHoursSchedule>();
@@ -253,7 +257,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 "CK_Bookings_BookerOrCustomer",
                 "(\"Channel\" = 1 AND \"BookerUserId\" IS NOT NULL AND \"CustomerName\" IS NULL)"
                 + " OR (\"Channel\" = 2 AND \"BookerUserId\" IS NULL"
-                + " AND \"CustomerName\" IS NOT NULL AND \"PaidAtCounter\" IS NOT NULL)"));
+                + " AND \"CustomerName\" IS NOT NULL"
+                // How they paid, or the arrangement that is why the court is theirs: a
+                // standing group's week is confirmed before anybody has paid for it, and
+                // the desk takes the money when they turn up (PRD US-30).
+                + " AND (\"PaidAtCounter\" IS NOT NULL OR \"SeriesId\" IS NOT NULL))"));
             // The booker's own history (US-05), and the check that they hold only one (PRD S-22).
             booking.HasIndex(b => new { b.BookerUserId, b.Status });
             booking.HasIndex(b => new { b.VenueId, b.CreatedAt });
@@ -271,6 +279,75 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .WithMany()
                 .HasForeignKey(b => b.CancellationPolicyId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Which weeks an arrangement has already made (PRD US-30). The job asks this of every
+            // running arrangement on every sweep, so it is the index that answers it.
+            booking.HasIndex(b => b.SeriesId);
+            booking.HasOne(b => b.Series)
+                .WithMany()
+                .HasForeignKey(b => b.SeriesId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<BookingSeries>(series =>
+        {
+            series.Property(one => one.CustomerName).HasMaxLength(Booking.CustomerNameMaxLength);
+            series.Property(one => one.CustomerPhone).HasMaxLength(Booking.CustomerPhoneMaxLength);
+            series.Property(one => one.EndReason).HasMaxLength(BookingStatusChange.ReasonMaxLength);
+
+            // The hours are a window, and the same one every week — guarded here as well as in the
+            // rules, because a backwards window would ask the floor for hours that do not exist.
+            series.ToTable(table => table.HasCheckConstraint(
+                "CK_BookingSeries_HoursAreAWindow",
+                "\"FromHour\" >= 0 AND \"UntilHour\" <= 24 AND \"FromHour\" < \"UntilHour\""));
+
+            // Every read is "what does this venue have standing", newest first.
+            series.HasIndex(one => new { one.VenueId, one.State, one.CreatedAt });
+
+            // One group per court, per day, per pair of hours, at the database rather than only
+            // in the handler: a second one could never have a single week of it, and every week
+            // it missed would be written off for good.
+            series.HasIndex(one => new
+                {
+                    one.VenueId,
+                    one.CourtId,
+                    one.Day,
+                    one.FromHour,
+                    one.UntilHour,
+                })
+                .IsUnique()
+                .HasFilter($"\"State\" = {(int)SeriesState.Running}");
+
+            series.HasOne(one => one.Venue)
+                .WithMany()
+                .HasForeignKey(one => one.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            series.HasOne(one => one.Court)
+                .WithMany()
+                .HasForeignKey(one => one.CourtId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // The arrangement this one took over from. Restrict: the thread between them is the
+            // only thing that says the group did not simply appear one week under new terms.
+            series.HasOne(one => one.Replaced)
+                .WithMany()
+                .HasForeignKey(one => one.ReplacedSeriesId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<SeriesMiss>(miss =>
+        {
+            miss.Property(one => one.Refusal).HasMaxLength(Series.RefusalMaxLength);
+
+            // One row per week, at the database: a week noticed twice would be told to the venue
+            // twice, and the job leans on this to know which weeks it has already given up on.
+            miss.HasIndex(one => new { one.SeriesId, one.Date }).IsUnique();
+
+            miss.HasOne(one => one.Series)
+                .WithMany()
+                .HasForeignKey(one => one.SeriesId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<BookingSlot>(slot =>

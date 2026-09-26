@@ -50,6 +50,9 @@ public sealed class Caretaker(
         // After the holds that ran out, so hours let go of this sweep are offered in it.
         await DoAsync("hours somebody was waiting for", WaitlistOffersAsync, stopping);
 
+        // Before the post, so a week made this sweep is one the day's list already has.
+        await DoAsync("weeks of standing arrangements", SeriesWeeksAsync, stopping);
+
         // Last, so a hold this sweep let go of is told about in the same sweep.
         await DoAsync("telling bookers", TellBookersAsync, stopping);
     }
@@ -63,6 +66,17 @@ public sealed class Caretaker(
         IServiceProvider services,
         CancellationToken stopping) =>
         await services.GetRequiredService<WaitlistOffers>().WorkAsync(stopping);
+
+    /// <summary>
+    /// The weeks of every standing arrangement that have come inside the booking window
+    /// (PRD US-30). Not called from where an arrangement is agreed: the weeks appear as the window
+    /// rolls, which is a thing the clock does and nobody asks for.
+    /// </summary>
+    private async Task SeriesWeeksAsync(
+        AppDbContext database,
+        IServiceProvider services,
+        CancellationToken stopping) =>
+        await services.GetRequiredService<SeriesBookings>().WorkAsync(stopping);
 
     /// <summary>
     /// What happened to each booker's bookings since the last sweep, and the reminder before

@@ -461,3 +461,57 @@ public static class RefundErrorCodes
     public const string NoteTooLong = "refund.note_too_long";
     public const string AlreadyVoided = "refund.already_voided";
 }
+
+/// <summary>
+/// An arrangement the venue is agreeing, or the terms taking over from one (PRD US-30). Every
+/// field is nullable so a missing one is refused with a code the screen can say in words, rather
+/// than by the model binder with a message nobody wrote (US-23).
+/// </summary>
+public sealed record BookingSeriesRequest(
+    Guid? CourtId,
+    /// <summary>The weekday's name, spelled as <see cref="DayOfWeek"/> spells it.</summary>
+    string? Day,
+    int? FromHour,
+    int? UntilHour,
+    string? CustomerName,
+    string? CustomerPhone,
+    DateOnly? StartsOn,
+    /// <summary>The last date it may cover, or null to run until somebody stops it.</summary>
+    DateOnly? UntilOn);
+
+/// <summary>Why the venue is standing a group down, in their own words. Optional.</summary>
+public sealed record BookingSeriesStopRequest(string? Note);
+
+/// <summary>One standing arrangement as the venue reads it (PRD US-30).</summary>
+public sealed record BookingSeriesResponse(
+    Guid SeriesId,
+    Guid CourtId,
+    string CourtName,
+    /// <summary>The weekday's name. The screen says it in the reader's language (US-23).</summary>
+    string Day,
+    int FromHour,
+    int UntilHour,
+    string CustomerName,
+    string? CustomerPhone,
+    DateOnly StartsOn,
+    DateOnly? UntilOn,
+    string State,
+    DateTimeOffset? EndedAt,
+    string? EndReason,
+    /// <summary>How many weeks of it have been booked so far.</summary>
+    int Booked,
+    /// <summary>The weeks still to come that could not be booked, and why (PRD US-30).</summary>
+    SeriesMissResponse[] Missed);
+
+/// <summary>A week the arrangement could not have. The code is turned into words by the screen.</summary>
+public sealed record SeriesMissResponse(DateOnly Date, string Refusal);
+
+/// <summary>
+/// What stopping or changing an arrangement did: the arrangement as it now stands, how many of
+/// its weeks were cancelled, and how many would not go — which is a number somebody has to look
+/// at, not one to retry (PRD US-30).
+/// </summary>
+public sealed record BookingSeriesStoppedResponse(
+    BookingSeriesResponse Series,
+    int Cancelled,
+    int Left);

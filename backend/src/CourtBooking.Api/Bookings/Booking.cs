@@ -82,8 +82,19 @@ public sealed class Booking
     /// <summary>Optional, and only ever used by the venue to reach the customer (PRD US-13).</summary>
     public string? CustomerPhone { get; init; }
 
-    /// <summary>How a counter booking was paid for; null for one made online.</summary>
+    /// <summary>
+    /// How a counter booking was paid for; null for one made online, and null for one a standing
+    /// arrangement made, which is paid for whenever the group turns up (PRD US-30).
+    /// </summary>
     public CounterPayment? PaidAtCounter { get; init; }
+
+    /// <summary>
+    /// The standing arrangement this booking came from, or null (PRD US-30). It is the only thread
+    /// between the week and the arrangement; everything else about the booking is ordinary, which
+    /// is the point — a group's week is cancelled, moved and paid for through the same doors as
+    /// anybody else's.
+    /// </summary>
+    public Guid? SeriesId { get; init; }
 
     public const int CustomerNameMaxLength = 200;
     public const int CustomerPhoneMaxLength = 20;
@@ -155,6 +166,9 @@ public sealed class Booking
     /// <summary>Every move this booking has made, oldest first (PRD 6.1).</summary>
     public List<BookingStatusChange> StatusChanges { get; init; } = [];
 
+    /// <summary>The arrangement that made this booking, where one did (PRD US-30).</summary>
+    public BookingSeries? Series { get; init; }
+
     public Venue? Venue { get; init; }
 
     public AppUser? Booker { get; init; }
@@ -222,6 +236,69 @@ public sealed class Booking
         Guid cancellationPolicyId,
         IEnumerable<SlotPrice> slots,
         Guid takenByUserId,
+        DateTimeOffset at) =>
+        AtTheVenue(
+            venueId,
+            customerName,
+            customerPhone,
+            paid,
+            PaymentState.Received,
+            null,
+            cancellationPolicyId,
+            slots,
+            takenByUserId,
+            at);
+
+    /// <summary>
+    /// One week of a standing arrangement (PRD US-30). It is a counter booking in every way but
+    /// the money: the court is the group's, so it starts confirmed, and nothing has been paid yet,
+    /// so the desk takes it when they turn up through the same door as any other outstanding
+    /// booking (PRD US-26). Nothing is billed for the arrangement as a whole (S-26).
+    ///
+    /// The channel is <see cref="BookingChannel.Staff"/> on purpose, and it decides something: the
+    /// platform's GMV counts online bookings only (PRD S-13), so a group the venue arranged with
+    /// its own customers is not something the platform charges commission on. That follows from
+    /// what S-13 already says, but nobody has ruled on standing arrangements specifically — and if
+    /// the answer ever changes, it needs a channel of its own rather than a second reading of this
+    /// one, because everything asking "was this made at the counter" would otherwise change with
+    /// it (PRD US-21).
+    /// </summary>
+    public static Booking ForSeries(
+        BookingSeries series,
+        Guid cancellationPolicyId,
+        IEnumerable<SlotPrice> slots,
+        DateTimeOffset at) =>
+        AtTheVenue(
+            series.VenueId,
+            series.CustomerName,
+            series.CustomerPhone,
+            // Null, not a guess: how they will pay is known when they pay.
+            null,
+            PaymentState.NotReceived,
+            series.Id,
+            cancellationPolicyId,
+            slots,
+            // Nobody: the clock made this week, the way it makes a hold run out (PRD 6.1). The
+            // person who agreed the arrangement is on the arrangement, and the booking points at
+            // it — so who decided is still readable, without every week claiming to have been
+            // made by somebody who may since have left the venue or closed their account.
+            null,
+            at);
+
+    /// <summary>
+    /// The shape both of the venue's own doors write: confirmed, nobody's account on it, and the
+    /// whole price asked for rather than a part of it, because there is no hold to pay off.
+    /// </summary>
+    private static Booking AtTheVenue(
+        Guid venueId,
+        string customerName,
+        string? customerPhone,
+        CounterPayment? paid,
+        PaymentState payment,
+        Guid? seriesId,
+        Guid cancellationPolicyId,
+        IEnumerable<SlotPrice> slots,
+        Guid? takenByUserId,
         DateTimeOffset at)
     {
         var booking = new Booking
@@ -231,8 +308,9 @@ public sealed class Booking
             CustomerName = customerName,
             CustomerPhone = customerPhone,
             PaidAtCounter = paid,
+            SeriesId = seriesId,
             Status = BookingStatus.Confirmed,
-            PaymentState = PaymentState.Received,
+            PaymentState = payment,
             CreatedAt = at,
 
             // Nothing is held, so nothing lapses. Set to the moment it was made rather than left
@@ -242,7 +320,7 @@ public sealed class Booking
             CancellationPolicyId = cancellationPolicyId,
             TotalBaht = slots.Sum(slot => slot.BahtPerHour),
 
-            // Paid where it was made, so there was never a part of it to wait for.
+            // Paid where it is played, so there was never a part of it to send on ahead.
             DepositBaht = slots.Sum(slot => slot.BahtPerHour),
             DepositReason = DepositReason.VenueTerms,
         };
