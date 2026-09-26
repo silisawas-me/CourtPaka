@@ -97,6 +97,126 @@ public sealed class ShopTests(ApiTestFixture api)
     }
 
     /// <summary>
+    /// The two halves of US-33 have two permissions, and each has to work on its own: the person
+    /// who pays the water bill at the counter is not the person who reads what the venue spent
+    /// this month. Requiring both would mean neither could do their half.
+    /// </summary>
+    [Fact]
+    public async Task Writing_down_money_and_reading_the_report_are_two_permissions()
+    {
+        var (owner, venue, _) = await scenario.BookableVenueAsync();
+
+        // A counter: takes money, writes down what was paid out, reads no reports.
+        var counter = await scenario.StaffClientAsync(
+            owner, venue.Id, nameof(VenuePermissions.ManageBookings));
+
+        var wrote = await counter.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/spending",
+            new SpendRequest(
+                nameof(SpendKind.Utilities), 60m, null, nameof(PaymentMethod.Cash),
+                "ค่าน้ำ", null, null));
+
+        Assert.Equal(HttpStatusCode.Created, wrote.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await counter.GetAsync($"/api/venues/{venue.Id}/spending")).StatusCode);
+
+        // A bookkeeper: reads the report, writes nothing.
+        var books = await scenario.StaffClientAsync(
+            owner, venue.Id, nameof(VenuePermissions.ViewReports));
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await books.GetAsync($"/api/venues/{venue.Id}/spending")).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await books.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/spending",
+                new SpendRequest(
+                    nameof(SpendKind.Wages), 100m, null, nameof(PaymentMethod.Cash),
+                    null, null, null))).StatusCode);
+    }
+
+    /// <summary>
+    /// A venue corrects a delivery it keyed wrong by taking it back and entering it again, so the
+    /// goods have to come off the shelf with the money. Left there, the second entry puts them on
+    /// twice — and the ledger is append-only, so the only way back is a stocktake (PRD US-33).
+    /// </summary>
+    [Fact]
+    public async Task Taking_back_a_delivery_takes_the_stock_back_with_it()
+    {
+        var (owner, venue, _) = await scenario.BookableVenueAsync();
+        var item = await AddAsync(owner, venue.Id);
+        var delivery = await BuyInAsync(owner, venue.Id, item.ItemId, 10, 700m);
+
+        Assert.Equal(10, (await BoardAsync(owner, venue.Id))
+            .Single(one => one.ItemId == item.ItemId).Left);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await owner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/spending/{delivery.SpendId}/void",
+                new ShopSaleCancelRequest("คีย์ราคาผิด"))).StatusCode);
+
+        Assert.Equal(0, (await BoardAsync(owner, venue.Id))
+            .Single(one => one.ItemId == item.ItemId).Left);
+
+        // And entering it again puts them on once, not twice.
+        await BuyInAsync(owner, venue.Id, item.ItemId, 10, 900m);
+        Assert.Equal(10, (await BoardAsync(owner, venue.Id))
+            .Single(one => one.ItemId == item.ItemId).Left);
+    }
+
+    /// <summary>
+    /// Every door that undoes something insists on being told why, and they all insist the same
+    /// way. Taking a sale back used to slip through on an empty string — the shared check for a
+    /// booking's note allows one, because most moves do not have to say anything.
+    /// </summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Undoing_something_has_to_say_why(string nothing)
+    {
+        var (owner, venue, _) = await scenario.BookableVenueAsync();
+        var item = await AddAsync(owner, venue.Id);
+        await BuyInAsync(owner, venue.Id, item.ItemId, 10, 700m);
+        var sale = await SellAsync(owner, venue.Id, (item.ItemId, 1));
+
+        var takenBack = await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/shop/sales/{sale.SaleId}/cancel",
+            new ShopSaleCancelRequest(nothing));
+
+        Assert.Equal(HttpStatusCode.BadRequest, takenBack.StatusCode);
+        Assert.Equal(ShopErrorCodes.ReasonNeeded, await takenBack.ErrorCodeAsync());
+
+        var counted = await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/shop/items/{item.ItemId}/count",
+            new StockCountRequest(8, nothing));
+
+        Assert.Equal(HttpStatusCode.BadRequest, counted.StatusCode);
+        Assert.Equal(ShopErrorCodes.ReasonNeeded, await counted.ErrorCodeAsync());
+
+        var spend = await VenueScenario.ReadAsync<SpendResponse>(
+            await owner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/spending",
+                new SpendRequest(
+                    nameof(SpendKind.Utilities), 60m, null, nameof(PaymentMethod.Cash),
+                    null, null, null)),
+            HttpStatusCode.Created);
+
+        var voided = await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/spending/{spend.SpendId}/void",
+            new ShopSaleCancelRequest(nothing));
+
+        Assert.Equal(HttpStatusCode.BadRequest, voided.StatusCode);
+        Assert.Equal(SpendErrorCodes.ReasonNeeded, await voided.ErrorCodeAsync());
+
+        // And the sale is still standing, because nothing was said.
+        Assert.Null((await SalesAsync(owner, venue.Id))
+            .Single(one => one.SaleId == sale.SaleId).CancelledAt);
+    }
+
+    /// <summary>
     /// Taking a sale back puts the stock on the shelf and takes the money out of the drawer, and
     /// it does neither by writing an expense: the venue bought nothing. Nothing is deleted either —
     /// what happened happened (PRD US-32).
@@ -447,6 +567,10 @@ public sealed class ShopTests(ApiTestFixture api)
     private static async Task<ShopItemResponse[]> BoardAsync(HttpClient owner, Guid venueId) =>
         await VenueScenario.ReadAsync<ShopItemResponse[]>(
             await owner.GetAsync($"/api/venues/{venueId}/shop/items"));
+
+    private static async Task<ShopSaleResponse[]> SalesAsync(HttpClient owner, Guid venueId) =>
+        await VenueScenario.ReadAsync<ShopSaleResponse[]>(
+            await owner.GetAsync($"/api/venues/{venueId}/shop/sales"));
 
     private static async Task<SpendResponse[]> SpendingAsync(HttpClient owner, Guid venueId) =>
         await VenueScenario.ReadAsync<SpendResponse[]>(

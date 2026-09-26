@@ -282,16 +282,28 @@ public static class VenueDashboard
         decimal courtBaht,
         CancellationToken cancellationToken)
     {
-        // A sale that was taken back is not money the venue has, and the row that says so is the
-        // cancellation rather than a deletion (PRD US-32).
-        var shop = await database.ShopSales
+        // Everything rung up in the range, less what was handed back in it — netted on the day
+        // the money moved rather than by dropping the sale outright. A June sale taken back in
+        // July is June's takings and July's refund: leaving it out of June instead would change
+        // a month that had already been read, and would disagree with the drawer, which counts
+        // the money going out on the day it went (PRD US-32).
+        var rungUp = await database.ShopSales
             .AsNoTracking()
             .Where(sale =>
                 sale.VenueId == venueId
-                && sale.CancelledAt == null
                 && sale.SoldAt >= since
                 && sale.SoldAt < until)
             .SumAsync(sale => (decimal?)sale.TotalBaht, cancellationToken) ?? 0m;
+
+        var handedBack = await database.ShopSales
+            .AsNoTracking()
+            .Where(sale =>
+                sale.VenueId == venueId
+                && sale.CancelledAt >= since
+                && sale.CancelledAt < until)
+            .SumAsync(sale => (decimal?)sale.TotalBaht, cancellationToken) ?? 0m;
+
+        var shop = rungUp - handedBack;
 
         var spent = await database.Spends
             .AsNoTracking()

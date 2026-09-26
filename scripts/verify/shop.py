@@ -11,12 +11,14 @@ import datetime
 from harness import (
     BASE,
     OWNER,
+    STAFF,
     Checks,
     clear_shop_board,
     ensure_bookable,
     open_seeded_venue,
     seeded_venue_id,
     sign_in,
+    staff_can,
     venue_today,
 )
 from playwright.sync_api import expect, sync_playwright
@@ -86,8 +88,13 @@ with sync_playwright() as p:
     page.fill("[data-testid=item-price]", "90")
     page.fill("[data-testid=item-unit]", "ลูก")
     page.fill("[data-testid=item-tell-me-at]", "3")
+
+    # A row more than there was. An earlier run's line is still on the board — taking something off
+    # marks it, it does not remove it — so waiting for "a row" would match one of those and read
+    # the board before this one had been written.
+    on_board = page.locator("[data-testid^=board-]").count()
     page.click("[data-testid=add-item]")
-    page.wait_for_selector("[data-testid^=board-]")
+    expect(page.locator("[data-testid^=board-]")).to_have_count(on_board + 1)
 
     item = [one for one in board(page, venue_id) if one["withdrawnAt"] is None][0]
     check("something goes on the board and starts with nothing on the shelf",
@@ -217,10 +224,45 @@ with sync_playwright() as p:
     page.set_viewport_size({"width": 1280, "height": 900})
     check("desk, English", True, page)
 
-    # And the venue is left the way the other scripts expect to find it.
-    clear_shop_board(page, venue_id)
+    # 9. The counter is run by somebody who does not read reports (PRD US-33).
     page.click("[data-testid=side-language-th]")
     expect(page.locator("html")).to_have_attribute("lang", "th")
+
+    staff_can(browser, venue_id)  # What the seed gives: no ViewReports.
+
+    counter = browser.new_page(viewport={"width": 1280, "height": 900})
+    sign_in(counter, STAFF)
+    counter.goto(f"{BASE}/venues/{venue_id}/shop")
+    counter.wait_for_selector("[data-testid^=item-]")
+
+    check("a counter that may not read the month's report still has a shop",
+          counter.locator("[data-testid=page-error]").count() == 0
+          and counter.locator("[data-testid=spent-this-month]").count() == 0
+          and counter.locator("[data-testid=record-spend]").count() == 1,
+          counter)
+
+    # And writing one down is still their job, even though reading them is not.
+    written = counter.request.post(
+        f"{BASE}/api/venues/{venue_id}/spending",
+        data={
+            "kind": "Utilities",
+            "amountBaht": 20,
+            "paidOn": None,
+            "paidBy": "Cash",
+            "note": "สตาฟจ่ายเอง",
+            "itemId": None,
+            "quantity": None,
+        },
+    )
+    read = counter.request.get(f"{BASE}/api/venues/{venue_id}/spending")
+
+    check(f"and may write one down ({written.status}) without reading them back ({read.status})",
+          written.status == 201 and read.status == 403)
+
+    counter.close()
+
+    # And the venue is left the way the other scripts expect to find it.
+    clear_shop_board(page, venue_id)
 
     page.close()
     browser.close()

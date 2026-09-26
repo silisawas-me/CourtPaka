@@ -176,9 +176,11 @@
   <mat-card>
     <mat-card-header>
       <mat-card-title>{{ i18n.t('shop.spending') }}</mat-card-title>
-      <mat-card-subtitle data-testid="spent-this-month">
-        {{ i18n.t('shop.thisMonth') }}: {{ spentThisMonth() | baht: i18n.locale() }}
-      </mat-card-subtitle>
+      @if (readsSpending()) {
+        <mat-card-subtitle data-testid="spent-this-month">
+          {{ i18n.t('shop.thisMonth') }}: {{ spentThisMonth() | baht: i18n.locale() }}
+        </mat-card-subtitle>
+      }
     </mat-card-header>
 
     <mat-card-content>
@@ -254,6 +256,10 @@
                 data-testid="bought-how-many"
                 formControlName="quantity"
               />
+              <mat-error
+                [appFieldError]="spend.controls.quantity"
+                testId="bought-how-many-error"
+              ></mat-error>
             </mat-form-field>
           }
         }
@@ -286,7 +292,7 @@
         </button>
       </div>
 
-      @if (spending().length > 0) {
+      @if (readsSpending() && spending().length > 0) {
         <ul class="plain-list" data-testid="spending">
           @for (one of spending(); track one.spendId) {
             <li

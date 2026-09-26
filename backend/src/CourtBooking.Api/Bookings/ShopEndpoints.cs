@@ -59,19 +59,27 @@ public static class ShopEndpoints
     /// </summary>
     private static void MapSpendingEndpoints(RouteGroupBuilder venue)
     {
-        var spending = venue.MapGroup("/spending");
+        // Two halves with two permissions, so they are two groups. A policy declared on a group
+        // and another on the endpoint inside it are *both* required — writing under the group's
+        // permission and reading under a second one would mean nobody could do either half
+        // without holding the other, which is the opposite of splitting them (PRD US-33).
+        var writing = venue.MapGroup("/spending");
+        var reading = venue.MapGroup("/spending");
 
-        // Neither reading nor writing is selling, so a suspension stops neither: money that has
-        // already left has to be accounted for, and the bills keep arriving (PRD US-20).
-        spending.RequireAuthorization(
+        // Neither half is selling, so a suspension stops neither: money that has already left has
+        // to be accounted for, and the bills keep arriving (PRD US-20).
+        writing.RequireAuthorization(
             VenuePolicies.NeedsEvenWhenSuspended(VenuePermissions.ManageBookings));
 
-        spending.MapGet("/", SpendingAsync)
-            .RequireAuthorization(
-                VenuePolicies.NeedsEvenWhenSuspended(VenuePermissions.ViewReports));
+        // Reading it is a report. The person who pays the water bill at the counter and the person
+        // who reads what the venue spent this month are not the same person.
+        reading.RequireAuthorization(
+            VenuePolicies.NeedsEvenWhenSuspended(VenuePermissions.ViewReports));
 
-        spending.MapPost("/", SpendAsync);
-        spending.MapPost("/{spendId:guid}/void", VoidSpendAsync);
+        reading.MapGet("/", SpendingAsync);
+
+        writing.MapPost("/", SpendAsync);
+        writing.MapPost("/{spendId:guid}/void", VoidSpendAsync);
     }
 
     /// <summary>
@@ -360,7 +368,7 @@ public static class ShopEndpoints
         var membership = venue.Require();
         var now = timeProvider.GetUtcNow();
 
-        if (BookingStatusChange.Recorded(request.Reason) is not { } reason)
+        if (Shop.Said(request.Reason, BookingStatusChange.ReasonMaxLength) is not { } reason)
         {
             return ApiProblem.Of(StatusCodes.Status400BadRequest, ShopErrorCodes.ReasonNeeded);
         }
@@ -388,7 +396,7 @@ public static class ShopEndpoints
                 set => set
                     .SetProperty(one => one.CancelledAt, now)
                     .SetProperty(one => one.CancelledByUserId, membership.UserId)
-                    .SetProperty(one => one.CancelReason, reason.Length == 0 ? null : reason),
+                    .SetProperty(one => one.CancelReason, reason),
                 cancellationToken);
 
         if (taken == 0)
@@ -405,6 +413,13 @@ public static class ShopEndpoints
             .Where(line => line.SaleId == saleId && line.Item!.Counted)
             .Select(line => new { line.ItemId, line.Quantity })
             .ToListAsync(cancellationToken);
+
+        // Putting stock back is writing the ledger, so it queues where every other writer of it
+        // queues. Without this a count running at the same moment reads the shelf before these
+        // rows and writes its adjustment after them, and the count — which is supposed to be the
+        // last word on what is there — ends up wrong by what came back.
+        await Locks.OnAsync(
+            database, goingBack.Select(line => line.ItemId), cancellationToken);
 
         foreach (var line in goingBack)
         {
@@ -433,13 +448,13 @@ public static class ShopEndpoints
             sale.TotalBaht);
 
         sale.CancelledAt = now;
-        sale.CancelReason = reason.Length == 0 ? null : reason;
+        sale.CancelReason = reason;
 
         return TypedResults.Ok(Drawn(sale));
     }
 
     /// <summary>What this venue paid out, newest first (PRD US-33).</summary>
-    private static async Task<Ok<SpendResponse[]>> SpendingAsync(
+    private static async Task<Results<Ok<SpendResponse[]>, ProblemHttpResult>> SpendingAsync(
         Guid venueId,
         DateOnly? from,
         DateOnly? to,
@@ -448,6 +463,11 @@ public static class ShopEndpoints
         CancellationToken cancellationToken)
     {
         var (first, last) = PlatformRequirements.MonthOr(from, to, timeProvider);
+
+        if (last < first || last.DayNumber - first.DayNumber + 1 > VenueDashboard.MaxDays)
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, DashboardErrorCodes.InvalidRange);
+        }
 
         return TypedResults.Ok(
             await database.Spends
@@ -617,6 +637,21 @@ public static class ShopEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, SpendErrorCodes.ReasonNeeded);
         }
 
+        await using var transaction =
+            await database.Database.BeginTransactionAsync(cancellationToken);
+
+        // What this expense put on a shelf, if it put anything there. Read before the row is
+        // stamped, and locked first, because taking it back writes the ledger like any other
+        // writer does.
+        var delivered = await database.StockEntries
+            .AsNoTracking()
+            .Where(entry => entry.SpendId == spendId && entry.Spend!.VenueId == venueId)
+            .Select(entry => new { entry.ItemId, entry.Quantity })
+            .ToListAsync(cancellationToken);
+
+        await Locks.OnAsync(
+            database, delivered.Select(entry => entry.ItemId), cancellationToken);
+
         var voided = await database.Spends
             .Where(one => one.Id == spendId && one.VenueId == venueId && one.VoidedAt == null)
             .ExecuteUpdateAsync(
@@ -633,12 +668,37 @@ public static class ShopEndpoints
 
         if (spend is null)
         {
+            await transaction.RollbackAsync(cancellationToken);
             return ApiProblem.Of(StatusCodes.Status404NotFound, SpendErrorCodes.NotFound);
         }
 
-        return voided == 0
-            ? ApiProblem.Of(StatusCodes.Status409Conflict, SpendErrorCodes.AlreadyVoided)
-            : TypedResults.Ok(Drawn(spend));
+        if (voided == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return ApiProblem.Of(StatusCodes.Status409Conflict, SpendErrorCodes.AlreadyVoided);
+        }
+
+        // An expense that filled a shelf empties it again when it is taken back. The way a venue
+        // corrects a delivery it keyed wrong is to void it and enter it again — so leaving the
+        // goods there would put them on the shelf twice, and the ledger is append-only, which
+        // means the only way back from that is a stocktake.
+        foreach (var entry in delivered)
+        {
+            database.StockEntries.Add(new StockEntry
+            {
+                ItemId = entry.ItemId,
+                Quantity = -entry.Quantity,
+                Move = StockMove.BoughtIn,
+                SpendId = spendId,
+                At = now,
+                ByUserId = membership.UserId,
+            });
+        }
+
+        await database.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return TypedResults.Ok(Drawn(spend));
     }
 
     /// <summary>
@@ -671,9 +731,7 @@ public static class ShopEndpoints
         await using var transaction =
             await database.Database.BeginTransactionAsync(cancellationToken);
 
-        await database.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT pg_advisory_xact_lock(hashtextextended({itemId.ToString()}, 0))",
-            cancellationToken);
+        await Locks.OnAsync(database, itemId, cancellationToken);
 
         var found = (await OnTheShelfAsync(database, venueId, [itemId], cancellationToken))
             .SingleOrDefault(one =>

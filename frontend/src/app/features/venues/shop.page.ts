@@ -5,7 +5,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { forkJoin, Observable } from 'rxjs';
+import { catchError, forkJoin, Observable, of } from 'rxjs';
 import { errorKey } from '../../core/http/api-error';
 import { AppDatePipe } from '../../core/i18n/app-date.pipe';
 import { BahtPipe } from '../../core/i18n/baht.pipe';
@@ -78,6 +78,13 @@ export class ShopPage {
   protected readonly loading = signal(true);
   protected readonly pageError = signal<string | null>(null);
 
+  /**
+   * Whether this person may read what the venue has paid out. Writing one down is a shift's work
+   * and reading the month is a report, so they are two permissions (PRD US-33) — and somebody who
+   * only has the first still has a counter to run.
+   */
+  protected readonly readsSpending = signal(true);
+
   protected readonly saving = signal(false);
   protected readonly saveError = signal<string | null>(null);
 
@@ -140,7 +147,7 @@ export class ShopPage {
     // A delivery is one expense that also fills a shelf, so it is said once, here, rather than
     // written down twice and hoped to agree (PRD US-33).
     itemId: [''],
-    quantity: [0, Validators.min(0)],
+    quantity: [0],
   });
 
   /** A line for the board. */
@@ -163,6 +170,15 @@ export class ShopPage {
 
   constructor() {
     effect(() => this.load(this.venueId()));
+
+    // How many arrived is required exactly when something did. Left optional, a delivery whose
+    // quantity was never filled in records the money and moves no stock — the half a purchase the
+    // server refuses outright when it is told about it, and cannot see when it is not (US-33).
+    this.spend.controls.itemId.valueChanges.subscribe((itemId) => {
+      const quantity = this.spend.controls.quantity;
+      quantity.setValidators(itemId === '' ? [] : [Validators.required, Validators.min(1)]);
+      quantity.updateValueAndValidity();
+    });
   }
 
   protected add(line: Ringing, by: number): void {
@@ -216,7 +232,7 @@ export class ShopPage {
     }
 
     const { kind, amountBaht, paidBy, note, itemId, quantity } = this.spend.getRawValue();
-    const bought = kind === 'Stock' && itemId !== '' && quantity > 0;
+    const bought = kind === 'Stock' && itemId !== '';
 
     this.act(
       this.shop.spend(this.venueId(), {
@@ -357,13 +373,18 @@ export class ShopPage {
     forkJoin({
       items: this.shop.items(venueId),
       sales: this.shop.sales(venueId),
-      spending: this.shop.spending(venueId),
+
+      // Refused rather than broken: a counter that may write an expense but not read the month's
+      // report still gets its board, its basket and its list of what was sold today. Letting this
+      // one answer decide the page would leave that person looking at an error.
+      spending: this.shop.spending(venueId).pipe(catchError(() => of(null as Spend[] | null))),
     }).subscribe({
       next: ({ items, sales, spending }) => {
         this.loading.set(false);
         this.items.set(items);
         this.sales.set(sales);
-        this.spending.set(spending);
+        this.readsSpending.set(spending !== null);
+        this.spending.set(spending ?? []);
 
         // Nothing to sell yet, so the thing to do first is put something on the board.
         this.editingBoard.set(items.filter((one) => one.withdrawnAt === null).length === 0);

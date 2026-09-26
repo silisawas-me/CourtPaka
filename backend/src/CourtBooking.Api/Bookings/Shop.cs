@@ -250,7 +250,6 @@ public static class Shop
     /// <summary>The most lines one sale may have. A counter is not a supermarket.</summary>
     public const int MostLines = 20;
 
-    /// <summary>How many of the sales that are over a venue is shown.</summary>
 
     /// <summary>Why this cannot go on the board, or null.</summary>
     public static string? Refusal(string? name, string? unit, decimal priceBaht, int? tellMeAt)

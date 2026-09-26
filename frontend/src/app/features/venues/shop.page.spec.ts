@@ -213,6 +213,55 @@ describe('ShopPage', () => {
     expect(textOf(fixture, 'left-i1')).toContain('20');
   });
 
+  /**
+   * Writing an expense down and reading the month's report are two permissions (PRD US-33), so a
+   * counter that only has the first still has a shop to run.
+   */
+  it('still works for somebody who may not read what the venue spent', () => {
+    localStorage.clear();
+    TestBed.configureTestingModule({ imports: [ShopPage], providers: pageProviders() });
+
+    httpMock = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(ShopPage);
+    fixture.componentRef.setInput('venueId', 'v1');
+    fixture.detectChanges();
+
+    httpMock.expectOne('/api/venues/v1/shop/items').flush([item()]);
+    httpMock.expectOne((request) => request.url === '/api/venues/v1/shop/sales').flush([]);
+    httpMock
+      .expectOne((request) => request.url === '/api/venues/v1/spending')
+      .flush({ code: 'venue.forbidden' }, { status: 403, statusText: 'Forbidden' });
+    fixture.detectChanges();
+
+    // The board is there, the basket works, and nothing says the page failed.
+    expect(elementOf(fixture, 'page-error')).toBeNull();
+    expect(elementOf(fixture, 'item-i1')).not.toBeNull();
+    clickOn(fixture, 'more-i1');
+    fixture.detectChanges();
+    expect(textOf(fixture, 'basket-i1')).toContain('1');
+
+    // What is hidden is the report, not the form: they may still write one down.
+    expect(elementOf(fixture, 'spent-this-month')).toBeNull();
+    expect(elementOf(fixture, 'record-spend')).not.toBeNull();
+  });
+
+  /** Half a purchase — the money without the goods — is what the server refuses when it is told
+   * about it, and cannot see when the quantity is quietly left at zero (PRD US-33). */
+  it('will not buy stock in without saying how many arrived', () => {
+    render([item()]);
+
+    setInput(fixture, '[data-testid="spend-amount"]', '700');
+    clickOn(fixture, 'kind-Stock');
+    fixture.detectChanges();
+    clickOn(fixture, 'bought-i1');
+    fixture.detectChanges();
+
+    clickOn(fixture, 'record-spend');
+
+    httpMock.expectNone('/api/venues/v1/spending');
+    expect(textOf(fixture, 'bought-how-many-error')).not.toBe('');
+  });
+
   it('will not write down a payment of nothing', () => {
     render([item()]);
 
