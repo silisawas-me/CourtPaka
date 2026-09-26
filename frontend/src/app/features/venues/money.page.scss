@@ -46,11 +46,17 @@
  * Where the difference might have come from: set apart from the count itself, because the count
  * is a fact and this is a list of coincidences worth walking over to check.
  */
+/*
+ * White and edged rather than a tint, like every other panel. It also keeps the green the
+ * amounts are written in readable: the brand green is 4.96:1 on white and 4.2:1 on the tint,
+ * and these are the lines somebody reads when the till did not balance.
+ */
 .leads {
   margin-top: 1rem;
   padding: 0.75rem 0.9rem;
+  border: 1px solid var(--mat-sys-outline-variant);
   border-radius: var(--mat-sys-corner-medium);
-  background: var(--mat-sys-surface-container-high);
+  background: var(--mat-sys-surface);
 }
 
 .leads-title {
