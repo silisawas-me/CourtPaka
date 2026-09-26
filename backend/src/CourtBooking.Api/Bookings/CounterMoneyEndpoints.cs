@@ -322,8 +322,7 @@ public static class CounterMoneyEndpoints
         CancellationToken cancellationToken)
     {
         var day = date ?? PlatformRequirements.BangkokToday(timeProvider);
-        var from = PlatformRequirements.BangkokHour(day, 0);
-        var until = PlatformRequirements.BangkokHour(day.AddDays(1), 0);
+        var (from, until) = await TillDayAsync(database, venueId, day, cancellationToken);
 
         var receipts = await database.PaymentReceipts
             .AsNoTracking()
@@ -498,8 +497,7 @@ public static class CounterMoneyEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, MoneyErrorCodes.InvalidFloat);
         }
 
-        var from = PlatformRequirements.BangkokHour(day, 0);
-        var until = PlatformRequirements.BangkokHour(day.AddDays(1), 0);
+        var (from, until) = await TillDayAsync(database, venueId, day, cancellationToken);
 
         var cashIn = await database.PaymentReceipts
             .Where(receipt =>
@@ -557,6 +555,31 @@ public static class CounterMoneyEndpoints
             closing.DifferenceBaht,
             closing.Note,
             closing.ClosedAt));
+    }
+
+    /// <summary>
+    /// When this venue's day starts and stops taking money (PRD US-26), read from the counts
+    /// either side of it. Asked here rather than worked out by each reader, because the page that
+    /// shows the day and the count that closes it have to be looking at the same money.
+    /// </summary>
+    private static async Task<(DateTimeOffset From, DateTimeOffset Until)> TillDayAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateOnly day,
+        CancellationToken cancellationToken)
+    {
+        var counts = await database.DailyClosings
+            .AsNoTracking()
+            .Where(closing =>
+                closing.VenueId == venueId
+                && (closing.Date == day || closing.Date == day.AddDays(-1)))
+            .Select(closing => new { closing.Date, closing.ClosedAt })
+            .ToListAsync(cancellationToken);
+
+        return Takings.TillDay(
+            day,
+            counts.SingleOrDefault(one => one.Date == day.AddDays(-1))?.ClosedAt,
+            counts.SingleOrDefault(one => one.Date == day)?.ClosedAt);
     }
 
     /// <summary>What has been taken for one booking so far.</summary>

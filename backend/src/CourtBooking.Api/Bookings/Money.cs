@@ -1,4 +1,5 @@
 using CourtBooking.Api.Identity;
+using CourtBooking.Api.Localization;
 using CourtBooking.Api.Venues;
 
 namespace CourtBooking.Api.Bookings;
@@ -195,6 +196,37 @@ public static class Takings
     /// </summary>
     public static bool PayingInFullConfirms(BookingStatus status) =>
         BookingTransitions.CanMove(status, BookingStatus.Confirmed);
+
+    /// <summary>
+    /// When a day's takings start and stop being that day's (PRD US-26).
+    ///
+    /// A day is midnight to midnight until somebody counts the till. Once they have, that count
+    /// is the end of it: money taken afterwards belongs to the next day, because the drawer it
+    /// went into has already been counted and written down, and a count that can still move is
+    /// not a count. The day after it picks that money up, which is why a day also starts at the
+    /// previous day's count rather than at its midnight.
+    ///
+    /// It cannot chain. A day may not be closed before it happens, so the closing that ends a day
+    /// is always later than anything the day before it could carry in.
+    /// </summary>
+    public static (DateTimeOffset From, DateTimeOffset Until) TillDay(
+        DateOnly day,
+        DateTimeOffset? closedYesterday,
+        DateTimeOffset? closedToday)
+    {
+        var midnight = PlatformRequirements.BangkokHour(day, 0);
+        var nextMidnight = PlatformRequirements.BangkokHour(day.AddDays(1), 0);
+
+        // Never past its own midnight, either end. A count can come days late — a venue catching
+        // up on a week it never closed — and a window that ran to the moment of counting would
+        // swallow every day in between.
+        return (
+            Earlier(closedYesterday ?? midnight, midnight),
+            Earlier(closedToday ?? nextMidnight, nextMidnight));
+    }
+
+    private static DateTimeOffset Earlier(DateTimeOffset one, DateTimeOffset other) =>
+        one < other ? one : other;
 
     /// <summary>
     /// What the till should hold at the end of the day: what it started with, plus the cash that

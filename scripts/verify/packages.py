@@ -36,8 +36,22 @@ def sold(page, venue_id):
     return page.request.get(f"{BASE}/api/venues/{venue_id}/packages").json()
 
 
-def money(page, venue_id):
-    return page.request.get(f"{BASE}/api/venues/{venue_id}/money").json()
+def till_day(page, venue_id):
+    """The day money taken right now lands in. Normally today — but a day that has been counted
+    keeps the count it was written with, so anything taken afterwards belongs to the next one
+    (PRD US-26). counter_money.py counts a day because that is what it is about, and it may have
+    counted this one."""
+    today = venue_today()
+    counted = page.request.get(
+        f"{BASE}/api/venues/{venue_id}/money?date={today.isoformat()}").json()["closed"]
+
+    return today if counted is None else today + datetime.timedelta(days=1)
+
+
+def money(page, venue_id, day=None):
+    day = day or till_day(page, venue_id)
+    return page.request.get(
+        f"{BASE}/api/venues/{venue_id}/money?date={day.isoformat()}").json()
 
 
 with sync_playwright() as p:
@@ -68,7 +82,9 @@ with sync_playwright() as p:
           offer["hours"] == 10 and offer["bahtPerHour"] == 180, page)
 
     # 2. Selling one is money in today's till.
-    before = money(page, venue_id)
+    # The day the money will land in, asked once so the before and after are the same day.
+    till = till_day(page, venue_id)
+    before = money(page, venue_id, till)
     already = page.locator("[data-testid^=package-]").count()
     page.fill("[data-testid=customer-name]", "ก๊วนซื้อชั่วโมง")
     page.fill("[data-testid=customer-phone]", "0800000000")
@@ -80,8 +96,8 @@ with sync_playwright() as p:
     expect(page.locator("[data-testid^=package-]")).to_have_count(already + 1)
 
     package = sold(page, venue_id)[0]
-    after = money(page, venue_id)
-    check("selling one puts the money in today's till",
+    after = money(page, venue_id, till)
+    check("selling one puts the money in the till of the day it is taken",
           after["cashBaht"] == before["cashBaht"] + 1800)
     check("and the till row says it was a package, not a booking",
           any(one["packageId"] == package["packageId"] and one["bookingId"] is None
@@ -122,7 +138,7 @@ with sync_playwright() as p:
     page.click(f"[data-testid=pay-with-{package['packageId']}]")
     check("the counter offers the customer's own hours as a way to pay", True, page)
 
-    till_before = money(page, venue_id)
+    till_before = money(page, venue_id, till)
     page.click("[data-testid=counter-take]")
     page.wait_for_selector("[data-testid=counter-grid]", state="detached")
 
@@ -130,7 +146,7 @@ with sync_playwright() as p:
                 if one["packageId"] == package["packageId"]][0]
     check("an hour comes off the package", one_left["hoursLeft"] == 9)
 
-    till_after = money(page, venue_id)
+    till_after = money(page, venue_id, till)
     check("and nothing new goes in the till, because the money came in when it was sold",
           till_after["takenBaht"] == till_before["takenBaht"])
 
