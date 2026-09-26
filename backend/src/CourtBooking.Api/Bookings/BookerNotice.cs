@@ -34,6 +34,14 @@ public enum BookerNoticeKind
     /// what comes back (PRD 6.2, US-13). The cancellation message promised this one.
     /// </summary>
     PaymentSettled = 8,
+
+    /// <summary>
+    /// The venue changed the hours of a booking that is standing: another hour on the end of it,
+    /// or the same hours on a different court (PRD US-29). One letter however many hours moved,
+    /// and it says what the booking holds now rather than what changed — somebody reading it on
+    /// the way to the venue needs to know which court to walk onto.
+    /// </summary>
+    HoursChanged = 10,
 }
 
 /// <summary>

@@ -153,6 +153,15 @@ public static class BookerLetters
                     + "ถ้าเลยเวลานี้ คอร์ทจะถูกเสนอให้คนถัดไปในคิว",
                     letter.Link)),
 
+            BookerNoticeKind.HoursChanged => (
+                $"สนามแก้ไขเวลาหรือคอร์ทของคุณ: {venue}",
+                Lines(
+                    $"การจองของคุณที่ {venue} ถูกแก้ไขโดยสนาม ตอนนี้เป็นดังนี้",
+                    when,
+                    $"ยอดรวม {Baht(letter.TotalBaht, Thai)} บาท"
+                    + (letter.PaymentReceived ? "" : " (ถ้ามีส่วนที่ยังไม่ได้ชำระ จ่ายที่สนามได้)"),
+                    letter.Link)),
+
             _ => throw new ArgumentOutOfRangeException(nameof(letter), letter.Kind, null),
         };
     }
@@ -252,6 +261,17 @@ public static class BookerLetters
                     $"Amount to pay: THB {Baht(letter.TotalBaht, English)}",
                     $"Please transfer and send the slip by {Clock(letter.HoldExpiresAt)}. "
                     + "After that the hours go to the next person in the queue.",
+                    letter.Link)),
+
+            BookerNoticeKind.HoursChanged => (
+                $"Your booking's hours or court have changed: {venue}",
+                Lines(
+                    $"The venue has changed your booking at {venue}. It is now:",
+                    when,
+                    $"Total: THB {Baht(letter.TotalBaht, English)}"
+                    + (letter.PaymentReceived
+                        ? ""
+                        : " (anything still to pay can be paid at the venue)"),
                     letter.Link)),
 
             _ => throw new ArgumentOutOfRangeException(nameof(letter), letter.Kind, null),

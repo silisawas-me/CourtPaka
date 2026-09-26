@@ -28,6 +28,10 @@ export interface VenueBookingActions {
   playedAfterAll: boolean;
   /** Taking money for it at the desk, in any form (PRD US-26). */
   takeMoney: boolean;
+  /** Selling them the hour they would run on into (PRD US-29). */
+  extend: boolean;
+  /** Putting the hours they have not played on another court (PRD US-29). */
+  moveCourt: boolean;
   /**
    * The reasons this booking may be turned away for, and what each owes the booker. Only the
    * ones the rules allow where it stands, so the page can never offer an answer the server
@@ -80,6 +84,31 @@ export interface VenueBooking {
   outstandingBaht: number;
   slots: BookingSlot[];
   can: VenueBookingActions;
+}
+
+/**
+ * A court these hours could be played on, and what they would cost there (PRD US-29). The amount
+ * is null where the door does not change what anything costs, which moving does not.
+ */
+export interface FreeCourt {
+  courtId: string;
+  courtName: string;
+  baht: number | null;
+}
+
+/**
+ * What could still be done with a booking's hours (PRD US-29). Either half is null where that
+ * door is shut, which the server decides — the page only draws what it is given.
+ */
+export interface BookingHours {
+  extend: {
+    date: string;
+    hour: number;
+    /** The court they are on, which is the one taken unless the venue picks another. */
+    sameCourtId: string | null;
+    courts: FreeCourt[];
+  } | null;
+  move: { hours: number; courts: FreeCourt[] } | null;
 }
 
 /** How money reached the venue (PRD US-26). */
@@ -242,6 +271,23 @@ export class VenueBookingsService {
 
   noShow(venueId: string, bookingId: string): Observable<VenueBooking> {
     return this.http.post<VenueBooking>(`${this.at(venueId, bookingId)}/no-show`, null);
+  }
+
+  /** What could still be done with this booking's hours, asked of the server (PRD US-29). */
+  hours(venueId: string, bookingId: string): Observable<BookingHours> {
+    return this.http.get<BookingHours>(`${this.at(venueId, bookingId)}/hours`);
+  }
+
+  /** One more hour, on the court they are on unless the venue names another (PRD US-29). */
+  extend(venueId: string, bookingId: string, courtId?: string): Observable<VenueBooking> {
+    return this.http.post<VenueBooking>(`${this.at(venueId, bookingId)}/extend`, {
+      courtId: courtId ?? null,
+    });
+  }
+
+  /** The hours they have not played, on another court (PRD US-29). */
+  moveCourt(venueId: string, bookingId: string, courtId: string): Observable<VenueBooking> {
+    return this.http.post<VenueBooking>(`${this.at(venueId, bookingId)}/move`, { courtId });
   }
 
   playedAfterAll(venueId: string, bookingId: string, reason: string): Observable<VenueBooking> {

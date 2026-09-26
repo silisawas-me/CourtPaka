@@ -310,3 +310,14 @@
   margin: 0.125rem 0 0;
   font: var(--mat-sys-label-medium);
 }
+
+/*
+ * The price and "same court" inside a filled button. Not `.muted`, which is a colour for text on
+ * a page: on the button's own dark green it is dark on dark. This keeps the button's ink and
+ * steps back by weight and opacity instead.
+ */
+.asking button .aside {
+  margin-inline-start: 0.4rem;
+  font-weight: 400;
+  opacity: 0.8;
+}

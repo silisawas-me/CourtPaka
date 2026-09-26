@@ -222,6 +222,44 @@ public sealed class BookerMailTests(ApiTestFixture api) : IClassFixture<ApiTestF
         Assert.DoesNotContain(BookerNoticeKind.AboutToPlay, await KindsToldAsync(booking.Id));
     }
 
+    /// <summary>
+    /// Hours that changed are hours somebody is about to walk to (PRD US-29, US-06). One letter
+    /// for the whole change: a move of two hours is one thing the venue did.
+    /// </summary>
+    [Fact]
+    public async Task A_booker_whose_hours_changed_is_told_once_however_many_moved()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync(courts: 2);
+        var (booker, email, booking) = await WaitingAsync(venue.Id, courts[0]);
+        await owner.PostAsync($"/api/venues/{venue.Id}/slip-queue/{booking.Id}/confirm", null);
+        await MailAfterSweepAsync(email, 2);
+
+        // A second hour, and then both of them onto the other court.
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await owner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/bookings/{booking.Id}/extend",
+                new ExtendBookingRequest(null))).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await owner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/bookings/{booking.Id}/move",
+                new MoveCourtRequest(courts[1]))).StatusCode);
+
+        // Two changes, so two letters — and the move of two hours is one of them, not two.
+        var mail = await MailAfterSweepAsync(email, 4);
+        Assert.Equal(
+            2, await CountToldAsync(booking.Id, BookerNoticeKind.HoursChanged));
+
+        // The letter says what the booking holds now, which is the court to walk onto.
+        Assert.Contains("Court 2", mail[^1].Body);
+
+        // And a second sweep does not say it again.
+        await SweepAsync();
+        Assert.Equal(4, Told(email).Count);
+        Assert.NotNull(booker);
+    }
+
     /// <summary>The counter's customer has no account, so there is nobody to write to (US-06).</summary>
     [Fact]
     public async Task A_counter_booking_tells_nobody()
@@ -346,6 +384,15 @@ public sealed class BookerMailTests(ApiTestFixture api) : IClassFixture<ApiTestF
             HttpStatusCode.OK);
 
         return written.Records.OrderBy(record => record.RecordedAt).Last().Id;
+    }
+
+    /// <summary>How many letters of one kind this booking has had a receipt written for.</summary>
+    private async Task<int> CountToldAsync(Guid bookingId, BookerNoticeKind kind)
+    {
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await database.BookerNotices
+            .CountAsync(notice => notice.BookingId == bookingId && notice.Kind == kind);
     }
 
     /// <summary>One pass of the booker mail, the way the caretaker runs it.</summary>

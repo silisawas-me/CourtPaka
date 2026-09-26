@@ -203,12 +203,25 @@ public static class BookedSlots
     /// so that two writers meet here rather than inside the exclusion constraint's index — where
     /// Postgres breaks the tie by killing one of them (PRD BR-04).
     /// </summary>
-    public static async Task LockAsync(
+    public static Task LockAsync(
         AppDbContext database,
         IEnumerable<BookingSlot> slots,
+        CancellationToken cancellationToken) =>
+        LockAsync(
+            database,
+            slots.Select(slot => (slot.CourtId, slot.StartsAt)),
+            cancellationToken);
+
+    /// <summary>
+    /// The same queue, for a caller holding court-hours it has not written rows for yet — the hour
+    /// a booking is being extended into, or the court its hours are being moved to (PRD US-29).
+    /// </summary>
+    public static async Task LockAsync(
+        AppDbContext database,
+        IEnumerable<(Guid CourtId, DateTimeOffset StartsAt)> hours,
         CancellationToken cancellationToken)
     {
-        foreach (var key in slots.Select(LockKey).Order())
+        foreach (var key in hours.Select(LockKey).Distinct().Order())
         {
             await database.Database.ExecuteSqlInterpolatedAsync(
                 $"SELECT pg_advisory_xact_lock({key})", cancellationToken);
@@ -219,11 +232,11 @@ public static class BookedSlots
     /// One number per court-hour, the same for everyone asking for it. Two different hours sharing
     /// a number only means they queue behind each other, which costs a moment and nothing else.
     /// </summary>
-    private static long LockKey(BookingSlot slot)
+    private static long LockKey((Guid CourtId, DateTimeOffset StartsAt) hour)
     {
         Span<byte> id = stackalloc byte[16];
-        slot.CourtId.TryWriteBytes(id);
-        return BitConverter.ToInt64(id[..8]) ^ BitConverter.ToInt64(id[8..]) ^ slot.StartsAt.UtcTicks;
+        hour.CourtId.TryWriteBytes(id);
+        return BitConverter.ToInt64(id[..8]) ^ BitConverter.ToInt64(id[8..]) ^ hour.StartsAt.UtcTicks;
     }
 
     /// <summary>

@@ -295,6 +295,17 @@
                   {{ i18n.t('venueBookings.settle') }}
                 </button>
               }
+              @if (booking.can.extend || booking.can.moveCourt) {
+                <button
+                  matButton
+                  type="button"
+                  [attr.data-testid]="'hours-' + booking.bookingId"
+                  [disabled]="deciding()"
+                  (click)="ask(booking.bookingId, 'hours')"
+                >
+                  {{ i18n.t('venueBookings.hours') }}
+                </button>
+              }
               @if (booking.can.noShow) {
                 <button
                   matButton
@@ -431,6 +442,73 @@
                   >
                     {{ i18n.t('slipQueue.moneyNotReceived') }}
                   </button>
+                  <button matButton type="button" data-testid="close" (click)="close()">
+                    {{ i18n.t('common.cancel') }}
+                  </button>
+                </div>
+              </div>
+            }
+
+            @if (asked(booking.bookingId, 'hours')) {
+              <div class="asking" data-testid="asking">
+                @if (hoursOffered(); as offered) {
+                  @if (offered.extend; as extend) {
+                    <p data-testid="extend-until">
+                      {{ i18n.t('venueBookings.extend') }} {{ until(extend.hour) }}
+                    </p>
+                    <div class="row">
+                      @for (court of extend.courts; track court.courtId) {
+                        <button
+                          matButton="filled"
+                          type="button"
+                          [attr.data-testid]="'extend-' + court.courtId"
+                          [disabled]="deciding()"
+                          (click)="extendTo(booking, court.courtId)"
+                        >
+                          {{ court.courtName }}
+                          @if (court.courtId === extend.sameCourtId) {
+                            <span class="aside">({{ i18n.t('venueBookings.sameCourt') }})</span>
+                          }
+                          <span class="aside">{{ court.baht | baht: i18n.locale() }}</span>
+                        </button>
+                      } @empty {
+                        <p class="muted" data-testid="extend-none">
+                          {{ i18n.t('venueBookings.extendNone') }}
+                        </p>
+                      }
+                    </div>
+                  }
+
+                  @if (offered.move; as move) {
+                    <p data-testid="move-hours">
+                      {{ i18n.t('venueBookings.moveCourt') }} · {{ move.hours }}
+                      {{
+                        i18n.t(
+                          move.hours === 1 ? 'venueBookings.moveHour' : 'venueBookings.moveHours'
+                        )
+                      }}
+                    </p>
+                    <div class="row">
+                      @for (court of move.courts; track court.courtId) {
+                        <button
+                          matButton
+                          type="button"
+                          [attr.data-testid]="'move-' + court.courtId"
+                          [disabled]="deciding()"
+                          (click)="moveTo(booking, court.courtId)"
+                        >
+                          {{ court.courtName }}
+                        </button>
+                      } @empty {
+                        <p class="muted" data-testid="move-none">
+                          {{ i18n.t('venueBookings.moveNone') }}
+                        </p>
+                      }
+                    </div>
+                  }
+                }
+
+                <div class="row">
                   <button matButton type="button" data-testid="close" (click)="close()">
                     {{ i18n.t('common.cancel') }}
                   </button>

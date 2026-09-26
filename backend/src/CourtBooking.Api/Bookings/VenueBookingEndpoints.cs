@@ -69,6 +69,10 @@ public static class VenueBookingEndpoints
         bookings.MapPost("/{bookingId:guid}/settle-payment", SettleAsync);
         bookings.MapPost("/{bookingId:guid}/played", PlayedAfterAllAsync);
 
+        // One more hour, and a different court (PRD US-29). Both declare their own side of a
+        // suspension where they are mapped, so the group's answer is never the one that decides.
+        bookings.MapBookingHourEndpoints();
+
         bookings.MapRefundEndpoints();
         // Money taken at the desk, in parts and in the form it arrived (PRD US-26).
         bookings.MapCounterMoneyEndpoints();
@@ -598,7 +602,7 @@ public static class VenueBookingEndpoints
         _ => ApiProblem.Of(StatusCodes.Status409Conflict, code),
     };
 
-    private static IQueryable<Booking> OneAsync(
+    internal static IQueryable<Booking> OneAsync(
         AppDbContext database,
         Guid venueId,
         Guid bookingId) =>
@@ -900,6 +904,11 @@ public static class VenueBookingEndpoints
                 .PlayedAfterAllOffer(booking, status, "recorded wrongly", byOwner, now)
                 .Allowed,
             Takings.CanTake(status, booking.PaymentState, outstandingBaht),
+            // An hour to run on into, and hours that have not been played yet (PRD US-29). Both
+            // are only whether the door is open — which court, and whether one is free, is the
+            // hours endpoint's answer, because it depends on the rest of the day.
+            BookingHours.NextHour(booking, status) is not null,
+            BookingHours.Movable(booking, status, now).Count > 0,
             cancelling.Allowed ? Choices(booking, status, byOwner, takenBaht, now) : []);
     }
 

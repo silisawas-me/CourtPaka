@@ -15,6 +15,7 @@ import { errorKey } from '../../core/http/api-error';
 import { plainDate, venueToday } from '../../core/i18n/plain-date';
 import { TranslationService } from '../../core/i18n/translation.service';
 import {
+  BookingHours,
   CancellationReason,
   PaymentMethod,
   RefundMethod,
@@ -35,7 +36,7 @@ import { provideLocalizedDateAdapter } from '../../shared/localized-date-adapter
 const NOTE_MAX_LENGTH = 400;
 
 /** Which question a row is being asked. One row at a time: these decide money. */
-type Asking = 'cancel' | 'noShow' | 'settle' | 'played' | 'refund' | 'take';
+type Asking = 'cancel' | 'noShow' | 'settle' | 'played' | 'refund' | 'take' | 'hours';
 
 /** The two ways a venue gets money back to somebody (PRD US-18). */
 const REFUND_METHODS: RefundMethod[] = ['Transfer', 'Cash'];
@@ -122,6 +123,13 @@ export class VenueBookingsPage {
 
   /** Which booking is being asked about, and which question. */
   protected readonly asking = signal<{ bookingId: string; door: Asking } | null>(null);
+
+  /**
+   * What the server says could still be done with the open booking's hours (PRD US-29). Read when
+   * the panel opens rather than carried on every row of the day: which courts are free depends on
+   * the whole day, and a day's worth of that would be stale by the time anybody pressed it.
+   */
+  protected readonly hoursOffered = signal<BookingHours | null>(null);
   protected readonly deciding = signal(false);
   protected readonly decideError = signal<string | null>(null);
 
@@ -307,6 +315,46 @@ export class VenueBookingsPage {
     if (door === 'refund') {
       this.openRefunds(bookingId);
     }
+
+    this.hoursOffered.set(null);
+    if (door === 'hours') {
+      this.openHours(bookingId);
+    }
+  }
+
+  /**
+   * Asks what could be done with this booking's hours. The courts on the panel are the ones the
+   * server has just called free; pressing one asks again, and the answer then is the one that
+   * counts — the constraint in the database, not this list (PRD BR-04).
+   */
+  private openHours(bookingId: string): void {
+    this.bookings.hours(this.venueId(), bookingId).subscribe({
+      next: (offered) => {
+        // The counter may have moved on while this was in the air. Drawing it into whichever row
+        // is open now would offer one booking's hours under another's name.
+        if (this.asking()?.bookingId !== bookingId) {
+          return;
+        }
+
+        this.hoursOffered.set(offered);
+      },
+      error: (failure: unknown) => this.decideError.set(errorKey(failure)),
+    });
+  }
+
+  /** One more hour, on the court the venue pressed (PRD US-29). */
+  protected extendTo(booking: VenueBooking, courtId: string): void {
+    this.decide(this.bookings.extend(this.venueId(), booking.bookingId, courtId));
+  }
+
+  /** The hours they have not played, on the court the venue pressed (PRD US-29). */
+  protected moveTo(booking: VenueBooking, courtId: string): void {
+    this.decide(this.bookings.moveCourt(this.venueId(), booking.bookingId, courtId));
+  }
+
+  /** The end of the hour being added, which is what the counter is agreeing to. */
+  protected until(hour: number): string {
+    return `${String(hour + 1).padStart(2, '0')}:00`;
   }
 
   /**
@@ -426,6 +474,7 @@ export class VenueBookingsPage {
 
   protected close(): void {
     this.asking.set(null);
+    this.hoursOffered.set(null);
     this.decideError.set(null);
   }
 
