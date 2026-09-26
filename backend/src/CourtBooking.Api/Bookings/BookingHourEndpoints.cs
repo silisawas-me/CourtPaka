@@ -126,6 +126,14 @@ internal static class BookingHourEndpoints
         var now = timeProvider.GetUtcNow();
         var membership = venue.Require();
 
+        // A frozen venue is already kept out by the policy on this route. One still waiting to be
+        // approved is not frozen, and it cannot sell an hour here that it could not sell at its
+        // own counter (PRD US-10, US-20).
+        if (venue.Status != VenueStatus.Approved)
+        {
+            return ApiProblem.Of(StatusCodes.Status403Forbidden, VenueErrorCodes.NotApproved);
+        }
+
         if (await VenueBookingEndpoints.OneAsync(database, venueId, bookingId)
             .SingleOrDefaultAsync(cancellationToken) is not { } booking)
         {
@@ -199,7 +207,20 @@ internal static class BookingHourEndpoints
         // The price joins the booking's total, which is what turns it into something owed at the
         // desk (PRD US-26). `Received` means the venue holds all of it (PRD US-28), and it no
         // longer does — so the payment state goes back to saying so and the desk's door reopens.
-        var payment = booking.PaymentState == PaymentState.Received
+        //
+        // Only where the receipts already account for the whole of what was owed, though. A
+        // booking that says the money arrived and has no receipt saying how much is one from
+        // before receipts were written down, and `Takings.HeldFor` reads it as holding what was
+        // asked for. Moving it off `Received` would drop that to nothing — and a booking recorded
+        // as holding nothing owes nothing back when it is cancelled. Flipping is allowed only
+        // where it cannot change what the venue is recorded as holding.
+        //
+        // The money is read behind the same lock everything that reads receipts takes, and in
+        // the same transaction as the write that follows (CLAUDE.md, PRD US-26).
+        await CounterMoneyEndpoints.QueueForTheMoneyAsync(database, bookingId, cancellationToken);
+        var taken = await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken);
+
+        var payment = booking.PaymentState == PaymentState.Received && taken >= booking.TotalBaht
             ? PaymentState.NotReceived
             : booking.PaymentState;
 
@@ -238,8 +259,7 @@ internal static class BookingHourEndpoints
         {
             await database.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException failure)
-            when (failure.InnerException is PostgresException { SqlState: ExclusionViolation })
+        catch (Exception failure) when (IsAlreadyTaken(failure))
         {
             // Somebody took the hour between the day being read and this write. The constraint is
             // the answer, not the read above (PRD BR-04).
@@ -276,7 +296,7 @@ internal static class BookingHourEndpoints
     private static async Task<Results<Ok<VenueBookingResponse>, ProblemHttpResult>> MoveAsync(
         Guid venueId,
         Guid bookingId,
-        MoveCourtRequest request,
+        MoveCourtRequest? request,
         CurrentVenue venue,
         AppDbContext database,
         TimeProvider timeProvider,
@@ -300,7 +320,11 @@ internal static class BookingHourEndpoints
                 StatusCodes.Status409Conflict, BookingErrorCodes.HoursCannotChange);
         }
 
-        var courtId = request.CourtId;
+        if (request?.CourtId is not { } courtId)
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, BookingErrorCodes.CourtUnknown);
+        }
+
         var moving = movable.Where(slot => slot.CourtId != courtId).ToList();
         if (moving.Count == 0)
         {
@@ -308,10 +332,21 @@ internal static class BookingHourEndpoints
                 StatusCodes.Status409Conflict, BookingErrorCodes.AlreadyOnThatCourt);
         }
 
-        var hours = moving
-            .Select(slot => PlatformRequirements.BangkokDateAndHour(slot.StartsAt).Hour)
-            .ToArray();
-        var date = PlatformRequirements.BangkokDateAndHour(moving[0].StartsAt).Date;
+        // Two courts at the same hour cannot become one court at that hour. The database would
+        // say so — the second row collides with the first inside the exclusion constraint — but
+        // it is the venue's question, and it deserves an answer its screen can read (PRD US-23).
+        if (moving.Select(slot => slot.StartsAt).Distinct().Count() != moving.Count)
+        {
+            return ApiProblem.Of(
+                StatusCodes.Status409Conflict, BookingErrorCodes.HoursOverlap);
+        }
+
+        // Grouped by the venue's own day, because a booking that has been run on past midnight
+        // holds hours on two of them, and a day's read model only answers for its own (BR-10).
+        var byDate = moving
+            .Select(slot => PlatformRequirements.BangkokDateAndHour(slot.StartsAt))
+            .GroupBy(when => when.Date)
+            .ToDictionary(day => day.Key, day => day.Select(when => when.Hour).ToArray());
 
         await using var transaction =
             await database.Database.BeginTransactionAsync(cancellationToken);
@@ -332,62 +367,69 @@ internal static class BookingHourEndpoints
             })],
             cancellationToken);
 
-        var day = await ReadDayAsync(database, venueId, date, [courtId], now, cancellationToken);
-        if (!day.Courts.Any(court => court.Id == courtId))
+        foreach (var (date, hours) in byDate)
         {
-            return ApiProblem.Of(StatusCodes.Status400BadRequest, BookingErrorCodes.CourtUnknown);
-        }
+            var day = await ReadDayAsync(
+                database, venueId, date, [courtId], now, cancellationToken);
+            if (!day.Courts.Any(court => court.Id == courtId))
+            {
+                return ApiProblem.Of(
+                    StatusCodes.Status400BadRequest, BookingErrorCodes.CourtUnknown);
+            }
 
-        if (hours.Any(hour => day.Status(courtId, hour) != HourStatus.Free))
-        {
-            return ApiProblem.Of(
-                StatusCodes.Status409Conflict,
-                BookingErrorCodes.CourtNotFree,
-                "courts",
-                FreeCourts(day, hours, priced: false));
+            if (hours.Any(hour => day.Status(courtId, hour) != HourStatus.Free))
+            {
+                return ApiProblem.Of(
+                    StatusCodes.Status409Conflict,
+                    BookingErrorCodes.CourtNotFree,
+                    "courts",
+                    FreeCourts(day, hours, priced: false));
+            }
         }
 
         var changedAt = now;
 
-        foreach (var slot in moving)
-        {
-            // The row as it was read, or nothing: a booking cancelled a moment ago has let go of
-            // these hours, and moving a released hour would claim a court for nobody.
-            var moved = await database.BookingSlots
-                .Where(candidate =>
-                    candidate.Id == slot.Id
-                    && candidate.CourtId == slot.CourtId
-                    && candidate.IsActive)
-                .ExecuteUpdateAsync(
-                    set => set.SetProperty(candidate => candidate.CourtId, courtId),
-                    cancellationToken);
-
-            if (moved == 0)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                return ApiProblem.Of(
-                    StatusCodes.Status409Conflict, BookingErrorCodes.ChangedMeanwhile);
-            }
-
-            database.BookingSlotChanges.Add(new BookingSlotChange
-            {
-                BookingId = bookingId,
-                What = HoursChange.Moved,
-                FromCourtId = slot.CourtId,
-                ToCourtId = courtId,
-                StartsAt = slot.StartsAt,
-                BahtPerHour = slot.BahtPerHour,
-                ChangedAt = changedAt,
-                ChangedByUserId = membership.UserId,
-            });
-        }
-
         try
         {
+            foreach (var slot in moving)
+            {
+                // The row as it was read, or nothing: a booking cancelled a moment ago has let go
+                // of these hours, and moving a released hour would claim a court for nobody.
+                var moved = await database.BookingSlots
+                    .Where(candidate =>
+                        candidate.Id == slot.Id
+                        && candidate.CourtId == slot.CourtId
+                        && candidate.IsActive)
+                    .ExecuteUpdateAsync(
+                        set => set.SetProperty(candidate => candidate.CourtId, courtId),
+                        cancellationToken);
+
+                if (moved == 0)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    return ApiProblem.Of(
+                        StatusCodes.Status409Conflict, BookingErrorCodes.ChangedMeanwhile);
+                }
+
+                database.BookingSlotChanges.Add(new BookingSlotChange
+                {
+                    BookingId = bookingId,
+                    What = HoursChange.Moved,
+                    FromCourtId = slot.CourtId,
+                    ToCourtId = courtId,
+                    StartsAt = slot.StartsAt,
+                    BahtPerHour = slot.BahtPerHour,
+                    ChangedAt = changedAt,
+                    ChangedByUserId = membership.UserId,
+                });
+            }
+
             await database.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException failure)
-            when (failure.InnerException is PostgresException { SqlState: ExclusionViolation })
+        // The day read above is advice; the constraint is the answer (PRD BR-04). Both shapes,
+        // because the statement that can violate it is an ExecuteUpdate — which runs on its own
+        // and raises the Postgres error bare, not wrapped the way SaveChanges wraps one.
+        catch (Exception failure) when (IsAlreadyTaken(failure))
         {
             database.ChangeTracker.Clear();
             await transaction.RollbackAsync(cancellationToken);
@@ -453,6 +495,19 @@ internal static class BookingHourEndpoints
                     // flooded is the venue's problem to solve, not the booker's to pay for.
                     priced ? hours.Sum(hour => day.Price(court.Id, hour) ?? 0m) : null)),
         ];
+
+    /// <summary>
+    /// Whether this failure is the no-overlap constraint refusing a row (PRD BR-04). It arrives
+    /// in two shapes: wrapped, from <c>SaveChanges</c>, and bare, from an <c>ExecuteUpdate</c>,
+    /// which runs a statement of its own.
+    /// </summary>
+    private static bool IsAlreadyTaken(Exception failure) => failure switch
+    {
+        PostgresException { SqlState: ExclusionViolation } => true,
+        DbUpdateException { InnerException: PostgresException { SqlState: ExclusionViolation } } =>
+            true,
+        _ => false,
+    };
 
     /// <summary>Postgres raises this when the no-overlap constraint refuses a row (PRD BR-04).</summary>
     private const string ExclusionViolation = "23P01";

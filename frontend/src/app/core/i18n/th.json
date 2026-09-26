@@ -141,6 +141,7 @@
   "error.booking.already_holding": "คุณมีรายการที่รอชำระเงินอยู่แล้ว",
   "error.booking.hours_cannot_change": "การจองนี้เปลี่ยนชั่วโมงไม่ได้แล้ว",
   "error.booking.hour_taken": "ชั่วโมงนั้นมีคนจองแล้วบนคอร์ทนี้",
+  "error.booking.hours_overlap": "การจองนี้ใช้สองคอร์ทในชั่วโมงเดียวกัน ย้ายไปรวมคอร์ทเดียวไม่ได้",
   "error.booking.court_not_free": "คอร์ทนั้นไม่ว่างตลอดชั่วโมงที่จะย้าย",
   "error.booking.already_on_that_court": "อยู่บนคอร์ทนั้นอยู่แล้ว",
   "error.booking.court_unknown": "ไม่พบคอร์ทนี้ในสนาม",

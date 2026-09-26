@@ -86,6 +86,30 @@ public sealed class BookingHoursTests(ApiTestFixture api) : IClassFixture<ApiTes
         Assert.Equal(400m, paid.TakenBaht);
     }
 
+    /// <summary>
+    /// Running an evening on must not change what the venue is recorded as holding. The share it
+    /// gives back is of the price, so a booking whose held amount was forgotten would owe nothing
+    /// at all — the shape of the bug that refunded four times over (CLAUDE.md, US-28).
+    /// </summary>
+    [Fact]
+    public async Task Adding_an_hour_does_not_change_what_the_venue_is_holding()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync(baht: 400m);
+        var (booker, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        await owner.PostAsync($"/api/venues/{venue.Id}/slip-queue/{booking.Id}/confirm", null);
+
+        await Extend(owner, venue.Id, booking.Id);
+
+        // Far enough out that the terms give the whole price back, whatever hour this runs at.
+        await scenario.StartsInAsync(booking.Id, TimeSpan.FromDays(2));
+
+        var cancelled = await VenueScenario.ReadAsync<BookingResponse>(
+            await booker.PostAsync($"/api/bookings/{booking.Id}/cancel", null));
+
+        // What they paid, and not the price of an hour nobody paid for.
+        Assert.Equal(400m, cancelled.RefundDueBaht);
+    }
+
     [Fact]
     public async Task An_hour_somebody_else_holds_is_refused_with_the_courts_that_are_free()
     {
@@ -240,6 +264,85 @@ public sealed class BookingHoursTests(ApiTestFixture api) : IClassFixture<ApiTes
 
         // Moving does not change what anything costs, so the offer carries no amount.
         Assert.Null(Assert.Single(problem.Courts).Baht);
+    }
+
+    /// <summary>
+    /// A booking can hold two courts in the same hour, and one court cannot hold both. The answer
+    /// has to be one the screen can read, not a 500 (PRD US-23).
+    /// </summary>
+    [Fact]
+    public async Task Two_courts_at_once_cannot_be_moved_onto_one()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync(courts: 3);
+        var booker = await scenario.SignedInClientAsync();
+        var booking = await VenueScenario.HoldAsync(
+            booker, venue.Id, Tomorrow, (courts[0], 18), (courts[1], 18));
+        await VenueScenario.UploadAsync(booker, booking.Id, VenueScenario.Jpeg());
+        await owner.PostAsync($"/api/venues/{venue.Id}/slip-queue/{booking.Id}/confirm", null);
+
+        var refused = await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/bookings/{booking.Id}/move", new MoveCourtRequest(courts[2]));
+
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Equal(
+            BookingErrorCodes.HoursOverlap,
+            (await VenueScenario.ReadAsync<OfferedCourtsProblem>(
+                refused, HttpStatusCode.Conflict)).Code);
+
+        // And nothing moved: the booking is where it was.
+        var day = await VenueScenario.ReadAsync<VenueBookingResponse[]>(
+            await owner.GetAsync($"/api/venues/{venue.Id}/bookings?date={Tomorrow:yyyy-MM-dd}"));
+        var row = day.Single(one => one.BookingId == booking.Id);
+        Assert.Equal(
+            [courts[0], courts[1]],
+            row.Slots.Select(slot => slot.CourtId).Order());
+    }
+
+    /// <summary>A booking of another venue is not this venue's to change (PDPA, PRD US-13).</summary>
+    [Fact]
+    public async Task A_booking_of_another_venue_is_not_found_here()
+    {
+        var (mine, venue, courts) = await scenario.BookableVenueAsync(courts: 2);
+        var (theirs, other, otherCourts) = await scenario.BookableVenueAsync();
+        var (_, elsewhere) = await scenario.ConfirmedBookingAsync(
+            theirs, other.Id, otherCourts[0], 18);
+
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await mine.GetAsync(
+                $"/api/venues/{venue.Id}/bookings/{elsewhere.Id}/hours")).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await mine.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/bookings/{elsewhere.Id}/move",
+                new MoveCourtRequest(courts[1]))).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await mine.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/bookings/{elsewhere.Id}/extend",
+                new ExtendBookingRequest(null))).StatusCode);
+    }
+
+    /// <summary>A court of another venue is not somewhere this booking can be sent.</summary>
+    [Fact]
+    public async Task A_court_of_another_venue_is_no_court_at_all()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, __, elsewhere) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.ConfirmedBookingAsync(owner, venue.Id, courts[0], 18);
+
+        foreach (var door in new[] { "extend", "move" })
+        {
+            var refused = await owner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/bookings/{booking.Id}/{door}",
+                new MoveCourtRequest(elsewhere[0]));
+
+            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+            Assert.Equal(
+                BookingErrorCodes.CourtUnknown,
+                (await VenueScenario.ReadAsync<OfferedCourtsProblem>(
+                    refused, HttpStatusCode.BadRequest)).Code);
+        }
     }
 
     [Fact]

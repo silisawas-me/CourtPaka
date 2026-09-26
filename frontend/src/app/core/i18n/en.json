@@ -141,6 +141,7 @@
   "error.booking.already_holding": "You already have a booking waiting to be paid for.",
   "error.booking.hours_cannot_change": "This booking's hours cannot be changed any more.",
   "error.booking.hour_taken": "That hour is already booked on this court.",
+  "error.booking.hours_overlap": "This booking uses two courts in the same hour, so one court cannot take them all.",
   "error.booking.court_not_free": "That court is not free for every hour being moved.",
   "error.booking.already_on_that_court": "They are already on that court.",
   "error.booking.court_unknown": "The venue has no such court.",

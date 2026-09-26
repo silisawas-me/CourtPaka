@@ -169,6 +169,12 @@ public static class BookingErrorCodes
     /// <summary>They are already on it, so there is nothing to move.</summary>
     public const string AlreadyOnThatCourt = "booking.already_on_that_court";
 
+    /// <summary>
+    /// The booking holds two courts at the same hour, and one court cannot hold both. Moving all
+    /// of its hours to one court is not something a court could do (PRD US-29).
+    /// </summary>
+    public const string HoursOverlap = "booking.hours_overlap";
+
     /// <summary>No court of this venue has that id.</summary>
     public const string CourtUnknown = "booking.court_unknown";
 
