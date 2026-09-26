@@ -6,7 +6,7 @@ import {
   provideBrowserGlobalErrorListeners,
   isDevMode,
 } from '@angular/core';
-import { provideRouter, withComponentInputBinding } from '@angular/router';
+import { provideRouter, withComponentInputBinding, withInMemoryScrolling } from '@angular/router';
 import { AuthService } from './core/auth/auth.service';
 import { DEFAULT_LANGUAGE } from './core/i18n/locales';
 import { TranslationService } from './core/i18n/translation.service';
@@ -38,7 +38,13 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     // Route parameters arrive as component inputs, so pages do not read route snapshots.
-    provideRouter(routes, withComponentInputBinding()),
+    // A URL with a fragment scrolls to it, which is what makes the way-finding on a long page of
+    // settings work and what makes such a link worth sending to somebody.
+    provideRouter(
+      routes,
+      withComponentInputBinding(),
+      withInMemoryScrolling({ anchorScrolling: 'enabled' }),
+    ),
     provideHttpClient(withFetch(), withInterceptors([apiErrorInterceptor])),
     // A session cookie may already exist. Its answer is asked for at boot but not waited for:
     // waiting held every page — the public court grid too — behind a round trip, which the grid's

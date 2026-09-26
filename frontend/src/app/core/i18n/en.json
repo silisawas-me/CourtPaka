@@ -679,5 +679,7 @@
   "board.needs.takeMoney": "Take money",
   "board.needs.settle": "Say if it arrived",
   "board.needs.refund": "Send back",
-  "board.needs.more": "Waiting as well:"
+  "board.needs.more": "Waiting as well:",
+  "settings.courts.outOfUse": "Out of use",
+  "settings.sections": "On this page"
 }
