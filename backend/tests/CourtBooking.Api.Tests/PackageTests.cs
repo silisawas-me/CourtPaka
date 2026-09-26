@@ -451,6 +451,90 @@ public sealed class PackageTests(ApiTestFixture api)
         Assert.Single(all, one => one.PackageId == live.PackageId);
     }
 
+    /// <summary>
+    /// A booking that gave its hours back kept less, and the venue earned less from it. Without
+    /// that the hours go back to be spent — and earned — again while this booking goes on being
+    /// counted for all of them (PRD US-31, ⚠️ S-27).
+    /// </summary>
+    [Fact]
+    public async Task A_cancelled_booking_stops_earning_the_hours_it_gave_back()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var offer = await OfferAsync(owner, venue.Id);
+        var package = await SellAsync(owner, venue.Id, offer.TypeId);
+
+        var before = await DashboardAsync(owner, venue.Id);
+        var booking = await AtCounterAsync(owner, venue.Id, courts[0], 7, 2, package.PackageId);
+
+        // Let go before it is played, which is when the hours can still come back (PRD 6.1).
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await owner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/bookings/{booking.BookingId}/cancel",
+                new VenueCancelRequest(
+                    nameof(CancellationReason.VenueInitiated), null, "ปิดคอร์ท"))).StatusCode);
+
+        // Every hour went back, so the booking kept nothing — and earned nothing. A cancelled
+        // booking is counted on the day it would have been played, so this is the number that
+        // would otherwise have gone on standing while the hours were spent again.
+        Assert.Equal(10, (await OneAsync(owner, venue.Id, package.PackageId)).HoursLeft);
+        Assert.Equal(before.StaffBaht, (await DashboardAsync(owner, venue.Id)).StaffBaht);
+    }
+
+    /// <summary>
+    /// Hours coming back to a package that was already written off would be hours nobody could
+    /// spend and nobody was told about. The write-off is undone so the sweep does it again, with
+    /// a row saying these hours ran out too (⚠️ S-28).
+    /// </summary>
+    [Fact]
+    public async Task Hours_given_back_after_it_ran_out_are_written_off_again_rather_than_lost()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var offer = await OfferAsync(owner, venue.Id);
+        var package = await SellAsync(owner, venue.Id, offer.TypeId);
+        var booking = await AtCounterAsync(owner, venue.Id, courts[0], 9, 2, package.PackageId);
+
+        await RanOutAsync(package.PackageId);
+        await ExpireAsync();
+        Assert.Equal(0, (await OneAsync(owner, venue.Id, package.PackageId)).HoursLeft);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await owner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/bookings/{booking.BookingId}/cancel",
+                new VenueCancelRequest(
+                    nameof(CancellationReason.VenueInitiated), null, "ปิดคอร์ท"))).StatusCode);
+
+        await ExpireAsync();
+
+        var after = await OneAsync(owner, venue.Id, package.PackageId);
+        Assert.Equal(0, after.HoursLeft);
+        Assert.NotNull(after.ExpiredAt);
+
+        // The ledger tells the whole story: the hours came back, and then they ran out.
+        Assert.Equal(2, after.Moves.Count(one => one.Move == nameof(PackageMove.Expired)));
+        Assert.Contains(after.Moves, one => one.Move == nameof(PackageMove.GivenBack));
+    }
+
+    /// <summary>
+    /// Paying with hours is a decision about money, and the booking's own history says who made
+    /// it — which is the first thing a complaint asks (PRD 6.1, US-26).
+    /// </summary>
+    [Fact]
+    public async Task Paying_with_hours_is_written_into_the_bookings_history()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var offer = await OfferAsync(owner, venue.Id);
+        var package = await SellAsync(owner, venue.Id, offer.TypeId);
+        var booking = await AtCounterAsync(owner, venue.Id, courts[0], 11, 1, package.PackageId);
+
+        // A counter sale on hours is settled as it is written, so its history is the one row that
+        // made it — and the venue can still read who took the hours off the package.
+        var moves = (await OneAsync(owner, venue.Id, package.PackageId)).Moves;
+        Assert.Contains(
+            moves, one => one.Move == nameof(PackageMove.Used) && one.BookingId == booking.BookingId);
+    }
+
     private async Task<PackageTypeResponse> OfferAsync(HttpClient owner, Guid venueId) =>
         await VenueScenario.ReadAsync<PackageTypeResponse>(
             await owner.PostAsJsonAsync(

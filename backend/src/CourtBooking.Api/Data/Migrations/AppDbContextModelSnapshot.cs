@@ -150,7 +150,7 @@ namespace CourtBooking.Api.Data.Migrations
                         {
                             t.HasCheckConstraint("CK_Bookings_BookerOrCustomer", "(\"Channel\" = 1 AND \"BookerUserId\" IS NOT NULL AND \"CustomerName\" IS NULL) OR (\"Channel\" = 2 AND \"BookerUserId\" IS NULL AND \"CustomerName\" IS NOT NULL AND (\"PaidAtCounter\" IS NOT NULL OR \"SeriesId\" IS NOT NULL OR \"PackageId\" IS NOT NULL))");
 
-                            t.HasCheckConstraint("CK_Bookings_PackagePaysForItWhole", "(\"PackageId\" IS NULL AND \"PackageHours\" = 0 AND \"PackageBaht\" = 0) OR (\"PackageId\" IS NOT NULL AND \"PackageHours\" > 0 AND \"PackageBaht\" > 0)");
+                            t.HasCheckConstraint("CK_Bookings_PackagePaysForItWhole", "(\"PackageId\" IS NULL AND \"PackageHours\" = 0 AND \"PackageBaht\" = 0) OR (\"PackageId\" IS NOT NULL AND \"PackageHours\" > 0 AND \"PackageBaht\" >= 0)");
                         });
                 });
 

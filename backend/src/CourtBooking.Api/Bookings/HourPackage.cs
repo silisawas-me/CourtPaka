@@ -159,6 +159,26 @@ public static class Packages
     /// </summary>
     public const int FinishedShown = 10;
 
+    /// <summary>
+    /// Whether a package's hours can still be spent: it has some, nobody has written them off,
+    /// and the day it was good until has not passed. One predicate, because the counter offering
+    /// a package and the server accepting one have to agree, and the screen that guessed at it
+    /// offered packages the server then refused.
+    /// </summary>
+    public static bool Live(int hoursLeft, DateTimeOffset? expiredAt, DateOnly expiresOn, DateOnly today) =>
+        hoursLeft > 0 && expiredAt is null && expiresOn >= today;
+
+    /// <summary>
+    /// Whether somebody should be rung about it: still live, and not much longer.
+    /// </summary>
+    public static bool RunningOut(
+        int hoursLeft,
+        DateTimeOffset? expiredAt,
+        DateOnly expiresOn,
+        DateOnly today) =>
+        Live(hoursLeft, expiredAt, expiresOn, today)
+        && expiresOn <= today.AddDays(RunningOutWithinDays);
+
     /// <summary>Why this offer cannot go on the board, or null.</summary>
     public static string? Refusal(string? name, int hours, decimal priceBaht, int validForDays)
     {
@@ -195,6 +215,15 @@ public static class Packages
     /// <summary>What a run of hours off this package is worth.</summary>
     public static decimal Worth(decimal priceBaht, int hoursSold, int hours) =>
         decimal.Round(PerHour(priceBaht, hoursSold) * hours, 2, MidpointRounding.AwayFromZero);
+
+    /// <summary>
+    /// What a booking kept of the hours it spent, once some came back. It is the value the venue
+    /// actually earned from it, and it is why a cancelled package booking does not go on earning
+    /// the whole of what it once took: the hours it gave back are on the ledger to be spent
+    /// again, and spent hours are only earned once (PRD US-31, ⚠️ S-27).
+    /// </summary>
+    public static decimal Kept(decimal priceBaht, int hoursSold, int hoursUsed, int hoursBack) =>
+        Worth(priceBaht, hoursSold, Math.Max(0, hoursUsed - hoursBack));
 
     /// <summary>
     /// How many hours come back when a booking they paid for is cancelled (PRD US-31, BR-06). The

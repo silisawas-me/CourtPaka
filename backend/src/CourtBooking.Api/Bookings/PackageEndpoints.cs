@@ -55,20 +55,14 @@ public static class PackageEndpoints
         AppDbContext database,
         CancellationToken cancellationToken) =>
         TypedResults.Ok(
-            await database.PackageTypes
+            (await database.PackageTypes
                 .AsNoTracking()
                 .Where(one => one.VenueId == venueId)
                 .OrderBy(one => one.WithdrawnAt != null)
                 .ThenBy(one => one.PriceBaht)
-                .Select(one => new PackageTypeResponse(
-                    one.Id,
-                    one.Name,
-                    one.Hours,
-                    one.PriceBaht,
-                    Packages.PerHour(one.PriceBaht, one.Hours),
-                    one.ValidForDays,
-                    one.WithdrawnAt))
-                .ToArrayAsync(cancellationToken));
+                .ToListAsync(cancellationToken))
+            .Select(Drawn)
+            .ToArray());
 
     /// <summary>Puts an offer on the board.</summary>
     private static async Task<Results<Created<PackageTypeResponse>, ProblemHttpResult>> OfferAsync(
@@ -176,10 +170,12 @@ public static class PackageEndpoints
     {
         var today = PlatformRequirements.BangkokToday(timeProvider);
 
+        // The same question Packages.Live asks, written where the database can answer it.
         var live = await SoldRowsAsync(
             database.HourPackages.Where(one =>
                 one.VenueId == venueId
                 && one.ExpiredAt == null
+                && one.ExpiresOn >= today
                 && one.Entries.Sum(entry => (int?)entry.Hours) > 0),
             today,
             cancellationToken);
@@ -189,6 +185,7 @@ public static class PackageEndpoints
                 .Where(one =>
                     one.VenueId == venueId
                     && (one.ExpiredAt != null
+                        || one.ExpiresOn < today
                         || (one.Entries.Sum(entry => (int?)entry.Hours) ?? 0) <= 0))
                 .OrderByDescending(one => one.SoldAt)
                 .Take(Packages.FinishedShown),
@@ -219,21 +216,13 @@ public static class PackageEndpoints
             return ApiProblem.Of(StatusCodes.Status403Forbidden, VenueErrorCodes.NotApproved);
         }
 
-        var name = request.CustomerName?.Trim();
-        if (string.IsNullOrEmpty(name) || name.Length > Booking.CustomerNameMaxLength)
+        if (Booking.CustomerRefusal(request.CustomerName, request.CustomerPhone) is { } wrongWho)
         {
-            return ApiProblem.Of(
-                StatusCodes.Status400BadRequest, BookingErrorCodes.InvalidCustomerName);
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, wrongWho);
         }
 
+        var name = request.CustomerName!.Trim();
         var phone = request.CustomerPhone?.Trim();
-        if (!string.IsNullOrEmpty(phone)
-            && (phone.Length > Booking.CustomerPhoneMaxLength
-                || !phone.All(letter => char.IsAsciiDigit(letter) || letter is '+' or '-' or ' ')))
-        {
-            return ApiProblem.Of(
-                StatusCodes.Status400BadRequest, BookingErrorCodes.InvalidCustomerPhone);
-        }
 
         // The names and nothing else, the way every other door here reads an enum.
         if (request.PaidBy is not { } paidBy
@@ -372,31 +361,14 @@ public static class PackageEndpoints
                 StatusCodes.Status409Conflict, PackageErrorCodes.AlreadyPaidFor);
         }
 
-        var package = await database.HourPackages
-            .AsNoTracking()
-            .SingleOrDefaultAsync(
-                one => one.Id == request.PackageId && one.VenueId == venueId, cancellationToken);
+        var hours = booking.Slots.Count;
+        var (package, refused) = await ClaimAsync(
+            database, venueId, request.PackageId, hours, today, cancellationToken);
 
         if (package is null)
         {
             await transaction.RollbackAsync(cancellationToken);
-            return ApiProblem.Of(StatusCodes.Status404NotFound, PackageErrorCodes.NotFound);
-        }
-
-        if (package.ExpiresOn < today || package.ExpiredAt is not null)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            return ApiProblem.Of(StatusCodes.Status409Conflict, PackageErrorCodes.RunOut);
-        }
-
-        var hours = booking.Slots.Count;
-        var left = await BalanceAsync(database, package.Id, cancellationToken);
-
-        if (left < hours)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            return ApiProblem.Of(
-                StatusCodes.Status409Conflict, PackageErrorCodes.NotEnoughHours);
+            return Refused(refused);
         }
 
         var worth = Packages.Worth(package.PriceBaht, package.HoursSold, hours);
@@ -416,7 +388,10 @@ public static class PackageEndpoints
                     .SetProperty(candidate => candidate.PackageId, package.Id)
                     .SetProperty(candidate => candidate.PackageHours, hours)
                     .SetProperty(candidate => candidate.PackageBaht, worth)
-                    .SetProperty(candidate => candidate.PaymentState, PaymentState.Received),
+                    .SetProperty(candidate => candidate.PaymentState, PaymentState.Received)
+                    // Where the clock has already moved it on, the row is made to say so too —
+                    // otherwise the next writer re-derives the same step and records it twice.
+                    .SetProperty(candidate => candidate.Status, status),
                 cancellationToken);
 
         if (paid == 0)
@@ -426,23 +401,21 @@ public static class PackageEndpoints
                 StatusCodes.Status409Conflict, BookingErrorCodes.ChangedMeanwhile);
         }
 
-        database.PackageEntries.Add(new PackageEntry
-        {
-            PackageId = package.Id,
-            Hours = -hours,
-            Move = PackageMove.Used,
-            BookingId = bookingId,
-            At = now,
-            ByUserId = membership.UserId,
-        });
+        SpendHours(database, package.Id, bookingId, hours, membership.UserId, now);
 
-        // Paying for a booking in full settles the booking as well as its money, the same as the
-        // last of the cash arriving does (PRD US-26).
+        // The step the clock took, written down before the one somebody took, so the history
+        // still reads as a chain (PRD 6.1).
         if (status != stored)
         {
             database.BookingStatusChanges.Add(
                 BookingTransitions.Record(bookingId, stored, status, null, now));
         }
+
+        // Who decided this booking was paid for, which is the first thing a complaint asks. Every
+        // other door that answers for money writes one of these (PRD US-26, US-13).
+        database.BookingStatusChanges.Add(
+            BookingTransitions.Settled(
+                bookingId, status, PaymentState.Received, membership.UserId, now));
 
         await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -467,12 +440,13 @@ public static class PackageEndpoints
     /// Called from inside the transaction that ends the booking, so the hours and the ending are
     /// one write: a booking cancelled with its hours left spent is a customer out of pocket.
     /// </summary>
-    internal static void GiveHoursBack(
+    internal static async Task GiveHoursBackAsync(
         AppDbContext database,
         Booking booking,
         int refundPercent,
         Guid? byUserId,
-        DateTimeOffset at)
+        DateTimeOffset at,
+        CancellationToken cancellationToken)
     {
         if (booking.PackageId is not { } packageId || booking.PackageHours <= 0)
         {
@@ -494,7 +468,100 @@ public static class PackageEndpoints
             At = at,
             ByUserId = byUserId,
         });
+
+        // What the booking kept is what the venue earned from it. Without this the hours go back
+        // to be spent — and earned — again while this booking goes on being counted for all of
+        // them, so one package's money could be recognised over and over (PRD US-31, ⚠️ S-27).
+        var package = await database.HourPackages
+            .AsNoTracking()
+            .Where(one => one.Id == packageId)
+            .Select(one => new { one.PriceBaht, one.HoursSold, one.ExpiredAt })
+            .SingleAsync(cancellationToken);
+
+        var kept = Packages.Kept(
+            package.PriceBaht, package.HoursSold, booking.PackageHours, hours);
+
+        await database.Bookings
+            .Where(one => one.Id == booking.Id)
+            .ExecuteUpdateAsync(
+                set => set.SetProperty(one => one.PackageBaht, kept),
+                cancellationToken);
+
+        // Hours coming back to a package that has already been written off would be hours nobody
+        // could ever spend and nobody was told about. The write-off is undone so the caretaker
+        // does it again — properly, with a row saying these hours expired too (⚠️ S-28).
+        if (package.ExpiredAt is not null)
+        {
+            await database.HourPackages
+                .Where(one => one.Id == packageId)
+                .ExecuteUpdateAsync(
+                    set => set.SetProperty(one => one.ExpiredAt, (DateTimeOffset?)null),
+                    cancellationToken);
+        }
     }
+
+    /// <summary>
+    /// Takes a package's hours for a booking, or says why it could not (PRD US-31).
+    ///
+    /// It queues on the package before it reads what is left, the way everything that reads money
+    /// and then writes from the reading has to (CLAUDE.md, PRD US-26): two tills spending the same
+    /// package on two different bookings take two different booking locks and never meet, and both
+    /// would read the same hours and both spend them. The caller has to be inside a transaction —
+    /// the lock is held to the end of it, and a reading acted on outside it buys nothing.
+    /// </summary>
+    /// <returns>The package once its hours are claimed, or the code it was refused with.</returns>
+    internal static async Task<(HourPackage? Package, string? Refusal)> ClaimAsync(
+        AppDbContext database,
+        Guid venueId,
+        Guid packageId,
+        int hours,
+        DateOnly today,
+        CancellationToken cancellationToken)
+    {
+        await database.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({packageId.ToString()}, 0))",
+            cancellationToken);
+
+        var package = await database.HourPackages
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                one => one.Id == packageId && one.VenueId == venueId, cancellationToken);
+
+        if (package is null)
+        {
+            return (null, PackageErrorCodes.NotFound);
+        }
+
+        var left = await BalanceAsync(database, packageId, cancellationToken);
+
+        if (!Packages.Live(left, package.ExpiredAt, package.ExpiresOn, today))
+        {
+            return (null, PackageErrorCodes.RunOut);
+        }
+
+        return left < hours ? (null, PackageErrorCodes.NotEnoughHours) : (package, null);
+    }
+
+    /// <summary>
+    /// Writes the hours off a package for a booking. Added to the caller's change tracker, not
+    /// saved: it belongs to whatever transaction claimed them (<see cref="ClaimAsync"/>).
+    /// </summary>
+    internal static void SpendHours(
+        AppDbContext database,
+        Guid packageId,
+        Guid bookingId,
+        int hours,
+        Guid byUserId,
+        DateTimeOffset at) =>
+        database.PackageEntries.Add(new PackageEntry
+        {
+            PackageId = packageId,
+            Hours = -hours,
+            Move = PackageMove.Used,
+            BookingId = bookingId,
+            At = at,
+            ByUserId = byUserId,
+        });
 
     /// <summary>What a package has left: the sum of its movements, and nothing else.</summary>
     internal static async Task<int> BalanceAsync(
@@ -553,17 +620,32 @@ public static class PackageEndpoints
                 Packages.PerHour(one.Package.PriceBaht, one.Package.HoursSold),
                 one.Left,
                 one.Package.ExpiresOn,
+                // Whether its hours can still be spent — the same answer the counter draws its
+                // list from, so the screen never offers one the server would refuse.
+                Packages.Live(
+                    one.Left, one.Package.ExpiredAt, one.Package.ExpiresOn, today),
                 // Only what somebody can still act on: hours that have run out are not a call to
                 // make, and a package spent to nothing is not either.
-                one.Left > 0
-                    && one.Package.ExpiredAt is null
-                    && one.Package.ExpiresOn >= today
-                    && one.Package.ExpiresOn <= today.AddDays(Packages.RunningOutWithinDays),
+                Packages.RunningOut(
+                    one.Left, one.Package.ExpiredAt, one.Package.ExpiresOn, today),
                 one.Package.ExpiredAt,
                 one.Package.SoldAt,
                 [.. one.Moves])),
         ];
     }
+
+    /// <summary>
+    /// Which answer belongs to which refusal: a package or an offer this venue does not have is
+    /// not here at all, and the rest is the hours having moved on since the screen last looked.
+    /// </summary>
+    private static ProblemHttpResult Refused(string? code) => code switch
+    {
+        PackageErrorCodes.NotFound or PackageErrorCodes.TypeUnknown => ApiProblem.Of(
+            StatusCodes.Status404NotFound, code),
+
+        _ => ApiProblem.Of(
+            StatusCodes.Status409Conflict, code ?? PackageErrorCodes.RunOut),
+    };
 
     private static PackageTypeResponse Drawn(PackageType offer) =>
         new(

@@ -28,6 +28,8 @@ export interface VenueBookingActions {
   playedAfterAll: boolean;
   /** Taking money for it at the desk, in any form (PRD US-26). */
   takeMoney: boolean;
+  /** Settling it with hours somebody bought earlier instead (PRD US-31). */
+  payWithPackage: boolean;
   /** Selling them the hour they would run on into (PRD US-29). */
   extend: boolean;
   /** Putting the hours they have not played on another court (PRD US-29). */

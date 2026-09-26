@@ -106,6 +106,14 @@ public sealed class Booking
     public decimal PackageBaht { get; set; }
 
     /// <summary>
+    /// What the hours that paid for this booking were worth, or null where none did (PRD US-31).
+    /// The one way to ask "was this paid for with hours", so nothing has to decide that an amount
+    /// of zero means no package — which it does not: a cancelled one that gave every hour back
+    /// kept nothing and is still a package booking.
+    /// </summary>
+    public decimal? PaidWithHours => PackageId is null ? null : PackageBaht;
+
+    /// <summary>
     /// The standing arrangement this booking came from, or null (PRD US-30). It is the only thread
     /// between the week and the arrangement; everything else about the booking is ordinary, which
     /// is the point — a group's week is cancelled, moved and paid for through the same doors as
@@ -115,6 +123,30 @@ public sealed class Booking
 
     public const int CustomerNameMaxLength = 200;
     public const int CustomerPhoneMaxLength = 20;
+
+    /// <summary>
+    /// Why this is not somebody a venue can write a booking or a package for, or null. One place,
+    /// because the counter, a standing arrangement and a package sale all ask it and all answer
+    /// with the same two codes (PRD US-13, US-30, US-31).
+    /// </summary>
+    public static string? CustomerRefusal(string? name, string? phone)
+    {
+        var who = name?.Trim();
+        if (string.IsNullOrEmpty(who) || who.Length > CustomerNameMaxLength)
+        {
+            return BookingErrorCodes.InvalidCustomerName;
+        }
+
+        var number = phone?.Trim();
+
+        // Digits and the punctuation people write numbers with. Not validated as a Thai number:
+        // the venue writes down what the customer said, and it is theirs to ring.
+        return !string.IsNullOrEmpty(number)
+            && (number.Length > CustomerPhoneMaxLength
+                || !number.All(letter => char.IsAsciiDigit(letter) || letter is '+' or '-' or ' '))
+            ? BookingErrorCodes.InvalidCustomerPhone
+            : null;
+    }
 
     public BookingStatus Status { get; set; } = BookingStatus.Held;
 

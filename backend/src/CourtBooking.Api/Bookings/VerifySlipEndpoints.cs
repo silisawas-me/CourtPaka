@@ -214,7 +214,8 @@ public static class VerifySlipEndpoints
             {
                 candidate.TotalBaht,
                 candidate.DepositBaht,
-                candidate.PackageBaht,
+                // Null where no package paid for it; zero is a different answer (PRD US-31).
+                PaidWithHours = candidate.PackageId == null ? (decimal?)null : candidate.PackageBaht,
                 LastHourEndsAt = candidate.Slots.Max(slot => slot.EndsAt),
             })
             .SingleOrDefaultAsync(cancellationToken);
@@ -294,7 +295,7 @@ public static class VerifySlipEndpoints
             refundPercent,
             holding,
             booking.DepositBaht,
-            booking.PackageBaht);
+            booking.PaidWithHours);
 
         // A booking that was turned away stops holding its hours; they go back on sale (PRD 6.1).
         // Before the booking row, not after: that is the order every writer takes these two

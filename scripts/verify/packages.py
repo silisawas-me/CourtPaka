@@ -12,6 +12,7 @@ from harness import (
     BASE,
     OWNER,
     Checks,
+    clear_package_board,
     ensure_bookable,
     open_seeded_venue,
     pick_date,
@@ -39,14 +40,6 @@ def money(page, venue_id):
     return page.request.get(f"{BASE}/api/venues/{venue_id}/money").json()
 
 
-def clear_board(page, venue_id) -> None:
-    """Takes every offer off, so a run starts from a board nobody has written on."""
-    for one in board(page, venue_id):
-        if one["withdrawnAt"] is None:
-            page.request.post(
-                f"{BASE}/api/venues/{venue_id}/packages/types/{one['typeId']}/withdraw")
-
-
 with sync_playwright() as p:
     browser = p.chromium.launch()
     venue_id = seeded_venue_id(browser.new_page())
@@ -54,7 +47,6 @@ with sync_playwright() as p:
 
     page = browser.new_page(viewport={"width": 1280, "height": 900})
     sign_in(page, OWNER)
-    clear_board(page, venue_id)
 
     page.goto(f"{BASE}{open_seeded_venue(page)}")
     page.click("[data-testid=nav-packages]")
@@ -144,12 +136,48 @@ with sync_playwright() as p:
 
     day = page.request.get(
         f"{BASE}/api/venues/{venue_id}/bookings?date={DAY.isoformat()}").json()
+    # The one just made, found by the hour it took: earlier runs leave bookings of the same name
+    # on this day, and cancelling one of those would be cancelling somebody else's check.
     booked = [row for row in day
-              if row["customerName"] == "ก๊วนซื้อชั่วโมง" and row["status"] == "Confirmed"][0]
+              if row["status"] == "Confirmed"
+              and any(slot["courtId"] == court_id and slot["hour"] == hour
+                      for slot in row["slots"])][0]
     check("the booking is confirmed and nobody is asked for money for it",
           booked["can"]["takeMoney"] is False)
 
-    # 5. Letting it go gives the hour back, not money.
+    # 5. A booking the venue is already holding, settled with hours afterwards.
+    # Whichever hour is free now: the one beside it may be somebody else's from an earlier run.
+    free = page.request.get(
+        f"{BASE}/api/venues/{venue_id}/availability?date={DAY.isoformat()}").json()
+    spare_court, spare_hour = next(
+        (court["courtId"], one["hour"])
+        for court in free["courts"]
+        for one in court["hours"]
+        if one["status"] == "Free"
+    )
+
+    standing = page.request.post(
+        f"{BASE}/api/venues/{venue_id}/bookings",
+        data={
+            "slots": [{"courtId": spare_court, "date": DAY.isoformat(), "hour": spare_hour}],
+            "customerName": "ก๊วนที่ยังไม่จ่าย",
+            "customerPhone": None,
+            "paidBy": "Cash",
+        },
+    )
+    check("a second booking is taken at the counter", standing.status == 201)
+
+    # The day is chosen through the picker again: a reload lands on today, which is a different
+    # day with different rows.
+    page.goto(f"{BASE}/venues/{venue_id}/bookings")
+    page.wait_for_selector("[data-testid=sell-at-counter]")
+    pick_date(page, DAY)
+    page.wait_for_selector("[data-testid=day-list]")
+    on_hours = page.locator("[data-testid^=pay-with-package-]")
+    check("a booking that has been paid for is not offered hours as well",
+          on_hours.count() == 0, page)
+
+    # 6. Letting it go gives the hour back, not money.
     page.request.post(
         f"{BASE}/api/venues/{venue_id}/bookings/{booked['bookingId']}/cancel",
         data={"reason": "VenueInitiated", "paymentReceived": None, "note": "ทดสอบ"})
@@ -185,7 +213,7 @@ with sync_playwright() as p:
     check("desk, English", True, page)
 
     # And the venue is left the way the other scripts expect to find it.
-    clear_board(page, venue_id)
+    clear_package_board(page, venue_id)
     page.click("[data-testid=side-language-th]")
     expect(page.locator("html")).to_have_attribute("lang", "th")
 

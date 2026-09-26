@@ -132,18 +132,23 @@ public static class Takings
     /// before deposits were possible was asked for its whole price.
     /// </summary>
     /// <param name="packageBaht">
-    /// What a package's hours paid for this booking (PRD US-31), or zero. Where there is one it is
-    /// the whole answer: the money came in when the package was sold, at what the customer paid
-    /// for an hour then — not at the price on the board the day the hours were spent, which is
-    /// what they chose not to pay. Nothing else is owed, because hours pay instead of money.
+    /// What a package's hours paid for this booking (PRD US-31), or null where no package did.
+    /// Where there is one it is the whole answer: the money came in when the package was sold, at
+    /// what the customer paid for an hour then — not at the price on the board the day the hours
+    /// were spent, which is what they chose not to pay. Nothing else is owed, because hours pay
+    /// instead of money.
+    ///
+    /// Null and zero are different answers. A package booking that was cancelled and gave all of
+    /// its hours back kept nothing, and reading that as "no package" would hand it the whole
+    /// price as money the venue is holding.
     /// </param>
     public static decimal HeldFor(
         PaymentState payment,
         decimal takenBaht,
         decimal askedBaht,
-        decimal packageBaht = 0m) =>
-        packageBaht > 0m
-            ? decimal.Round(packageBaht, 2, MidpointRounding.AwayFromZero)
+        decimal? packageBaht = null) =>
+        packageBaht is { } worth
+            ? Math.Max(0m, decimal.Round(worth, 2, MidpointRounding.AwayFromZero))
             : Math.Max(
                 0m,
                 payment == PaymentState.Received

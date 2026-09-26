@@ -368,6 +368,11 @@ public sealed record VenueBookingActionsResponse(
     bool PlayedAfterAll,
     /// <summary>Taking money for it at the desk, in any form (PRD US-26).</summary>
     bool TakeMoney,
+    /// <summary>
+    /// Settling it with hours somebody bought earlier instead (PRD US-31). Only where nothing has
+    /// been paid against it yet: hours pay instead of money, not alongside it.
+    /// </summary>
+    bool PayWithPackage,
     /// <summary>Selling them the hour they would run on into (PRD US-29).</summary>
     bool Extend,
     /// <summary>Putting the hours they have not played on another court (PRD US-29).</summary>
@@ -569,6 +574,11 @@ public sealed record HourPackageResponse(
     /// <summary>What is left: the sum of the movements, never a number anybody keeps.</summary>
     int HoursLeft,
     DateOnly ExpiresOn,
+    /// <summary>
+    /// Whether its hours can still be spent. The server's own answer, so a screen never offers a
+    /// package the server would then refuse (PRD US-31).
+    /// </summary>
+    bool Live,
     /// <summary>Whether somebody should be rung about it before the hours run out (⚠️ S-28).</summary>
     bool RunningOut,
     /// <summary>When what was left was written off, or null.</summary>

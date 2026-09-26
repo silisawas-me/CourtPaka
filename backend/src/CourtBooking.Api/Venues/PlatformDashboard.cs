@@ -121,7 +121,8 @@ public static class PlatformDashboard
                 booking.TotalBaht,
                 booking.RefundDueBaht,
                 booking.DepositBaht,
-                booking.PackageBaht,
+                // Null where no package paid for it; zero is a different answer (PRD US-31).
+                PaidWithHours = booking.PackageId == null ? (decimal?)null : booking.PackageBaht,
                 // What arrived, which since deposits is not always the price (PRD US-28).
                 Taken = database.PaymentReceipts
                     .Where(receipt => receipt.BookingId == booking.Id)
@@ -159,7 +160,7 @@ public static class PlatformDashboard
                                 booking.PaymentState,
                                 booking.Taken,
                                 booking.DepositBaht,
-                                booking.PackageBaht))
+                                booking.PaidWithHours))
                         - booking.RefundDueBaht));
 
                 return new PlatformVenueFigures(

@@ -412,7 +412,7 @@ public static class VenueBookingEndpoints
             booking.RefundPercent,
             await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken),
             booking.DepositBaht,
-            booking.PackageBaht);
+            booking.PaidWithHours);
 
         var settled = await database.Bookings
             .Where(candidate =>
@@ -611,7 +611,8 @@ public static class VenueBookingEndpoints
         // came in when the package was sold and is not the venue's to send anywhere. Written in
         // this transaction, because a booking cancelled with its hours left spent is a customer
         // out of pocket with nothing on the page to say so.
-        PackageEndpoints.GiveHoursBack(database, booking, offer.RefundPercent, byUserId, now);
+        await PackageEndpoints.GiveHoursBackAsync(
+            database, booking, offer.RefundPercent, byUserId, now, cancellationToken);
 
         await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -706,21 +707,13 @@ public static class VenueBookingEndpoints
             return ApiProblem.Of(StatusCodes.Status403Forbidden, VenueErrorCodes.NotApproved);
         }
 
-        var name = request.CustomerName?.Trim();
-        if (string.IsNullOrEmpty(name) || name.Length > Booking.CustomerNameMaxLength)
+        if (Booking.CustomerRefusal(request.CustomerName, request.CustomerPhone) is { } wrongWho)
         {
-            return ApiProblem.Of(
-                StatusCodes.Status400BadRequest, BookingErrorCodes.InvalidCustomerName);
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, wrongWho);
         }
 
+        var name = request.CustomerName!.Trim();
         var phone = request.CustomerPhone?.Trim();
-        if (!string.IsNullOrEmpty(phone)
-            && (phone.Length > Booking.CustomerPhoneMaxLength
-                || !phone.All(character => char.IsAsciiDigit(character) || character is '+' or '-' or ' ')))
-        {
-            return ApiProblem.Of(
-                StatusCodes.Status400BadRequest, BookingErrorCodes.InvalidCustomerPhone);
-        }
 
         // Hours instead of money (PRD US-31). Where a package is named nothing is going in the
         // till, so there is no way of paying to read.
@@ -735,7 +728,7 @@ public static class VenueBookingEndpoints
                 StatusCodes.Status400BadRequest, BookingErrorCodes.InvalidCounterPayment);
         }
 
-        var paidBy = onHours ? null : request.PaidBy;
+        var paid = onHours ? null : (CounterPayment?)Enum.Parse<CounterPayment>(request.PaidBy!);
         var now = timeProvider.GetUtcNow();
         var slots = request.Slots ?? [];
 
@@ -756,42 +749,20 @@ public static class VenueBookingEndpoints
         var policyId = await BookingEndpoints.InForcePolicyIdAsync(
             database, venueId, cancellationToken);
 
-        // The hours have to be there before the court is put aside, and they have to still be
-        // there when it is: the check and the write are one transaction, taken in the same order
-        // and behind the same lock as every other way of paying (PRD US-26).
+        // Hours somebody bought earlier are read and taken inside the write's own transaction,
+        // under the package's own lock — a balance read before it and acted on after it would let
+        // two tills spend the same hours, and a booking that committed before the hours came off
+        // would be a court given away for nothing (PRD US-31, US-26).
+        var hours = priced.Slots.Length;
         HourPackage? package = null;
-        if (request.PackageId is { } packageId)
-        {
-            package = await database.HourPackages
-                .AsNoTracking()
-                .SingleOrDefaultAsync(
-                    one => one.Id == packageId && one.VenueId == venueId, cancellationToken);
+        string? wrongHours = null;
 
-            if (package is null)
-            {
-                return ApiProblem.Of(StatusCodes.Status404NotFound, PackageErrorCodes.NotFound);
-            }
-
-            if (package.ExpiredAt is not null
-                || package.ExpiresOn < PlatformRequirements.BangkokToday(timeProvider))
-            {
-                return ApiProblem.Of(StatusCodes.Status409Conflict, PackageErrorCodes.RunOut);
-            }
-
-            if (await PackageEndpoints.BalanceAsync(database, package.Id, cancellationToken)
-                < priced.Slots.Length)
-            {
-                return ApiProblem.Of(
-                    StatusCodes.Status409Conflict, PackageErrorCodes.NotEnoughHours);
-            }
-        }
-
-        var booking = package is null
+        var booking = request.PackageId is null
             ? Booking.AtCounter(
                 venueId,
                 name,
                 string.IsNullOrEmpty(phone) ? null : phone,
-                Enum.Parse<CounterPayment>(paidBy!),
+                paid!.Value,
                 policyId,
                 priced.Slots,
                 membership.UserId,
@@ -800,17 +771,56 @@ public static class VenueBookingEndpoints
                 venueId,
                 name,
                 string.IsNullOrEmpty(phone) ? null : phone,
-                package,
-                priced.Slots.Length,
+                // Priced from the package the claim below hands back; until then this is only
+                // the shape of the booking, and nothing has been written.
+                await database.HourPackages
+                    .AsNoTracking()
+                    .SingleAsync(one => one.Id == request.PackageId, cancellationToken),
+                hours,
                 policyId,
                 priced.Slots,
                 membership.UserId,
                 now);
 
-        if (await BookingEndpoints.WriteNewAsync(database, booking, timeProvider, cancellationToken)
-            is { } refused)
+        var written = await BookingEndpoints.WriteNewAsync(
+            database,
+            booking,
+            timeProvider,
+            cancellationToken,
+            request.PackageId is not { } packageId
+                ? null
+                : async inside =>
+                {
+                    var (claimed, refusal) = await PackageEndpoints.ClaimAsync(
+                        database,
+                        venueId,
+                        packageId,
+                        hours,
+                        PlatformRequirements.BangkokToday(timeProvider),
+                        inside);
+
+                    if (claimed is null)
+                    {
+                        wrongHours = refusal;
+                        return refusal;
+                    }
+
+                    package = claimed;
+                    PackageEndpoints.SpendHours(
+                        database, claimed.Id, booking.Id, hours, membership.UserId, now);
+
+                    return null;
+                });
+
+        if (written is { } refused)
         {
-            return ApiProblem.Of(StatusCodes.Status409Conflict, refused);
+            return ApiProblem.Of(
+                wrongHours is null || refused != wrongHours
+                    ? StatusCodes.Status409Conflict
+                    : refused == PackageErrorCodes.NotFound
+                        ? StatusCodes.Status404NotFound
+                        : StatusCodes.Status409Conflict,
+                refused);
         }
 
         if (package is null)
@@ -822,29 +832,15 @@ public static class VenueBookingEndpoints
                 BookingId = booking.Id,
                 VenueId = venueId,
                 AmountBaht = booking.TotalBaht,
-                Method = paidBy == nameof(CounterPayment.Cash)
+                Method = paid == CounterPayment.Cash
                     ? PaymentMethod.Cash
                     : PaymentMethod.PromptPay,
                 ReceivedAt = now,
                 ReceivedByUserId = membership.UserId,
             });
-        }
-        else
-        {
-            // Nothing in the till: the money came in when the package was sold, and a receipt
-            // here would count it a second time on a day it did not arrive (PRD US-31).
-            database.PackageEntries.Add(new PackageEntry
-            {
-                PackageId = package.Id,
-                Hours = -booking.PackageHours,
-                Move = PackageMove.Used,
-                BookingId = booking.Id,
-                At = now,
-                ByUserId = membership.UserId,
-            });
-        }
 
-        await database.SaveChangesAsync(cancellationToken);
+            await database.SaveChangesAsync(cancellationToken);
+        }
 
         AppEvents.For(loggers).LogInformation(
             BookingTransitions.EventName(BookingStatus.Confirmed)
@@ -1025,6 +1021,13 @@ public static class VenueBookingEndpoints
                 .PlayedAfterAllOffer(booking, status, "recorded wrongly", byOwner, now)
                 .Allowed,
             Takings.CanTake(status, booking.PaymentState, outstandingBaht),
+            // Hours instead of money (PRD US-31). The venue's own bookings only, and only while
+            // nothing has been paid against it — the same rule the endpoint keeps, asked here so
+            // the screen draws the button from the server's answer rather than its own.
+            Takings.CanTake(status, booking.PaymentState, outstandingBaht)
+                && booking.Channel == BookingChannel.Staff
+                && booking.PackageId is null
+                && takenBaht == 0m,
             // An hour to run on into, and hours that have not been played yet (PRD US-29). Both
             // are only whether the door is open — which court, and whether one is free, is the
             // hours endpoint's answer, because it depends on the rest of the day.

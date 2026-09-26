@@ -44,10 +44,10 @@ public static class Refunds
     /// existed, and for every one of them it is the whole price (the migration says so).
     /// </param>
     /// <param name="packageBaht">
-    /// What a package's hours paid for this booking (PRD US-31), or zero. Where there is one,
-    /// nothing is owed back in money: what came in was hours, and hours are what go back
-    /// (<see cref="Packages.HoursBack"/>). Handing money back for them would be paying twice for
-    /// something the customer has already been given the use of.
+    /// What a package's hours paid for this booking (PRD US-31), or null where no package did.
+    /// Where there is one, nothing is owed back in money: what came in was hours, and hours are
+    /// what go back (<see cref="Packages.HoursBack"/>). Handing money back for them would be
+    /// paying twice for something the customer has already been given the use of.
     /// </param>
     public static decimal DueFor(
         BookingStatus status,
@@ -56,8 +56,8 @@ public static class Refunds
         int refundPercent,
         decimal takenBaht,
         decimal askedBaht,
-        decimal packageBaht = 0m) =>
-        Endings.Contains(status) && packageBaht <= 0m
+        decimal? packageBaht = null) =>
+        Endings.Contains(status) && packageBaht is null
             ? Owed(Takings.HeldFor(payment, takenBaht, askedBaht), Kept(totalBaht, refundPercent))
             : 0m;
 

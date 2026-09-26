@@ -87,17 +87,24 @@ export class CounterBooking {
    */
   protected readonly packagesWithHours = signal<HourPackage[]>([]);
 
+  /**
+   * How this one is paid for: one of the ways money arrives, or the id of a package whose hours
+   * pay for it instead (PRD US-31). One control, because it is one question — two of them meant
+   * both could read as chosen at once, and every reader had to be told which won.
+   */
   protected readonly form = this.forms.nonNullable.group({
     customerName: ['', [Validators.required, Validators.maxLength(NAME_MAX_LENGTH)]],
     customerPhone: ['', Validators.maxLength(PHONE_MAX_LENGTH)],
-    paidBy: this.forms.nonNullable.control<CounterPayment>('Cash'),
-
-    // Null means money. A package named here is what pays, and how they paid stops being asked.
-    packageId: this.forms.control<string | null>(null),
+    paidBy: this.forms.nonNullable.control<string>('Cash'),
   });
 
   /** Whether hours are paying for this one rather than money. */
-  protected readonly onHours = computed(() => this.form.controls.packageId.value !== null);
+  protected readonly onHours = computed(() =>
+    this.packagesWithHours().some((one) => one.packageId === this.paying()),
+  );
+
+  /** What is currently chosen, as a signal so the total above it can follow. */
+  private readonly paying = signal<string>('Cash');
 
   /** What the picks come to, from the prices the grid was drawn with. The server charges its own. */
   protected readonly total = computed(() => {
@@ -129,6 +136,11 @@ export class CounterBooking {
     return this.picks().some((pick) => pick.courtId === courtId && pick.hour === hour);
   }
 
+  /** Keeps the signal the total reads in step with the control the form holds. */
+  protected choosePayment(chosen: string): void {
+    this.paying.set(chosen);
+  }
+
   protected toggle(courtId: string, hour: number): void {
     this.error.set(null);
     this.picks.update((picks) =>
@@ -147,7 +159,8 @@ export class CounterBooking {
       return;
     }
 
-    const { customerName, customerPhone, paidBy, packageId } = this.form.getRawValue();
+    const { customerName, customerPhone, paidBy } = this.form.getRawValue();
+    const onPackage = this.packagesWithHours().some((one) => one.packageId === paidBy);
     this.sending.set(true);
     this.error.set(null);
 
@@ -160,19 +173,15 @@ export class CounterBooking {
         })),
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim() || null,
-        paidBy: packageId === null ? paidBy : null,
-        packageId,
+        paidBy: onPackage ? null : (paidBy as CounterPayment),
+        packageId: onPackage ? paidBy : null,
       })
       .subscribe({
         next: (booking) => {
           this.sending.set(false);
           this.picks.set([]);
-          this.form.reset({
-            customerName: '',
-            customerPhone: '',
-            paidBy: 'Cash',
-            packageId: null,
-          });
+          this.form.reset({ customerName: '', customerPhone: '', paidBy: 'Cash' });
+          this.paying.set('Cash');
 
           // A package that just paid for something has fewer hours on it now.
           this.loadPackages(this.venueId());
@@ -200,10 +209,9 @@ export class CounterBooking {
    */
   private loadPackages(venueId: string): void {
     this.packages.sold(venueId).subscribe({
-      next: (sold) =>
-        this.packagesWithHours.set(
-          sold.filter((one) => one.hoursLeft > 0 && one.expiredAt === null),
-        ),
+      // The server's own answer about which can still be spent, rather than one worked out here:
+      // a list that disagrees with it offers a package the counter is then refused (PRD US-31).
+      next: (sold) => this.packagesWithHours.set(sold.filter((one) => one.live)),
       error: () => this.packagesWithHours.set([]),
     });
   }

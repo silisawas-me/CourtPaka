@@ -53,7 +53,7 @@ public static class Cancellation
                     percent,
                     heldBaht,
                     booking.DepositBaht,
-                    booking.PackageBaht),
+                    booking.PaidWithHours),
                 payment);
 
         /// <summary>A door that is shut, and why. Nothing moves, so nothing is owed.</summary>

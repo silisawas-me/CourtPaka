@@ -29,6 +29,7 @@ function sold(overrides: Record<string, unknown> = {}) {
     bahtPerHour: 180,
     hoursLeft: 8,
     expiresOn: '2026-12-25',
+    live: true,
     runningOut: false,
     expiredAt: null,
     soldAt: '2026-09-26T04:00:00Z',

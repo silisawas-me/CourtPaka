@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
+import { VenueBooking } from './venue-bookings.service';
 
 /** One kind of package a venue offers (PRD US-31). */
 export interface PackageType {
@@ -35,6 +36,11 @@ export interface HourPackage {
   bahtPerHour: number;
   hoursLeft: number;
   expiresOn: string;
+  /**
+   * Whether its hours can still be spent. The server's answer, not one derived here — a screen
+   * that works it out itself offers packages the server then refuses (PRD US-31).
+   */
+  live: boolean;
   /** Whether somebody should be rung about it before the hours run out. */
   runningOut: boolean;
   expiredAt: string | null;
@@ -82,5 +88,17 @@ export class PackagesService {
 
   sell(venueId: string, asked: SellPackageRequest): Observable<HourPackage> {
     return this.http.post<HourPackage>(`/api/venues/${venueId}/packages`, asked);
+  }
+
+  /**
+   * Pays for a booking the venue is already holding with a package's hours (PRD US-31). Answers
+   * with the booking's row as the day's list draws it, so the screen replaces that row rather
+   * than reading the whole day again.
+   */
+  spend(venueId: string, bookingId: string, packageId: string): Observable<VenueBooking> {
+    return this.http.post<VenueBooking>(
+      `/api/venues/${venueId}/bookings/${bookingId}/pay-with-package`,
+      { packageId },
+    );
   }
 }

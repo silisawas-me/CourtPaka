@@ -322,7 +322,9 @@ public static class VenueDashboard
                 booking.RefundDueBaht,
                 booking.PaymentState,
                 booking.DepositBaht,
-                booking.PackageBaht,
+                // Null where no package paid for it. Zero is a different answer: a package
+                // booking that gave all its hours back kept nothing (PRD US-31).
+                PaidWithHours = booking.PackageId == null ? (decimal?)null : booking.PackageBaht,
                 // What arrived, which since deposits is not always the price (PRD US-28). A
                 // booking the venue is holding nothing for is not revenue, whatever it cost.
                 Taken = database.PaymentReceipts
@@ -356,7 +358,7 @@ public static class VenueDashboard
                     booking.PaymentState,
                     booking.Taken,
                     booking.DepositBaht,
-                    booking.PackageBaht));
+                    booking.PaidWithHours));
 
             // Money that never arrived is not revenue, and a booking held on a deposit is revenue
             // for the deposit until the desk collects the rest (PRD US-28).

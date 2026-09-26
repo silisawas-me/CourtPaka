@@ -38,6 +38,19 @@ public sealed class PackageExpiry(
 
         foreach (var package in over)
         {
+            // The claim and the row that explains it are one write. Two of them would leave a
+            // package marked finished with hours still on it and nothing saying where they went —
+            // which is the thing this file exists to prevent — and nothing would ever look at it
+            // again, because the next sweep only reads the ones still unclaimed.
+            await using var transaction =
+                await database.Database.BeginTransactionAsync(cancellationToken);
+
+            // Behind the package's own lock, so a sale spending the last of its hours at this
+            // moment is either counted here or waits for this to finish (PRD US-26's rule).
+            await database.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(hashtextextended({package.Id.ToString()}, 0))",
+                cancellationToken);
+
             // Claimed first. Whoever sets this is the one who writes the row; anybody else who
             // was about to finds it taken and leaves it alone.
             var claimed = await database.HourPackages
@@ -48,33 +61,39 @@ public sealed class PackageExpiry(
 
             if (claimed == 0)
             {
+                await transaction.RollbackAsync(cancellationToken);
                 continue;
             }
 
             var left = await PackageEndpoints.BalanceAsync(database, package.Id, cancellationToken);
-            if (left <= 0)
+            if (left > 0)
             {
-                // Nothing to write off. It is still marked, so the sweep stops looking at it.
-                continue;
+                database.PackageEntries.Add(new PackageEntry
+                {
+                    PackageId = package.Id,
+                    Hours = -left,
+                    Move = PackageMove.Expired,
+
+                    // Nobody: the day passed. That is what a null actor means everywhere else
+                    // (PRD 6.1), and it is true here.
+                    At = now,
+                    ByUserId = null,
+                });
+
+                await database.SaveChangesAsync(cancellationToken);
+                written++;
             }
 
-            database.PackageEntries.Add(new PackageEntry
+            await transaction.CommitAsync(cancellationToken);
+
+            if (left > 0)
             {
-                PackageId = package.Id,
-                Hours = -left,
-                Move = PackageMove.Expired,
-
-                // Nobody: the day passed. That is what a null actor means everywhere else
-                // (PRD 6.1), and it is true here.
-                At = now,
-                ByUserId = null,
-            });
-
-            await database.SaveChangesAsync(cancellationToken);
-            written++;
-
-            AppEvents.For(loggers).LogInformation(
-                "package_expired {PackageId} {VenueId} {Hours}", package.Id, package.VenueId, left);
+                AppEvents.For(loggers).LogInformation(
+                    "package_expired {PackageId} {VenueId} {Hours}",
+                    package.Id,
+                    package.VenueId,
+                    left);
+            }
         }
 
         return written;

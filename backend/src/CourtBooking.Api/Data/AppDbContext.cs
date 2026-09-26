@@ -296,8 +296,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             booking.ToTable(table => table.HasCheckConstraint(
                 "CK_Bookings_PackagePaysForItWhole",
                 "(\"PackageId\" IS NULL AND \"PackageHours\" = 0 AND \"PackageBaht\" = 0)"
+                // Nothing, once it has been cancelled and every hour has gone back: what it kept
+                // is what it earned, and it kept none of it (PRD US-31).
                 + " OR (\"PackageId\" IS NOT NULL AND \"PackageHours\" > 0"
-                + " AND \"PackageBaht\" > 0)"));
+                + " AND \"PackageBaht\" >= 0)"));
 
             booking.HasIndex(b => b.PackageId);
             booking.HasOne(b => b.Package)

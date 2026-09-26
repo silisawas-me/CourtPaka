@@ -206,7 +206,7 @@ public static class BookingEndpoints
             offer.RefundPercent,
             taken,
             booking.DepositBaht,
-            booking.PackageBaht);
+            booking.PaidWithHours);
 
         // The hours go back on sale the moment they are given up (PRD 6.1). Before the booking
         // row, which is the order BookedSlots.ReleaseAsync explains and every writer keeps.
@@ -663,12 +663,20 @@ public static class BookingEndpoints
     /// the booker's and the counter's — come through here, so they queue for the same hours the
     /// same way and are refused by the same constraint in the same words (PRD BR-04, US-13).
     /// </summary>
+    /// <param name="alsoInside">
+    /// Work the caller needs written with the booking or not at all, run inside the transaction
+    /// and before it is saved — answering a refusal code to call the whole thing off. Paying for
+    /// a booking with hours somebody bought earlier is one (PRD US-31): the hours have to be
+    /// taken off the same ledger, under the same lock, in the same commit, or a booking exists
+    /// that nobody paid for.
+    /// </param>
     /// <returns>Null once it is written; otherwise the code it was refused with.</returns>
     internal static async Task<string?> WriteNewAsync(
         AppDbContext database,
         Booking booking,
         TimeProvider timeProvider,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<CancellationToken, Task<string?>>? alsoInside = null)
     {
         for (var attempt = 0; ; attempt++)
         {
@@ -692,6 +700,12 @@ public static class BookingEndpoints
             // with a deadlock — a 500, where waiting a moment gives a real answer. The constraint
             // is still what guarantees the rule; this only decides who asks it first.
             await BookedSlots.LockAsync(database, booking.Slots, cancellationToken);
+
+            if (alsoInside is not null
+                && await alsoInside(cancellationToken) is { } stopped)
+            {
+                return stopped;
+            }
 
             database.Bookings.Add(booking);
 

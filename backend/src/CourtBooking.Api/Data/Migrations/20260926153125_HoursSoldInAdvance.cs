@@ -171,7 +171,7 @@ namespace CourtBooking.Api.Data.Migrations
             migrationBuilder.AddCheckConstraint(
                 name: "CK_Bookings_PackagePaysForItWhole",
                 table: "Bookings",
-                sql: "(\"PackageId\" IS NULL AND \"PackageHours\" = 0 AND \"PackageBaht\" = 0) OR (\"PackageId\" IS NOT NULL AND \"PackageHours\" > 0 AND \"PackageBaht\" > 0)");
+                sql: "(\"PackageId\" IS NULL AND \"PackageHours\" = 0 AND \"PackageBaht\" = 0) OR (\"PackageId\" IS NOT NULL AND \"PackageHours\" > 0 AND \"PackageBaht\" >= 0)");
 
             migrationBuilder.CreateIndex(
                 name: "IX_HourPackages_PackageTypeId",

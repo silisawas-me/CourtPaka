@@ -639,8 +639,13 @@ public static class CounterMoneyEndpoints
             .Where(booking =>
                 booking.VenueId == venueId
                 && booking.Slots.Any(slot => slot.StartsAt >= from && slot.StartsAt < until)
-                // The same bookings the counter is offered a door on, from the same list.
-                && Takings.StillOwing.Contains(booking.Status))
+                // The same bookings the counter is offered a door on, and on the same terms
+                // (Takings.CanTake): one the venue already says it has the money for owes
+                // nothing, whatever its receipts add up to. A booking paid for with hours has no
+                // receipts at all and would otherwise be offered as the explanation for a till
+                // that came out over — sending somebody to look for cash nobody ever owed.
+                && Takings.StillOwing.Contains(booking.Status)
+                && booking.PaymentState != PaymentState.Received)
             .Select(booking => new
             {
                 booking.Id,

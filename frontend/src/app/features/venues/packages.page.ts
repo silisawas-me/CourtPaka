@@ -17,7 +17,10 @@ import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 /** How the money for a package came in. The same three the till counts (PRD US-26). */
 const METHODS = ['Cash', 'PromptPay', 'Card'] as const;
 
-const NAME_MAX_LENGTH = 100;
+/** As long as an offer's name on the board may be. The customer's own is Booking's, and longer. */
+const OFFER_NAME_MAX_LENGTH = 100;
+const CUSTOMER_NAME_MAX_LENGTH = 200;
+const CUSTOMER_PHONE_MAX_LENGTH = 20;
 
 /**
  * Hours sold in advance (PRD US-31).
@@ -53,7 +56,7 @@ export class PackagesPage {
 
   protected readonly i18n = inject(TranslationService);
   protected readonly methods = METHODS;
-  protected readonly nameMaxLength = NAME_MAX_LENGTH;
+  protected readonly nameMaxLength = OFFER_NAME_MAX_LENGTH;
 
   readonly venueId = input.required<string>();
 
@@ -96,15 +99,18 @@ export class PackagesPage {
     packageTypeId: this.forms.control<string | null>(null, Validators.required),
     customerName: this.forms.nonNullable.control('', [
       Validators.required,
-      Validators.maxLength(200),
+      Validators.maxLength(CUSTOMER_NAME_MAX_LENGTH),
     ]),
-    customerPhone: this.forms.nonNullable.control('', Validators.maxLength(20)),
+    customerPhone: this.forms.nonNullable.control(
+      '',
+      Validators.maxLength(CUSTOMER_PHONE_MAX_LENGTH),
+    ),
     paidBy: this.forms.nonNullable.control<string>(METHODS[0], Validators.required),
   });
 
   /** Putting an offer on the board. */
   protected readonly offer = this.forms.nonNullable.group({
-    name: ['', [Validators.required, Validators.maxLength(NAME_MAX_LENGTH)]],
+    name: ['', [Validators.required, Validators.maxLength(OFFER_NAME_MAX_LENGTH)]],
     hours: [10, [Validators.required, Validators.min(1)]],
     priceBaht: [1800, [Validators.required, Validators.min(1)]],
     validForDays: [90, [Validators.required, Validators.min(1)]],

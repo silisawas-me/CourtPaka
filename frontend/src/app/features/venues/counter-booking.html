@@ -94,7 +94,7 @@
               formControlName="paidBy"
               [value]="payment"
               [attr.data-testid]="'paid-' + payment"
-              (change)="form.controls.packageId.setValue(null)"
+              (change)="choosePayment(payment)"
             />
             <span>{{ i18n.t('counter.paid.' + payment) }}</span>
           </label>
@@ -104,9 +104,10 @@
           <label class="paid-choice">
             <input
               type="radio"
-              formControlName="packageId"
+              formControlName="paidBy"
               [value]="one.packageId"
               [attr.data-testid]="'pay-with-' + one.packageId"
+              (change)="choosePayment(one.packageId)"
             />
             <span>
               {{ i18n.t('packages.payWith') }}: {{ one.customerName }}
