@@ -307,7 +307,13 @@ public static class VerifySlipEndpoints
             .Where(candidate =>
                 candidate.Id == bookingId
                 && candidate.VenueId == venueId
-                && candidate.Status == BookingStatus.PendingVerification)
+                && candidate.Status == BookingStatus.PendingVerification
+                // The price is no longer fixed once a booking is made: an evening that runs on
+                // raises it (PRD US-29). Every amount below was worked out from the price read
+                // before this transaction, so the write carries that price as its condition —
+                // an hour added in between leaves this changing nothing, and the venue is told
+                // to look again rather than settling money against a total that has moved.
+                && candidate.TotalBaht == booking.TotalBaht)
             .ExecuteUpdateAsync(
                 set => set
                     .SetProperty(candidate => candidate.Status, landed)

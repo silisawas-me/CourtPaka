@@ -69,6 +69,10 @@ public static class VenueBookingEndpoints
         bookings.MapPost("/{bookingId:guid}/settle-payment", SettleAsync);
         bookings.MapPost("/{bookingId:guid}/played", PlayedAfterAllAsync);
 
+        // One more hour, and a different court (PRD US-29). Both declare their own side of a
+        // suspension where they are mapped, so the group's answer is never the one that decides.
+        bookings.MapBookingHourEndpoints();
+
         bookings.MapRefundEndpoints();
         // Money taken at the desk, in parts and in the form it arrived (PRD US-26).
         bookings.MapCounterMoneyEndpoints();
@@ -408,7 +412,13 @@ public static class VenueBookingEndpoints
             .Where(candidate =>
                 candidate.Id == bookingId
                 && candidate.VenueId == venueId
-                && candidate.PaymentState == PaymentState.Unconfirmed)
+                && candidate.PaymentState == PaymentState.Unconfirmed
+                // The price is no longer fixed once a booking is made: an evening that runs on
+                // raises it (PRD US-29). Every amount below was worked out from the price read
+                // before this transaction, so the write carries that price as its condition —
+                // an hour added in between leaves this changing nothing, and the venue is told
+                // to look again rather than settling money against a total that has moved.
+                && candidate.TotalBaht == booking.TotalBaht)
             .ExecuteUpdateAsync(
                 set => set
                     .SetProperty(candidate => candidate.PaymentState, payment)
@@ -515,7 +525,13 @@ public static class VenueBookingEndpoints
             .Where(candidate =>
                 candidate.Id == bookingId
                 && candidate.VenueId == venueId
-                && candidate.Status == stored)
+                && candidate.Status == stored
+                // The price is no longer fixed once a booking is made: an evening that runs on
+                // raises it (PRD US-29). Every amount below was worked out from the price read
+                // before this transaction, so the write carries that price as its condition —
+                // an hour added in between leaves this changing nothing, and the venue is told
+                // to look again rather than settling money against a total that has moved.
+                && candidate.TotalBaht == booking.TotalBaht)
             .ExecuteUpdateAsync(
                 set => set
                     .SetProperty(candidate => candidate.Status, decided)
@@ -598,7 +614,7 @@ public static class VenueBookingEndpoints
         _ => ApiProblem.Of(StatusCodes.Status409Conflict, code),
     };
 
-    private static IQueryable<Booking> OneAsync(
+    internal static IQueryable<Booking> OneAsync(
         AppDbContext database,
         Guid venueId,
         Guid bookingId) =>
@@ -900,6 +916,12 @@ public static class VenueBookingEndpoints
                 .PlayedAfterAllOffer(booking, status, "recorded wrongly", byOwner, now)
                 .Allowed,
             Takings.CanTake(status, booking.PaymentState, outstandingBaht),
+            // An hour to run on into, and hours that have not been played yet (PRD US-29). Both
+            // are only whether the door is open — which court, and whether one is free, is the
+            // hours endpoint's answer, because it depends on the rest of the day.
+            BookingHours.SameCourt(booking, status, now) is not null,
+            BookingHours.Movable(booking, status, now) is { Count: > 0 } movable
+                && !BookingHours.OnTwoCourtsAtOnce(movable),
             cancelling.Allowed ? Choices(booking, status, byOwner, takenBaht, now) : []);
     }
 

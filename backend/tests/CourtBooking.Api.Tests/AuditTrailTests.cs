@@ -26,6 +26,7 @@ public sealed class AuditTrailTests(ApiTestFixture api) : IClassFixture<ApiTestF
     [InlineData("SlipViewings")]
     [InlineData("MembershipChanges")]
     [InlineData("BookingArrivalChanges")]
+    [InlineData("BookingSlotChanges")]
     [InlineData("PaymentReceipts")]
     [InlineData("DailyClosings")]
     public async Task A_history_row_cannot_be_changed_or_removed(string table)
@@ -101,6 +102,15 @@ public sealed class AuditTrailTests(ApiTestFixture api) : IClassFixture<ApiTestF
             (await admin.PostAsJsonAsync(
                 $"/api/admin/users/{me.Id}/suspend",
                 new Identity.AccountStandingRequest("ทดสอบ"))).StatusCode);
+
+        // An hour added to a booking, which is the row BookingSlotChanges keeps (PRD US-29).
+        // Before the hours are moved about below: the hour it runs on into has to be one the
+        // venue is open for.
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await venueOwner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/bookings/{booking.Id}/extend",
+                new ExtendBookingRequest(null))).StatusCode);
 
         // Somebody turned up, which is the row BookingArrivalChanges keeps (PRD US-24).
         await scenario.StartsInAsync(booking.Id, TimeSpan.FromMinutes(5));

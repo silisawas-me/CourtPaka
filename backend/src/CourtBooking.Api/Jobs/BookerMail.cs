@@ -138,6 +138,33 @@ public sealed class BookerMail(
             .Distinct()
             .ToListAsync(cancellationToken);
 
+        // Hours that changed on a booking that is standing (PRD US-29). One letter for the whole
+        // change, not one per hour: a move of three hours is one thing the venue did, and three
+        // letters saying the same evening moved is three letters nobody finishes. They are
+        // grouped by the instant they were written, which is what the doors write them with, and
+        // the earliest row of a group is what the receipt is taken against — the same row every
+        // sweep, so a group that is claimed stays claimed.
+        var hourRows = await database.BookingSlotChanges
+            .AsNoTracking()
+            .Where(change =>
+                change.ChangedAt >= since && change.Booking!.Channel == BookingChannel.Online)
+            .Select(change => new { change.Id, change.BookingId, change.ChangedAt })
+            .ToListAsync(cancellationToken);
+
+        var hourChanges = hourRows
+            .GroupBy(change => (change.BookingId, change.ChangedAt))
+            .Select(group => group.OrderBy(change => change.Id).First())
+            .ToList();
+
+        var claimed = await database.BookerNotices
+            .AsNoTracking()
+            .Where(notice => notice.Kind == BookerNoticeKind.HoursChanged
+                && hourChanges.Select(change => change.Id).Contains(notice.SourceId))
+            .Select(notice => notice.SourceId)
+            .ToListAsync(cancellationToken);
+
+        hourChanges.RemoveAll(change => claimed.Contains(change.Id));
+
         // A hold the queue put aside is still a hold, but the booker did not ask for it a moment
         // ago — they asked days ago — so the letter has to say where it came from (PRD US-27).
         var fromQueue = await database.WaitlistEntries
@@ -162,6 +189,8 @@ public sealed class BookerMail(
                 BookerNoticeKind.RefundRecorded, record.Id, record.BookingId, record.RecordedAt)),
             .. reminders.Select(bookingId => new Due(
                 BookerNoticeKind.AboutToPlay, bookingId, bookingId, now)),
+            .. hourChanges.Select(change => new Due(
+                BookerNoticeKind.HoursChanged, change.Id, change.BookingId, change.ChangedAt)),
         ];
     }
 

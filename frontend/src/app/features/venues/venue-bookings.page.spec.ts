@@ -679,4 +679,117 @@ describe('VenueBookingsPage', () => {
 
     expect(elementOf(fixture, 'needs-doing')).toBeNull();
   });
+
+  /**
+   * One more hour, and a different court (PRD US-29). What is offered comes from the server when
+   * the panel opens — which courts are free depends on the whole day, and a list carried on every
+   * row would be out of date by the time anybody pressed it.
+   */
+  it('offers the courts the server says are free for the hour they would run on into', () => {
+    render([booking({ can: { ...booking().can, extend: true, moveCourt: true } })]);
+
+    clickOn(fixture, 'hours-b1');
+    httpMock.expectOne('/api/venues/v1/bookings/b1/hours').flush({
+      extend: {
+        date: '2026-09-21',
+        hour: 20,
+        sameCourtId: 'c1',
+        courts: [
+          { courtId: 'c1', courtName: 'คอร์ท 1', baht: 300 },
+          { courtId: 'c2', courtName: 'คอร์ท 2', baht: 300 },
+        ],
+      },
+      move: { hours: 2, courts: [{ courtId: 'c2', courtName: 'คอร์ท 2', baht: null }] },
+    });
+    fixture.detectChanges();
+
+    // The hour is named by when it ends, which is what the counter is agreeing to.
+    expect(textOf(fixture, 'extend-until')).toContain('21:00');
+    expect(textOf(fixture, 'extend-c1')).toContain(TRANSLATIONS.th['venueBookings.sameCourt']);
+    expect(textOf(fixture, 'extend-c1')).toContain('300');
+    expect(elementOf(fixture, 'move-c2')).not.toBeNull();
+
+    // The court they are on is not offered as somewhere to move to.
+    expect(elementOf(fixture, 'move-c1')).toBeNull();
+
+    clickOn(fixture, 'extend-c2');
+    const sent = httpMock.expectOne('/api/venues/v1/bookings/b1/extend');
+    expect(sent.request.body).toEqual({ courtId: 'c2' });
+
+    // The row is replaced with what the server now says, the way every other door works.
+    sent.flush(
+      booking({ totalBaht: 700, toPayBaht: 300, can: { ...booking().can, takeMoney: true } }),
+    );
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'booking-b1')).toContain('700');
+    expect(elementOf(fixture, 'take-b1')).not.toBeNull();
+  });
+
+  it('moves the hours to the court that was pressed', () => {
+    render([booking({ can: { ...booking().can, extend: false, moveCourt: true } })]);
+
+    clickOn(fixture, 'hours-b1');
+    httpMock.expectOne('/api/venues/v1/bookings/b1/hours').flush({
+      extend: null,
+      move: { hours: 2, courts: [{ courtId: 'c2', courtName: 'คอร์ท 2', baht: null }] },
+    });
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, 'extend-until')).toBeNull();
+
+    clickOn(fixture, 'move-c2');
+    const sent = httpMock.expectOne('/api/venues/v1/bookings/b1/move');
+    expect(sent.request.body).toEqual({ courtId: 'c2' });
+    sent.flush(booking());
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, 'asking')).toBeNull();
+  });
+
+  it('says so when no court is free rather than offering nothing at all', () => {
+    render([booking({ can: { ...booking().can, extend: true, moveCourt: true } })]);
+
+    clickOn(fixture, 'hours-b1');
+    httpMock.expectOne('/api/venues/v1/bookings/b1/hours').flush({
+      extend: { date: '2026-09-21', hour: 20, sameCourtId: 'c1', courts: [] },
+      move: { hours: 2, courts: [] },
+    });
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'extend-none')).toBe(TRANSLATIONS.th['venueBookings.extendNone']);
+    expect(textOf(fixture, 'move-none')).toBe(TRANSLATIONS.th['venueBookings.moveNone']);
+  });
+
+  it('does not offer the hours at all where the server says both doors are shut', () => {
+    render([booking({ can: { ...booking().can, extend: false, moveCourt: false } })]);
+
+    expect(elementOf(fixture, 'hours-b1')).toBeNull();
+  });
+
+  it('translates a refusal from the hours doors', () => {
+    render([booking({ can: { ...booking().can, extend: true, moveCourt: false } })]);
+
+    clickOn(fixture, 'hours-b1');
+    httpMock.expectOne('/api/venues/v1/bookings/b1/hours').flush({
+      extend: {
+        date: '2026-09-21',
+        hour: 20,
+        sameCourtId: 'c1',
+        courts: [{ courtId: 'c1', courtName: 'คอร์ท 1', baht: 300 }],
+      },
+      move: null,
+    });
+    fixture.detectChanges();
+
+    clickOn(fixture, 'extend-c1');
+    httpMock
+      .expectOne('/api/venues/v1/bookings/b1/extend')
+      .flush({ code: 'booking.hour_taken' }, { status: 409, statusText: 'Conflict' });
+    // A refusal on a door is usually somebody else deciding first, so the day is read again.
+    httpMock.expectOne((request) => request.url === '/api/venues/v1/bookings').flush([booking()]);
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'decide-error')).toBe(TRANSLATIONS.th['error.booking.hour_taken']);
+  });
 });

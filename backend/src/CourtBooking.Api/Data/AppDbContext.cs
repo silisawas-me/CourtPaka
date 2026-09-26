@@ -51,6 +51,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<BookingArrivalChange> BookingArrivalChanges => Set<BookingArrivalChange>();
 
+    public DbSet<BookingSlotChange> BookingSlotChanges => Set<BookingSlotChange>();
+
     public DbSet<PaymentReceipt> PaymentReceipts => Set<PaymentReceipt>();
 
     public DbSet<DailyClosing> DailyClosings => Set<DailyClosing>();
@@ -409,6 +411,33 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .WithMany()
                 .HasForeignKey(c => c.BookingId)
                 .OnDelete(DeleteBehavior.Cascade);
+            // Restrict, like every other reference to an account (PRD 8, S-15).
+            change.HasOne(c => c.ChangedBy)
+                .WithMany()
+                .HasForeignKey(c => c.ChangedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<BookingSlotChange>(change =>
+        {
+            change.Property(c => c.BahtPerHour).HasPrecision(10, 2);
+            // Read one booking at a time, oldest first: "which court were we on at eight" is a
+            // question about one evening (PRD US-29).
+            change.HasIndex(c => new { c.BookingId, c.ChangedAt });
+            change.HasOne(c => c.Booking)
+                .WithMany()
+                .HasForeignKey(c => c.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // A court cannot be deleted, only taken out of use, so nothing here ever dangles —
+            // and Restrict says out loud that a court named in an audit row is not disposable.
+            change.HasOne(c => c.FromCourt)
+                .WithMany()
+                .HasForeignKey(c => c.FromCourtId)
+                .OnDelete(DeleteBehavior.Restrict);
+            change.HasOne(c => c.ToCourt)
+                .WithMany()
+                .HasForeignKey(c => c.ToCourtId)
+                .OnDelete(DeleteBehavior.Restrict);
             // Restrict, like every other reference to an account (PRD 8, S-15).
             change.HasOne(c => c.ChangedBy)
                 .WithMany()

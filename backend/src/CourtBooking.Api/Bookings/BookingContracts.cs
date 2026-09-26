@@ -151,6 +151,33 @@ public static class BookingErrorCodes
     /// <summary>Someone else took one of the hours between reading the grid and confirming.</summary>
     public const string SlotJustTaken = "booking.slot_just_taken";
 
+    /// <summary>
+    /// This booking's hours are not something that can still change: it is a hold, or it is over
+    /// (PRD US-29). An evening that has finished is answered with a booking of its own.
+    /// </summary>
+    public const string HoursCannotChange = "booking.hours_cannot_change";
+
+    /// <summary>
+    /// The hour they would run on into is somebody else's on that court. The refusal carries the
+    /// courts that are free for it, because that is the next thing the counter asks (PRD US-29).
+    /// </summary>
+    public const string HourTaken = "booking.hour_taken";
+
+    /// <summary>The court they would move to is not free for every hour being moved.</summary>
+    public const string CourtNotFree = "booking.court_not_free";
+
+    /// <summary>They are already on it, so there is nothing to move.</summary>
+    public const string AlreadyOnThatCourt = "booking.already_on_that_court";
+
+    /// <summary>
+    /// The booking holds two courts at the same hour, and one court cannot hold both. Moving all
+    /// of its hours to one court is not something a court could do (PRD US-29).
+    /// </summary>
+    public const string HoursOverlap = "booking.hours_overlap";
+
+    /// <summary>No court of this venue has that id.</summary>
+    public const string CourtUnknown = "booking.court_unknown";
+
     /// <summary>One held booking at a time, per booker (PRD S-22).</summary>
     public const string AlreadyHolding = "booking.already_holding";
 
@@ -336,12 +363,49 @@ public sealed record VenueBookingActionsResponse(
     bool PlayedAfterAll,
     /// <summary>Taking money for it at the desk, in any form (PRD US-26).</summary>
     bool TakeMoney,
+    /// <summary>Selling them the hour they would run on into (PRD US-29).</summary>
+    bool Extend,
+    /// <summary>Putting the hours they have not played on another court (PRD US-29).</summary>
+    bool MoveCourt,
     /// <summary>
     /// The reasons this booking may be turned away for, and what each would owe the booker.
     /// Only the ones PRD 6.1 allows where it stands: a booking whose hours were played cannot be
     /// given back at the customer's request, so that answer is not offered.
     /// </summary>
     CancelChoiceResponse[] CancelChoices);
+
+/// <summary>
+/// A court that could take these hours, and what they would cost there. The amount is what the
+/// hours being asked about come to at today's prices — it is only ever read for an hour being
+/// added, because moving hours does not change what they cost (PRD US-29).
+/// </summary>
+public sealed record FreeCourtResponse(Guid CourtId, string CourtName, decimal? Baht);
+
+/// <summary>The hour a booking would run on into, and where it could be played (PRD US-29).</summary>
+public sealed record ExtendOptionResponse(
+    DateOnly Date,
+    int Hour,
+    /// <summary>The court they are on, which is the one offered unless the venue says otherwise.</summary>
+    Guid? SameCourtId,
+    FreeCourtResponse[] Courts);
+
+/// <summary>Where the hours a booking has not finished could be played instead (PRD US-29).</summary>
+public sealed record MoveOptionResponse(int Hours, FreeCourtResponse[] Courts);
+
+/// <summary>
+/// What could still be done to this booking's hours. Either half is null where that door is shut
+/// — a booking whose evening is over has neither.
+/// </summary>
+public sealed record BookingHoursResponse(ExtendOptionResponse? Extend, MoveOptionResponse? Move);
+
+/// <summary>
+/// One more hour. The court is the one they are on unless the venue names another, which is what
+/// it does after being told the hour was taken there (PRD US-29).
+/// </summary>
+public sealed record ExtendBookingRequest(Guid? CourtId);
+
+/// <summary>The court the hours that have not finished are to be played on instead.</summary>
+public sealed record MoveCourtRequest(Guid CourtId);
 
 /// <summary>
 /// One answer the counter may give for turning a booking away, and the money it settles. The
