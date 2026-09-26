@@ -347,6 +347,8 @@ public static class VerifySlipEndpoints
             {
                 BookingId = bookingId,
                 VenueId = venueId,
+                CountsOn = await CounterMoneyEndpoints.CountsOnAsync(
+                    database, venueId, now, cancellationToken),
                 AmountBaht = transferred,
                 Method = PaymentMethod.PromptPay,
                 ReceivedAt = now,

@@ -208,6 +208,7 @@ public static class CounterMoneyEndpoints
         {
             BookingId = bookingId,
             VenueId = venueId,
+            CountsOn = await CountsOnAsync(database, venueId, now, cancellationToken),
             AmountBaht = amount,
             Method = method,
             ReceivedAt = now,
@@ -324,10 +325,7 @@ public static class CounterMoneyEndpoints
 
         var receipts = await database.PaymentReceipts
             .AsNoTracking()
-            .Where(receipt =>
-                receipt.VenueId == venueId
-                && receipt.ReceivedAt >= from
-                && receipt.ReceivedAt < until)
+            .Where(receipt => receipt.VenueId == venueId && receipt.CountsOn == day)
             .OrderBy(receipt => receipt.ReceivedAt)
             .Select(receipt => new
             {
@@ -496,12 +494,19 @@ public static class CounterMoneyEndpoints
         var from = PlatformRequirements.BangkokHour(day, 0);
         var until = PlatformRequirements.BangkokHour(day.AddDays(1), 0);
 
+        await using var transaction =
+            await database.Database.BeginTransactionAsync(cancellationToken);
+
+        // Nothing may be added to this day between what is counted here and the count being
+        // written: money that arrived while the drawer was being counted belongs to tomorrow,
+        // and the receipt decides that by asking whether this row is already there (PRD US-26).
+        await QueueForTheDayAsync(database, venueId, day, cancellationToken);
+
         var cashIn = await database.PaymentReceipts
             .Where(receipt =>
                 receipt.VenueId == venueId
                 && receipt.Method == PaymentMethod.Cash
-                && receipt.ReceivedAt >= from
-                && receipt.ReceivedAt < until)
+                && receipt.CountsOn == day)
             .SumAsync(receipt => (decimal?)receipt.AmountBaht, cancellationToken) ?? 0m;
 
         var cashOut = await database.RefundRecords
@@ -538,8 +543,11 @@ public static class CounterMoneyEndpoints
         catch (DbUpdateException exception) when (DbErrors.IsUniqueViolation(exception))
         {
             // Two people counted the same till at the same time. The first count is the count.
+            await transaction.RollbackAsync(cancellationToken);
             return ApiProblem.Of(StatusCodes.Status409Conflict, MoneyErrorCodes.AlreadyClosed);
         }
+
+        await transaction.CommitAsync(cancellationToken);
 
         AppEvents.For(loggers).LogInformation(
             "day_closed {VenueId} {Date} {Difference}", venueId, day, closing.DifferenceBaht);
@@ -555,6 +563,46 @@ public static class CounterMoneyEndpoints
     }
 
     /// <summary>What has been taken for one booking so far.</summary>
+    /// <summary>
+    /// Which of the venue's days this money is counted in, and a place in the queue behind
+    /// anyone counting that day (PRD US-26).
+    ///
+    /// Both halves matter together: reading whether the day is closed and writing the receipt
+    /// have to be one decision, or a receipt written while the count is being taken lands in a
+    /// day whose total was read a moment before it — and the till comes up short by exactly that
+    /// receipt, with nothing to explain it.
+    /// </summary>
+    internal static async Task<DateOnly> CountsOnAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateTimeOffset receivedAt,
+        CancellationToken cancellationToken)
+    {
+        var receivedOn = PlatformRequirements.BangkokDateAndHour(receivedAt).Date;
+        await QueueForTheDayAsync(database, venueId, receivedOn, cancellationToken);
+
+        var counted = await database.DailyClosings
+            .AnyAsync(
+                closing => closing.VenueId == venueId && closing.Date == receivedOn,
+                cancellationToken);
+
+        return Takings.CountsOn(receivedOn, counted);
+    }
+
+    /// <summary>
+    /// Queues behind anybody else counting or adding to this venue's day, so a count and a
+    /// receipt cannot pass each other (PRD US-26). One number per venue per day, the same for
+    /// everyone asking for it.
+    /// </summary>
+    internal static Task QueueForTheDayAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateOnly day,
+        CancellationToken cancellationToken) =>
+        database.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({venueId.ToString() + day.ToString("O")}, 0))",
+            cancellationToken);
+
     /// <summary>
     /// Queues this request behind everybody else who is about to read what a booking has had paid
     /// against it and then write from that reading (PRD US-26, US-18). Two reads of "900 owed"

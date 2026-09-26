@@ -730,6 +730,8 @@ public static class VenueBookingEndpoints
         {
             BookingId = booking.Id,
             VenueId = venueId,
+            CountsOn = await CounterMoneyEndpoints.CountsOnAsync(
+                database, venueId, now, cancellationToken),
             AmountBaht = booking.TotalBaht,
             Method = paid == CounterPayment.Cash ? PaymentMethod.Cash : PaymentMethod.PromptPay,
             ReceivedAt = now,
