@@ -43,6 +43,7 @@ import { VenueAddressPipe } from '../../shared/venue-address.pipe';
   ],
   providers: [FORM_FIELD_DEFAULTS],
   templateUrl: './venue-detail.page.html',
+  styleUrl: './venue-detail.page.scss',
 })
 export class VenueDetailPage {
   private readonly venues = inject(VenueService);

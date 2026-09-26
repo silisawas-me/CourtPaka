@@ -1,8 +1,35 @@
+/*
+ * The page is a grid item of `.shell`, and a grid item is as wide as its widest row unless it is
+ * told otherwise. Its widest row is a day of hours, so without this the page itself grew to the
+ * width of the table, the scroller inside it never had anything to scroll, and the body clipped
+ * the overflow — which on a phone meant the later hours could not be reached or booked at all.
+ * The same trap as the day board in US-25 and the venue page.
+ */
+:host {
+  display: block;
+  min-width: 0;
+}
+
 /** A wide grid on a narrow phone scrolls sideways rather than squeezing the hours out of shape. */
 .grid-scroll {
   overflow-x: auto;
   margin-inline: -0.5rem;
   padding-inline: 0.5rem;
+
+  /*
+   * A shadow on the side there is more to see on, and none on a side there is not. Both pairs of
+   * gradients are backgrounds of this element: the covers scroll with the content and slide off
+   * the shadows as the reader reaches each end, so the page needs no script and no listener.
+   */
+  background:
+    linear-gradient(to right, var(--mat-sys-surface), transparent) left center / 2.5rem 100%
+      no-repeat local,
+    linear-gradient(to left, var(--mat-sys-surface), transparent) right center / 2.5rem 100%
+      no-repeat local,
+    linear-gradient(to right, rgba(20, 32, 43, 0.14), transparent) left center / 1rem 100% no-repeat
+      scroll,
+    linear-gradient(to left, rgba(20, 32, 43, 0.14), transparent) right center / 1rem 100% no-repeat
+      scroll;
 }
 
 .grid {

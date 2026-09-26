@@ -1,0 +1,19 @@
+/*
+ * The page is a grid item of `.shell`, and a grid item is as wide as its widest row unless it is
+ * told otherwise — the row of links to the venue's other pages does not wrap far enough on a
+ * phone, so without this the whole page is 420px inside a 390px window and every card hangs off
+ * the right edge. The same trap as the day board in US-25.
+ */
+:host {
+  display: block;
+  min-width: 0;
+}
+
+/*
+ * The doors to the venue's other pages. Material lays card actions out in a row and does not
+ * wrap them, so five links run off the side of a phone; the sign-in card says the same thing
+ * about its own actions.
+ */
+mat-card-actions {
+  flex-wrap: wrap;
+}
