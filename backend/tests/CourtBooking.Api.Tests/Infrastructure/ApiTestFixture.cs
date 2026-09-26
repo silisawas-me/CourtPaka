@@ -25,6 +25,9 @@ public sealed class ApiTestFixture : IAsyncLifetime
     /// <summary>LINE, as far as the tests are concerned (PRD US-01).</summary>
     public FakeLineLogin Line { get; } = new();
 
+    /// <summary>LINE's push endpoint, off until a test switches it on (PRD US-34).</summary>
+    public FakeLineMessenger LineMessages { get; } = new();
+
     public WebApplicationFactory<Program> Api { get; private set; } = null!;
 
     public string ConnectionString => _container.GetConnectionString();
@@ -47,6 +50,7 @@ public sealed class ApiTestFixture : IAsyncLifetime
             {
                 services.Replace(ServiceDescriptor.Singleton<ITransactionalEmailSender>(Emails));
                 services.Replace(ServiceDescriptor.Singleton<ILineLogin>(Line));
+                services.Replace(ServiceDescriptor.Singleton<ILineMessenger>(LineMessages));
             }));
     }
 

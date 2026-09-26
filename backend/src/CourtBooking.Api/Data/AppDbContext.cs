@@ -897,6 +897,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             // The claim: one message per thing it is about, whoever tries to send it (PRD US-06).
             notice.HasIndex(n => new { n.SourceId, n.Kind }).IsUnique();
+            notice.Property(n => n.SentBy).HasConversion<int?>();
             notice.HasIndex(n => n.BookingId);
             notice.HasOne(n => n.Booking)
                 .WithMany()

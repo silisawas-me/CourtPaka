@@ -15,6 +15,13 @@ public sealed class LineOptions
     public string? ChannelSecret { get; init; }
 
     /// <summary>
+    /// The Messaging API channel access token, which is what lets the platform push a message to
+    /// somebody rather than only sign them in (PRD US-34). A deployment without one goes on
+    /// writing to everybody by email, and nothing has to be switched off.
+    /// </summary>
+    public string? MessagingToken { get; init; }
+
+    /// <summary>
     /// A stand-in LINE for local stacks, so the flow can be walked without a channel. Read only
     /// on a Development host, like the seeded accounts: it signs anybody in as anybody.
     /// </summary>

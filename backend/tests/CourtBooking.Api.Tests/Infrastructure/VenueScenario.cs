@@ -31,6 +31,44 @@ public sealed class VenueScenario(ApiTestFixture api)
     public async Task<HttpClient> SignedInClientAsync(bool verifyEmail = true) =>
         (await SignedInClientWithEmailAsync(verifyEmail)).Client;
 
+    /// <summary>
+    /// Somebody who arrived through LINE: a phone number a venue could ring, and no address they
+    /// have ever proved. Which is a booker — PRD US-01 asks a LINE account for a number rather
+    /// than a confirmed address — and until US-34 was the booker nothing could reach.
+    /// </summary>
+    public async Task<(HttpClient Client, string LineUserId)> SignedInWithLineAsync(
+        string? sharedEmail = null)
+    {
+        // Redirects are not followed: LINE's page is not on this site, and following the one that
+        // goes there would fetch a host that does not exist.
+        var client = api.Api.CreateClient(
+            new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false,
+            });
+
+        var subject = $"U{Guid.NewGuid():N}";
+
+        var start = await client.GetAsync("/api/auth/line/start?returnUrl=%2f");
+        Assert.Equal(HttpStatusCode.Redirect, start.StatusCode);
+
+        var state = System.Web.HttpUtility
+            .ParseQueryString(new Uri(start.Headers.Location!.ToString()).Query)["state"]!;
+
+        var code = api.Line.Grant(subject, email: sharedEmail);
+        var back = await client.GetAsync(
+            $"/api/auth/line/callback?code={code}&state={System.Web.HttpUtility.UrlEncode(state)}");
+        Assert.Equal(HttpStatusCode.Redirect, back.StatusCode);
+
+        var made = await client.PostAsJsonAsync(
+            "/api/auth/line/complete",
+            new CompleteLineSignUpRequest(
+                ApiFactory.PrivacyPolicyVersion, SupportedLanguages.Thai, "0812345678"));
+        Assert.Equal(HttpStatusCode.NoContent, made.StatusCode);
+
+        return (client, subject);
+    }
+
     public async Task<(HttpClient Client, string Email)> SignedInClientWithEmailAsync(
         bool verifyEmail = true)
     {
