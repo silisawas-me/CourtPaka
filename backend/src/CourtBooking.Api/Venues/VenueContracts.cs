@@ -153,6 +153,15 @@ public static class VenueErrorCodes
     public const string OwnerNeedsEmail = "venue.owner_needs_email";
     public const string AlreadyMember = "venue.already_member";
     public const string OwnerCannotBeChanged = "venue.owner_cannot_be_changed";
+    /// <summary>A number that could not be a commission rate at all (PRD US-21).</summary>
+    public const string InvalidRate = "venue.invalid_rate";
+
+    /// <summary>
+    /// A rate cannot start on a day that has been played: those days have already been charged
+    /// at whatever was in force then, and moving that would change a month already told about.
+    /// </summary>
+    public const string RateStartsInThePast = "venue.rate_starts_in_the_past";
+
     public const string InvalidPermissions = "venue.invalid_permissions";
     public const string InvitationInvalid = "venue.invitation_invalid";
     public const string InvitationForAnotherAddress = "venue.invitation_for_another_address";
@@ -204,6 +213,30 @@ public sealed record AdminVenueResponse(
     string Province,
     string Status,
     DateTimeOffset CreatedAt);
+
+/// <summary>One rate the platform has charged this venue, and who agreed it (PRD US-21).</summary>
+public sealed record CommissionRateResponse(
+    decimal Percent,
+    DateOnly EffectiveFrom,
+    DateTimeOffset SetAt,
+    /// <summary>The admin who entered it. Null once that account has been closed (PRD S-15).</summary>
+    string? SetByEmail,
+    string? Note);
+
+/// <summary>
+/// What this venue is charged today, and every rate it has ever been charged (PRD US-21).
+/// <c>TodayPercent</c> is null where the platform has never agreed one — which is not nought:
+/// nought is a rate somebody chose, and null is a question nobody has answered.
+/// </summary>
+public sealed record CommissionRatesResponse(
+    decimal? TodayPercent,
+    CommissionRateResponse[] Rates);
+
+/// <summary>A rate the platform agrees with a venue, from a date (PRD US-21, BR-08).</summary>
+public sealed record SetCommissionRateRequest(
+    decimal Percent,
+    DateOnly EffectiveFrom,
+    string? Note);
 
 /// <summary>One move a venue's standing made, as the platform reads its history (PRD US-20).</summary>
 public sealed record VenueStatusChangeResponse(

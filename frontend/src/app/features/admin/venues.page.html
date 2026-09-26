@@ -126,6 +126,81 @@
                     </div>
                   </dl>
 
+                  <!--
+                    What the platform charges this venue (PRD US-21). Here rather than on a
+                    screen of its own because it is one of the facts about the venue an admin
+                    reads on this page, and the last rate is what they need in front of them to
+                    decide the next one.
+                  -->
+                  <section class="commission" data-testid="commission">
+                    <h4>{{ i18n.t('admin.commission.title') }}</h4>
+
+                    @if (commission(); as charged) {
+                      <p data-testid="commission-today">
+                        {{ i18n.t('admin.commission.today') }}
+                        @if (charged.todayPercent === null) {
+                          <span class="muted">{{ i18n.t('admin.commission.none') }}</span>
+                        } @else {
+                          <span class="badge">{{ charged.todayPercent }}%</span>
+                        }
+                      </p>
+
+                      @if (charged.rates.length > 0) {
+                        <ul class="history" data-testid="commission-history">
+                          @for (rate of charged.rates; track rate.setAt) {
+                            <li>
+                              <span>{{ rate.effectiveFrom | appDate: i18n.locale() }}</span>
+                              <span class="badge">{{ rate.percent }}%</span>
+                              @if (rate.note) {
+                                <span class="muted history-why">{{ rate.note }}</span>
+                              }
+                            </li>
+                          }
+                        </ul>
+                      }
+
+                      <form class="row" [formGroup]="rateForm" novalidate>
+                        <mat-form-field class="rate">
+                          <mat-label>{{ i18n.t('admin.commission.percent') }}</mat-label>
+                          <input
+                            matInput
+                            type="number"
+                            inputmode="decimal"
+                            data-testid="rate-percent"
+                            formControlName="percent"
+                          />
+                        </mat-form-field>
+
+                        <mat-form-field class="rate-from">
+                          <mat-label>{{ i18n.t('admin.commission.from') }}</mat-label>
+                          <input
+                            matInput
+                            readonly
+                            data-testid="rate-from"
+                            [matDatepicker]="ratePicker"
+                            formControlName="effectiveFrom"
+                          />
+                          <mat-datepicker-toggle matIconSuffix [for]="ratePicker" />
+                          <mat-datepicker #ratePicker />
+                        </mat-form-field>
+
+                        <button
+                          matButton="filled"
+                          type="button"
+                          data-testid="save-rate"
+                          [disabled]="savingRate()"
+                          (click)="saveRate()"
+                        >
+                          {{ i18n.t('admin.commission.save') }}
+                        </button>
+                      </form>
+
+                      @if (rateError(); as key) {
+                        <p class="form-error" data-testid="rate-error">{{ i18n.t(key) }}</p>
+                      }
+                    }
+                  </section>
+
                   @if (detail.history.length > 0) {
                     <ul class="history" data-testid="history">
                       @for (move of detail.history; track move.changedAt) {

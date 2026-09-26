@@ -70,6 +70,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<DocumentSeries> DocumentSeries => Set<DocumentSeries>();
 
+    public DbSet<CommissionRate> CommissionRates => Set<CommissionRate>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -456,6 +458,25 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             // two writers creating the same series at once meet here, and the loser reads the
             // winner's row instead of writing a second count (PRD 7.4).
             series.HasIndex(s => new { s.SeriesCode, s.Kind, s.Year }).IsUnique();
+        });
+
+        builder.Entity<CommissionRate>(rate =>
+        {
+            rate.Property(r => r.Percent).HasPrecision(5, 2);
+            rate.Property(r => r.Note).HasMaxLength(CommissionRate.NoteMaxLength);
+
+            // Read one venue at a time, newest first: an invoice asks "what was the rate on this
+            // day", and a screen asks "what is it now and what was it before" (PRD US-21).
+            rate.HasIndex(r => new { r.VenueId, r.EffectiveFrom });
+            rate.HasOne(r => r.Venue)
+                .WithMany()
+                .HasForeignKey(r => r.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Restrict, like every other reference to an account (PRD 8, S-15).
+            rate.HasOne(r => r.SetBy)
+                .WithMany()
+                .HasForeignKey(r => r.SetByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<PaymentReceipt>(receipt =>

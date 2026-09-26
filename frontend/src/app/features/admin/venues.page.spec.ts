@@ -56,11 +56,16 @@ describe('AdminVenuesPage', () => {
     fixture.detectChanges();
   }
 
-  function openFirst(answer: object = detail()): void {
+  function openFirst(answer: object = detail(), charged: object = noRateYet): void {
     clickOn(fixture, 'open-v1');
     httpMock.expectOne('/api/admin/venues/v1').flush(answer);
+    // The rate the platform charges is read with the application (PRD US-21).
+    httpMock.expectOne('/api/admin/venues/v1/commission').flush(charged);
     fixture.detectChanges();
   }
+
+  /** A venue the platform has never agreed a rate with, which is most of them. */
+  const noRateYet = { todayPercent: null, rates: [] };
 
   afterEach(() => {
     httpMock.verify();
@@ -145,5 +150,88 @@ describe('AdminVenuesPage', () => {
     render([]);
 
     expect(textOf(fixture, 'nothing-here')).toBe(TRANSLATIONS.th['admin.venues.none']);
+  });
+
+  /**
+   * What the platform charges this venue (PRD US-21). Read with the application, because the
+   * last rate is what an admin needs in front of them to decide the next one.
+   */
+  it('says a venue has no rate yet rather than saying it is charged nothing', () => {
+    render();
+    openFirst();
+
+    expect(textOf(fixture, 'commission-today')).toContain(TRANSLATIONS.th['admin.commission.none']);
+    expect(elementOf(fixture, 'commission-history')).toBeNull();
+  });
+
+  it('shows what is charged today and every rate before it', () => {
+    render();
+    openFirst(detail(), {
+      todayPercent: 10,
+      rates: [
+        {
+          percent: 8,
+          effectiveFrom: '2027-06-01',
+          setAt: '2027-05-01T02:00:00Z',
+          setByEmail: 'a@b.c',
+          note: null,
+        },
+        {
+          percent: 10,
+          effectiveFrom: '2027-01-01',
+          setAt: '2026-12-01T02:00:00Z',
+          setByEmail: 'a@b.c',
+          note: 'ตามที่ตกลง',
+        },
+      ],
+    });
+
+    // Ten today, because the eight has not started yet — the platform tells a venue first.
+    expect(textOf(fixture, 'commission-today')).toContain('10%');
+    expect(textOf(fixture, 'commission-history')).toContain('8%');
+    expect(textOf(fixture, 'commission-history')).toContain('ตามที่ตกลง');
+  });
+
+  it('agrees a rate from a date and draws what comes back', () => {
+    render();
+    openFirst();
+
+    setInput(fixture, '[data-testid="rate-percent"]', '12.5');
+    clickOn(fixture, 'save-rate');
+
+    const sent = httpMock.expectOne('/api/admin/venues/v1/commission');
+    expect(sent.request.body.percent).toBe(12.5);
+    expect(sent.request.body.effectiveFrom).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+    sent.flush({
+      todayPercent: 12.5,
+      rates: [
+        {
+          percent: 12.5,
+          effectiveFrom: sent.request.body.effectiveFrom,
+          setAt: '2027-01-01T02:00:00Z',
+          setByEmail: 'a@b.c',
+          note: null,
+        },
+      ],
+    });
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'commission-today')).toContain('12.5%');
+  });
+
+  it('translates a rate the server will not take', () => {
+    render();
+    openFirst();
+
+    setInput(fixture, '[data-testid="rate-percent"]', '101');
+    clickOn(fixture, 'save-rate');
+
+    httpMock
+      .expectOne('/api/admin/venues/v1/commission')
+      .flush({ code: 'venue.invalid_rate' }, { status: 400, statusText: 'Bad Request' });
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'rate-error')).toBe(TRANSLATIONS.th['error.venue.invalid_rate']);
   });
 });

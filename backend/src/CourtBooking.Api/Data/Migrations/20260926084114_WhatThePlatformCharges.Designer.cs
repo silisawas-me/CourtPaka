@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using CourtBooking.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CourtBooking.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260926084114_WhatThePlatformCharges")]
+    partial class WhatThePlatformCharges
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -611,34 +614,6 @@ namespace CourtBooking.Api.Data.Migrations
                     b.HasIndex("VenueId", "Date", "State", "AskedAt");
 
                     b.ToTable("WaitlistEntries");
-                });
-
-            modelBuilder.Entity("CourtBooking.Api.Documents.DocumentSeries", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Issued")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Kind")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("SeriesCode")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.Property<int>("Year")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SeriesCode", "Kind", "Year")
-                        .IsUnique();
-
-                    b.ToTable("DocumentSeries");
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Identity.AccountStatusChange", b =>
