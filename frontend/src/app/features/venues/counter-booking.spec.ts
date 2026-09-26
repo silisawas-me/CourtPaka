@@ -30,7 +30,7 @@ describe('CounterBooking', () => {
   let fixture: ComponentFixture<CounterBooking>;
   let httpMock: HttpTestingController;
 
-  function render(date = '2026-09-22', answer: object = grid(date)): void {
+  function render(date = '2026-09-22', answer: object = grid(date), packages: object[] = []): void {
     TestBed.configureTestingModule({
       imports: [CounterBooking],
       providers: pageProviders(),
@@ -43,6 +43,10 @@ describe('CounterBooking', () => {
     fixture.detectChanges();
 
     httpMock.expectOne((request) => request.url === '/api/venues/v1/availability').flush(answer);
+
+    // Asked for with the grid, so "are they on a package?" is answered while the customer is
+    // still standing there rather than after a second round trip (PRD US-31).
+    httpMock.expectOne('/api/venues/v1/packages').flush(packages);
     fixture.detectChanges();
   }
 
@@ -96,9 +100,14 @@ describe('CounterBooking', () => {
       customerName: 'คุณสมชาย',
       customerPhone: '081-234-5678',
       paidBy: 'Transfer',
+      // Null unless hours are paying for it instead of money (PRD US-31).
+      packageId: null,
     });
 
     request.flush({ bookingId: 'b1', channel: 'Staff' });
+
+    // A package that just paid for something has fewer hours on it, so the list is read again.
+    httpMock.expectOne('/api/venues/v1/packages').flush([]);
     expect(taken).toHaveBeenCalled();
   });
 
@@ -150,6 +159,7 @@ describe('CounterBooking', () => {
     const again = grid();
     again.courts[0].hours[1].status = 'Booked';
     httpMock.expectOne((request) => request.url === '/api/venues/v1/availability').flush(again);
+    httpMock.expectOne('/api/venues/v1/packages').flush([]);
     fixture.detectChanges();
 
     expect(textOf(fixture, 'counter-error')).toBe(TRANSLATIONS.th['error.booking.slot_just_taken']);

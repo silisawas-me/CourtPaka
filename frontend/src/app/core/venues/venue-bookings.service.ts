@@ -54,7 +54,9 @@ export interface CounterBookingRequest {
   slots: { courtId: string; date: string; hour: number }[];
   customerName: string;
   customerPhone: string | null;
-  paidBy: CounterPayment;
+  paidBy: CounterPayment | null;
+  /** Hours the customer bought earlier, instead of money (PRD US-31). */
+  packageId?: string | null;
 }
 
 /** One of the venue's bookings for a day, as its counter reads it (PRD US-13). */

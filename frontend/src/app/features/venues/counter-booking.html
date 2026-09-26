@@ -81,6 +81,10 @@
         </mat-form-field>
       </div>
 
+      <!--
+        Hours the customer bought earlier, or money (PRD US-31). One choice, because it is one
+        question: a booking is paid for one way, and a package that pays for it covers it whole.
+      -->
       <fieldset class="paid">
         <legend>{{ i18n.t('counter.paidBy') }}</legend>
         @for (payment of payments; track payment) {
@@ -90,8 +94,24 @@
               formControlName="paidBy"
               [value]="payment"
               [attr.data-testid]="'paid-' + payment"
+              (change)="form.controls.packageId.setValue(null)"
             />
             <span>{{ i18n.t('counter.paid.' + payment) }}</span>
+          </label>
+        }
+
+        @for (one of packagesWithHours(); track one.packageId) {
+          <label class="paid-choice">
+            <input
+              type="radio"
+              formControlName="packageId"
+              [value]="one.packageId"
+              [attr.data-testid]="'pay-with-' + one.packageId"
+            />
+            <span>
+              {{ i18n.t('packages.payWith') }}: {{ one.customerName }}
+              <span class="muted">({{ one.hoursLeft }} {{ i18n.t('packages.hours') }})</span>
+            </span>
           </label>
         }
       </fieldset>
@@ -99,7 +119,11 @@
 
     <div class="counter-foot">
       <span class="total" data-testid="counter-total">
-        {{ i18n.t('booking.total') }}: {{ total() }}
+        @if (onHours()) {
+          {{ i18n.t('packages.payWith') }}: {{ picks().length }} {{ i18n.t('packages.hours') }}
+        } @else {
+          {{ i18n.t('booking.total') }}: {{ total() }}
+        }
       </span>
       <button
         matButton="filled"

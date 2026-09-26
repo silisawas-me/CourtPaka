@@ -469,6 +469,14 @@ def ensure_bookable(browser, venue_id) -> None:
     # somebody agreed.
     stop_every_series(page, venue_id)
 
+    # And with nothing on the package board. packages.py puts offers on it because that is what
+    # it is about (PRD US-31), and one left there is a row every other script's screenshots and
+    # counts have to step around.
+    for offer in page.request.get(f"{BASE}/api/venues/{venue_id}/packages/types").json():
+        if offer["withdrawnAt"] is None:
+            page.request.post(
+                f"{BASE}/api/venues/{venue_id}/packages/types/{offer['typeId']}/withdraw")
+
     page.close()
 
 

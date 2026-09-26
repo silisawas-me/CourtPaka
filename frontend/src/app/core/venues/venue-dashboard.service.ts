@@ -61,6 +61,20 @@ export interface Dashboard {
   months: DashboardMonth[];
   attention: DashboardAttention;
   recovery: Recovery;
+  /** Hours sold and not yet given (PRD US-31). Never part of the money above. */
+  owedHours: OwedHours;
+}
+
+/**
+ * Hours the venue has been paid for and not yet given (PRD US-31). Not revenue: the money came
+ * in when the packages were sold, and what the venue has in exchange is an obligation.
+ */
+export interface OwedHours {
+  hours: number;
+  baht: number;
+  packages: number;
+  /** Of those, the ones whose hours are about to run out. */
+  runningOut: number;
 }
 
 @Injectable({ providedIn: 'root' })

@@ -12,18 +12,26 @@ public enum PaymentMethod
 }
 
 /// <summary>
-/// One amount the venue took for one booking (PRD US-26). Rows are only added: a deposit and the
-/// rest are two of these, and nothing edits either afterwards — the day is counted from them, and
-/// a count you can rewrite is not a count.
+/// One amount the venue took (PRD US-26). Rows are only added: a deposit and the rest are two of
+/// these, and nothing edits either afterwards — the day is counted from them, and a count you can
+/// rewrite is not a count.
 ///
 /// It is not the same thing as <see cref="PaymentState"/>, which says whether the venue considers
 /// itself paid. These say what actually came in, when, in what form, and from whose hands.
+///
+/// Most of it is money for a booking. Selling a package is money too, and it goes in the same
+/// till on the same day (PRD US-31), so it is one of these as well — with the package named
+/// instead of a booking. Exactly one of the two, which the database sees to.
 /// </summary>
 public sealed class PaymentReceipt
 {
     public Guid Id { get; init; } = Guid.CreateVersion7();
 
-    public required Guid BookingId { get; init; }
+    /// <summary>The booking it was for, or null where it was a package being sold.</summary>
+    public Guid? BookingId { get; init; }
+
+    /// <summary>The package that was sold, or null where it was money for a booking (US-31).</summary>
+    public Guid? PackageId { get; init; }
 
     /// <summary>Kept beside the booking's own so a venue's day can be counted in one query.</summary>
     public required Guid VenueId { get; init; }
@@ -42,6 +50,8 @@ public sealed class PaymentReceipt
     public const int NoteMaxLength = 400;
 
     public Booking? Booking { get; init; }
+
+    public HourPackage? Package { get; init; }
 
     public Venue? Venue { get; init; }
 
@@ -121,8 +131,24 @@ public static class Takings
     /// answer before receipts existed, and what arrived was what was asked for. Every booking made
     /// before deposits were possible was asked for its whole price.
     /// </summary>
-    public static decimal HeldFor(PaymentState payment, decimal takenBaht, decimal askedBaht) =>
-        Math.Max(0m, payment == PaymentState.Received ? Math.Max(takenBaht, askedBaht) : takenBaht);
+    /// <param name="packageBaht">
+    /// What a package's hours paid for this booking (PRD US-31), or zero. Where there is one it is
+    /// the whole answer: the money came in when the package was sold, at what the customer paid
+    /// for an hour then — not at the price on the board the day the hours were spent, which is
+    /// what they chose not to pay. Nothing else is owed, because hours pay instead of money.
+    /// </param>
+    public static decimal HeldFor(
+        PaymentState payment,
+        decimal takenBaht,
+        decimal askedBaht,
+        decimal packageBaht = 0m) =>
+        packageBaht > 0m
+            ? decimal.Round(packageBaht, 2, MidpointRounding.AwayFromZero)
+            : Math.Max(
+                0m,
+                payment == PaymentState.Received
+                    ? Math.Max(takenBaht, askedBaht)
+                    : takenBaht);
 
     /// <summary>
     /// Whether money may still be taken for this booking (PRD US-26). Something has to be owed,

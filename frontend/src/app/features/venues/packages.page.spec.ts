@@ -1,0 +1,175 @@
+import { HttpTestingController } from '@angular/common/http/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { clickOn, elementOf, pageProviders, setInput, textOf } from '../../testing/dom';
+import { TRANSLATIONS } from '../../testing/translations';
+import { PackagesPage } from './packages.page';
+
+function offer(overrides: Record<string, unknown> = {}) {
+  return {
+    typeId: 't1',
+    name: 'ชุด 10 ชั่วโมง',
+    hours: 10,
+    priceBaht: 1800,
+    bahtPerHour: 180,
+    validForDays: 90,
+    withdrawnAt: null,
+    ...overrides,
+  };
+}
+
+function sold(overrides: Record<string, unknown> = {}) {
+  return {
+    packageId: 'p1',
+    typeId: 't1',
+    typeName: 'ชุด 10 ชั่วโมง',
+    customerName: 'ก๊วนเหมา',
+    customerPhone: '0812345678',
+    hoursSold: 10,
+    priceBaht: 1800,
+    bahtPerHour: 180,
+    hoursLeft: 8,
+    expiresOn: '2026-12-25',
+    runningOut: false,
+    expiredAt: null,
+    soldAt: '2026-09-26T04:00:00Z',
+    moves: [
+      { hours: 10, move: 'Sold', bookingId: null, at: '2026-09-26T04:00:00Z' },
+      { hours: -2, move: 'Used', bookingId: 'b1', at: '2026-09-27T04:00:00Z' },
+    ],
+    ...overrides,
+  };
+}
+
+describe('PackagesPage', () => {
+  let fixture: ComponentFixture<PackagesPage>;
+  let httpMock: HttpTestingController;
+
+  function render(board: unknown[], packages: unknown[]): void {
+    // The language is remembered in storage, and a spec that ran earlier in this worker may have
+    // left English there; these assertions read the Thai words.
+    localStorage.clear();
+    TestBed.configureTestingModule({
+      imports: [PackagesPage],
+      providers: pageProviders(),
+    });
+
+    httpMock = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(PackagesPage);
+    fixture.componentRef.setInput('venueId', 'v1');
+    fixture.detectChanges();
+
+    httpMock.expectOne('/api/venues/v1/packages/types').flush(board);
+    httpMock.expectOne('/api/venues/v1/packages').flush(packages);
+    fixture.detectChanges();
+  }
+
+  afterEach(() => {
+    httpMock.verify();
+    TestBed.resetTestingModule();
+  });
+
+  it('says when nothing has been sold', () => {
+    render([offer()], []);
+
+    expect(textOf(fixture, 'nothing-sold')).toBe(TRANSLATIONS.th['packages.nothingSold']);
+  });
+
+  it('will not offer a sale with nothing on the board', () => {
+    render([], []);
+
+    expect(elementOf(fixture, 'nothing-on-the-board')).not.toBeNull();
+    expect(elementOf(fixture, 'sell-package')).toBeNull();
+  });
+
+  it('sells one to a named customer, on the only offer there is', () => {
+    render([offer()], []);
+
+    setInput(fixture, '[data-testid="customer-name"]', ' ก๊วนเหมา ');
+    setInput(fixture, '[data-testid="customer-phone"]', '0812345678');
+    clickOn(fixture, 'paid-PromptPay');
+    clickOn(fixture, 'sell-package');
+
+    const request = httpMock.expectOne('/api/venues/v1/packages');
+    expect(request.request.body).toEqual({
+      packageTypeId: 't1',
+      customerName: 'ก๊วนเหมา',
+      customerPhone: '0812345678',
+      paidBy: 'PromptPay',
+    });
+
+    request.flush(sold({ hoursLeft: 10, moves: [] }));
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, 'package-p1')).not.toBeNull();
+  });
+
+  it('will not sell to nobody', () => {
+    render([offer()], []);
+
+    clickOn(fixture, 'sell-package');
+
+    httpMock.expectNone('/api/venues/v1/packages');
+    expect(textOf(fixture, 'customer-name-error')).not.toBe('');
+  });
+
+  /**
+   * What is left is the number somebody opened this page for, and where it went is the question
+   * a package gets asked (PRD US-31).
+   */
+  it('shows what is left and every movement that got it there', () => {
+    render([offer()], [sold()]);
+
+    expect(textOf(fixture, 'left-p1')).toContain('8');
+    expect(textOf(fixture, 'left-p1')).toContain('10');
+
+    const moves = elementOf(fixture, 'moves-p1');
+    expect(moves!.textContent).toContain(TRANSLATIONS.th['packages.move.Sold']);
+    expect(moves!.textContent).toContain(TRANSLATIONS.th['packages.move.Used']);
+    expect(moves!.textContent).toContain('-2');
+
+    expect(textOf(fixture, 'hours-owed')).toContain('8');
+  });
+
+  it('puts the ones about to run out first, and marks them', () => {
+    render([offer()], [sold(), sold({ packageId: 'p2', runningOut: true })]);
+
+    const rows = fixture.nativeElement.querySelectorAll('[data-testid^="package-"]');
+    expect(rows[0].getAttribute('data-testid')).toBe('package-p2');
+    expect(rows[0].classList).toContain('running-out');
+    expect(textOf(fixture, 'hours-owed')).toContain(TRANSLATIONS.th['packages.runningOutCount']);
+  });
+
+  /** An offer is replaced, never edited: a package sold from one keeps the terms it was sold on. */
+  it('puts an offer on the board and takes one off', () => {
+    render([], []);
+
+    setInput(fixture, '[data-testid="offer-name"]', 'ชุด 20 ชั่วโมง');
+    setInput(fixture, '[data-testid="offer-hours"]', '20');
+    setInput(fixture, '[data-testid="offer-price"]', '3400');
+    setInput(fixture, '[data-testid="offer-days"]', '120');
+    clickOn(fixture, 'add-offer');
+
+    const added = httpMock.expectOne('/api/venues/v1/packages/types');
+    expect(added.request.body).toEqual({
+      name: 'ชุด 20 ชั่วโมง',
+      hours: 20,
+      priceBaht: 3400,
+      validForDays: 120,
+    });
+
+    added.flush(offer({ typeId: 't2', name: 'ชุด 20 ชั่วโมง', hours: 20, priceBaht: 3400 }));
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, 'board-t2')).not.toBeNull();
+
+    clickOn(fixture, 'withdraw-t2');
+    httpMock
+      .expectOne('/api/venues/v1/packages/types/t2/withdraw')
+      .flush(offer({ typeId: 't2', withdrawnAt: '2026-09-26T05:00:00Z' }));
+    fixture.detectChanges();
+
+    // It stays on the page, struck through, because a sold package points at it.
+    expect(elementOf(fixture, 'board-t2')!.classList).toContain('old');
+    expect(elementOf(fixture, 'sell-package')).toBeNull();
+  });
+});

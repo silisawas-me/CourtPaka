@@ -89,6 +89,23 @@ public sealed class Booking
     public CounterPayment? PaidAtCounter { get; init; }
 
     /// <summary>
+    /// The package whose hours paid for this booking, or null (PRD US-31). A booking is paid for
+    /// with hours or with money, never with both, so this being set is the whole of its payment.
+    /// </summary>
+    public Guid? PackageId { get; set; }
+
+    /// <summary>How many of the package's hours it took.</summary>
+    public int PackageHours { get; set; }
+
+    /// <summary>
+    /// What those hours were worth, at what the customer paid for an hour of that package. It is
+    /// a snapshot for the same reason the price is (BR-05), and it is the amount the venue has
+    /// actually received for this booking — not the price on the board, which is what they chose
+    /// not to pay (PRD US-31, ⚠️ S-27).
+    /// </summary>
+    public decimal PackageBaht { get; set; }
+
+    /// <summary>
     /// The standing arrangement this booking came from, or null (PRD US-30). It is the only thread
     /// between the week and the arrangement; everything else about the booking is ordinary, which
     /// is the point — a group's week is cancelled, moved and paid for through the same doors as
@@ -169,6 +186,9 @@ public sealed class Booking
     /// <summary>The arrangement that made this booking, where one did (PRD US-30).</summary>
     public BookingSeries? Series { get; init; }
 
+    /// <summary>The package that paid for it, where one did (PRD US-31).</summary>
+    public HourPackage? Package { get; init; }
+
     public Venue? Venue { get; init; }
 
     public AppUser? Booker { get; init; }
@@ -248,6 +268,42 @@ public sealed class Booking
             slots,
             takenByUserId,
             at);
+
+    /// <summary>
+    /// A booking taken at the counter and paid for with hours the customer bought earlier
+    /// (PRD US-31). It starts confirmed with the money received, because it was — when the
+    /// package was sold. Nothing goes in the till today: the hours are what changes hands.
+    /// </summary>
+    public static Booking OnHours(
+        Guid venueId,
+        string customerName,
+        string? customerPhone,
+        HourPackage package,
+        int hours,
+        Guid cancellationPolicyId,
+        IEnumerable<SlotPrice> slots,
+        Guid takenByUserId,
+        DateTimeOffset at)
+    {
+        var booking = AtTheVenue(
+            venueId,
+            customerName,
+            customerPhone,
+            // Null, and it says something: nothing was paid at this counter today.
+            null,
+            PaymentState.Received,
+            null,
+            cancellationPolicyId,
+            slots,
+            takenByUserId,
+            at);
+
+        booking.PackageId = package.Id;
+        booking.PackageHours = hours;
+        booking.PackageBaht = Packages.Worth(package.PriceBaht, package.HoursSold, hours);
+
+        return booking;
+    }
 
     /// <summary>
     /// One week of a standing arrangement (PRD US-30). It is a counter booking in every way but

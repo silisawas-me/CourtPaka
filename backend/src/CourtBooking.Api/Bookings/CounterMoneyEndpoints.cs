@@ -13,7 +13,10 @@ public sealed record TakePaymentRequest(decimal AmountBaht, string Method, strin
 /// <summary>One amount the venue took, as the counter reads it back (PRD US-26).</summary>
 public sealed record PaymentReceiptResponse(
     Guid Id,
-    Guid BookingId,
+    /// <summary>The booking it was for, or null where it was a package being sold (US-31).</summary>
+    Guid? BookingId,
+    /// <summary>The package that was sold, where that is what it was.</summary>
+    Guid? PackageId,
     decimal AmountBaht,
     string Method,
     DateTimeOffset ReceivedAt,
@@ -333,6 +336,7 @@ public static class CounterMoneyEndpoints
             {
                 receipt.Id,
                 receipt.BookingId,
+                receipt.PackageId,
                 receipt.AmountBaht,
                 receipt.Method,
                 receipt.ReceivedAt,
@@ -381,6 +385,7 @@ public static class CounterMoneyEndpoints
                 .Select(receipt => new PaymentReceiptResponse(
                     receipt.Id,
                     receipt.BookingId,
+                    receipt.PackageId,
                     receipt.AmountBaht,
                     receipt.Method.ToString(),
                     receipt.ReceivedAt,
@@ -601,6 +606,7 @@ public static class CounterMoneyEndpoints
             .Select(receipt => new PaymentReceiptResponse(
                 receipt.Id,
                 receipt.BookingId,
+                receipt.PackageId,
                 receipt.AmountBaht,
                 receipt.Method.ToString(),
                 receipt.ReceivedAt,

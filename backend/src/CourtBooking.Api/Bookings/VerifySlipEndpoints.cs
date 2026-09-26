@@ -214,6 +214,7 @@ public static class VerifySlipEndpoints
             {
                 candidate.TotalBaht,
                 candidate.DepositBaht,
+                candidate.PackageBaht,
                 LastHourEndsAt = candidate.Slots.Max(slot => slot.EndsAt),
             })
             .SingleOrDefaultAsync(cancellationToken);
@@ -287,7 +288,13 @@ public static class VerifySlipEndpoints
             : payment;
 
         var refundDue = Refunds.DueFor(
-            landed, settled, booking.TotalBaht, refundPercent, holding, booking.DepositBaht);
+            landed,
+            settled,
+            booking.TotalBaht,
+            refundPercent,
+            holding,
+            booking.DepositBaht,
+            booking.PackageBaht);
 
         // A booking that was turned away stops holding its hours; they go back on sale (PRD 6.1).
         // Before the booking row, not after: that is the order every writer takes these two

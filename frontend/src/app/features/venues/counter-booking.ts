@@ -7,6 +7,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { errorKey } from '../../core/http/api-error';
 import { venueNow } from '../../core/i18n/plain-date';
 import { TranslationService } from '../../core/i18n/translation.service';
+import { HourPackage, PackagesService } from '../../core/venues/packages.service';
 import { Availability, PublicVenueService } from '../../core/venues/public-venue.service';
 import {
   CounterPayment,
@@ -56,6 +57,7 @@ interface Pick {
 export class CounterBooking {
   private readonly publicVenues = inject(PublicVenueService);
   private readonly bookings = inject(VenueBookingsService);
+  private readonly packages = inject(PackagesService);
   private readonly forms = inject(FormBuilder);
 
   protected readonly i18n = inject(TranslationService);
@@ -78,11 +80,24 @@ export class CounterBooking {
   protected readonly sending = signal(false);
   protected readonly error = signal<string | null>(null);
 
+  /**
+   * The packages this venue has sold that still have hours on them (PRD US-31). Loaded with the
+   * grid rather than when somebody asks: the question "are they on a package?" is asked while
+   * the customer is standing there, and a second round trip then is a queue.
+   */
+  protected readonly packagesWithHours = signal<HourPackage[]>([]);
+
   protected readonly form = this.forms.nonNullable.group({
     customerName: ['', [Validators.required, Validators.maxLength(NAME_MAX_LENGTH)]],
     customerPhone: ['', Validators.maxLength(PHONE_MAX_LENGTH)],
     paidBy: this.forms.nonNullable.control<CounterPayment>('Cash'),
+
+    // Null means money. A package named here is what pays, and how they paid stops being asked.
+    packageId: this.forms.control<string | null>(null),
   });
+
+  /** Whether hours are paying for this one rather than money. */
+  protected readonly onHours = computed(() => this.form.controls.packageId.value !== null);
 
   /** What the picks come to, from the prices the grid was drawn with. The server charges its own. */
   protected readonly total = computed(() => {
@@ -132,7 +147,7 @@ export class CounterBooking {
       return;
     }
 
-    const { customerName, customerPhone, paidBy } = this.form.getRawValue();
+    const { customerName, customerPhone, paidBy, packageId } = this.form.getRawValue();
     this.sending.set(true);
     this.error.set(null);
 
@@ -145,13 +160,22 @@ export class CounterBooking {
         })),
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim() || null,
-        paidBy,
+        paidBy: packageId === null ? paidBy : null,
+        packageId,
       })
       .subscribe({
         next: (booking) => {
           this.sending.set(false);
           this.picks.set([]);
-          this.form.reset({ customerName: '', customerPhone: '', paidBy: 'Cash' });
+          this.form.reset({
+            customerName: '',
+            customerPhone: '',
+            paidBy: 'Cash',
+            packageId: null,
+          });
+
+          // A package that just paid for something has fewer hours on it now.
+          this.loadPackages(this.venueId());
           this.taken.emit(booking);
         },
         error: (failure: unknown) => {
@@ -170,8 +194,23 @@ export class CounterBooking {
     return date < now.date || (date === now.date && hour + 1 <= now.hour + now.minute / 60);
   }
 
+  /**
+   * The packages this venue has sold that still have hours on them. A refusal is not put on the
+   * screen: a counter that cannot read them can still take money, which is the thing it is for.
+   */
+  private loadPackages(venueId: string): void {
+    this.packages.sold(venueId).subscribe({
+      next: (sold) =>
+        this.packagesWithHours.set(
+          sold.filter((one) => one.hoursLeft > 0 && one.expiredAt === null),
+        ),
+      error: () => this.packagesWithHours.set([]),
+    });
+  }
+
   private load(venueId: string, date: string): void {
     this.loading.set(true);
+    this.loadPackages(venueId);
 
     this.publicVenues.availability(venueId, date).subscribe({
       next: (grid) => {

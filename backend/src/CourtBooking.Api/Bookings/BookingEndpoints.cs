@@ -205,7 +205,8 @@ public static class BookingEndpoints
             booking.TotalBaht,
             offer.RefundPercent,
             taken,
-            booking.DepositBaht);
+            booking.DepositBaht,
+            booking.PackageBaht);
 
         // The hours go back on sale the moment they are given up (PRD 6.1). Before the booking
         // row, which is the order BookedSlots.ReleaseAsync explains and every writer keeps.
@@ -340,8 +341,8 @@ public static class BookingEndpoints
         // What has been taken against each booking, which caps what a cancellation could give
         // back (PRD US-28). Grouped like the refunds above rather than asked per booking.
         var taken = await database.PaymentReceipts
-            .Where(receipt => bookingIds.Contains(receipt.BookingId))
-            .GroupBy(receipt => receipt.BookingId)
+            .Where(receipt => receipt.BookingId != null && bookingIds.Contains(receipt.BookingId.Value))
+            .GroupBy(receipt => receipt.BookingId!.Value)
             .Select(receipts => new
             {
                 BookingId = receipts.Key,

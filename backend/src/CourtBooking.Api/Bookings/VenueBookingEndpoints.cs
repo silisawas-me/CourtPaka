@@ -73,6 +73,11 @@ public static class VenueBookingEndpoints
         // suspension where they are mapped, so the group's answer is never the one that decides.
         bookings.MapBookingHourEndpoints();
 
+        // Hours instead of money (PRD US-31). Selling, in the sense that matters: it settles a
+        // booking, so a suspended venue may not do it.
+        bookings.MapPost("/{bookingId:guid}/pay-with-package", PackageEndpoints.SpendAsync)
+            .RequireAuthorization(VenuePolicies.Needs(VenuePermissions.ManageBookings));
+
         bookings.MapRefundEndpoints();
         // Money taken at the desk, in parts and in the form it arrived (PRD US-26).
         bookings.MapCounterMoneyEndpoints();
@@ -406,7 +411,8 @@ public static class VenueBookingEndpoints
             booking.TotalBaht,
             booking.RefundPercent,
             await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken),
-            booking.DepositBaht);
+            booking.DepositBaht,
+            booking.PackageBaht);
 
         var settled = await database.Bookings
             .Where(candidate =>
@@ -601,6 +607,12 @@ public static class VenueBookingEndpoints
         database.BookingStatusChanges.Add(BookingTransitions.Record(
             bookingId, status, decided, byUserId, now, reason, cause));
 
+        // A booking a package paid for gives back hours, not money (PRD US-31, BR-06): the money
+        // came in when the package was sold and is not the venue's to send anywhere. Written in
+        // this transaction, because a booking cancelled with its hours left spent is a customer
+        // out of pocket with nothing on the page to say so.
+        PackageEndpoints.GiveHoursBack(database, booking, offer.RefundPercent, byUserId, now);
+
         await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -710,15 +722,20 @@ public static class VenueBookingEndpoints
                 StatusCodes.Status400BadRequest, BookingErrorCodes.InvalidCustomerPhone);
         }
 
+        // Hours instead of money (PRD US-31). Where a package is named nothing is going in the
+        // till, so there is no way of paying to read.
+        var onHours = request.PackageId is not null;
+
         // The names and nothing else: Enum.TryParse would take "1" and "Cash,Transfer".
-        if (request.PaidBy is not { } paidBy
-            || !Enum.GetNames<CounterPayment>().Contains(paidBy, StringComparer.Ordinal))
+        if (!onHours
+            && (request.PaidBy is not { } named
+                || !Enum.GetNames<CounterPayment>().Contains(named, StringComparer.Ordinal)))
         {
             return ApiProblem.Of(
                 StatusCodes.Status400BadRequest, BookingErrorCodes.InvalidCounterPayment);
         }
 
-        var paid = Enum.Parse<CounterPayment>(paidBy);
+        var paidBy = onHours ? null : request.PaidBy;
         var now = timeProvider.GetUtcNow();
         var slots = request.Slots ?? [];
 
@@ -739,15 +756,56 @@ public static class VenueBookingEndpoints
         var policyId = await BookingEndpoints.InForcePolicyIdAsync(
             database, venueId, cancellationToken);
 
-        var booking = Booking.AtCounter(
-            venueId,
-            name,
-            string.IsNullOrEmpty(phone) ? null : phone,
-            paid,
-            policyId,
-            priced.Slots,
-            membership.UserId,
-            now);
+        // The hours have to be there before the court is put aside, and they have to still be
+        // there when it is: the check and the write are one transaction, taken in the same order
+        // and behind the same lock as every other way of paying (PRD US-26).
+        HourPackage? package = null;
+        if (request.PackageId is { } packageId)
+        {
+            package = await database.HourPackages
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    one => one.Id == packageId && one.VenueId == venueId, cancellationToken);
+
+            if (package is null)
+            {
+                return ApiProblem.Of(StatusCodes.Status404NotFound, PackageErrorCodes.NotFound);
+            }
+
+            if (package.ExpiredAt is not null
+                || package.ExpiresOn < PlatformRequirements.BangkokToday(timeProvider))
+            {
+                return ApiProblem.Of(StatusCodes.Status409Conflict, PackageErrorCodes.RunOut);
+            }
+
+            if (await PackageEndpoints.BalanceAsync(database, package.Id, cancellationToken)
+                < priced.Slots.Length)
+            {
+                return ApiProblem.Of(
+                    StatusCodes.Status409Conflict, PackageErrorCodes.NotEnoughHours);
+            }
+        }
+
+        var booking = package is null
+            ? Booking.AtCounter(
+                venueId,
+                name,
+                string.IsNullOrEmpty(phone) ? null : phone,
+                Enum.Parse<CounterPayment>(paidBy!),
+                policyId,
+                priced.Slots,
+                membership.UserId,
+                now)
+            : Booking.OnHours(
+                venueId,
+                name,
+                string.IsNullOrEmpty(phone) ? null : phone,
+                package,
+                priced.Slots.Length,
+                policyId,
+                priced.Slots,
+                membership.UserId,
+                now);
 
         if (await BookingEndpoints.WriteNewAsync(database, booking, timeProvider, cancellationToken)
             is { } refused)
@@ -755,17 +813,37 @@ public static class VenueBookingEndpoints
             return ApiProblem.Of(StatusCodes.Status409Conflict, refused);
         }
 
-        // The money was in the venue's hands before the booking was written, which is why it
-        // starts confirmed (PRD US-13) — so the day's count is told about it too (PRD US-26).
-        database.PaymentReceipts.Add(new PaymentReceipt
+        if (package is null)
         {
-            BookingId = booking.Id,
-            VenueId = venueId,
-            AmountBaht = booking.TotalBaht,
-            Method = paid == CounterPayment.Cash ? PaymentMethod.Cash : PaymentMethod.PromptPay,
-            ReceivedAt = now,
-            ReceivedByUserId = membership.UserId,
-        });
+            // The money was in the venue's hands before the booking was written, which is why it
+            // starts confirmed (PRD US-13) — so the day's count is told about it too (US-26).
+            database.PaymentReceipts.Add(new PaymentReceipt
+            {
+                BookingId = booking.Id,
+                VenueId = venueId,
+                AmountBaht = booking.TotalBaht,
+                Method = paidBy == nameof(CounterPayment.Cash)
+                    ? PaymentMethod.Cash
+                    : PaymentMethod.PromptPay,
+                ReceivedAt = now,
+                ReceivedByUserId = membership.UserId,
+            });
+        }
+        else
+        {
+            // Nothing in the till: the money came in when the package was sold, and a receipt
+            // here would count it a second time on a day it did not arrive (PRD US-31).
+            database.PackageEntries.Add(new PackageEntry
+            {
+                PackageId = package.Id,
+                Hours = -booking.PackageHours,
+                Move = PackageMove.Used,
+                BookingId = booking.Id,
+                At = now,
+                ByUserId = membership.UserId,
+            });
+        }
+
         await database.SaveChangesAsync(cancellationToken);
 
         AppEvents.For(loggers).LogInformation(
@@ -842,8 +920,8 @@ public static class VenueBookingEndpoints
 
         // What each of them has been paid so far, counted from the receipts (PRD US-26).
         var taken = await database.PaymentReceipts
-            .Where(receipt => bookingIds.Contains(receipt.BookingId))
-            .GroupBy(receipt => receipt.BookingId)
+            .Where(receipt => receipt.BookingId != null && bookingIds.Contains(receipt.BookingId.Value))
+            .GroupBy(receipt => receipt.BookingId!.Value)
             .Select(receipts => new
             {
                 BookingId = receipts.Key,

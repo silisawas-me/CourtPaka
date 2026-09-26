@@ -121,6 +121,7 @@ public static class PlatformDashboard
                 booking.TotalBaht,
                 booking.RefundDueBaht,
                 booking.DepositBaht,
+                booking.PackageBaht,
                 // What arrived, which since deposits is not always the price (PRD US-28).
                 Taken = database.PaymentReceipts
                     .Where(receipt => receipt.BookingId == booking.Id)
@@ -155,7 +156,10 @@ public static class PlatformDashboard
                         Math.Min(
                             booking.TotalBaht,
                             Takings.HeldFor(
-                                booking.PaymentState, booking.Taken, booking.DepositBaht))
+                                booking.PaymentState,
+                                booking.Taken,
+                                booking.DepositBaht,
+                                booking.PackageBaht))
                         - booking.RefundDueBaht));
 
                 return new PlatformVenueFigures(

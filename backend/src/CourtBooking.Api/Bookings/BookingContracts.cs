@@ -310,7 +310,12 @@ public sealed record CounterBookingRequest(
     BookingSlotRequest[]? Slots,
     string? CustomerName,
     string? CustomerPhone,
-    string? PaidBy);
+    string? PaidBy,
+    /// <summary>
+    /// Hours the customer bought earlier, instead of money (PRD US-31). Where this is given
+    /// <see cref="PaidBy"/> is not read: nothing is going in the till.
+    /// </summary>
+    Guid? PackageId = null);
 
 /// <summary>
 /// One of the venue's bookings for a day, as its counter reads it (PRD US-13). It names an online
@@ -515,3 +520,61 @@ public sealed record BookingSeriesStoppedResponse(
     BookingSeriesResponse Series,
     int Cancelled,
     int Left);
+
+/// <summary>An offer a venue puts on its board (PRD US-31). Nullable so a missing field is
+/// refused with a code the screen can say in words rather than by the model binder (US-23).</summary>
+public sealed record PackageTypeRequest(
+    string? Name,
+    int? Hours,
+    decimal? PriceBaht,
+    int? ValidForDays);
+
+/// <summary>One offer, as the venue reads it.</summary>
+public sealed record PackageTypeResponse(
+    Guid TypeId,
+    string Name,
+    int Hours,
+    decimal PriceBaht,
+    /// <summary>What an hour of it costs. Worked out here so no screen divides it itself.</summary>
+    decimal BahtPerHour,
+    int ValidForDays,
+    /// <summary>When it came off the board, or null while it is still on it.</summary>
+    DateTimeOffset? WithdrawnAt);
+
+/// <summary>Selling one to somebody standing at the counter (PRD US-31).</summary>
+public sealed record SellPackageRequest(
+    Guid PackageTypeId,
+    string? CustomerName,
+    string? CustomerPhone,
+    /// <summary>How they paid, spelled as <see cref="PaymentMethod"/> spells it.</summary>
+    string? PaidBy);
+
+/// <summary>One movement of hours, in or out (PRD US-31).</summary>
+public sealed record PackageMoveResponse(
+    int Hours,
+    string Move,
+    Guid? BookingId,
+    DateTimeOffset At);
+
+/// <summary>One package somebody bought, and everything that has happened to it.</summary>
+public sealed record HourPackageResponse(
+    Guid PackageId,
+    Guid TypeId,
+    string TypeName,
+    string CustomerName,
+    string? CustomerPhone,
+    int HoursSold,
+    decimal PriceBaht,
+    decimal BahtPerHour,
+    /// <summary>What is left: the sum of the movements, never a number anybody keeps.</summary>
+    int HoursLeft,
+    DateOnly ExpiresOn,
+    /// <summary>Whether somebody should be rung about it before the hours run out (⚠️ S-28).</summary>
+    bool RunningOut,
+    /// <summary>When what was left was written off, or null.</summary>
+    DateTimeOffset? ExpiredAt,
+    DateTimeOffset SoldAt,
+    PackageMoveResponse[] Moves);
+
+/// <summary>Paying for a booking with a package's hours (PRD US-31).</summary>
+public sealed record SpendPackageRequest(Guid PackageId);

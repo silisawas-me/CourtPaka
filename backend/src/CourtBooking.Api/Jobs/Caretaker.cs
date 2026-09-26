@@ -50,6 +50,9 @@ public sealed class Caretaker(
         // After the holds that ran out, so hours let go of this sweep are offered in it.
         await DoAsync("hours somebody was waiting for", WaitlistOffersAsync, stopping);
 
+        // Hours somebody bought and did not use, on the day after they were good for (US-31).
+        await DoAsync("hours that ran out", HoursThatRanOutAsync, stopping);
+
         // Before the post, so a week made this sweep is one the day's list already has.
         await DoAsync("weeks of standing arrangements", SeriesWeeksAsync, stopping);
 
@@ -66,6 +69,16 @@ public sealed class Caretaker(
         IServiceProvider services,
         CancellationToken stopping) =>
         await services.GetRequiredService<WaitlistOffers>().WorkAsync(stopping);
+
+    /// <summary>
+    /// What is left on a package whose day has passed, written off (PRD US-31, S-28). Nobody asks
+    /// for it: the day passing is the whole of the reason.
+    /// </summary>
+    private async Task HoursThatRanOutAsync(
+        AppDbContext database,
+        IServiceProvider services,
+        CancellationToken stopping) =>
+        await services.GetRequiredService<PackageExpiry>().WorkAsync(stopping);
 
     /// <summary>
     /// The weeks of every standing arrangement that have come inside the booking window
