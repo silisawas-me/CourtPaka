@@ -679,5 +679,7 @@
   "board.needs.takeMoney": "รับเงิน",
   "board.needs.settle": "ยืนยันว่าเงินเข้า",
   "board.needs.refund": "ต้องคืนเงิน",
-  "board.needs.more": "และอีก"
+  "board.needs.more": "และอีก",
+  "settings.courts.outOfUse": "ปิดใช้งาน",
+  "settings.sections": "หัวข้อในหน้านี้"
 }

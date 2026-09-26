@@ -66,6 +66,7 @@ type DayForm = FormGroup<{
     PriceBands,
     CancellationPolicyEditor,
   ],
+  styleUrl: './venue-settings.page.scss',
   templateUrl: './venue-settings.page.html',
   providers: [FORM_FIELD_DEFAULTS, provideLocalizedDateAdapter()],
 })

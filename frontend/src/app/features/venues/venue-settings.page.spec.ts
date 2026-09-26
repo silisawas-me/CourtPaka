@@ -8,6 +8,7 @@ import { TRANSLATIONS } from '../../testing/translations';
 import {
   check,
   clickOn,
+  controlOf,
   isDisabled,
   isOn,
   elementOf,
@@ -494,5 +495,59 @@ describe('VenueSettingsPage', () => {
     fixture.detectChanges();
 
     expect(textOf(fixture, 'risk-error')).toBe(TRANSLATIONS.th['error.venue.invalid_risk_rule']);
+  });
+
+  /**
+   * The switch is the only thing on a court's row that says which way it is set, and Material
+   * hands the accessible name to the <button> inside it — only through its own `aria-label` input.
+   * Bound as an attribute instead, the name lands nowhere: the host binding strips the attribute
+   * again and the projected label is empty, so a screen reader reads "switch, on" six times.
+   */
+  it('names every court switch for a reader who cannot see the row', () => {
+    render({}, [COURT, { ...COURT, id: 'c2', name: 'Court 2', position: 1 }]);
+
+    for (const [id, name] of [
+      ['c1', 'Court 1'],
+      ['c2', 'Court 2'],
+    ]) {
+      const control = controlOf(fixture, `[data-testid="court-active-${id}"]`);
+      expect(control.getAttribute('aria-label')).toContain(name);
+      expect(control.getAttribute('aria-labelledby')).toBeNull();
+    }
+  });
+
+  it('counts the courts beside the name of the card', () => {
+    render({}, [COURT, { ...COURT, id: 'c2', name: 'Court 2', position: 1 }]);
+
+    expect(textOf(fixture, 'court-count')).toBe('2');
+  });
+
+  /** The switch says which way it is set; the badge is for the row that is the exception. */
+  it('says out of use on the court that is, and on no other', () => {
+    render({}, [COURT, { ...COURT, id: 'c2', name: 'Court 2', position: 1, isActive: false }]);
+
+    expect(elementOf(fixture, 'out-of-use-c1')).toBeNull();
+    expect(textOf(fixture, 'out-of-use-c2')).toBe(TRANSLATIONS.th['settings.courts.outOfUse']);
+  });
+
+  /**
+   * Five links and five sections, checked against each other: a jump whose target has been
+   * renamed lands nowhere at all, and nothing about the page looks wrong until it is pressed.
+   */
+  it('points every jump at a section that is on the page', () => {
+    render({}, [COURT]);
+
+    const links = [
+      ...elementOf<HTMLElement>(fixture, 'settings-sections')!.querySelectorAll('a'),
+    ].map((link) => link.getAttribute('href')!);
+
+    expect(links.length).toBe(5);
+    for (const href of links) {
+      // The router writes the whole URL; the part after the hash is the section it points at,
+      // which is also the selector the browser looks for.
+      expect(href).toContain('#');
+      const fragment = href.slice(href.indexOf('#'));
+      expect((fixture.nativeElement as HTMLElement).querySelector(fragment)).not.toBeNull();
+    }
   });
 });

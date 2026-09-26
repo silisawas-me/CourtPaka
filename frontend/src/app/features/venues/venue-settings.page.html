@@ -20,13 +20,39 @@
       @if (!canManage()) {
         <p class="muted" data-testid="read-only">{{ i18n.t('settings.readOnly') }}</p>
       }
+
+      <!--
+        Everything a venue is set by is on this page, which on a phone is six thousand pixels of
+        it. These are the way in: an owner comes here to change one thing, and scrolling past four
+        other things to find it is how a page this long stops being read at all.
+      -->
+      <nav
+        class="jumps"
+        data-testid="settings-sections"
+        [attr.aria-label]="i18n.t('settings.sections')"
+      >
+        <!--
+          Through the router, not as a bare href: the app has a <base href="/">, and the browser
+          resolves "#courts" against that rather than against the page it is on — which lands the
+          reader on the home screen with a fragment nobody is looking for. The router keeps the
+          route it is on and changes only the fragment, and the app's scrolling does the rest.
+        -->
+        <a [routerLink]="[]" fragment="courts">{{ i18n.t('settings.courts.title') }}</a>
+        <a [routerLink]="[]" fragment="hours">{{ i18n.t('settings.hours.title') }}</a>
+        <a [routerLink]="[]" fragment="prices">{{ i18n.t('pricing.title') }}</a>
+        <a [routerLink]="[]" fragment="cancellation">{{ i18n.t('cancellation.title') }}</a>
+        <a [routerLink]="[]" fragment="deposit">{{ i18n.t('settings.deposit') }}</a>
+      </nav>
     </mat-card-content>
   </mat-card>
 
   <div class="columns">
-    <mat-card>
+    <mat-card id="courts" class="jump-target" tabindex="-1">
       <mat-card-header>
-        <mat-card-title>{{ i18n.t('settings.courts.title') }}</mat-card-title>
+        <mat-card-title>
+          {{ i18n.t('settings.courts.title') }}
+          <span class="count" data-testid="court-count">{{ courtList().length }}</span>
+        </mat-card-title>
       </mat-card-header>
 
       <mat-card-content>
@@ -72,6 +98,17 @@
                 } @else {
                   <span class="entry-name">{{ court.name }}</span>
 
+                  <!--
+                    A court that is in use is every court on an ordinary day, so it says nothing:
+                    the switch beside it already does. What is worth a word is the one that is
+                    out of use, or the one with a date coming.
+                  -->
+                  @if (!court.isActive) {
+                    <span class="badge" [attr.data-testid]="'out-of-use-' + court.id">
+                      {{ i18n.t('settings.courts.outOfUse') }}
+                    </span>
+                  }
+
                   @for (change of row.scheduled; track change.effectiveFrom) {
                     <span class="muted" [attr.data-testid]="'scheduled-' + court.id">
                       {{
@@ -91,10 +128,9 @@
                     [checked]="court.isActive"
                     [disabled]="!canManage() || isSaving(court)"
                     [attr.data-testid]="'court-active-' + court.id"
+                    [aria-label]="i18n.t('settings.courts.inUse') + ' — ' + court.name"
                     (change)="toggleCourt(court, $event.checked)"
-                  >
-                    {{ i18n.t('settings.courts.inUse') }}
-                  </mat-slide-toggle>
+                  />
 
                   @if (canManage()) {
                     <button
@@ -113,7 +149,7 @@
         }
 
         @if (canManage()) {
-          <form class="stack" [formGroup]="newCourtForm" (ngSubmit)="addCourt()" novalidate>
+          <form class="add-court" [formGroup]="newCourtForm" (ngSubmit)="addCourt()" novalidate>
             <mat-form-field class="field">
               <mat-label>{{ i18n.t('settings.courts.name') }}</mat-label>
               <input
@@ -137,7 +173,7 @@
       </mat-card-content>
     </mat-card>
 
-    <mat-card>
+    <mat-card id="hours" class="jump-target" tabindex="-1">
       <mat-card-header>
         <mat-card-title>{{ i18n.t('settings.hours.title') }}</mat-card-title>
       </mat-card-header>
@@ -264,11 +300,20 @@
   </div>
 
   <div class="columns">
-    <app-price-bands [venueId]="current.id" [canManage]="canManage()" />
-    <app-cancellation-policy [venueId]="current.id" [canManage]="canManage()" />
+    <!--
+      The anchors are on wrappers here rather than on the cards themselves: the nav belongs to
+      this page, and an id inside a component that could be used twice is an id that points at
+      whichever copy came first.
+    -->
+    <div id="prices" class="jump-target" tabindex="-1">
+      <app-price-bands [venueId]="current.id" [canManage]="canManage()" />
+    </div>
+    <div id="cancellation" class="jump-target" tabindex="-1">
+      <app-cancellation-policy [venueId]="current.id" [canManage]="canManage()" />
+    </div>
   </div>
 
-  <mat-card>
+  <mat-card id="deposit" class="jump-target" tabindex="-1">
     <mat-card-header>
       <mat-card-title>{{ i18n.t('settings.deposit') }}</mat-card-title>
     </mat-card-header>
