@@ -189,6 +189,12 @@ public sealed class DepositTests(ApiTestFixture api) : IClassFixture<ApiTestFixt
         var (booker, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 9);
         await owner.PostAsync($"/api/venues/{venue.Id}/slip-queue/{booking.Id}/confirm", null);
 
+        // The terms give everything back with a day's notice, and a booking made for nine
+        // o'clock tomorrow has that only until nine o'clock this morning — so what this asserts
+        // depended on the hour the suite happened to run at. The hours are put far enough out
+        // for the notice to be the same every time.
+        await scenario.StartsInAsync(booking.Id, TimeSpan.FromDays(2));
+
         var cancelled = await VenueScenario.ReadAsync<BookingResponse>(
             await booker.PostAsync($"/api/bookings/{booking.Id}/cancel", null));
 
