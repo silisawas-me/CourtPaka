@@ -52,6 +52,10 @@ public sealed class Caretaker(
 
         // Last, so a hold this sweep let go of is told about in the same sweep.
         await DoAsync("telling bookers", TellBookersAsync, stopping);
+
+        // Once a month this writes invoices; every other tick it finds nothing due and does
+        // nothing. After the rest, because what it bills for is what the rest has settled.
+        await DoAsync("the month's commission", BillTheMonthAsync, stopping);
     }
 
     /// <summary>
@@ -74,6 +78,17 @@ public sealed class Caretaker(
         CancellationToken stopping) =>
         await services.GetRequiredService<BookerMail>()
             .SendDueAsync(timeProvider.GetUtcNow(), stopping);
+
+    /// <summary>
+    /// The commission invoices for any month whose cut-off has passed and which nobody has
+    /// billed yet (PRD US-21, BR-08). Almost every tick finds nothing to do.
+    /// </summary>
+    private async Task BillTheMonthAsync(
+        AppDbContext database,
+        IServiceProvider services,
+        CancellationToken stopping) =>
+        await services.GetRequiredService<MonthlyBilling>()
+            .IssueDueAsync(timeProvider.GetUtcNow(), stopping);
 
     /// <summary>
     /// Hours held by a booking whose fifteen minutes are up, given back (PRD BR-02, 9.2). The

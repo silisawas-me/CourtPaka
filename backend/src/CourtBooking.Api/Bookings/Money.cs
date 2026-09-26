@@ -125,6 +125,43 @@ public static class Takings
         Math.Max(0m, payment == PaymentState.Received ? Math.Max(takenBaht, askedBaht) : takenBaht);
 
     /// <summary>
+    /// What the venue keeps out of one booking (PRD 6.2, "ยอดที่สนามเก็บไว้"): what it holds,
+    /// never more than the price, less what it owes back. Nought where nothing arrived.
+    ///
+    /// It uses what is owed back rather than what has been sent back, so the number does not
+    /// move with the day a venue happens to record a transfer on. And it reads what the venue
+    /// holds rather than the payment state alone — a booking held on a deposit is revenue for
+    /// the deposit until the desk collects the rest (PRD US-28), which is the correction PRD 6.2's
+    /// own wording predates.
+    ///
+    /// One place, because the venue's revenue (US-15), the platform's GMV (US-22) and what the
+    /// platform charges commission on (BR-08) are the same question asked by three readers.
+    /// </summary>
+    public static decimal KeptBy(
+        PaymentState payment,
+        decimal totalBaht,
+        decimal refundDueBaht,
+        decimal takenBaht,
+        decimal askedBaht)
+    {
+        var held = HeldUpToPrice(payment, totalBaht, takenBaht, askedBaht);
+        return held <= 0m ? 0m : held - refundDueBaht;
+    }
+
+    /// <summary>
+    /// What the venue holds of a booking, never counting more than the booking cost. Its own
+    /// name because "did any money arrive at all" and "what does the venue keep" are different
+    /// questions with different answers: a booking whose whole price is owed back still had
+    /// money arrive, and it is still a booking that happened.
+    /// </summary>
+    public static decimal HeldUpToPrice(
+        PaymentState payment,
+        decimal totalBaht,
+        decimal takenBaht,
+        decimal askedBaht) =>
+        Math.Min(totalBaht, HeldFor(payment, takenBaht, askedBaht));
+
+    /// <summary>
     /// Whether money may still be taken for this booking (PRD US-26). Something has to be owed,
     /// and the booking has to be one the venue is going to honour or has already played: a
     /// booking that was turned away or let go owes nothing forwards, and money against it would

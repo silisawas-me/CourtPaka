@@ -288,18 +288,26 @@ public static class VenueDashboard
                 continue;
             }
 
-            var held = Math.Min(
-                booking.TotalBaht,
-                Takings.HeldFor(booking.PaymentState, booking.Taken, booking.DepositBaht));
-
             // Money that never arrived is not revenue, and a booking held on a deposit is revenue
-            // for the deposit until the desk collects the rest (PRD US-28).
-            if (held <= 0m)
+            // for the deposit until the desk collects the rest (PRD US-28). Asked of what the
+            // venue holds rather than of what it keeps: a booking whose whole price is owed back
+            // still happened, and the month has to count it and say what is owed on it.
+            if (Takings.HeldUpToPrice(
+                    booking.PaymentState,
+                    booking.TotalBaht,
+                    booking.Taken,
+                    booking.DepositBaht) <= 0m)
             {
                 continue;
             }
 
-            var keeps = held - booking.RefundDueBaht;
+            // The same rule the platform's own numbers are built from (PRD 6.2).
+            var keeps = Takings.KeptBy(
+                booking.PaymentState,
+                booking.TotalBaht,
+                booking.RefundDueBaht,
+                booking.Taken,
+                booking.DepositBaht);
             var day = PlatformRequirements.BangkokDateAndHour(booking.FirstStart).Date;
             var so_far = byDay.GetValueOrDefault(day);
 

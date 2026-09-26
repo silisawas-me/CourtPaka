@@ -72,6 +72,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<CommissionRate> CommissionRates => Set<CommissionRate>();
 
+    public DbSet<CommissionInvoice> CommissionInvoices => Set<CommissionInvoice>();
+
+    public DbSet<CommissionInvoiceLine> CommissionInvoiceLines => Set<CommissionInvoiceLine>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -476,6 +480,50 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             rate.HasOne(r => r.SetBy)
                 .WithMany()
                 .HasForeignKey(r => r.SetByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<CommissionInvoice>(invoice =>
+        {
+            invoice.Property(i => i.AmountBaht).HasPrecision(10, 2);
+            invoice.Property(i => i.Number).HasMaxLength(64);
+            invoice.Property(i => i.RefusedReason).HasMaxLength(CommissionInvoice.ReasonMaxLength);
+
+            // A document number is how a venue and the platform talk about one invoice, so two
+            // of anything carrying the same number is not something to find out later (PRD 7.4).
+            invoice.HasIndex(i => i.Number).IsUnique();
+
+            // One invoice per venue per month. The run is built to be safe to repeat, and this
+            // is the answer if it ever is not (PRD US-21).
+            invoice.HasIndex(i => new { i.VenueId, i.Month }).IsUnique();
+
+            invoice.HasOne(i => i.Venue)
+                .WithMany()
+                .HasForeignKey(i => i.VenueId)
+                .OnDelete(DeleteBehavior.Restrict);
+            invoice.HasOne(i => i.PaidBy)
+                .WithMany()
+                .HasForeignKey(i => i.PaidByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<CommissionInvoiceLine>(line =>
+        {
+            line.Property(l => l.KeptBaht).HasPrecision(10, 2);
+            line.Property(l => l.Percent).HasPrecision(5, 2);
+            line.Property(l => l.AmountBaht).HasPrecision(10, 2);
+
+            // The rule that a booking is billed once, kept by the database rather than by the
+            // run being careful (PRD BR-08).
+            line.HasIndex(l => l.BookingId).IsUnique();
+
+            line.HasOne(l => l.Invoice)
+                .WithMany(i => i.Lines)
+                .HasForeignKey(l => l.InvoiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            line.HasOne(l => l.Booking)
+                .WithMany()
+                .HasForeignKey(l => l.BookingId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
