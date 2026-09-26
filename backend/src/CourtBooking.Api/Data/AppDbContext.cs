@@ -37,6 +37,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<PackageEntry> PackageEntries => Set<PackageEntry>();
 
+    public DbSet<ShopItem> ShopItems => Set<ShopItem>();
+
+    public DbSet<ShopSale> ShopSales => Set<ShopSale>();
+
+    public DbSet<ShopSaleLine> ShopSaleLines => Set<ShopSaleLine>();
+
+    public DbSet<StockEntry> StockEntries => Set<StockEntry>();
+
+    public DbSet<Spend> Spends => Set<Spend>();
+
     public DbSet<CourtStatusChange> CourtStatusChanges => Set<CourtStatusChange>();
 
     public DbSet<OpeningHoursSchedule> OpeningHoursSchedules => Set<OpeningHoursSchedule>();
@@ -557,6 +567,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             receipt.HasIndex(r => new { r.VenueId, r.ReceivedAt });
             receipt.HasIndex(r => r.BookingId);
             receipt.HasIndex(r => r.PackageId);
+            receipt.HasIndex(r => r.SaleId);
             receipt.HasOne(r => r.Booking)
                 .WithMany()
                 .HasForeignKey(r => r.BookingId)
@@ -564,6 +575,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             receipt.HasOne(r => r.Package)
                 .WithMany()
                 .HasForeignKey(r => r.PackageId)
+                .OnDelete(DeleteBehavior.Cascade);
+            receipt.HasOne(r => r.Sale)
+                .WithMany()
+                .HasForeignKey(r => r.SaleId)
                 .OnDelete(DeleteBehavior.Cascade);
             receipt.HasOne(r => r.Venue)
                 .WithMany()
@@ -577,12 +592,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             receipt.ToTable(table => table.HasCheckConstraint(
                 "CK_PaymentReceipts_AmountIsMoney", "\"AmountBaht\" > 0"));
 
-            // And it came in for exactly one thing: a booking, or a package being sold (US-31).
-            // Money that names neither is money nobody can account for afterwards, and money that
-            // names both would be counted twice by whichever reader asked second.
+            // And it came in for exactly one thing: a booking, a package being sold (US-31), or
+            // something bought across the counter (US-32). Money that names none of them is money
+            // nobody can account for afterwards, and money that names two would be counted twice
+            // by whichever reader asked second.
             receipt.ToTable(table => table.HasCheckConstraint(
                 "CK_PaymentReceipts_ForOneThing",
-                "(\"BookingId\" IS NULL) <> (\"PackageId\" IS NULL)"));
+                "(CASE WHEN \"BookingId\" IS NULL THEN 0 ELSE 1 END"
+                + " + CASE WHEN \"PackageId\" IS NULL THEN 0 ELSE 1 END"
+                + " + CASE WHEN \"SaleId\" IS NULL THEN 0 ELSE 1 END) = 1"));
         });
 
         builder.Entity<PackageType>(type =>
@@ -657,6 +675,124 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             entry.HasOne(one => one.By)
                 .WithMany()
                 .HasForeignKey(one => one.ByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<ShopItem>(item =>
+        {
+            item.Property(one => one.Name).HasMaxLength(ShopItem.NameMaxLength);
+            item.Property(one => one.Unit).HasMaxLength(ShopItem.UnitMaxLength);
+            item.Property(one => one.PriceBaht).HasPrecision(10, 2);
+
+            // What is on the board now, which is every read this table has.
+            item.HasIndex(one => new { one.VenueId, one.WithdrawnAt, one.Name });
+
+            item.ToTable(table => table.HasCheckConstraint(
+                "CK_ShopItems_IsSomethingToSell",
+                "\"PriceBaht\" > 0 AND (\"TellMeAt\" IS NULL OR \"TellMeAt\" >= 0)"));
+
+            item.HasOne(one => one.Venue)
+                .WithMany()
+                .HasForeignKey(one => one.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<ShopSale>(sale =>
+        {
+            sale.Property(one => one.TotalBaht).HasPrecision(10, 2);
+            sale.Property(one => one.CancelReason).HasMaxLength(BookingStatusChange.ReasonMaxLength);
+
+            // "What did this venue sell today" and "what did this booking buy" are the two
+            // questions asked of it.
+            sale.HasIndex(one => new { one.VenueId, one.SoldAt });
+            sale.HasIndex(one => one.BookingId);
+
+            sale.ToTable(table => table.HasCheckConstraint(
+                "CK_ShopSales_CameToSomething", "\"TotalBaht\" > 0"));
+
+            sale.HasOne(one => one.Venue)
+                .WithMany()
+                .HasForeignKey(one => one.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Restrict, not cascade: a booking is never deleted, and losing what somebody bought
+            // beside it would lose money that was taken.
+            sale.HasOne(one => one.Booking)
+                .WithMany()
+                .HasForeignKey(one => one.BookingId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<ShopSaleLine>(line =>
+        {
+            line.Property(one => one.Name).HasMaxLength(ShopItem.NameMaxLength);
+            line.Property(one => one.EachBaht).HasPrecision(10, 2);
+            line.Ignore(one => one.Baht);
+
+            line.ToTable(table => table.HasCheckConstraint(
+                "CK_ShopSaleLines_IsALine",
+                $"\"Quantity\" > 0 AND \"Quantity\" <= {Shop.MostOfOneThing}"
+                + " AND \"EachBaht\" > 0"));
+
+            line.HasOne(one => one.Sale)
+                .WithMany(one => one.Lines)
+                .HasForeignKey(one => one.SaleId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // The line keeps the name it was sold under, so the item it points at is only for
+            // counting stock — and it stays readable for as long as the sale does.
+            line.HasOne(one => one.Item)
+                .WithMany()
+                .HasForeignKey(one => one.ItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<StockEntry>(entry =>
+        {
+            entry.Property(one => one.Reason).HasMaxLength(StockEntry.ReasonMaxLength);
+
+            // Reading an item's stock is reading its movements in order; the balance is their sum.
+            entry.HasIndex(one => new { one.ItemId, one.At });
+
+            entry.ToTable(table => table.HasCheckConstraint(
+                "CK_StockEntries_SomethingMoved", "\"Quantity\" <> 0"));
+
+            entry.HasOne(one => one.Item)
+                .WithMany()
+                .HasForeignKey(one => one.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entry.HasOne(one => one.Sale)
+                .WithMany()
+                .HasForeignKey(one => one.SaleId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entry.HasOne(one => one.By)
+                .WithMany()
+                .HasForeignKey(one => one.ByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<Spend>(spend =>
+        {
+            spend.Property(one => one.AmountBaht).HasPrecision(10, 2);
+            spend.Property(one => one.Note).HasMaxLength(Spend.NoteMaxLength);
+            spend.Property(one => one.VoidReason).HasMaxLength(Spend.NoteMaxLength);
+
+            // "What did this venue pay out, and when" is the whole of what is asked of it.
+            spend.HasIndex(one => new { one.VenueId, one.PaidOn });
+
+            spend.ToTable(table => table.HasCheckConstraint(
+                "CK_Spends_IsMoney", "\"AmountBaht\" > 0"));
+
+            spend.HasOne(one => one.Venue)
+                .WithMany()
+                .HasForeignKey(one => one.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            spend.HasOne(one => one.RecordedBy)
+                .WithMany()
+                .HasForeignKey(one => one.RecordedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

@@ -1,0 +1,157 @@
+/**
+ * Four things stacked in the order a shift uses them: ringing something up, what was sold, what
+ * was paid out, and the board — which is a setting and folds away.
+ */
+
+/** The page is a grid item of the shell, so it has to be told it may be narrower than its rows. */
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.board,
+.sales {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.line,
+.sale {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.85rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  font: var(--mat-sys-body-medium);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.line-name,
+.sale-total {
+  font-weight: 500;
+}
+
+/**
+ * How many are left is the number somebody looks for while their other hand is holding money,
+ * so it lines up down the list and does not move when the name beside it is long.
+ */
+.line-left {
+  margin-left: auto;
+  font: var(--mat-sys-title-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+/** Few enough left to order more, which is the colour the app uses for something waiting. */
+.line.low .line-left {
+  background: var(--status-waiting-soft);
+  color: var(--status-waiting-ink);
+  border-radius: var(--mat-sys-corner-small);
+  padding: 0.05rem 0.5rem;
+}
+
+.line.old {
+  color: var(--mat-sys-on-surface-variant);
+
+  .line-name {
+    text-decoration: line-through;
+  }
+}
+
+/** One press each way, with what is in the basket between them. */
+.line-count {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+
+  button {
+    min-width: 3rem;
+  }
+}
+
+.in-basket {
+  min-width: 1.5rem;
+  text-align: center;
+  font: var(--mat-sys-title-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+/** What is being rung up, set apart from the board it was rung up from. */
+.basket {
+  margin-top: 1rem;
+  padding: 0.85rem;
+  border-radius: var(--mat-sys-corner-medium);
+  background: var(--mat-sys-surface-container-low);
+}
+
+.total {
+  font: var(--mat-sys-title-medium);
+  margin-right: auto;
+}
+
+.sale-what {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.6rem;
+}
+
+.sale-total {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.sale.taken-back {
+  color: var(--mat-sys-on-surface-variant);
+
+  .sale-total {
+    text-decoration: line-through;
+  }
+}
+
+.methods {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+
+  legend {
+    padding: 0;
+    margin-bottom: 0.35rem;
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-body-medium);
+  }
+}
+
+.method-choice,
+.counted-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+
+  input {
+    accent-color: var(--mat-sys-primary);
+  }
+}
+
+/** A row of numbers that belong to one sentence: a name, a price, a unit. */
+.numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1rem;
+
+  .field {
+    flex: 1 1 14rem;
+  }
+
+  .number {
+    flex: 0 1 10rem;
+  }
+}

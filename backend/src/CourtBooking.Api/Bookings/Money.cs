@@ -20,9 +20,10 @@ public enum PaymentMethod
 /// It is not the same thing as <see cref="PaymentState"/>, which says whether the venue considers
 /// itself paid. These say what actually came in, when, in what form, and from whose hands.
 ///
-/// Most of it is money for a booking. Selling a package is money too, and it goes in the same
-/// till on the same day (PRD US-31), so it is one of these as well — with the package named
-/// instead of a booking. Exactly one of the two, which the database sees to.
+/// Most of it is money for a booking. Selling a package is money too (PRD US-31), and so is a
+/// tube of shuttlecocks (US-32) — both go in the same till on the same day, so both are one of
+/// these, with what they were for named instead of a booking. Exactly one of the three, which
+/// the database sees to.
 /// </summary>
 public sealed class PaymentReceipt
 {
@@ -33,6 +34,9 @@ public sealed class PaymentReceipt
 
     /// <summary>The package that was sold, or null where it was money for a booking (US-31).</summary>
     public Guid? PackageId { get; init; }
+
+    /// <summary>What somebody bought across the counter, where that is what it was (US-32).</summary>
+    public Guid? SaleId { get; init; }
 
     /// <summary>Kept beside the booking's own so a venue's day can be counted in one query.</summary>
     public required Guid VenueId { get; init; }
@@ -53,6 +57,8 @@ public sealed class PaymentReceipt
     public Booking? Booking { get; init; }
 
     public HourPackage? Package { get; init; }
+
+    public ShopSale? Sale { get; init; }
 
     public Venue? Venue { get; init; }
 

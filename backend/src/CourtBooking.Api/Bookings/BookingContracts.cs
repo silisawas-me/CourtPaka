@@ -588,3 +588,82 @@ public sealed record HourPackageResponse(
 
 /// <summary>Paying for a booking with a package's hours (PRD US-31).</summary>
 public sealed record SpendPackageRequest(Guid PackageId);
+
+/// <summary>A line a venue puts on its counter board (PRD US-32).</summary>
+public sealed record ShopItemRequest(
+    string? Name,
+    decimal? PriceBaht,
+    /// <summary>What one of them is, in the venue's own words: a tube, a bottle, an hour.</summary>
+    string? Unit,
+    bool? Counted,
+    /// <summary>Below this, somebody is told there are not many left. Only for what is counted.</summary>
+    int? TellMeAt);
+
+/// <summary>One line of the board, with how many are left of the ones that are counted.</summary>
+public sealed record ShopItemResponse(
+    Guid ItemId,
+    string Name,
+    decimal PriceBaht,
+    string Unit,
+    bool Counted,
+    int? TellMeAt,
+    /// <summary>Null for what is not counted: a zero there would read as none left.</summary>
+    int? Left,
+    bool RunningLow,
+    DateTimeOffset? WithdrawnAt);
+
+/// <summary>One thing being rung up, and how many of it.</summary>
+public sealed record ShopSaleLineRequest(Guid ItemId, int Quantity);
+
+/// <summary>One trip to the counter (PRD US-32).</summary>
+public sealed record ShopSaleRequest(
+    ShopSaleLineRequest[]? Lines,
+    /// <summary>How they paid, spelled as <see cref="PaymentMethod"/> spells it.</summary>
+    string? PaidBy,
+    /// <summary>The booking it goes beside, or null for somebody who only bought.</summary>
+    Guid? BookingId);
+
+/// <summary>Why a sale is being taken back, or why an expense is being voided.</summary>
+public sealed record ShopSaleCancelRequest(string? Reason);
+
+public sealed record ShopSaleLineResponse(
+    Guid ItemId,
+    /// <summary>The name it was sold under, which is not always the name it has now (BR-05).</summary>
+    string Name,
+    int Quantity,
+    decimal EachBaht);
+
+public sealed record ShopSaleResponse(
+    Guid SaleId,
+    Guid? BookingId,
+    decimal TotalBaht,
+    DateTimeOffset SoldAt,
+    DateTimeOffset? CancelledAt,
+    string? CancelReason,
+    ShopSaleLineResponse[] Lines);
+
+/// <summary>Money the venue paid out (PRD US-33).</summary>
+public sealed record SpendRequest(
+    /// <summary>One of <see cref="SpendKind"/>, spelled as it is spelled.</summary>
+    string? Kind,
+    decimal? AmountBaht,
+    /// <summary>The day it left, in the venue's own week. Today when nothing is said.</summary>
+    DateOnly? PaidOn,
+    string? PaidBy,
+    string? Note,
+    /// <summary>Buying stock says which item and how many; anything else says neither.</summary>
+    Guid? ItemId,
+    int? Quantity);
+
+public sealed record SpendResponse(
+    Guid SpendId,
+    string Kind,
+    decimal AmountBaht,
+    DateOnly PaidOn,
+    string PaidBy,
+    string? Note,
+    DateTimeOffset? VoidedAt,
+    string? VoidReason);
+
+/// <summary>What the shelf actually holds (PRD US-33).</summary>
+public sealed record StockCountRequest(int? Counted, string? Reason);

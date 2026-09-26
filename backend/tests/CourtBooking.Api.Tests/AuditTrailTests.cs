@@ -31,6 +31,7 @@ public sealed class AuditTrailTests(ApiTestFixture api) : IClassFixture<ApiTestF
     [InlineData("DailyClosings")]
     [InlineData("SeriesMisses")]
     [InlineData("PackageEntries")]
+    [InlineData("StockEntries")]
     public async Task A_history_row_cannot_be_changed_or_removed(string table)
     {
         await EveryHistoryHasARowAsync();
@@ -136,6 +137,21 @@ public sealed class AuditTrailTests(ApiTestFixture api) : IClassFixture<ApiTestF
         Assert.Equal(
             HttpStatusCode.OK,
             (await admin.GetAsync($"/api/admin/complaints/{complaint.Id}/slip")).StatusCode);
+
+        // Something on the shelf, which is the row StockEntries keeps (PRD US-32, US-33).
+        var stock = await VenueScenario.ReadAsync<ShopItemResponse>(
+            await venueOwner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/shop/items",
+                new ShopItemRequest("ลูกขนไก่ทดสอบ", 90m, "ลูก", true, null)),
+            HttpStatusCode.Created);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            (await venueOwner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/shop/spending",
+                new SpendRequest(
+                    nameof(SpendKind.Stock), 700m, null, nameof(PaymentMethod.PromptPay),
+                    null, stock.ItemId, 10))).StatusCode);
 
         // Hours somebody bought, which is the row PackageEntries keeps (PRD US-31).
         var offer = await VenueScenario.ReadAsync<PackageTypeResponse>(

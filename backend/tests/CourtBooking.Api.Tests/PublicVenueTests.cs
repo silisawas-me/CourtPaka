@@ -103,29 +103,60 @@ public sealed class PublicVenueTests(ApiTestFixture api)
         Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync($"/api/venues/{venue.Id}")).StatusCode);
     }
 
+    /// <summary>
+    /// A search answers on the name, the district or the province (PRD US-02). Only so many come
+    /// back (<see cref="PublicVenueEndpoints.MaxResults"/>), so a venue is looked for by a name
+    /// nobody else has — and the district and province, which every test venue shares, are asked
+    /// of the answer as a whole rather than of one row that may be past the cap.
+    /// </summary>
     [Fact]
     public async Task Search_finds_a_venue_by_name_district_or_province()
     {
-        var (_, venue) = await BookableVenueAsync();
+        var (owner, venue) = await BookableVenueAsync();
+        var mine = $"Smash {Guid.NewGuid():N}"[..20];
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await owner.PutAsJsonAsync(
+                $"/api/venues/{venue.Id}", VenueScenario.Details(mine))).StatusCode);
+
         await scenario.SetStatusAsync(venue.Id, VenueStatus.Approved);
         var anonymous = api.CreateClient();
 
-        foreach (var term in new[] { venue.Name, venue.District, venue.Province })
+        Assert.Contains(await SearchAsync(anonymous, mine), found => found.Id == venue.Id);
+
+        foreach (var term in new[] { venue.District, venue.Province })
         {
-            Assert.Contains(await SearchAsync(anonymous, term), found => found.Id == venue.Id);
+            var found = await SearchAsync(anonymous, term);
+            Assert.NotEmpty(found);
+            Assert.All(
+                found,
+                one => Assert.True(
+                    one.District.Contains(term, StringComparison.OrdinalIgnoreCase)
+                    || one.Province.Contains(term, StringComparison.OrdinalIgnoreCase),
+                    $"{one.Name} is not in {term}"));
         }
     }
 
+    /// <summary>
+    /// Asked in any case at all. By a name of its own, because only so many answers come back and
+    /// a name every test venue shares would not say whether the case mattered or the cap did.
+    /// </summary>
     [Fact]
     public async Task Search_ignores_the_case_of_what_was_typed()
     {
-        var (_, venue) = await BookableVenueAsync();
+        var (owner, venue) = await BookableVenueAsync();
+        var mine = $"Smash {Guid.NewGuid():N}"[..20];
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await owner.PutAsJsonAsync(
+                $"/api/venues/{venue.Id}", VenueScenario.Details(mine))).StatusCode);
+
         var anonymous = api.CreateClient();
 
         Assert.Contains(
-            await SearchAsync(anonymous, venue.Name.ToUpperInvariant()), found => found.Id == venue.Id);
+            await SearchAsync(anonymous, mine.ToUpperInvariant()), found => found.Id == venue.Id);
         Assert.Contains(
-            await SearchAsync(anonymous, venue.Name.ToLowerInvariant()), found => found.Id == venue.Id);
+            await SearchAsync(anonymous, mine.ToLowerInvariant()), found => found.Id == venue.Id);
     }
 
     [Fact]

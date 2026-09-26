@@ -75,6 +75,22 @@ public sealed record DashboardOwedHoursResponse(
     /// <summary>Of those, the ones whose hours are about to run out (⚠️ S-28).</summary>
     int RunningOut);
 
+/// <summary>
+/// What the counter sold besides court time, and what the venue paid out (PRD US-32, US-33).
+///
+/// Kept apart from the court money above because it is a different business with a different
+/// margin — a venue that cannot tell the two apart cannot tell whether either is working. What
+/// is left over is the plainest subtraction there is, and it is labelled as that: it is not
+/// profit in any sense an accountant would sign, which is what S-30 goes to them with.
+/// </summary>
+public sealed record DashboardTradeResponse(
+    /// <summary>What was rung up at the counter, less what was taken back.</summary>
+    decimal ShopBaht,
+    /// <summary>What the venue wrote down as paid out, less what was voided.</summary>
+    decimal SpentBaht,
+    /// <summary>Court money plus shop money, less what was paid out. Not profit (⚠️ S-30).</summary>
+    decimal LeftOverBaht);
+
 public sealed record DashboardResponse(
     DateOnly From,
     DateOnly To,
@@ -91,7 +107,9 @@ public sealed record DashboardResponse(
     DashboardAttentionResponse Attention,
     DashboardRecoveryResponse Recovery,
     /// <summary>Hours sold and not yet given (PRD US-31). Never part of the money above.</summary>
-    DashboardOwedHoursResponse OwedHours);
+    DashboardOwedHoursResponse OwedHours,
+    /// <summary>The counter's other trade, and the money that went out (PRD US-32, US-33).</summary>
+    DashboardTradeResponse Trade);
 
 public static class DashboardErrorCodes
 {
@@ -241,7 +259,58 @@ public static class VenueDashboard
             months,
             await AttentionAsync(database, venueId, cancellationToken),
             await RecoveryAsync(database, venueId, since, until, cancellationToken),
-            await OwedHoursAsync(database, venueId, now, cancellationToken));
+            await OwedHoursAsync(database, venueId, now, cancellationToken),
+            await TradeAsync(
+                database,
+                venueId,
+                first,
+                last,
+                days.Sum(day => day.OnlineBaht) + days.Sum(day => day.StaffBaht),
+                cancellationToken));
+    }
+
+    /// <summary>
+    /// What the counter sold and what the venue paid out over the range (PRD US-32, US-33).
+    ///
+    /// Both are counted on the day they happened — a sale on the day it was rung up, an expense
+    /// on the day the venue says the money left — rather than on a day of service, because
+    /// neither is a booking and neither has one.
+    /// </summary>
+    private static async Task<DashboardTradeResponse> TradeAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateOnly first,
+        DateOnly last,
+        decimal courtBaht,
+        CancellationToken cancellationToken)
+    {
+        var from = PlatformRequirements.BangkokHour(first, 0);
+        var until = PlatformRequirements.BangkokHour(last.AddDays(1), 0);
+
+        // A sale that was taken back is not money the venue has, and the row that says so is the
+        // cancellation rather than a deletion (PRD US-32).
+        var shop = await database.ShopSales
+            .AsNoTracking()
+            .Where(sale =>
+                sale.VenueId == venueId
+                && sale.CancelledAt == null
+                && sale.SoldAt >= from
+                && sale.SoldAt < until)
+            .SumAsync(sale => (decimal?)sale.TotalBaht, cancellationToken) ?? 0m;
+
+        var spent = await database.Spends
+            .AsNoTracking()
+            .Where(spend =>
+                spend.VenueId == venueId
+                && spend.VoidedAt == null
+                && spend.PaidOn >= first
+                && spend.PaidOn <= last)
+            .SumAsync(spend => (decimal?)spend.AmountBaht, cancellationToken) ?? 0m;
+
+        return new DashboardTradeResponse(
+            shop,
+            spent,
+            decimal.Round(courtBaht + shop - spent, 2, MidpointRounding.AwayFromZero));
     }
 
     /// <summary>

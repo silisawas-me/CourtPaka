@@ -150,6 +150,35 @@
   </mat-card>
 
   <!--
+    The counter's other trade (PRD US-32, US-33). Drawn only when there is any: a venue that
+    sells nothing but court time has nothing to read here.
+  -->
+  @if (f.trade.shopBaht > 0 || f.trade.spentBaht > 0) {
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>{{ i18n.t('dashboard.trade') }}</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <dl class="figures">
+          <div>
+            <dt class="muted">{{ i18n.t('dashboard.shopBaht') }}</dt>
+            <dd data-testid="shop-baht">{{ f.trade.shopBaht | baht: i18n.locale() }}</dd>
+          </div>
+          <div>
+            <dt class="muted">{{ i18n.t('dashboard.spentBaht') }}</dt>
+            <dd data-testid="spent-baht">{{ f.trade.spentBaht | baht: i18n.locale() }}</dd>
+          </div>
+          <div>
+            <dt class="muted">{{ i18n.t('dashboard.leftOverBaht') }}</dt>
+            <dd data-testid="left-over-baht">{{ f.trade.leftOverBaht | baht: i18n.locale() }}</dd>
+          </div>
+        </dl>
+        <p class="muted small">{{ i18n.t('dashboard.leftOverHint') }}</p>
+      </mat-card-content>
+    </mat-card>
+  }
+
+  <!--
     Hours somebody has already paid for (PRD US-31). Drawn only when the venue owes some: a
     venue that sells no packages has nothing to read here, and a zero would only say so.
   -->

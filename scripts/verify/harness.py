@@ -474,7 +474,20 @@ def ensure_bookable(browser, venue_id) -> None:
     # counts have to step around.
     clear_package_board(page, venue_id)
 
+    # And with nothing on the counter's own board. shop.py puts things on it because that is what
+    # it is about (PRD US-32), and one left there is a row every other script has to step around.
+    clear_shop_board(page, venue_id)
+
     page.close()
+
+
+def clear_shop_board(page, venue_id) -> None:
+    """Takes everything off the counter's board. Through the API: it is the setup, not the
+    subject."""
+    for one in page.request.get(f"{BASE}/api/venues/{venue_id}/shop/items").json():
+        if one["withdrawnAt"] is None:
+            page.request.post(
+                f"{BASE}/api/venues/{venue_id}/shop/items/{one['itemId']}/withdraw")
 
 
 def clear_package_board(page, venue_id) -> None:

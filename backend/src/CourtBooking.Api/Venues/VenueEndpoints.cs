@@ -67,6 +67,9 @@ public static class VenueEndpoints
 
         // Hours sold in advance (PRD US-31).
         venue.MapPackageEndpoints();
+
+        // What the counter sells besides court time, and what the venue paid out (US-32, US-33).
+        venue.MapShopEndpoints();
         venue.MapVenueWaitlistEndpoints();
         // What the day took, and the count at the end of it (PRD US-26).
         venue.MapDayMoneyEndpoints();
