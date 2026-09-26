@@ -37,6 +37,9 @@ public static class AdminVenueEndpoints
         // What the platform charges this venue (PRD US-21). The platform's own decision, so it
         // lives with the platform's own screens rather than under the venue's doors.
         admin.MapCommissionRateEndpoints();
+
+        // And what it has billed, which is a list of its own rather than a venue's (PRD US-21).
+        routes.MapAdminInvoiceEndpoints();
     }
 
     /// <summary>

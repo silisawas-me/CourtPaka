@@ -1,3 +1,4 @@
+import { CommissionInvoice } from './admin-venues.service';
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
@@ -81,6 +82,21 @@ export interface VenueMember {
   email: string;
   role: 'Owner' | 'Staff';
   permissions: VenuePermission[];
+}
+
+/** Where the platform takes its commission (PRD US-21). */
+export interface PlatformAccount {
+  promptPayId: string;
+  accountName: string | null;
+}
+
+/**
+ * What this venue owes the platform, and how to pay it. The account travels with the invoices
+ * because a venue paying one is looking at it. Null where the platform has not said yet.
+ */
+export interface VenueCommission {
+  account: PlatformAccount | null;
+  invoices: CommissionInvoice[];
 }
 
 export interface VenueInvitation {
@@ -176,6 +192,25 @@ export class VenueService {
     return this.http.put<void>(`/api/venues/${venueId}/members/${userId}/permissions`, {
       permissions,
     });
+  }
+
+  /** What this venue owes the platform, and where to send it (PRD US-21). */
+  commission(venueId: string): Observable<VenueCommission> {
+    return this.http.get<VenueCommission>(`/api/venues/${venueId}/commission`);
+  }
+
+  /** The owner says it has transferred, and shows something for it. */
+  submitCommissionPayment(
+    venueId: string,
+    invoiceId: string,
+    file: File,
+  ): Observable<CommissionInvoice> {
+    const form = new FormData();
+    form.append('file', file);
+    return this.http.post<CommissionInvoice>(
+      `/api/venues/${venueId}/commission/${invoiceId}/payment`,
+      form,
+    );
   }
 
   removeMember(venueId: string, userId: string): Observable<void> {

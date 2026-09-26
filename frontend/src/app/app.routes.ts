@@ -94,6 +94,12 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    path: 'admin/commission',
+    loadComponent: () =>
+      import('./features/admin/commission.page').then((m) => m.AdminCommissionPage),
+    canActivate: [authGuard],
+  },
+  {
     path: 'admin/complaints',
     loadComponent: () =>
       import('./features/admin/complaints.page').then((m) => m.AdminComplaintsPage),

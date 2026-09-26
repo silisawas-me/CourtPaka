@@ -1,0 +1,151 @@
+<app-admin-tabs />
+
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>{{ i18n.t('admin.tabs.commission') }}</mat-card-title>
+  </mat-card-header>
+
+  <mat-card-content>
+    <!--
+      Waiting to be checked comes first, because it is the only thing on this screen somebody
+      else is waiting on: a venue that has said it paid is waiting to hear back.
+    -->
+    <nav class="row filters" [attr.aria-label]="i18n.t('admin.tabs.commission')">
+      @for (choice of filters; track choice) {
+        <button
+          matButton
+          type="button"
+          class="filter"
+          [class.chosen]="filter() === choice"
+          [attr.data-testid]="'filter-' + choice"
+          [attr.aria-pressed]="filter() === choice"
+          (click)="show(choice)"
+        >
+          {{
+            choice === 'All'
+              ? i18n.t('commission.filter.All')
+              : i18n.t('commission.status.' + choice)
+          }}
+        </button>
+      }
+    </nav>
+
+    @if (loading()) {
+      <mat-progress-bar mode="indeterminate" />
+    }
+
+    @if (pageError(); as key) {
+      <p class="form-error" data-testid="page-error">{{ i18n.t(key) }}</p>
+    }
+
+    @if (nothingHere()) {
+      <p class="muted" data-testid="nothing-here">{{ i18n.t('commission.none') }}</p>
+    }
+
+    <div class="stack" data-testid="invoice-list">
+      @for (invoice of invoices(); track invoice.id) {
+        <div class="entry invoice" [attr.data-testid]="'invoice-' + invoice.id">
+          <div class="stack who">
+            <span class="entry-name">{{ invoice.venueName }}</span>
+            <span class="muted">
+              {{ invoice.number }} · {{ invoice.month | appDate: i18n.locale() }}
+            </span>
+          </div>
+
+          <span class="amount">{{ invoice.amountBaht | baht: i18n.locale() }}</span>
+
+          <span class="badge">{{ i18n.t('commission.status.' + invoice.status) }}</span>
+
+          <!--
+            Beside the status, never instead of it: an invoice that is late is still waiting to
+            be paid, and the platform needs both facts at once (PRD US-21).
+          -->
+          @if (invoice.overdue) {
+            <span class="badge late" [attr.data-testid]="'overdue-' + invoice.id">
+              {{ i18n.t('commission.overdue') }}
+            </span>
+          }
+
+          <span class="muted due">
+            {{ i18n.t('commission.dueOn') }} {{ invoice.dueOn | appDate: i18n.locale() }}
+          </span>
+
+          <span class="spacer"></span>
+
+          @if (invoice.status === 'PaymentSubmitted') {
+            @if (invoice.hasEvidence) {
+              <a
+                matButton
+                target="_blank"
+                rel="noopener"
+                [href]="evidenceLink(invoice)"
+                [attr.data-testid]="'evidence-' + invoice.id"
+              >
+                {{ i18n.t('commission.evidence') }}
+              </a>
+            }
+            <button
+              matButton="filled"
+              type="button"
+              [attr.data-testid]="'paid-' + invoice.id"
+              [disabled]="deciding()"
+              (click)="markPaid(invoice)"
+            >
+              {{ i18n.t('commission.markPaid') }}
+            </button>
+            <button
+              matButton
+              type="button"
+              [attr.data-testid]="'refuse-' + invoice.id"
+              [disabled]="deciding()"
+              (click)="askRefuse(invoice.id)"
+            >
+              {{ i18n.t('commission.refuse') }}
+            </button>
+          }
+
+          @if (refusing() === invoice.id) {
+            <div class="asking" data-testid="asking">
+              <form class="stack" [formGroup]="refuseForm" novalidate>
+                <mat-form-field class="field">
+                  <mat-label>{{ i18n.t('commission.refuseReason') }}</mat-label>
+                  <textarea
+                    matInput
+                    rows="2"
+                    data-testid="refuse-reason"
+                    formControlName="reason"
+                  ></textarea>
+                </mat-form-field>
+
+                <div class="row">
+                  <button
+                    matButton="filled"
+                    type="button"
+                    data-testid="refuse-confirm"
+                    [disabled]="deciding()"
+                    (click)="refuse(invoice)"
+                  >
+                    {{ i18n.t('commission.refuse') }}
+                  </button>
+                  <button matButton type="button" data-testid="close" (click)="close()">
+                    {{ i18n.t('common.cancel') }}
+                  </button>
+                </div>
+              </form>
+            </div>
+          }
+
+          @if (invoice.paidAt) {
+            <span class="muted" [attr.data-testid]="'paid-at-' + invoice.id">
+              {{ invoice.paidAt | appDateTime: i18n.locale() }}
+            </span>
+          }
+        </div>
+      }
+    </div>
+
+    @if (decideError(); as key) {
+      <p class="form-error" data-testid="decide-error">{{ i18n.t(key) }}</p>
+    }
+  </mat-card-content>
+</mat-card>

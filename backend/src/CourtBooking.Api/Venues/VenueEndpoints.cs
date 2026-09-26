@@ -43,6 +43,10 @@ public static class VenueEndpoints
         venue.MapPost("/resubmit", ResubmitAsync)
             .RequireAuthorization(VenuePolicies.OwnerAnsweringRefusal);
         venue.MapGet("/attention", WaitingForAsync).RequireAuthorization(VenuePolicies.Member);
+
+        // What this venue owes the platform, and saying it has paid (PRD US-21). Each door
+        // declares who may open it: reading is any member's, paying is the owner's alone.
+        venue.MapVenueInvoiceEndpoints();
         // How long the counter waits for somebody is a setting like the prices are (PRD US-24).
         venue.MapPut("/grace", SetGraceAsync).RequireAuthorization(VenuePolicies.Settings);
         venue.MapPut("/deposit", SetDepositAsync).RequireAuthorization(VenuePolicies.Settings);

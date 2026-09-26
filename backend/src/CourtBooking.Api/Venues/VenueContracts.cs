@@ -153,6 +153,18 @@ public static class VenueErrorCodes
     public const string OwnerNeedsEmail = "venue.owner_needs_email";
     public const string AlreadyMember = "venue.already_member";
     public const string OwnerCannotBeChanged = "venue.owner_cannot_be_changed";
+    /// <summary>No invoice of that id, or not this venue's to look at (PRD US-21).</summary>
+    public const string InvoiceNotFound = "venue.invoice_not_found";
+
+    /// <summary>The platform already agrees this one is paid; there is nothing to send.</summary>
+    public const string InvoiceAlreadyPaid = "venue.invoice_already_paid";
+
+    /// <summary>
+    /// There is no claim of payment to answer. Both of the platform's decisions are answers to
+    /// one, so neither means anything without it.
+    /// </summary>
+    public const string InvoiceNotAwaitingDecision = "venue.invoice_not_awaiting_decision";
+
     /// <summary>A number that could not be a commission rate at all (PRD US-21).</summary>
     public const string InvalidRate = "venue.invalid_rate";
 
@@ -213,6 +225,52 @@ public sealed record AdminVenueResponse(
     string Province,
     string Status,
     DateTimeOffset CreatedAt);
+
+/// <summary>One month's commission, as either side reads it (PRD US-21).</summary>
+public sealed record CommissionInvoiceResponse(
+    Guid Id,
+    Guid VenueId,
+    /// <summary>Named only where the platform is reading; a venue knows whose it is.</summary>
+    string? VenueName,
+    string Number,
+    DateOnly Month,
+    decimal AmountBaht,
+    string Status,
+    /// <summary>
+    /// Late, which is not a status: an invoice that is late is still waiting to be paid, and
+    /// PRD US-21 asks for both to be shown at once.
+    /// </summary>
+    bool Overdue,
+    DateTimeOffset IssuedAt,
+    DateOnly DueOn,
+    DateTimeOffset? SubmittedAt,
+    bool HasEvidence,
+    DateTimeOffset? PaidAt,
+    /// <summary>Why the platform sent a claim of payment back, if it did.</summary>
+    string? RefusedReason,
+    /// <summary>The bookings it was worked out from. Only where a venue is reading its own.</summary>
+    CommissionInvoiceLineResponse[]? Lines);
+
+/// <summary>One booking on an invoice, as it was charged (PRD BR-08).</summary>
+public sealed record CommissionInvoiceLineResponse(
+    DateOnly ServedOn,
+    decimal KeptBaht,
+    decimal Percent,
+    decimal AmountBaht);
+
+/// <summary>Where the platform takes its commission (PRD US-21).</summary>
+public sealed record PlatformAccountResponse(string PromptPayId, string? AccountName);
+
+/// <summary>
+/// What this venue owes the platform, and how to pay it. The account travels with the invoices
+/// because a venue paying one is looking at it.
+/// </summary>
+public sealed record VenueCommissionResponse(
+    PlatformAccountResponse? Account,
+    CommissionInvoiceResponse[] Invoices);
+
+/// <summary>Why the platform does not agree it has been paid (PRD US-21).</summary>
+public sealed record InvoiceRefusalRequest(string? Reason);
 
 /// <summary>One rate the platform has charged this venue, and who agreed it (PRD US-21).</summary>
 public sealed record CommissionRateResponse(
