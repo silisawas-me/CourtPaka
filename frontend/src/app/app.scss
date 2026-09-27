@@ -156,9 +156,18 @@
   width: 100%;
 }
 
+// The app's bar stays first on a phone; the owner app's top bar (from the shell) comes under it.
+:host.at-a-venue .bar,
+:host.at-a-venue .bar-menu {
+  order: -2;
+}
+
 @media (min-width: 60rem) {
   :host.at-a-venue {
-    grid-template-columns: 14rem minmax(0, 1fr);
+    // The rail down the side, and beside it the top bar over the page (docs/plan/owner-app.md).
+    grid-template-columns: 14.25rem minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    align-content: start;
   }
 
   // The sidebar is the navigation at this width, so the bar above it would be a second one —
@@ -172,7 +181,7 @@
 
   :host.at-a-venue .shell {
     grid-column: 2;
-    grid-row: 1;
+    grid-row: 2;
     margin-inline: 0;
     padding-inline: 1.5rem;
   }
@@ -213,4 +222,48 @@
 .side-account .language.chosen {
   background: color-mix(in srgb, currentColor 20%, transparent);
   color: inherit;
+}
+
+// The top bar's end, projected into the shell: the language as a two-way switch, and who is in.
+.segmented {
+  display: inline-flex;
+  padding: 0.2rem;
+  border-radius: var(--mat-sys-corner-medium);
+  background: var(--mat-sys-surface-container-highest);
+}
+
+.segment {
+  padding: 0.25rem 0.6rem;
+  border: 0;
+  border-radius: var(--mat-sys-corner-small);
+  background: transparent;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-label-large);
+  font-family: var(--font-mono);
+  cursor: pointer;
+
+  &.chosen {
+    background: var(--mat-sys-surface);
+    color: var(--mat-sys-on-surface);
+    box-shadow: var(--mat-sys-level1);
+  }
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--mat-sys-corner-full);
+  background: var(--mat-sys-surface-container-highest);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-title-small);
+  text-decoration: none;
+}
+
+// On a phone the app's own bar above already carries the language; one switch is enough.
+@media (max-width: 59.99rem) {
+  .segmented {
+    display: none;
+  }
 }

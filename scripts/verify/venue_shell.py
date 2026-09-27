@@ -27,11 +27,11 @@ with sync_playwright() as p:
     # The bar above is not drawn beside a sidebar, so the rest of the app has to travel with it.
     check(
         "the app's own doors travel in the sidebar's foot",
-        desk.locator("[data-testid=side-nav-account] [data-testid=side-nav-venues]").count() == 1,
+        desk.locator("[data-testid=side-nav-account] [data-testid=side-sign-out]").count() == 1,
     )
     check(
-        "the day's door is marked as the one being read",
-        "on" in (desk.locator("[data-testid=nav-venue-bookings]").get_attribute("class") or ""),
+        "the schedule is marked as the section being read",
+        "on" in (desk.locator("[data-testid=nav-schedule]").get_attribute("class") or ""),
     )
     # The bar above it would be a second navigation saying the same thing.
     check("the top bar stands down on a desk", not desk.locator("mat-toolbar.bar").is_visible())
@@ -57,8 +57,24 @@ with sync_playwright() as p:
         check(f"{door} leads to {page}", landed)
 
     # A page outside any venue keeps the bar and is given no shift to work.
+    # Every venue at once stands in the same frame, with the schedule as its page
+    # (docs/plan/owner-app.md) — and the pages of one venue wait until one is chosen.
     desk.goto(f"{BASE}/venues")
-    desk.wait_for_selector("[data-testid=venue-list], [data-testid=no-venues]")
+    desk.wait_for_selector("[data-testid=owner-top]")
+    check(
+        "every venue at once stands in the owner app's frame",
+        desk.locator(".side").is_visible()
+        and "on" in (desk.locator("[data-testid=pill-all]").get_attribute("class") or "")
+        if desk.locator("[data-testid=pill-all]").count()
+        else desk.locator(".side").is_visible(),
+        desk,
+    )
+    check("one venue's pages are not offered on every venue's",
+          desk.locator("[data-testid=nav-slip-queue]").count() == 0)
+
+    # A page outside any venue keeps the bar and is given no rail.
+    desk.goto(f"{BASE}/account")
+    desk.wait_for_timeout(1200)
     check(
         "a page outside a venue keeps the bar and is given no shift to work",
         desk.locator("mat-toolbar.bar").is_visible() and desk.locator(".side").count() == 0,
@@ -68,15 +84,15 @@ with sync_playwright() as p:
     phone = browser.new_page(viewport=PHONE)
     sign_in(phone, OWNER)
     phone.goto(f"{BASE}/venues/{venue_id}/bookings")
-    phone.wait_for_selector("[data-testid=tab-venue-bookings]")
-    check("the five doors lie along the bottom on a phone", phone.locator(".tabs").is_visible(), phone)
+    phone.wait_for_selector("[data-testid=tab-schedule]")
+    check("the sections lie along the bottom on a phone", phone.locator(".tabs").is_visible(), phone)
     check("the sidebar is not drawn on a phone", not phone.locator(".side").is_visible())
     check(
-        "the day's tab is marked as the one being read",
-        "on" in (phone.locator("[data-testid=tab-venue-bookings]").get_attribute("class") or ""),
+        "the schedule's tab is marked as the one being read",
+        "on" in (phone.locator("[data-testid=tab-schedule]").get_attribute("class") or ""),
     )
-    phone.click("[data-testid=tab-money]")
-    phone.wait_for_url(f"{BASE}/venues/{venue_id}/money**")
+    phone.click("[data-testid=tab-dashboard]")
+    phone.wait_for_url(f"{BASE}/venues/{venue_id}/dashboard**")
     check("a tab carries the thumb to that page", phone.locator(".tabs").is_visible(), phone)
 
     browser.close()

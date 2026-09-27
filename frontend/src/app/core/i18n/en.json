@@ -240,7 +240,7 @@
   "nav.menu": "Menu",
   "nav.signIn": "Sign in",
   "nav.signOut": "Sign out",
-  "nav.venues": "My venues",
+  "nav.venues": "Branches",
   "pricing.addBand": "Add a band",
   "pricing.bahtPerHour": "baht/hour",
   "pricing.day": "Day",
@@ -888,5 +888,15 @@
   "login.createAccount": "Create an account",
   "login.point.today": "Every court right now, and who is on the way",
   "login.point.money": "Take money, check slips, count the till",
-  "login.point.team": "Invite staff and decide who may do what"
+  "login.point.team": "Invite staff and decide who may do what",
+  "nav.section.schedule": "Court schedule",
+  "nav.section.pricing": "Pricing & peak",
+  "nav.section.revenue": "Revenue",
+  "nav.section.members": "Members",
+  "nav.sections": "Main",
+  "nav.other": "More",
+  "nav.allVenues": "All branches",
+  "nav.view": "View",
+  "nav.view.timeline": "Timeline",
+  "nav.view.now": "Now"
 }

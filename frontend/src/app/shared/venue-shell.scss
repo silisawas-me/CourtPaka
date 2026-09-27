@@ -47,17 +47,18 @@
     display: none;
   }
 
+  // The design's rail: the ink itself, the sections large and the rest quieter under them.
   .side {
     grid-column: 1;
-    grid-row: 1;
-    display: grid;
-    align-content: start;
-    gap: 0.15rem;
+    grid-row: 1 / span 2;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
     position: sticky;
     top: 0;
     height: 100vh;
     overflow-y: auto;
-    padding: 0.75rem 0.6rem;
+    padding: 1.35rem 0.875rem 1rem;
     background: var(--mat-sys-inverse-surface);
     color: var(--mat-sys-inverse-on-surface);
   }
@@ -65,56 +66,130 @@
 
 // A quiet heading, because the doors under it are what is being read, not the group's name.
 .side-group {
-  margin: 0.75rem 0 0.25rem;
-  padding-inline: 0.6rem;
+  margin: 1rem 0 0.25rem;
+  padding-inline: 0.75rem;
   font: var(--mat-sys-label-small);
-  color: color-mix(in srgb, currentColor 65%, transparent);
-}
-
-.side-group:first-child {
-  margin-top: 0;
+  color: color-mix(in srgb, currentColor 60%, transparent);
 }
 
 .side-nav {
   display: grid;
-  gap: 0.1rem;
+  gap: 0.15rem;
 }
 
 .side-link {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem 0.6rem;
-  border-radius: var(--mat-sys-corner-small);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--mat-sys-corner-medium);
   font: var(--mat-sys-body-medium);
-  color: color-mix(in srgb, currentColor 85%, transparent);
+  color: color-mix(in srgb, currentColor 80%, transparent);
   text-decoration: none;
 
   span:first-child {
     flex: 1 1 auto;
     min-width: 0;
   }
+
+  &:hover {
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    color: inherit;
+  }
 }
 
-.side-link:hover {
-  background: color-mix(in srgb, currentColor 10%, transparent);
+// The four sections are the rail's main business: larger, and the one open drawn as the design
+// draws it — a piece of the page's own paper, with the page's ink, standing on the dark rail.
+.side-link.section {
+  padding: 0.7rem 0.75rem;
+  font: var(--mat-sys-title-small);
   color: inherit;
 }
 
-// Where you are, marked down the edge and by weight — a pointer resting on a door must not look
-// like the door being read, and the edge has to be light to be seen on a dark rail at all.
 .side-link.on {
-  background: color-mix(in srgb, currentColor 22%, transparent);
-  color: inherit;
-  font-weight: 500;
-  box-shadow: inset 3px 0 0 currentColor;
+  background: var(--mat-sys-background);
+  color: var(--mat-sys-on-background);
 }
 
 .side-foot {
   display: grid;
   gap: 0.25rem;
   justify-items: start;
-  margin-top: 1rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  margin-top: auto;
+  padding: 0.75rem;
+  border-radius: var(--mat-sys-corner-extra-large);
+  background: color-mix(in srgb, var(--mat-sys-inverse-on-surface) 9%, transparent);
+}
+
+/*
+ * The bar along the top of the page. A grid item of the app beside the rail, above the page; on
+ * a phone it sits under the app's own bar, and scrolls sideways within itself if a venue list is
+ * longer than the screen rather than widening the page.
+ */
+.top {
+  order: -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.875rem;
+  min-width: 0;
+  padding: 0.75rem var(--page-gutter);
+  background: var(--mat-sys-surface);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+
+  @media (min-width: 60rem) {
+    grid-column: 2;
+    grid-row: 1;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding-inline: 1.5rem;
+  }
+}
+
+.top-title {
+  margin: 0;
+  font: var(--mat-sys-title-large);
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+// A segmented switch, as the design draws it: a tray, and the chosen one lifted out of it.
+.pills {
+  display: flex;
+  gap: 0.15rem;
+  max-width: 100%;
+  padding: 0.25rem;
+  overflow-x: auto;
+  border-radius: var(--mat-sys-corner-medium);
+  background: var(--mat-sys-surface-container-highest);
+}
+
+.pill {
+  flex: none;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--mat-sys-corner-small);
+  font: var(--mat-sys-label-large);
+  color: var(--mat-sys-on-surface-variant);
+  text-decoration: none;
+  white-space: nowrap;
+
+  &.on {
+    background: var(--mat-sys-surface);
+    color: var(--mat-sys-on-surface);
+    box-shadow: var(--mat-sys-level1);
+  }
+}
+
+.pill-only {
+  border: 1px solid var(--mat-sys-outline-variant);
+  color: var(--mat-sys-on-surface);
+}
+
+.top-end {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-inline-start: auto;
 }

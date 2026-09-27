@@ -1,24 +1,36 @@
 <!--
-  The venue's own doors, down the side of every one of its pages (PRD US-25). A counter that has
-  to go back to the venue page to reach the slip queue reads the day twice; these are the same
-  doors the phone lays along the bottom, from one list, with the counts that decide where to look
-  next. On a phone this is not drawn at all — the bar above and the tabs below are what a thumb
-  can reach.
+  The owner app's rail (docs/plan/owner-app.md): the four sections the design names, then — under
+  a quieter heading — the rest of a venue's pages, which are real work even if the design left
+  them out. On a phone this is not drawn at all: the tabs along the bottom are what a thumb reaches.
 -->
 <aside class="side" [attr.aria-label]="i18n.t('nav.venueLabel')">
-  <!-- Whose app this is, and the way out of the venue: the app's, not the shell's, to name. -->
   <ng-content select="[sideHead]" />
 
-  @for (group of groups(); track group.heading) {
-    <p class="side-group">{{ i18n.t(group.heading) }}</p>
-    <nav class="side-nav" [attr.aria-label]="i18n.t(group.heading)">
-      @for (door of group.doors; track door.testId) {
+  <nav class="side-nav" [attr.aria-label]="i18n.t('nav.sections')">
+    @for (door of sections(); track door.testId) {
+      <a
+        class="side-link section"
+        [class.on]="door.on"
+        [attr.aria-current]="door.on ? 'page' : null"
+        [routerLink]="door.path"
+        [fragment]="door.fragment"
+        [attr.data-testid]="door.testId"
+      >
+        <span>{{ i18n.t(door.label) }}</span>
+      </a>
+    }
+  </nav>
+
+  @if (others().length > 0) {
+    <p class="side-group">{{ i18n.t('nav.other') }}</p>
+    <nav class="side-nav" [attr.aria-label]="i18n.t('nav.other')">
+      @for (door of others(); track door.testId) {
         <a
           class="side-link"
-          routerLinkActive="on"
-          ariaCurrentWhenActive="page"
-          [routerLinkActiveOptions]="{ exact: door.exact }"
+          [class.on]="door.on"
+          [attr.aria-current]="door.on ? 'page' : null"
           [routerLink]="door.path"
+          [fragment]="door.fragment"
           [attr.data-testid]="door.testId"
         >
           <span>{{ i18n.t(door.label) }}</span>
@@ -32,28 +44,73 @@
     </nav>
   }
 
-  <!-- The rest of the app: whoever is signed in still has an account and bookings of their own. -->
+  <!-- Who is signed in, and the way out: where the design had its demo switch (O6). -->
   <div class="side-foot">
     <ng-content select="[sideFoot]" />
   </div>
 </aside>
 
 <!--
-  The same doors along the bottom, where a thumb is. Five of them, because a sixth is a row
-  nobody can hit, and the last one is the venue's own page — which is where everything that is
-  not part of a shift lives.
+  The bar along the top of the page: what this page is, which venue it is about, which way of
+  reading the schedule, and the day. After the page in the document, like the rail, and put above
+  it by the grid — the order a screen reader meets it in is the page first.
+-->
+<header class="top" data-testid="owner-top">
+  <h1 class="top-title" data-testid="owner-title">{{ i18n.t(title()) }}</h1>
+
+  @if (pills().length > 1) {
+    <nav class="pills" data-testid="venue-pills" [attr.aria-label]="i18n.t('nav.venues')">
+      @for (pill of pills(); track pill.testId) {
+        <a
+          class="pill"
+          [class.on]="pill.on"
+          [attr.aria-current]="pill.on ? 'page' : null"
+          [routerLink]="pill.path"
+          [attr.data-testid]="pill.testId"
+          >{{ pill.testId === 'pill-all' ? i18n.t(pill.label) : pill.label }}</a
+        >
+      }
+    </nav>
+  } @else if (current(); as venue) {
+    <!-- One venue: its name, not a switch with nothing to switch to. -->
+    <span class="pill pill-only" data-testid="venue-name">{{ venue.name }}</span>
+  }
+
+  @if (views().length > 0) {
+    <nav class="pills views" data-testid="schedule-views" [attr.aria-label]="i18n.t('nav.view')">
+      @for (view of views(); track view.testId) {
+        <a
+          class="pill"
+          [class.on]="view.on"
+          [attr.aria-current]="view.on ? 'page' : null"
+          [routerLink]="view.path"
+          [attr.data-testid]="view.testId"
+          >{{ i18n.t(view.label) }}</a
+        >
+      }
+    </nav>
+  }
+
+  <span class="top-end">
+    <ng-content select="[topEnd]" />
+  </span>
+</header>
+
+<!--
+  The same sections along the bottom, where a thumb is — five at most, the last the venue's own
+  page, where everything that is not a section lives.
 -->
 <nav class="tabs" [attr.aria-label]="i18n.t('nav.venueLabel')">
   @for (tab of tabs(); track tab.testId) {
     <a
       class="tab"
-      routerLinkActive="on"
-      ariaCurrentWhenActive="page"
-      [routerLinkActiveOptions]="{ exact: tab.exact }"
+      [class.on]="tab.on"
+      [attr.aria-current]="tab.on ? 'page' : null"
       [routerLink]="tab.path"
+      [fragment]="tab.fragment"
       [attr.data-testid]="tab.tabTestId"
     >
-      {{ i18n.t(tab.short) }}
+      {{ i18n.t(tab.label) }}
       @if (tab.waiting; as count) {
         <span class="badge badge-waiting">{{ count }}</span>
       }

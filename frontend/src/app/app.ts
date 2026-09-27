@@ -16,6 +16,7 @@ import { TranslationService } from './core/i18n/translation.service';
 import { VenueShell } from './shared/venue-shell';
 
 import { Wordmark } from './shared/wordmark';
+import { ALL_VENUES } from './shared/venue-nav';
 @Component({
   // The directives, not the modules: MatButtonModule also declares icon and fab buttons,
   // which the shell does not use but would carry into the first chunk.
@@ -118,6 +119,10 @@ export class App {
  */
 function venueOf(route: ActivatedRouteSnapshot | null): string | null {
   while (route) {
+    // The overview of every venue stands in the same frame (docs/plan/owner-app.md).
+    if (route.data['venueShell'] === ALL_VENUES) {
+      return ALL_VENUES;
+    }
     const venueId = route.params['venueId'];
     if (route.data['venueShell'] === true && typeof venueId === 'string' && venueId.length > 0) {
       return venueId;

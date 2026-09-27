@@ -110,9 +110,10 @@ describe("A venue's own shell", () => {
     await TestBed.configureTestingModule({
       imports: [App],
       providers: pageProviders([
-        { path: 'venues', children: [] },
+        // Every venue at once stands in the same frame (docs/plan/owner-app.md).
+        { path: 'venues', children: [], data: { venueShell: 'all' } },
         // A venue's page is a venue's page because the route says so, not because its URL has an
-        // id in it — `book/:venueId` is the booker's grid and carries the same parameter.
+        // id in it.
         {
           path: 'venues/:venueId/bookings',
           children: [],
@@ -133,10 +134,20 @@ describe("A venue's own shell", () => {
 
   afterEach(() => httpMock.verify());
 
-  /** The shell is deferred, so nothing of it exists until a venue's page asks for it. */
-  async function showShell(): Promise<void> {
+  const MINE = [
+    { id: 'v1', name: 'Smash Court', role: 'Owner', permissions: [] },
+    { id: 'v2', name: 'Second Court', role: 'Staff', permissions: [] },
+  ];
+
+  /**
+   * The shell is deferred, so nothing of it exists until a venue's page asks for it. It asks who
+   * this person is at each venue as it arrives, and the answer decides which sections it draws.
+   */
+  async function showShell(mine: object[] = MINE): Promise<void> {
     const blocks = await fixture.getDeferBlocks();
     await blocks[0].render(DeferBlockState.Complete);
+    fixture.detectChanges();
+    httpMock.expectOne('/api/venues/mine').flush(mine);
     fixture.detectChanges();
   }
 
@@ -164,14 +175,10 @@ describe("A venue's own shell", () => {
 
   it('leaves the pages outside a venue alone', async () => {
     // The class the shell hangs on is the whole answer: no venue, no second layout, and the
-    // deferred sidebar is never asked for.
+    // deferred rail is never asked for.
     const shellIsUp = () => (fixture.nativeElement as HTMLElement).classList.contains('at-a-venue');
 
-    await router.navigate(['/venues']);
-    fixture.detectChanges();
-    expect(shellIsUp()).toBe(false);
-
-    // Neither is applying to join, however much the URL looks like a venue's.
+    // Applying to join is not a venue's page, however much the URL looks like one.
     await router.navigate(['/venues/apply']);
     fixture.detectChanges();
     expect(shellIsUp()).toBe(false);
@@ -184,6 +191,45 @@ describe("A venue's own shell", () => {
       slipsToCheck: 0,
       bookingsWithMoneyWaiting: 0,
     });
+  });
+
+  /*
+   * The owner app (docs/plan/owner-app.md): the four sections, a switch between venues along the
+   * top — with "every venue" only on the schedule — and the owner's two sections only for an
+   * owner.
+   */
+  it('stands on every venue at once, with the schedule as its page', async () => {
+    await router.navigate(['/venues']);
+    fixture.detectChanges();
+    await showShell();
+
+    expect(textOf(fixture, 'owner-title')).toBe(TRANSLATIONS.th['nav.section.schedule']);
+    expect(elementOf(fixture, 'nav-schedule')?.getAttribute('href')).toBe('/venues');
+    expect(elementOf(fixture, 'pill-all')?.classList).toContain('on');
+    // Revenue opens at a venue this person owns, never at one where they only work.
+    expect(elementOf(fixture, 'nav-dashboard')?.getAttribute('href')).toBe('/venues/v1/dashboard');
+    // The rest of a venue's pages belong to one venue, so they wait until one is chosen.
+    expect(elementOf(fixture, 'nav-slip-queue')).toBeNull();
+  });
+
+  it("keeps the owner's sections from somebody who only works at the venue", async () => {
+    await router.navigate(['/venues', 'v2', 'bookings']);
+    fixture.detectChanges();
+    await showShell();
+    httpMock
+      .expectOne('/api/venues/v2/attention')
+      .flush({ slipsToCheck: 0, bookingsWithMoneyWaiting: 0 });
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, 'nav-schedule')).not.toBeNull();
+    expect(elementOf(fixture, 'nav-packages')).not.toBeNull();
+    expect(elementOf(fixture, 'nav-dashboard')).toBeNull();
+    expect(elementOf(fixture, 'nav-pricing')).toBeNull();
+    // At a venue the schedule reads as a timeline or as right now.
+    expect(elementOf(fixture, 'view-bookings')?.classList).toContain('on');
+    expect(elementOf(fixture, 'view-now')?.getAttribute('href')).toBe('/venues/v2/now');
+    // Switching venue keeps the page.
+    expect(elementOf(fixture, 'pill-v1')?.getAttribute('href')).toBe('/venues/v1/bookings');
   });
 
   /**
