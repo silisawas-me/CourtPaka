@@ -27,8 +27,13 @@
   padding: 2rem var(--page-gutter) 3rem;
 }
 
-/* A strip of court above the form, which is all a phone has room to show of it. */
+/*
+ * A strip of court above the form, which is all a phone has room to show of it. The same name
+ * the front page gives its court: coming in from there is one movement, and the browser carries
+ * the drawing across instead of redrawing it (app.config.ts, `isTheWayIn`).
+ */
 app-court-art {
+  view-transition-name: court;
   width: 100%;
   height: 11rem;
   margin-bottom: -2.5rem;
@@ -78,6 +83,7 @@ app-court-art {
 }
 
 .auth-wordmark {
+  view-transition-name: wordmark;
   font: var(--mat-sys-title-medium);
   color: var(--mat-sys-primary);
   text-align: center;
