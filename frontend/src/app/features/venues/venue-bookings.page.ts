@@ -1,4 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   afterNextRender,
   Component,
@@ -20,6 +21,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Observable } from 'rxjs';
 import { courtsOf, hoursOf } from '../../core/bookings/hours';
+import { WalkInEvents } from '../../core/venues/walk-in.events';
 import { BookingPanel } from './booking-panel';
 import { SellOntoBooking } from './sell-onto-booking';
 import { VenueWaitlistEntry, WaitlistService } from '../../core/bookings/waitlist.service';
@@ -320,6 +322,16 @@ export class VenueBookingsPage {
     // The day and the venue both come from outside, and the venue only after the first pass, so
     // reading them here is what waits for both.
     effect(() => this.load(this.venueId(), this.day()));
+
+    // A walk-in sold from the top bar is on today's floor now; the day on screen is read again,
+    // quietly, when it is that venue's today (owner app PR-3).
+    inject(WalkInEvents)
+      .sold.pipe(takeUntilDestroyed())
+      .subscribe(({ venueId }) => {
+        if (venueId === this.venueId() && this.day() === plainDate(venueToday())) {
+          this.load(venueId, this.day(), { quiet: true });
+        }
+      });
 
     // Another day is another floor: the booking in the panel is not on it.
     effect(() => {

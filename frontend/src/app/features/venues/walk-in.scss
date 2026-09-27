@@ -1,0 +1,172 @@
+/*
+ * The design's walk-in modal: paper on a dimmed page, rows of choices as buttons (a hand holding
+ * a phone or a card machine picks faster from buttons than from selects), and one wide button
+ * at the foot that says what is missing until nothing is, then the price.
+ */
+:host {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: var(--page-gutter);
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--mat-sys-scrim) 45%, transparent);
+}
+
+.sheet {
+  position: relative;
+  display: grid;
+  gap: 1rem;
+  width: min(34rem, 100%);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  padding: 1.5rem;
+  border-radius: var(--mat-sys-corner-extra-large);
+  background: var(--mat-sys-background);
+  box-shadow: var(--mat-sys-level2);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  h2 {
+    margin: 0;
+    font: var(--mat-sys-title-large);
+    font-family: var(--font-display);
+    font-weight: 800;
+  }
+}
+
+.close {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 0;
+  border-radius: var(--mat-sys-corner-full);
+  background: var(--mat-sys-surface-container-highest);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-title-medium);
+  cursor: pointer;
+}
+
+fieldset {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+legend {
+  padding: 0;
+  margin-bottom: 0.4rem;
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.choices {
+  display: grid;
+  gap: 0.4rem;
+
+  &.four {
+    grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr));
+  }
+
+  &.three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  &.two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  &.courts {
+    grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr));
+  }
+}
+
+.choice {
+  min-height: 2.75rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-medium);
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-label-large);
+  font-family: var(--font-mono);
+  cursor: pointer;
+
+  &.on {
+    border-color: var(--mat-sys-on-surface);
+    background: var(--mat-sys-on-surface);
+    color: var(--mat-sys-surface);
+  }
+
+  &:disabled {
+    background: var(--mat-sys-surface-container-high);
+    color: var(--mat-sys-on-surface-variant);
+    opacity: 0.6;
+    cursor: default;
+  }
+}
+
+.who {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.5rem;
+
+  input {
+    width: 100%;
+    min-height: 3rem;
+    padding: 0 0.9rem;
+    border: 1px solid var(--mat-sys-outline-variant);
+    border-radius: var(--mat-sys-corner-medium);
+    background: var(--mat-sys-surface);
+    color: var(--mat-sys-on-surface);
+    font: var(--mat-sys-body-large);
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.note {
+  margin: 0;
+  font: var(--mat-sys-body-small);
+  color: var(--status-waiting-ink);
+}
+
+.confirm {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 3.5rem;
+  padding: 0 1.25rem;
+  border: 0;
+  border-radius: var(--mat-sys-corner-extra-large);
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  font: var(--mat-sys-title-medium);
+  cursor: pointer;
+
+  // Not greyed out to nothing: while it is waiting it says what is still missing, so it is read.
+  &:disabled {
+    background: var(--mat-sys-surface-container-highest);
+    color: var(--mat-sys-on-surface-variant);
+    cursor: default;
+  }
+}
