@@ -742,6 +742,7 @@
   "packages.subtitle": "ขายชั่วโมงล่วงหน้าให้ลูกค้าประจำ · เงินเข้าวันที่ขาย แต่ยังไม่ใช่รายได้จนกว่าจะถูกใช้",
   "packages.sell": "ขายแพ็กเกจ",
   "packages.whichOffer": "แพ็กเกจ",
+  "packages.whoseHours": "ใช้ชั่วโมงของใคร",
   "packages.customerName": "ชื่อลูกค้า",
   "packages.customerPhone": "เบอร์โทร (ไม่บังคับ)",
   "packages.paidBy": "จ่ายด้วย",

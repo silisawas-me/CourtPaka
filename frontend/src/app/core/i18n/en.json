@@ -742,6 +742,7 @@
   "packages.subtitle": "Hours sold in advance. The money is in on the day it is sold, but it is not revenue until the hours are used.",
   "packages.sell": "Sell a package",
   "packages.whichOffer": "Package",
+  "packages.whoseHours": "Whose hours",
   "packages.customerName": "Customer name",
   "packages.customerPhone": "Phone (optional)",
   "packages.paidBy": "Paid by",
