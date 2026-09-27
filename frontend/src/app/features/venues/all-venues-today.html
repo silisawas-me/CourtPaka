@@ -1,86 +1,99 @@
 @if (today(); as day) {
   @if (day.venues.length > 0) {
     <section class="overview" data-testid="all-venues-today">
-      <h2 class="overview-title">{{ i18n.t('overview.title') }}</h2>
+      <!-- The three numbers the design leads with, each a card of its own. -->
+      <div class="kpis">
+        <div class="kpi">
+          <span class="kpi-label">{{ i18n.t('overview.kept') }}</span>
+          <span class="kpi-value" data-testid="overview-kept"
+            >฿{{ day.keptBaht | baht: i18n.locale() }}</span
+          >
+          <span class="kpi-note">{{ day.venues.length }} {{ i18n.t('overview.branches') }}</span>
+        </div>
+        <div class="kpi">
+          <span class="kpi-label">{{ i18n.t('overview.bookings') }}</span>
+          <span class="kpi-value" data-testid="overview-bookings">{{ day.bookings }}</span>
+          <span class="kpi-note">{{ i18n.t('overview.bookingsNote') }}</span>
+        </div>
+        <div class="kpi">
+          <span class="kpi-label">{{ i18n.t('overview.dueNow') }}</span>
+          <span class="kpi-value" data-testid="overview-due">{{ day.dueNow }}</span>
+          <span class="kpi-note" [class.late]="late() > 0">
+            {{ i18n.t('overview.pastGrace') }} {{ late() }} {{ i18n.t('overview.items') }}
+          </span>
+        </div>
+      </div>
 
-      <dl class="tiles">
-        <div class="tile tile-live">
-          <dt>{{ i18n.t('overview.kept') }}</dt>
-          <dd data-testid="overview-kept">{{ day.keptBaht | baht: i18n.locale() }}</dd>
+      <div class="heat-card">
+        <div class="heat-head">
+          <h2>{{ i18n.t('overview.heat') }}</h2>
+          <span class="heat-key" aria-hidden="true">
+            {{ i18n.t('overview.free') }}<span class="heat-ramp"></span
+            >{{ i18n.t('overview.full') }}
+          </span>
         </div>
-        <div class="tile">
-          <dt>{{ i18n.t('overview.bookings') }}</dt>
-          <dd data-testid="overview-bookings">{{ day.bookings }}</dd>
-        </div>
-        <div class="tile" [class.tile-waiting]="day.dueNow > 0">
-          <dt>{{ i18n.t('overview.dueNow') }}</dt>
-          <dd data-testid="overview-due">{{ day.dueNow }}</dd>
-        </div>
-      </dl>
 
-      <ul class="venues">
-        @for (venue of day.venues; track venue.venueId) {
-          <li class="venue" [attr.data-testid]="'overview-venue-' + venue.venueId">
-            <div class="venue-head">
-              <a class="venue-name" [routerLink]="['/venues', venue.venueId, 'now']">{{
-                venue.name
-              }}</a>
-              <span class="venue-figures">
-                {{ venue.keptBaht | baht: i18n.locale() }} {{ i18n.t('money.baht') }} ·
-                {{ venue.bookings }} {{ i18n.t('overview.bookingsShort') }} ·
-                @if (venue.usedPercent !== null) {
-                  {{ i18n.t('overview.used') }} {{ venue.usedPercent }}%
-                } @else {
-                  {{ i18n.t('overview.nothingOnSale') }}
-                }
+        <!--
+          One grid for every venue, so the same hour sits in the same column down the page — which
+          is the comparison the design is for: whose evening is full and whose afternoon is not.
+        -->
+        <div class="heat" [style.--hours]="hours().length" role="table">
+          <div class="heat-row heat-hours" role="row">
+            <span role="columnheader"></span>
+            @for (hour of hours(); track hour) {
+              <span class="heat-hour" role="columnheader">{{ hour }}:00</span>
+            }
+            <span class="heat-rev-head" role="columnheader">{{ i18n.t('overview.revenue') }}</span>
+          </div>
+
+          @for (venue of day.venues; track venue.venueId) {
+            <a
+              class="heat-row venue"
+              role="row"
+              [routerLink]="['/venues', venue.venueId, 'bookings']"
+              [attr.data-testid]="'overview-venue-' + venue.venueId"
+            >
+              <span class="venue-name" role="rowheader">
+                <span>{{ venue.name }}</span>
+                <span class="venue-sub">{{ courtsOf(venue) }} {{ i18n.t('overview.courts') }}</span>
               </span>
-            </div>
-
-            <!--
-              How full each hour was, darker for fuller — the question "when are we empty" is
-              answered by looking, not by reading sixteen percentages. Each cell says its number
-              to whoever cannot see the shade.
-            -->
-            @if (venue.hours.length > 0) {
-              <div class="heat" role="list" [attr.aria-label]="i18n.t('overview.heat')">
-                @for (hour of venue.hours; track hour.hour) {
+              @if (venue.sellableHours === 0) {
+                <!-- Nothing on sale today: one line that says so, not a row of empty cells. -->
+                <span class="heat-none" role="cell">{{ i18n.t('overview.nothingOnSale') }}</span>
+              }
+              @for (hour of venue.sellableHours === 0 ? [] : hours(); track hour) {
+                @if (cell(venue, hour); as use) {
                   <span
-                    role="listitem"
-                    class="heat-hour"
-                    [class.off]="use(hour) === null"
-                    [style.--use]="use(hour) ?? 0"
-                    [attr.aria-label]="hourLabel(hour)"
-                    [attr.title]="hourLabel(hour)"
-                  ></span>
+                    class="heat-hour-cell"
+                    role="cell"
+                    [class.full]="use.percent > 60"
+                    [style.--use]="use.percent"
+                    [attr.aria-label]="hour + ':00 ' + use.percent + '%'"
+                    >{{ use.percent }}%</span
+                  >
+                } @else {
+                  <span class="heat-hour-cell off" role="cell"></span>
                 }
-              </div>
-              <div class="heat-scale" aria-hidden="true">
-                <span>{{ venue.hours[0].hour }}:00</span>
-                <span>{{ venue.hours[venue.hours.length - 1].hour + 1 }}:00</span>
-              </div>
-            }
+              }
+              <span class="venue-rev" role="cell"
+                >฿{{ venue.keptBaht | baht: i18n.locale() }}<span class="chevron">›</span></span
+              >
+            </a>
+          }
+        </div>
 
-            @if (venue.pastGrace > 0 || venue.dueNow > 0 || venue.shutNow.length > 0) {
-              <ul class="flags">
-                @if (venue.pastGrace > 0) {
-                  <li class="flag late" [attr.data-testid]="'overview-late-' + venue.venueId">
-                    {{ i18n.t('overview.pastGrace') }} {{ venue.pastGrace }}
-                  </li>
-                } @else if (venue.dueNow > 0) {
-                  <li class="flag due" [attr.data-testid]="'overview-due-' + venue.venueId">
-                    {{ i18n.t('overview.dueNow') }} {{ venue.dueNow }}
-                  </li>
-                }
-                @if (venue.shutNow.length > 0) {
-                  <li class="flag shut" [attr.data-testid]="'overview-shut-' + venue.venueId">
-                    {{ i18n.t('overview.shut') }} {{ venue.shutNow.join(', ') }}
-                  </li>
-                }
-              </ul>
+        @if (alerts().length > 0) {
+          <p class="alert" data-testid="overview-alerts">
+            <span class="alert-dot" aria-hidden="true"></span>
+            @for (alert of alerts(); track alert.testId; let last = $last) {
+              <span [attr.data-testid]="alert.testId">{{ alert.text }}</span>
+              @if (!last) {
+                ·
+              }
             }
-          </li>
+          </p>
         }
-      </ul>
+      </div>
     </section>
   }
 } @else if (error(); as key) {

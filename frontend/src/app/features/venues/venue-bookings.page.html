@@ -1,6 +1,5 @@
+<!-- The page's name is on the top bar (owner app); this row is the day and the way to sell into it. -->
 <header class="page-head">
-  <h2>{{ i18n.t('venueBookings.title') }}</h2>
-
   <mat-form-field class="field-date">
     <mat-label>{{ i18n.t('availability.day') }}</mat-label>
     <input
@@ -52,7 +51,19 @@
     <mat-card class="floor">
       <mat-card-content class="stack">
         <!--
-        The day in four numbers, before the floor it summarises: a counter looks up to ask how
+        The floor, then the list. Both are the same day's bookings: the board is for the glance
+        across the counter, the list for the row somebody is asking about (PRD US-25).
+      -->
+        <app-day-board
+          [day]="grid()"
+          [bookings]="bookings$()"
+          [now]="liveNow()"
+          [chosen]="chosen()"
+          (opened)="reveal($event)"
+          (picked)="sellAt($event)"
+        />
+        <!--
+        The day in four numbers, under the floor it summarises (the owner app puts the floor first): a counter looks up to ask how
         the day is going and down to ask about one hour of it. Tiles rather than a run of
         label-and-value, because these are read from across a counter and the number is what is
         being read — the money that has not arrived carries the waiting colour when there is
@@ -76,24 +87,24 @@
             <dd data-testid="today-owed">{{ todayOwed() | baht: i18n.locale() }}</dd>
           </div>
         </dl>
-
-        <!--
-        The floor, then the list. Both are the same day's bookings: the board is for the glance
-        across the counter, the list for the row somebody is asking about (PRD US-25).
-      -->
-        <app-day-board
-          [day]="grid()"
-          [bookings]="bookings$()"
-          [now]="liveNow()"
-          [chosen]="chosen()"
-          (opened)="reveal($event)"
-          (picked)="sellAt($event)"
-        />
       </mat-card-content>
     </mat-card>
 
     @if (chosenBooking(); as booking) {
-      <app-booking-panel [kind]="booking.kind" (closed)="closePanel()">
+      <app-booking-panel
+        [kind]="booking.kind"
+        [name]="whoOf(booking)"
+        [where]="
+          courts(booking) +
+          ' · ' +
+          hours(booking) +
+          ' · ' +
+          booking.slots.length +
+          ' ' +
+          i18n.t('panel.hours')
+        "
+        (closed)="closePanel()"
+      >
         <div class="booking" tabindex="-1" [attr.data-testid]="'booking-' + booking.bookingId">
           <ng-container *ngTemplateOutlet="bookingBody; context: { $implicit: booking }" />
         </div>

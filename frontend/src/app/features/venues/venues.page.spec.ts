@@ -87,16 +87,16 @@ describe('VenuesPage', () => {
     });
     fixture.detectChanges();
 
-    expect(textOf(fixture, 'overview-kept')).toBe('1,200');
+    expect(textOf(fixture, 'overview-kept')).toBe('฿1,200');
     expect(textOf(fixture, 'overview-due')).toBe('1');
-    const venue = elementOf(fixture, 'overview-venue-v1');
-    // Past the grace outranks merely due: it is the one the venue has to decide about.
+    // What wants somebody is said per venue, under the grid.
     expect(elementOf(fixture, 'overview-late-v1')).not.toBeNull();
-    expect(elementOf(fixture, 'overview-due-v1')).toBeNull();
     expect(textOf(fixture, 'overview-shut-v1')).toContain('Court 2');
-    // Each hour says its number to whoever cannot see the shade; an hour not on sale says so.
-    const hours = venue!.querySelectorAll('.heat-hour');
-    expect(hours[0].getAttribute('aria-label')).toContain('50%');
+    // Each hour says its number, to whoever cannot see the shade; an hour not sold says nothing.
+    const venue = elementOf(fixture, 'overview-venue-v1');
+    expect(venue?.getAttribute('href')).toBe('/venues/v1/bookings');
+    const hours = venue!.querySelectorAll('.heat-hour-cell');
+    expect(hours[0].textContent?.trim()).toBe('50%');
     expect(hours[1].classList).toContain('off');
   });
 

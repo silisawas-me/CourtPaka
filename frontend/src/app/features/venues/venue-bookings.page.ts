@@ -580,6 +580,16 @@ export class VenueBookingsPage {
     return hoursOf(booking.slots);
   }
 
+  /** Who a booking is for, as the panel names it: the name given, the address, or the phone. */
+  protected whoOf(booking: VenueBooking): string {
+    return (
+      booking.customerName ??
+      booking.bookerEmail ??
+      booking.bookerPhone ??
+      this.i18n.t('booker.deleted')
+    );
+  }
+
   protected courts(booking: VenueBooking): string {
     return courtsOf(booking.slots);
   }

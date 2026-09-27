@@ -1,4 +1,4 @@
-/* The day across every venue: the three numbers, then a line per venue. */
+/* Every venue today, as the design draws it: three number cards, then one grid of hours. */
 :host {
   display: block;
   min-width: 0;
@@ -7,74 +7,168 @@
 .overview {
   display: grid;
   gap: 1rem;
-  padding: 1rem;
-  border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: var(--mat-sys-corner-large);
-  background: var(--mat-sys-surface);
   /* The page it sits on is not a grid, so the space under it is carried here — only when drawn. */
   margin-block-end: var(--stack);
 }
 
-.overview-title {
-  margin: 0;
-  font: var(--mat-sys-title-large);
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 1rem;
 }
 
-.venues {
+.kpi,
+.heat-card {
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-extra-large);
+  background: var(--mat-sys-surface);
+}
+
+.kpi {
   display: grid;
-  gap: 0.25rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  gap: 0.35rem;
+  padding: 1.1rem 1.25rem;
+}
+
+.kpi-label {
+  font: var(--mat-sys-label-large);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.kpi-value {
+  font: var(--mat-sys-headline-medium);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-note {
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+
+  &.late {
+    color: var(--status-waiting-ink);
+  }
+}
+
+.heat-card {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 1.25rem;
+}
+
+.heat-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem 1rem;
+
+  h2 {
+    margin: 0;
+    font: var(--mat-sys-title-medium);
+  }
+}
+
+.heat-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.heat-ramp {
+  width: 5.5rem;
+  height: 0.5rem;
+  border-radius: var(--mat-sys-corner-full);
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--mat-sys-on-primary-container) 8%, var(--mat-sys-surface)),
+    var(--mat-sys-on-primary-container)
+  );
+}
+
+/*
+ * A day does not fit a phone at the design's size, so the grid scrolls inside its card rather
+ * than widening the page.
+ */
+.heat {
+  display: grid;
+  gap: 0.5rem;
+  overflow-x: auto;
+}
+
+.heat-row {
+  display: grid;
+  grid-template-columns: 9rem repeat(var(--hours), minmax(3.25rem, 1fr)) 7rem;
+  gap: 0.5rem;
+  align-items: stretch;
+  min-width: max-content;
+}
+
+.heat-hour,
+.heat-rev-head {
+  font: var(--mat-sys-label-small);
+  font-family: var(--font-mono);
+  color: var(--mat-sys-on-surface-variant);
+  text-align: center;
+}
+
+.heat-rev-head {
+  text-align: end;
 }
 
 .venue {
-  display: grid;
-  gap: 0.4rem;
-  padding-block: 0.75rem;
-  border-top: 1px solid var(--mat-sys-outline-variant);
-}
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--mat-sys-corner-medium);
 
-.venue-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.25rem 1rem;
+  &:hover {
+    background: var(--mat-sys-surface-container);
+  }
 }
 
 .venue-name {
-  font: var(--mat-sys-title-medium);
-  color: var(--mat-sys-on-surface);
+  display: grid;
+  align-content: center;
+  gap: 0.1rem;
+  font: var(--mat-sys-title-small);
 }
 
-.venue-figures {
-  font: var(--mat-sys-body-medium);
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
+.venue-sub {
+  font: var(--mat-sys-label-small);
   color: var(--mat-sys-on-surface-variant);
 }
 
 /*
- * One cell per hour the venue sells, sharing the width: a day of sixteen hours fits a phone at
- * this size, and a heatmap that scrolled would stop being read at a glance.
+ * Darker for fuller, toward the dark green. The ramp steps at 60%: below it the number is the
+ * darkest ink, above it white, and the ground jumps past the band where neither reads (measured:
+ * dark ink ≥ 4.9:1 up to the step, white ≥ 5.1:1 from it).
  */
-.heat {
+.heat-hour-cell {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  gap: 2px;
-}
-
-.heat-hour {
-  height: 1.25rem;
-  border-radius: var(--mat-sys-corner-extra-small);
-  /* A fifth of the green even for an empty hour, so "on sale, nobody came" is not "not on sale". */
+  place-items: center;
+  min-height: 4.5rem;
+  border-radius: var(--mat-sys-corner-small);
   background: color-mix(
     in srgb,
-    var(--mat-sys-primary) calc(12% + var(--use) * 0.88%),
-    var(--mat-sys-surface-container-high)
+    var(--mat-sys-on-primary-container) calc(8% + var(--use) * 0.85%),
+    var(--mat-sys-surface)
   );
+  font: var(--mat-sys-label-small);
+  font-family: var(--font-mono);
+  color: var(--mat-sys-on-primary-fixed);
+
+  &.full {
+    background: color-mix(
+      in srgb,
+      var(--mat-sys-on-primary-container) calc(50% + var(--use) * 0.5%),
+      var(--mat-sys-surface)
+    );
+    color: var(--mat-sys-on-primary);
+  }
 
   &.off {
     background: repeating-linear-gradient(
@@ -85,40 +179,44 @@
   }
 }
 
-.heat-scale {
-  display: flex;
-  justify-content: space-between;
-  font: var(--mat-sys-label-small);
-  font-family: var(--font-mono);
+.heat-none {
+  grid-column: 2 / -2;
+  align-self: center;
+  font: var(--mat-sys-body-small);
   color: var(--mat-sys-on-surface-variant);
 }
 
-.flags {
+.venue-rev {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
   gap: 0.35rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  font: var(--mat-sys-title-small);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
-.flag {
-  padding: 0.1rem 0.6rem;
-  border-radius: var(--mat-sys-corner-extra-small);
-  font: var(--mat-sys-label-medium);
+.chevron {
+  color: var(--mat-sys-on-surface-variant);
+}
 
-  &.late {
-    background: var(--status-risk-soft);
-    color: var(--status-risk-ink);
-  }
+.alert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-radius: var(--mat-sys-corner-medium);
+  background: var(--status-waiting-soft);
+  color: var(--status-waiting-ink);
+  font: var(--mat-sys-body-small);
+}
 
-  &.due {
-    background: var(--status-waiting-soft);
-    color: var(--status-waiting-ink);
-  }
-
-  &.shut {
-    background: var(--status-done-soft);
-    color: var(--status-done-ink);
-  }
+.alert-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--status-waiting);
 }

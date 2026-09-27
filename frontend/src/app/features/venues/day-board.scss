@@ -99,7 +99,7 @@
 .board-court {
   display: flex;
   align-items: center;
-  font: var(--mat-sys-body-medium);
+  font: var(--mat-sys-title-small);
   overflow: hidden;
 }
 
@@ -118,7 +118,7 @@
 
 .board-cell,
 .board-block {
-  min-height: 2.75rem;
+  min-height: 3.5rem;
   border: 0;
   border-radius: var(--mat-sys-corner-small);
   padding: 0.25rem 0.5rem;
@@ -126,15 +126,29 @@
   font: inherit;
 }
 
-/* An hour nobody has taken: faint, but a button, because pressing it sells that hour. */
+/*
+ * An hour nobody has taken. The design draws the floor as empty track, so the hour is the track
+ * itself — a button all the same, because pressing it sells that hour. Its price stays, quieter
+ * than the blocks: "how much is seven o'clock" is still the question across the counter (US-25).
+ */
 .board-cell.free {
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--mat-sys-surface-variant) 55%, transparent);
+  background: var(--mat-sys-surface);
+  box-shadow: inset 0 0 0 1px var(--mat-sys-outline-variant);
   cursor: pointer;
 
-  &:hover {
-    background: var(--mat-sys-surface-variant);
+  .board-price {
+    opacity: 0.55;
+  }
+
+  &:hover,
+  &:focus-visible {
+    background: var(--mat-sys-surface-container);
+
+    .board-price {
+      opacity: 0.8;
+    }
   }
 }
 
@@ -208,8 +222,7 @@
 }
 
 /* Check-in is open and nobody has come in: the design's rust dot, in the corner the eye reaches last. */
-.board-due,
-.board-key .due {
+.board-due {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 50%;
@@ -229,9 +242,25 @@
   white-space: nowrap;
 }
 
-.board-note {
+.board-time {
   font: var(--mat-sys-label-small);
+  font-family: var(--font-mono);
   opacity: 0.85;
+}
+
+/* Played out already: still there to read, but no longer what the floor is about. */
+.board-block.done {
+  opacity: 0.5;
+}
+
+.board-peak {
+  display: inline-block;
+  width: 0.35rem;
+  height: 0.35rem;
+  margin-inline-start: 0.2rem;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: var(--status-waiting);
 }
 
 /*
@@ -253,42 +282,17 @@
   pointer-events: none;
 }
 
-.board-key {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 1rem;
-  margin: 0.75rem 0 0;
-  padding: 0;
-  list-style: none;
-  font: var(--mat-sys-label-medium);
-  color: var(--mat-sys-on-surface-variant);
-
-  li {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
-
-  .swatch {
-    width: 0.9rem;
-    height: 0.9rem;
-    border-radius: var(--mat-sys-corner-extra-small);
-    background: var(--soft);
-    box-shadow: inset 0 0 0 1px var(--line);
-  }
-
-  .swatch.closed {
-    background: repeating-linear-gradient(
-      135deg,
-      var(--status-risk-soft) 0 3px,
-      var(--mat-sys-surface) 3px 6px
-    );
-    box-shadow: inset 0 0 0 1px var(--mat-sys-outline-variant);
-  }
-
-  .now {
-    width: 2px;
-    height: 0.9rem;
-    background: var(--status-waiting);
-  }
+/* The time itself, on a tab at the top of the line, as the design has it. */
+.board-clock {
+  position: absolute;
+  top: -1.1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--mat-sys-corner-extra-small);
+  background: var(--status-waiting);
+  color: var(--mat-sys-on-primary);
+  font: var(--mat-sys-label-small);
+  font-family: var(--font-mono);
+  white-space: nowrap;
 }
