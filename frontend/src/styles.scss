@@ -1,39 +1,54 @@
 @use '@angular/material' as mat;
 @use './theme-colors' as brand;
 
-/**
- * The font is served from this origin, not from Google's. Loading it through an @import chained a
- * third-party stylesheet in front of the first paint, which cost about a second of LCP on mobile;
- * Only the two weights the theme asks for are shipped — mat.theme() writes 400 for body text and
- * 500 for titles and buttons — and the 400s are preloaded in index.html so the swap happens before
- * anyone reads a word.
- */
-@each $weight in (400, 500) {
-  @font-face {
-    font-family: 'Noto Sans Thai';
-    font-style: normal;
-    font-display: swap;
-    font-weight: $weight;
-    src: url('/fonts/noto-sans-thai-thai-#{$weight}-normal.woff2') format('woff2');
-    unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
-  }
+$thai-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+$latin-range:
+  U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+  U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 
+@mixin face($family, $file, $subset, $weight, $range) {
   @font-face {
-    font-family: 'Noto Sans Thai';
+    font-family: $family;
     font-style: normal;
     font-display: swap;
     font-weight: $weight;
-    src: url('/fonts/noto-sans-thai-latin-#{$weight}-normal.woff2') format('woff2');
-    unicode-range:
-      U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
-      U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    src: url('/fonts/#{$file}-#{$subset}-#{$weight}-normal.woff2') format('woff2');
+    unicode-range: $range;
   }
+}
+
+/**
+ * The badPaka faces, served from this origin rather than Google's: loading them through an
+ * @import chained a third-party stylesheet in front of the first paint, which cost about a second
+ * of LCP on mobile. Each face is split by script so a Thai page never fetches the latin file of a
+ * face it only uses for digits, and the other way round.
+ *
+ * - IBM Plex Sans Thai is the voice of the app — every body line, Thai and English. 400 and 500
+ *   are what Material writes; 600 is for the few labels the design sets bold.
+ * - Bricolage Grotesque is for headings, the wordmark and big numbers. It has no Thai, so a Thai
+ *   heading falls through to Plex in the same weight. 800 is the wordmark's weight.
+ * - IBM Plex Mono is for times and prices that line up in columns (`--font-mono`).
+ *
+ * Only Plex's two 400 files are preloaded in index.html: they are what the first screen is
+ * written in. Everything else is swapped in when a page asks for it.
+ */
+@each $weight in (400, 500, 600) {
+  @include face('IBM Plex Sans Thai', 'ibm-plex-sans-thai', 'thai', $weight, $thai-range);
+  @include face('IBM Plex Sans Thai', 'ibm-plex-sans-thai', 'latin', $weight, $latin-range);
+}
+
+@each $weight in (400, 500, 600, 800) {
+  @include face('Bricolage Grotesque', 'bricolage-grotesque', 'latin', $weight, $latin-range);
+}
+
+@each $weight in (400, 500) {
+  @include face('IBM Plex Mono', 'ibm-plex-mono', 'latin', $weight, $latin-range);
 }
 
 html {
   color-scheme: light;
 
-  // The palettes are generated from the CourtPaka green by the Material theme-color schematic.
+  // The palettes are generated from the old CourtPaka green by the Material theme-color schematic.
   @include mat.theme(
     (
       color: (
@@ -41,8 +56,18 @@ html {
         tertiary: brand.$tertiary-palette,
       ),
       typography: (
-        plain-family: 'Noto Sans Thai',
-        brand-family: 'Noto Sans Thai',
+        plain-family: (
+          'IBM Plex Sans Thai',
+          system-ui,
+          sans-serif,
+        ),
+        // Headings reach Plex for their Thai, since Bricolage has none.
+        brand-family: (
+            'Bricolage Grotesque',
+            'IBM Plex Sans Thai',
+            system-ui,
+            sans-serif,
+          ),
       ),
       density: 0,
     )
@@ -50,13 +75,13 @@ html {
 }
 
 /**
- * The CourtFlow palette, written over the tokens Material generated (the prototype the venues
- * were sold on: `CourtFlow_SalesReady_Spec.md`).
+ * The badPaka palette, written over the tokens Material generated (`badPaka Owner.dc.html`, the
+ * design the rebrand was drawn from — see docs/plan/badpaka.md).
  *
  * The schematic can only build a palette from one seed colour, and every shade it derives is a
- * shade of that green — which is why the status colours below had to be chosen by hand in the
- * first place. CourtFlow does not work that way: its green is for courts, its amber is for
- * money, its red is for trouble and its ink is navy, and none of them is a tint of another.
+ * shade of that green. badPaka is not built that way: its ground is warm paper, its ink is a
+ * brown-black, its green is for courts and for the one thing to press, and its rust is for the
+ * thing that is late. None of them is a tint of another.
  *
  * So `_theme-colors.scss` stays exactly as the schematic wrote it, and the system tokens are
  * reassigned here instead. Every component in the app already reads `var(--mat-sys-*)` and
@@ -64,81 +89,88 @@ html {
  * delete it.
  */
 :root {
-  /* Paper and ground. The page is a cool grey-green; panels are white and edged, not floated. */
-  --mat-sys-background: #f2f5f1;
+  /* Paper. The app sits on a warm off-white; panels are white and edged, not floated. */
+  --mat-sys-background: #f8f5ef;
   --mat-sys-surface: #ffffff;
-  --mat-sys-surface-dim: #e4eae5;
+  --mat-sys-surface-dim: #efebe4;
   --mat-sys-surface-bright: #ffffff;
   --mat-sys-surface-container-lowest: #ffffff;
-  --mat-sys-surface-container-low: #f2f5f1;
-  --mat-sys-surface-container: #f7faf7;
-  --mat-sys-surface-container-high: #eef2ee;
-  --mat-sys-surface-container-highest: #e7ece8;
-  --mat-sys-surface-variant: #e7ece8;
+  --mat-sys-surface-container-low: #f8f5ef;
+  --mat-sys-surface-container: #fbf8f3;
+  --mat-sys-surface-container-high: #f3eee6;
+  --mat-sys-surface-container-highest: #efebe4;
+  --mat-sys-surface-variant: #efebe4;
 
-  /* Navy ink rather than a dark green: it is what stops the whole page reading as one colour. */
-  --mat-sys-on-background: #14202b;
-  --mat-sys-on-surface: #14202b;
-  // CourtFlow's muted grey is #5c6a70, which reads at 4.46:1 on the darkest container here —
-  // just under the line. Two points darker clears it and is indistinguishable beside it.
-  --mat-sys-on-surface-variant: #55636b;
-  --mat-sys-outline: #9faea4;
-  --mat-sys-outline-variant: #d9e0da;
+  /* Brown-black ink rather than a dark green: it is what stops the page reading as one colour. */
+  --mat-sys-on-background: #2a2420;
+  --mat-sys-on-surface: #2a2420;
+  // The design's muted brown is #8a7a68, which reads at 3.5:1 on the darkest container and 4.15
+  // on white — under the line everywhere. This is the lightest of that brown that clears 4.5
+  // on every surface here. Measured by script, not by eye.
+  --mat-sys-on-surface-variant: #74665a;
+  --mat-sys-outline: #b3a491;
+  --mat-sys-outline-variant: #e6ddcf;
 
-  /* Courts. */
-  --mat-sys-primary: #1e7f5c;
+  /* Courts, and the one thing on a screen to press. */
+  // The design's #2f7a45 is 4.43:1 as link text on the darkest container; two steps darker
+  // clears 4.5 there and is the same green beside it.
+  --mat-sys-primary: #2d7643;
   --mat-sys-on-primary: #ffffff;
-  --mat-sys-primary-container: #e2f2e9;
-  --mat-sys-on-primary-container: #10523c;
-  --mat-sys-primary-fixed: #e2f2e9;
-  --mat-sys-primary-fixed-dim: #8fd7b6;
-  --mat-sys-on-primary-fixed: #072418;
-  --mat-sys-on-primary-fixed-variant: #10523c;
-  --mat-sys-inverse-primary: #7fd0ab;
+  --mat-sys-primary-container: #e3f0e4;
+  --mat-sys-on-primary-container: #1f5a31;
+  --mat-sys-primary-fixed: #e3f0e4;
+  --mat-sys-primary-fixed-dim: #9fcaa8;
+  --mat-sys-on-primary-fixed: #0f2e18;
+  --mat-sys-on-primary-fixed-variant: #1f5a31;
+  /* The green that reads on the dark side panel, where "Paka" is written in it. */
+  --mat-sys-inverse-primary: #7fd08f;
 
   /* The quiet green, used for a thing that is on or chosen. */
-  --mat-sys-secondary: #3f6b57;
+  --mat-sys-secondary: #4b6b53;
   --mat-sys-on-secondary: #ffffff;
-  --mat-sys-secondary-container: #e2f2e9;
-  --mat-sys-on-secondary-container: #10523c;
+  --mat-sys-secondary-container: #e3f0e4;
+  --mat-sys-on-secondary-container: #1f5a31;
 
-  /* Information, which in CourtFlow is blue and never green. */
-  --mat-sys-tertiary: #2c5bb5;
+  /* Information: the design's indigo, which is never mistaken for a court or for money. */
+  --mat-sys-tertiary: #4a4499;
   --mat-sys-on-tertiary: #ffffff;
-  --mat-sys-tertiary-container: #e6edfb;
-  --mat-sys-on-tertiary-container: #1f4590;
+  --mat-sys-tertiary-container: #e4e2f3;
+  --mat-sys-on-tertiary-container: #3d3880;
 
   /* Trouble. */
-  --mat-sys-error: #be4638;
+  --mat-sys-error: #a8322b;
   --mat-sys-on-error: #ffffff;
-  --mat-sys-error-container: #fbe7e4;
-  --mat-sys-on-error-container: #8f2f24;
+  --mat-sys-error-container: #f8e1dc;
+  --mat-sys-on-error-container: #85261f;
 
-  /* The dark side panel, and anything else that inverts. Navy, not the brand green. */
-  --mat-sys-inverse-surface: #0f1f2c;
-  --mat-sys-inverse-on-surface: #dce6ec;
+  /* The dark side panel, and anything else that inverts: the ink itself, not a new colour. */
+  --mat-sys-inverse-surface: #2a2420;
+  --mat-sys-inverse-on-surface: #efe8dc;
   --mat-sys-shadow: #000000;
-  --mat-sys-scrim: #0f1f2c;
+  --mat-sys-scrim: #2a2420;
 
   /*
-   * Corners are much tighter than Material's defaults. CourtFlow is a working tool: 10px on a
-   * panel and 6px on a control, and the softness that is left is for things that are round on
-   * purpose, like a pill.
+   * Softer than CourtFlow, tighter than Material: 14px on a panel, 8–10px on a control, 5px on a
+   * tag, and the rest for things that are round on purpose, like a pill.
    */
-  --mat-sys-corner-extra-small: 4px;
-  --mat-sys-corner-small: 6px;
-  --mat-sys-corner-medium: 8px;
-  --mat-sys-corner-large: 10px;
-  --mat-sys-corner-extra-large: 14px;
+  --mat-sys-corner-extra-small: 5px;
+  --mat-sys-corner-small: 8px;
+  --mat-sys-corner-medium: 10px;
+  --mat-sys-corner-large: 14px;
+  --mat-sys-corner-extra-large: 18px;
   --mat-sys-corner-full: 999px;
 
   /*
-   * And it draws edges rather than floating things. Material's elevation is kept for the few
-   * things that really are above the page — a menu, a dialog — and taken off everything else by
-   * the card rule further down.
+   * Edges rather than floating things. Material's elevation is kept for the few things that
+   * really are above the page — a menu, a dialog — and taken off everything else by the card rule
+   * further down. Tinted with the ink, so a shadow on paper is brown and not grey.
    */
-  --mat-sys-level1: 0 1px 2px rgba(20, 32, 43, 0.06);
-  --mat-sys-level2: 0 2px 6px rgba(20, 32, 43, 0.08);
+  --mat-sys-level1: 0 1px 2px rgba(42, 36, 32, 0.06);
+  --mat-sys-level2: 0 2px 6px rgba(42, 36, 32, 0.08);
+
+  /* The two faces Material has no slot for. */
+  --font-display: 'Bricolage Grotesque', 'IBM Plex Sans Thai', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'IBM Plex Sans Thai', ui-monospace, monospace;
 }
 
 /**
@@ -154,29 +186,29 @@ html {
  * pretty. Everything else still comes from var(--mat-sys-*).
  */
 :root {
-  /* Being played, or money in hand. The CourtPaka green the whole theme is built from. */
-  --status-playing: #1d7a4c;
-  --status-playing-soft: #e2f2e9;
-  --status-playing-ink: #14603a;
+  /* Being played, or money in hand. The badPaka green. */
+  --status-playing: #2f7a45;
+  --status-playing-soft: #e3f0e4;
+  --status-playing-ink: #1f5a31;
 
-  /* Settled and ahead of us: somebody has paid and is expected. */
-  --status-confirmed: #2c5bb5;
-  --status-confirmed-soft: #e6edfb;
-  --status-confirmed-ink: #1f4590;
+  /* Settled and ahead of us: somebody has paid and is expected. Blue, because green is "now". */
+  --status-confirmed: #2f5aa8;
+  --status-confirmed-soft: #e3eaf7;
+  --status-confirmed-ink: #22437f;
 
-  /* Not sure yet — a slip nobody has checked, somebody who has not said they are coming. */
-  --status-waiting: #a86a12;
-  --status-waiting-soft: #fbf0dc;
-  --status-waiting-ink: #7a4e0c;
+  /* Not sure yet — a slip nobody has checked, somebody who has not turned up. The design's rust. */
+  --status-waiting: #b5562f;
+  --status-waiting-soft: #f6e3d8;
+  --status-waiting-ink: #8a3b1c;
 
-  /* Lost, shut, or owed back. */
-  --status-risk: #be4638;
-  --status-risk-soft: #fbe7e4;
-  --status-risk-ink: #9a3327;
+  /* Lost, shut, or owed back. Redder than the rust, so the two are told apart on one board. */
+  --status-risk: #a8283a;
+  --status-risk-soft: #f7e0e3;
+  --status-risk-ink: #85202e;
 
   /* Over and settled: it happened, and there is nothing to do about it. */
-  --status-done-soft: #eef1ee;
-  --status-done-ink: #5c6a70;
+  --status-done-soft: #efe8dc;
+  --status-done-ink: #6a5c4f;
 }
 
 :root {
@@ -192,7 +224,7 @@ html {
 }
 
 /*
- * A CourtFlow panel: white, edged, barely raised. Material draws a card as a tinted surface with
+ * A badPaka panel: white, edged, barely raised. Material draws a card as a tinted surface with
  * a shadow under it, which on a page of a dozen cards reads as a dozen things hovering. Written
  * here rather than in each page because every page uses the same card.
  */

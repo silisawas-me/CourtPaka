@@ -17,28 +17,28 @@ public static class AccountLetters
 
     public static (string Subject, string Body) Verify(string language, string link) =>
         Thai(language)
-            ? ("CourtPaka: ยืนยันอีเมลของคุณ",
+            ? ("badPaka: ยืนยันอีเมลของคุณ",
                 $"กดลิงก์นี้เพื่อยืนยันอีเมลและสมัครให้เสร็จ\n\n{link}\n\n"
-                + "ถ้าคุณไม่ได้สมัคร CourtPaka ไม่ต้องทำอะไร")
-            : ("CourtPaka: verify your email",
+                + "ถ้าคุณไม่ได้สมัคร badPaka ไม่ต้องทำอะไร")
+            : ("badPaka: verify your email",
                 $"Confirm your address to finish signing up:\n\n{link}\n\n"
-                + "If you did not sign up for CourtPaka, you can ignore this.");
+                + "If you did not sign up for badPaka, you can ignore this.");
 
     public static (string Subject, string Body) AccountExists(string language) =>
         Thai(language)
-            ? ("CourtPaka: มีบัญชีที่ใช้อีเมลนี้อยู่แล้ว",
+            ? ("badPaka: มีบัญชีที่ใช้อีเมลนี้อยู่แล้ว",
                 "มีคนพยายามสมัครด้วยอีเมลนี้ ถ้าเป็นคุณ เข้าสู่ระบบด้วยบัญชีเดิมได้เลย "
                 + "ถ้าไม่ใช่คุณ ไม่ต้องทำอะไร บัญชีของคุณยังปลอดภัย")
-            : ("CourtPaka: account already exists",
+            : ("badPaka: account already exists",
                 "Someone tried to register with this address. If it was you, sign in with the "
                 + "account you already have. If it was not, you do not need to do anything.");
 
     public static (string Subject, string Body) Locked(string language) =>
         Thai(language)
-            ? ("CourtPaka: บัญชีของคุณถูกล็อกชั่วคราว",
+            ? ("badPaka: บัญชีของคุณถูกล็อกชั่วคราว",
                 "มีการใส่รหัสผ่านผิดหลายครั้ง บัญชีจึงถูกล็อกไว้ 15 นาที "
                 + "ถ้าไม่ใช่คุณ ควรเปลี่ยนรหัสผ่านเมื่อปลดล็อกแล้ว")
-            : ("CourtPaka: your account is temporarily locked",
+            : ("badPaka: your account is temporarily locked",
                 "Too many failed sign-in attempts locked your account for 15 minutes. "
                 + "If this was not you, change your password once it unlocks.");
 
@@ -47,10 +47,10 @@ public static class AccountLetters
 
     private static (string Subject, string Body) InvitationIn(string language, string venueName, string link) =>
         Thai(language)
-            ? ($"CourtPaka: คุณได้รับคำเชิญเข้าร่วม {venueName}",
+            ? ($"badPaka: คุณได้รับคำเชิญเข้าร่วม {venueName}",
                 $"{venueName} เชิญคุณเข้าร่วมเป็นทีมงานของสนาม กดลิงก์นี้เพื่อตอบรับภายใน 7 วัน\n\n"
                 + $"{link}\n\nต้องเข้าสู่ระบบด้วยอีเมลนี้ก่อนตอบรับ")
-            : ($"CourtPaka: you were invited to {venueName}",
+            : ($"badPaka: you were invited to {venueName}",
                 $"{venueName} has invited you to join its staff. Accept within 7 days:\n\n"
                 + $"{link}\n\nSign in with this address before accepting.");
 

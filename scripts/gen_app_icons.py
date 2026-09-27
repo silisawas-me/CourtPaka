@@ -11,7 +11,7 @@ import pathlib
 
 from PIL import Image, ImageDraw
 
-GREEN = (29, 122, 76)  # #1d7a4c, the theme's seed colour
+GREEN = (45, 118, 67)  # #2d7643, the badPaka green (--mat-sys-primary)
 WHITE = (255, 255, 255)
 SIZES = [72, 96, 128, 144, 152, 192, 384, 512]
 OUT = pathlib.Path(__file__).resolve().parents[1] / "frontend" / "public" / "icons"
@@ -53,3 +53,7 @@ OUT.mkdir(parents=True, exist_ok=True)
 for size in SIZES:
     court(size).save(OUT / f"icon-{size}x{size}.png", optimize=True)
     print(f"icon-{size}x{size}.png")
+
+# The browser tab's icon, from the same drawing, so the tab and the home screen agree.
+court(48).save(OUT.parent / "favicon.ico", sizes=[(16, 16), (32, 32), (48, 48)])
+print("favicon.ico")

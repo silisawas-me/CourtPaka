@@ -15,6 +15,7 @@ import { FieldError } from '../../shared/field-error';
 import { LineSignIn } from '../../shared/line-sign-in';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 
+import { Wordmark } from '../../shared/wordmark';
 @Component({
   selector: 'app-login-page',
   imports: [
@@ -22,6 +23,7 @@ import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
     RouterLink,
     FieldError,
     LineSignIn,
+    Wordmark,
     MatButtonModule,
     MatCardModule,
     MatFormFieldModule,

@@ -8,7 +8,7 @@
   <mat-card class="auth-card" appearance="raised">
     <app-alpaca class="auth-mascot" [label]="i18n.t('login.mascot')" [waving]="true" />
 
-    <h1 class="auth-wordmark">{{ i18n.t('app.name') }}</h1>
+    <h1 class="auth-wordmark"><app-wordmark /></h1>
 
     <mat-card-header>
       <h2 mat-card-title data-testid="page-title">{{ i18n.t('login.title') }}</h2>
