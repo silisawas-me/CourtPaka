@@ -19,16 +19,12 @@ from harness import (
 from playwright.sync_api import sync_playwright
 
 check = Checks(__file__)
-# Far enough ahead that the cancellation terms give the whole of it back whatever hour this
-# runs at. The venue opens at six, so a booking "tomorrow" is under the policy's day of notice
-# from about six in the evening onwards — and what comes back then is not the deposit but
-# nothing, which is a different thing from the one this script is about.
+# Far enough ahead that the cancellation terms give the whole of it back whatever hour this runs
+# at. The venue opens at six and the default policy returns everything only with a day's notice
+# (Pricing.Default), so a booking "tomorrow" stops being refundable some time in the afternoon —
+# and what comes back then is not the deposit but nothing, which is a different thing from the
+# one this script is about.
 playing_on = venue_today() + datetime.timedelta(days=3)
-# Far enough out that the default terms still give the money back. The venue's policy returns
-# everything if the booking is let go more than 24 hours before play (Pricing.Default), so a
-# booking made for tomorrow morning stops being refundable some time in the afternoon — and the
-# checks below are about what comes back, not about what time this script happens to run.
-soon = venue_today() + datetime.timedelta(days=3)
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
@@ -58,7 +54,6 @@ with sync_playwright() as p:
     email = new_booker(booker)
     sign_in(booker, email)
     booking = take_first_free_hour(booker, venue_id, playing_on).json()
-    booking = take_first_free_hour(booker, venue_id, soon).json()
 
     price = booking["totalBaht"]
     deposit = booking["depositBaht"]
@@ -107,7 +102,6 @@ with sync_playwright() as p:
     # 4. The desk is left the rest to take (US-26).
     day = owner.request.get(
         f"{BASE}/api/venues/{venue_id}/bookings?date={playing_on.isoformat()}"
-        f"{BASE}/api/venues/{venue_id}/bookings?date={soon.isoformat()}"
     ).json()
     row = next(one for one in day if one["bookingId"] == booking["id"])
     check("the day says what arrived", row["takenBaht"] == deposit)
