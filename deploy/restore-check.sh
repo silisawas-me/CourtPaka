@@ -105,7 +105,7 @@ tables=$(psql -d "$scratch" -t -A -c \
 echo "  (tables in the restore: $tables)"
 
 if [ "$failed" -ne 0 ] || [ "${tables:-0}" -lt 10 ]; then
-    echo "restore-check.sh: the restore is not a CourtPaka database" >&2
+    echo "restore-check.sh: the restore is not a badPaka database" >&2
     exit 1
 fi
 

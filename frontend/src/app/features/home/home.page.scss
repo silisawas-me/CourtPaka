@@ -64,9 +64,12 @@ app-court-art {
   align-content: center;
   justify-items: center;
   gap: 1.25rem;
+  /*
+   * The whole width of the hall, not the page's measure: the pool of floor under the words is
+   * painted on this box, and a box narrower than the window shows its own edges as a lighter band
+   * down each side. The doors keep their own measure.
+   */
   width: 100%;
-  max-width: var(--page-width);
-  margin-inline: auto;
   padding: 2.5rem var(--page-gutter) 3rem;
   color: var(--mat-sys-inverse-on-surface);
   /*
@@ -101,6 +104,8 @@ app-court-art {
   view-transition-name: wordmark;
   margin: 0;
   font: var(--mat-sys-display-small);
+  /* The brand green is an ink for paper; on the evening floor "Paka" takes the light one. */
+  --wordmark-paka: var(--mat-sys-inverse-primary);
 }
 
 .lead {

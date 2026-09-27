@@ -1,14 +1,14 @@
 {
-  "name": "CourtPaka",
-  "short_name": "CourtPaka",
+  "name": "badPaka",
+  "short_name": "badPaka",
   "description": "จองคอร์ทแบดมินตัน",
   "lang": "th",
   "dir": "ltr",
   "display": "standalone",
   "scope": "/",
   "start_url": "/",
-  "theme_color": "#1d7a4c",
-  "background_color": "#f1f5ee",
+  "theme_color": "#2d7643",
+  "background_color": "#f8f5ef",
   "icons": [
     {
       "src": "icons/icon-72x72.png",

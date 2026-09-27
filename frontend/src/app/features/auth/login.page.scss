@@ -84,11 +84,9 @@ app-court-art {
 
 .auth-wordmark {
   view-transition-name: wordmark;
-  font: var(--mat-sys-title-medium);
-  color: var(--mat-sys-primary);
+  font: var(--mat-sys-headline-small);
   text-align: center;
   margin: 0.25rem 0 0;
-  letter-spacing: -0.01em;
 }
 
 .auth-card mat-card-header {

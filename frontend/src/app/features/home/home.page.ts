@@ -12,9 +12,10 @@ import { CourtArt } from '../../shared/court-art';
  * work it out. Somebody already signed in is asked neither: the doors become where they were
  * going.
  */
+import { Wordmark } from '../../shared/wordmark';
 @Component({
   selector: 'app-home-page',
-  imports: [RouterLink, MatButtonModule, Alpaca, CourtArt],
+  imports: [RouterLink, MatButtonModule, Alpaca, CourtArt, Wordmark],
   templateUrl: './home.page.html',
   styleUrl: './home.page.scss',
 })

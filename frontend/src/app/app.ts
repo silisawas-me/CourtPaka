@@ -15,10 +15,11 @@ import { Language, LANGUAGES } from './core/i18n/locales';
 import { TranslationService } from './core/i18n/translation.service';
 import { VenueShell } from './shared/venue-shell';
 
+import { Wordmark } from './shared/wordmark';
 @Component({
   // The directives, not the modules: MatButtonModule also declares icon and fab buttons,
   // which the shell does not use but would carry into the first chunk.
-  imports: [RouterOutlet, RouterLink, MatToolbar, MatButton, MatAnchor, VenueShell],
+  imports: [RouterOutlet, RouterLink, MatToolbar, MatButton, MatAnchor, VenueShell, Wordmark],
   host: {
     // Escape closes the panel wherever the focus happens to be inside it.
     '(document:keydown.escape)': 'closeMenu()',

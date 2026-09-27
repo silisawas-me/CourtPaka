@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 
 /**
- * The CourtPaka alpaca — the "paka" in the name — about to serve a shuttlecock.
+ * The badPaka alpaca — the "Paka" in the name — about to serve a shuttlecock.
  *
  * Drawn rather than loaded: it is a handful of colours from the theme, so it follows the palette
  * and the reader's light or dark setting on its own, costs no request, and stays sharp at any size.
