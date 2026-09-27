@@ -508,7 +508,12 @@ describe('VenueBookingsPage', () => {
       const block = elementOf(fixture, 'board-block-b1');
       expect(block).not.toBeNull();
       expect(block?.getAttribute('style')).toContain('--span: 2');
-      expect(block?.textContent).toContain('player@example.com');
+
+      // Named by the part before the @, not the whole address: a block is narrow, and the rest
+      // of an address is the same for everybody at the same provider. The row below the board
+      // still carries the whole of it.
+      expect(block?.textContent).toContain('player');
+      expect(block?.textContent).not.toContain('@example.com');
 
       // The hour nobody has taken is a button that sells it; the one off sale is not.
       expect(elementOf(fixture, 'board-free-c1-20')).not.toBeNull();

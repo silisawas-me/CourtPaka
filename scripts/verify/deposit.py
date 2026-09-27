@@ -19,7 +19,11 @@ from harness import (
 from playwright.sync_api import sync_playwright
 
 check = Checks(__file__)
-tomorrow = venue_today() + datetime.timedelta(days=1)
+# Far enough ahead that the cancellation terms give the whole of it back whatever hour this
+# runs at. The venue opens at six, so a booking "tomorrow" is under the policy's day of notice
+# from about six in the evening onwards — and what comes back then is not the deposit but
+# nothing, which is a different thing from the one this script is about.
+playing_on = venue_today() + datetime.timedelta(days=3)
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
@@ -48,7 +52,7 @@ with sync_playwright() as p:
     booker = browser.new_page(viewport={"width": 390, "height": 844})
     email = new_booker(booker)
     sign_in(booker, email)
-    booking = take_first_free_hour(booker, venue_id, tomorrow).json()
+    booking = take_first_free_hour(booker, venue_id, playing_on).json()
 
     price = booking["totalBaht"]
     deposit = booking["depositBaht"]
@@ -96,7 +100,7 @@ with sync_playwright() as p:
 
     # 4. The desk is left the rest to take (US-26).
     day = owner.request.get(
-        f"{BASE}/api/venues/{venue_id}/bookings?date={tomorrow.isoformat()}"
+        f"{BASE}/api/venues/{venue_id}/bookings?date={playing_on.isoformat()}"
     ).json()
     row = next(one for one in day if one["bookingId"] == booking["id"])
     check("the day says what arrived", row["takenBaht"] == deposit)

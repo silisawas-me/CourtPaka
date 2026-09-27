@@ -50,6 +50,98 @@ html {
 }
 
 /**
+ * The CourtFlow palette, written over the tokens Material generated (the prototype the venues
+ * were sold on: `CourtFlow_SalesReady_Spec.md`).
+ *
+ * The schematic can only build a palette from one seed colour, and every shade it derives is a
+ * shade of that green — which is why the status colours below had to be chosen by hand in the
+ * first place. CourtFlow does not work that way: its green is for courts, its amber is for
+ * money, its red is for trouble and its ink is navy, and none of them is a tint of another.
+ *
+ * So `_theme-colors.scss` stays exactly as the schematic wrote it, and the system tokens are
+ * reassigned here instead. Every component in the app already reads `var(--mat-sys-*)` and
+ * nothing reads a colour of its own, so this one block is the whole visual language. To go back,
+ * delete it.
+ */
+:root {
+  /* Paper and ground. The page is a cool grey-green; panels are white and edged, not floated. */
+  --mat-sys-background: #f2f5f1;
+  --mat-sys-surface: #ffffff;
+  --mat-sys-surface-dim: #e4eae5;
+  --mat-sys-surface-bright: #ffffff;
+  --mat-sys-surface-container-lowest: #ffffff;
+  --mat-sys-surface-container-low: #f2f5f1;
+  --mat-sys-surface-container: #f7faf7;
+  --mat-sys-surface-container-high: #eef2ee;
+  --mat-sys-surface-container-highest: #e7ece8;
+  --mat-sys-surface-variant: #e7ece8;
+
+  /* Navy ink rather than a dark green: it is what stops the whole page reading as one colour. */
+  --mat-sys-on-background: #14202b;
+  --mat-sys-on-surface: #14202b;
+  // CourtFlow's muted grey is #5c6a70, which reads at 4.46:1 on the darkest container here —
+  // just under the line. Two points darker clears it and is indistinguishable beside it.
+  --mat-sys-on-surface-variant: #55636b;
+  --mat-sys-outline: #9faea4;
+  --mat-sys-outline-variant: #d9e0da;
+
+  /* Courts. */
+  --mat-sys-primary: #1e7f5c;
+  --mat-sys-on-primary: #ffffff;
+  --mat-sys-primary-container: #e2f2e9;
+  --mat-sys-on-primary-container: #10523c;
+  --mat-sys-primary-fixed: #e2f2e9;
+  --mat-sys-primary-fixed-dim: #8fd7b6;
+  --mat-sys-on-primary-fixed: #072418;
+  --mat-sys-on-primary-fixed-variant: #10523c;
+  --mat-sys-inverse-primary: #7fd0ab;
+
+  /* The quiet green, used for a thing that is on or chosen. */
+  --mat-sys-secondary: #3f6b57;
+  --mat-sys-on-secondary: #ffffff;
+  --mat-sys-secondary-container: #e2f2e9;
+  --mat-sys-on-secondary-container: #10523c;
+
+  /* Information, which in CourtFlow is blue and never green. */
+  --mat-sys-tertiary: #2c5bb5;
+  --mat-sys-on-tertiary: #ffffff;
+  --mat-sys-tertiary-container: #e6edfb;
+  --mat-sys-on-tertiary-container: #1f4590;
+
+  /* Trouble. */
+  --mat-sys-error: #be4638;
+  --mat-sys-on-error: #ffffff;
+  --mat-sys-error-container: #fbe7e4;
+  --mat-sys-on-error-container: #8f2f24;
+
+  /* The dark side panel, and anything else that inverts. Navy, not the brand green. */
+  --mat-sys-inverse-surface: #0f1f2c;
+  --mat-sys-inverse-on-surface: #dce6ec;
+  --mat-sys-shadow: #000000;
+  --mat-sys-scrim: #0f1f2c;
+
+  /*
+   * Corners are much tighter than Material's defaults. CourtFlow is a working tool: 10px on a
+   * panel and 6px on a control, and the softness that is left is for things that are round on
+   * purpose, like a pill.
+   */
+  --mat-sys-corner-extra-small: 4px;
+  --mat-sys-corner-small: 6px;
+  --mat-sys-corner-medium: 8px;
+  --mat-sys-corner-large: 10px;
+  --mat-sys-corner-extra-large: 14px;
+  --mat-sys-corner-full: 999px;
+
+  /*
+   * And it draws edges rather than floating things. Material's elevation is kept for the few
+   * things that really are above the page — a menu, a dialog — and taken off everything else by
+   * the card rule further down.
+   */
+  --mat-sys-level1: 0 1px 2px rgba(20, 32, 43, 0.06);
+  --mat-sys-level2: 0 2px 6px rgba(20, 32, 43, 0.08);
+}
+
+/**
  * The four things a status can mean, and the only place their colours are written (US-25, US-26).
  *
  * Material's palette is generated from one green, so its secondary and tertiary containers are
@@ -97,6 +189,18 @@ html {
 
 * {
   box-sizing: border-box;
+}
+
+/*
+ * A CourtFlow panel: white, edged, barely raised. Material draws a card as a tinted surface with
+ * a shadow under it, which on a page of a dozen cards reads as a dozen things hovering. Written
+ * here rather than in each page because every page uses the same card.
+ */
+mat-card,
+.mat-mdc-card {
+  --mat-card-elevated-container-color: var(--mat-sys-surface);
+  --mat-card-elevated-container-elevation: none;
+  border: 1px solid var(--mat-sys-outline-variant);
 }
 
 html,

@@ -24,7 +24,9 @@
 }
 
 // Where the accent sits in the bar: the one action for someone with no account yet.
-.accent {
+// Two classes, not one: Material colours its own label through a rule of the same shape, and a
+// single class loses to it — which left the page's navy ink sitting on the green at 3.3:1.
+.accent.mat-mdc-button {
   background: var(--mat-sys-primary);
   color: var(--mat-sys-on-primary);
 }
