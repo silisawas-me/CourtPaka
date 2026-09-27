@@ -45,6 +45,7 @@ public static class RefundEndpoints
     private static async Task<Results<Ok<RefundsResponse>, ProblemHttpResult>> ListAsync(
         Guid venueId,
         Guid bookingId,
+        CurrentVenue venue,
         AppDbContext database,
         CancellationToken cancellationToken)
     {
@@ -54,7 +55,7 @@ public static class RefundEndpoints
             return ApiProblem.Of(StatusCodes.Status404NotFound, BookingErrorCodes.NotFound);
         }
 
-        return TypedResults.Ok(await ReadAsync(database, booking, cancellationToken));
+        return TypedResults.Ok(await ReadAsync(database, booking, venue.Require(), cancellationToken));
     }
 
     /// <summary>
@@ -87,6 +88,19 @@ public static class RefundEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, RefundErrorCodes.AmountNotPositive);
         }
 
+        // What this person may send back at all, before anything is read about the booking:
+        // it is a fact about who is asking (PRD US-18). The amount they may is part of the
+        // refusal, because the answer is to hand the booker to somebody who can send it.
+        var membership = venue.Require();
+        if (!RefundLimits.Allows(membership, amount))
+        {
+            return ApiProblem.Of(
+                StatusCodes.Status403Forbidden,
+                RefundErrorCodes.OverTheLimit,
+                "limitBaht",
+                membership.RefundLimitBaht);
+        }
+
         var note = request.Note?.Trim();
         if (note is { Length: > RefundRecord.NoteMaxLength })
         {
@@ -112,8 +126,7 @@ public static class RefundEndpoints
         // double click — both read the same total, both find room for the whole of it, and both
         // write: a booking owing 1,000 ends up with 2,000 recorded against it and drops off the
         // list of what the venue still owes, in records nobody can edit (PRD BR-06).
-        await database.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT pg_advisory_xact_lock({LockKey(bookingId)})", cancellationToken);
+        await Locks.OnAsync(database, bookingId, cancellationToken);
 
         var outstanding = Refunds.OutstandingOf(
             booking.RefundDueBaht, await SentBackAsync(database, bookingId, cancellationToken));
@@ -132,7 +145,7 @@ public static class RefundEndpoints
             RefundedOn = request.RefundedOn,
             Method = method,
             Note = string.IsNullOrEmpty(note) ? null : note,
-            RecordedByUserId = venue.Require().UserId,
+            RecordedByUserId = membership.UserId,
             RecordedAt = timeProvider.GetUtcNow(),
         });
 
@@ -143,7 +156,7 @@ public static class RefundEndpoints
             "refund_recorded {BookingId} {VenueId} {AmountBaht} {Method}",
             bookingId, venueId, amount, method);
 
-        return TypedResults.Ok(await ReadAsync(database, booking, cancellationToken));
+        return TypedResults.Ok(await ReadAsync(database, booking, venue.Require(), cancellationToken));
     }
 
     /// <summary>
@@ -218,19 +231,7 @@ public static class RefundEndpoints
                 refundId, bookingId);
         }
 
-        return TypedResults.Ok(await ReadAsync(database, booking, cancellationToken));
-    }
-
-    /// <summary>
-    /// One number per booking, so that everybody writing against the same one waits for the
-    /// others rather than all of them reading the same total. Sharing a number with something
-    /// else only means queueing behind it, which costs a moment and nothing else.
-    /// </summary>
-    private static long LockKey(Guid bookingId)
-    {
-        Span<byte> id = stackalloc byte[16];
-        bookingId.TryWriteBytes(id);
-        return BitConverter.ToInt64(id[..8]) ^ BitConverter.ToInt64(id[8..]);
+        return TypedResults.Ok(await ReadAsync(database, booking, venue.Require(), cancellationToken));
     }
 
     /// <summary>What counts towards what has been sent back: every record that still stands.</summary>
@@ -257,6 +258,7 @@ public static class RefundEndpoints
     private static async Task<RefundsResponse> ReadAsync(
         AppDbContext database,
         Booking booking,
+        VenueMembership member,
         CancellationToken cancellationToken)
     {
         var records = await database.RefundRecords
@@ -283,6 +285,7 @@ public static class RefundEndpoints
             booking.RefundDueBaht,
             sentBack,
             Refunds.OutstandingOf(booking.RefundDueBaht, sentBack),
-            [.. records]);
+            [.. records],
+            member.RefundCeiling);
     }
 }

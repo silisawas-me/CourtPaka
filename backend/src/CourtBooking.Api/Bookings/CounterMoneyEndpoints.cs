@@ -13,7 +13,12 @@ public sealed record TakePaymentRequest(decimal AmountBaht, string Method, strin
 /// <summary>One amount the venue took, as the counter reads it back (PRD US-26).</summary>
 public sealed record PaymentReceiptResponse(
     Guid Id,
-    Guid BookingId,
+    /// <summary>The booking it was for, or null where it was a package being sold (US-31).</summary>
+    Guid? BookingId,
+    /// <summary>The package that was sold, where that is what it was.</summary>
+    Guid? PackageId,
+    /// <summary>What somebody bought across the counter, where that is what it was (US-32).</summary>
+    Guid? SaleId,
     decimal AmountBaht,
     string Method,
     DateTimeOffset ReceivedAt,
@@ -38,8 +43,16 @@ public sealed record DayMoneyResponse(
     decimal CashBaht,
     decimal PromptPayBaht,
     decimal CardBaht,
-    /// <summary>Cash the venue handed back that day (PRD US-18), which leaves the till too.</summary>
+    /// <summary>
+    /// Cash the venue handed back that day: sent to a booker (PRD US-18) or over the counter for a
+    /// sale taken back (US-32). Both leave the till, and both are money going back to somebody.
+    /// </summary>
     decimal CashRefundedBaht,
+    /// <summary>
+    /// Cash the venue paid out that day (PRD US-33). Out of the same drawer, but not money going
+    /// back to anybody — a delivery, the water bill — so it is counted and shown on its own.
+    /// </summary>
+    decimal CashPaidOutBaht,
     decimal OutstandingBaht,
     PaymentReceiptResponse[] CashReceipts,
     DailyClosingResponse? Closed,
@@ -208,6 +221,7 @@ public static class CounterMoneyEndpoints
         {
             BookingId = bookingId,
             VenueId = venueId,
+            CountsOn = await CountsOnAsync(database, venueId, now, cancellationToken),
             AmountBaht = amount,
             Method = method,
             ReceivedAt = now,
@@ -319,20 +333,18 @@ public static class CounterMoneyEndpoints
         CancellationToken cancellationToken)
     {
         var day = date ?? PlatformRequirements.BangkokToday(timeProvider);
-        var from = PlatformRequirements.BangkokHour(day, 0);
-        var until = PlatformRequirements.BangkokHour(day.AddDays(1), 0);
+        var (from, until) = await Takings.TillDayAsync(database, venueId, day, cancellationToken);
 
         var receipts = await database.PaymentReceipts
             .AsNoTracking()
-            .Where(receipt =>
-                receipt.VenueId == venueId
-                && receipt.ReceivedAt >= from
-                && receipt.ReceivedAt < until)
+            .Where(receipt => receipt.VenueId == venueId && receipt.CountsOn == day)
             .OrderBy(receipt => receipt.ReceivedAt)
             .Select(receipt => new
             {
                 receipt.Id,
                 receipt.BookingId,
+                receipt.PackageId,
+                receipt.SaleId,
                 receipt.AmountBaht,
                 receipt.Method,
                 receipt.ReceivedAt,
@@ -340,19 +352,7 @@ public static class CounterMoneyEndpoints
             })
             .ToListAsync(cancellationToken);
 
-        // Cash the venue sent back that day leaves the same till the cash came into (US-18).
-        var cashBack = await database.RefundRecords
-            .StillStanding()
-            .Where(record =>
-                record.Booking!.VenueId == venueId
-                && record.Method == RefundMethod.Cash
-                && record.RecordedAt >= from
-                && record.RecordedAt < until)
-            .Select(record => new CashHandedBack(
-                record.BookingId, record.AmountBaht, record.RecordedAt))
-            .ToListAsync(cancellationToken);
-
-        var cashRefunded = cashBack.Sum(record => record.AmountBaht);
+        var cashOut = await CashOutAsync(database, venueId, from, until, cancellationToken);
 
         // What the day's bookings are still short, counted the same way the rows are.
         var owing = await OwingOnAsync(database, venueId, day, cancellationToken);
@@ -374,6 +374,9 @@ public static class CounterMoneyEndpoints
         decimal By(PaymentMethod method) =>
             receipts.Where(receipt => receipt.Method == method).Sum(receipt => receipt.AmountBaht);
 
+        decimal Out(CashOutKind kind) =>
+            cashOut.Where(one => one.Kind == kind).Sum(one => one.AmountBaht);
+
         PaymentReceiptResponse[] cashTaken =
         [
             .. receipts
@@ -381,6 +384,8 @@ public static class CounterMoneyEndpoints
                 .Select(receipt => new PaymentReceiptResponse(
                     receipt.Id,
                     receipt.BookingId,
+                    receipt.PackageId,
+                    receipt.SaleId,
                     receipt.AmountBaht,
                     receipt.Method.ToString(),
                     receipt.ReceivedAt,
@@ -393,11 +398,12 @@ public static class CounterMoneyEndpoints
             By(PaymentMethod.Cash),
             By(PaymentMethod.PromptPay),
             By(PaymentMethod.Card),
-            cashRefunded,
+            Out(CashOutKind.Refunded) + Out(CashOutKind.SaleTakenBack),
+            Out(CashOutKind.PaidOut),
             outstanding,
             cashTaken,
             closed,
-            LeadsFor(closed, cashTaken, cashBack, owing)));
+            LeadsFor(closed, cashTaken, cashOut, owing)));
     }
 
     /// <summary>
@@ -412,7 +418,7 @@ public static class CounterMoneyEndpoints
     private static MoneyLeadResponse[] LeadsFor(
         DailyClosingResponse? closed,
         IReadOnlyList<PaymentReceiptResponse> cashTaken,
-        IReadOnlyList<CashHandedBack> cashBack,
+        IReadOnlyList<CashOut> cashOut,
         IReadOnlyList<StillOwed> owing)
     {
         if (closed is null)
@@ -433,14 +439,16 @@ public static class CounterMoneyEndpoints
                     receipt.ReceivedAt,
                     receipt.Note)),
 
-            .. cashBack
-                .Where(record => Takings.Explains(record.AmountBaht, difference))
-                .Select(record => new MoneyLeadResponse(
-                    nameof(MoneyLeadKind.CashHandedBack),
-                    record.AmountBaht,
-                    record.BookingId,
-                    record.At,
-                    null)),
+            .. cashOut
+                .Where(one => Takings.Explains(one.AmountBaht, difference))
+                .Select(one => new MoneyLeadResponse(
+                    one.Kind == CashOutKind.PaidOut
+                        ? nameof(MoneyLeadKind.CashPaidOut)
+                        : nameof(MoneyLeadKind.CashHandedBack),
+                    one.AmountBaht,
+                    one.BookingId,
+                    one.At,
+                    one.Note)),
 
             .. owing
                 .Where(one => Takings.Explains(one.Baht, difference))
@@ -453,8 +461,75 @@ public static class CounterMoneyEndpoints
         ];
     }
 
-    /// <summary>Cash that left the till that day (PRD US-18).</summary>
-    private sealed record CashHandedBack(Guid BookingId, decimal AmountBaht, DateTimeOffset At);
+    /// <summary>
+    /// Every lot of cash that left this venue's drawer in the window, whichever door it left by
+    /// (PRD US-18, US-32, US-33). The one place that knows the doors: the count subtracts these
+    /// and the page shows them, so neither can be looking at money the other is not.
+    ///
+    /// All three are counted on the day the notes left the drawer — the day the refund was written
+    /// down, the day the expense was recorded, the day the sale was taken back — and not on any
+    /// date typed beside them. The drawer is short from the moment the money goes.
+    /// </summary>
+    private static async Task<List<CashOut>> CashOutAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateTimeOffset from,
+        DateTimeOffset until,
+        CancellationToken cancellationToken)
+    {
+        var refunded = await database.RefundRecords
+            .StillStanding()
+            .Where(record =>
+                record.Booking!.VenueId == venueId
+                && record.Method == RefundMethod.Cash
+                && record.RecordedAt >= from
+                && record.RecordedAt < until)
+            .Select(record => new CashOut(
+                CashOutKind.Refunded,
+                record.AmountBaht,
+                record.RecordedAt,
+                record.BookingId,
+                null))
+            .ToListAsync(cancellationToken);
+
+        var paidOut = await database.Spends
+            .AsNoTracking()
+            .Where(spend =>
+                spend.VenueId == venueId
+                && spend.VoidedAt == null
+                && spend.PaidBy == PaymentMethod.Cash
+                && spend.RecordedAt >= from
+                && spend.RecordedAt < until)
+            .Select(spend => new CashOut(
+                CashOutKind.PaidOut,
+                spend.AmountBaht,
+                spend.RecordedAt,
+                null,
+                spend.Note))
+            .ToListAsync(cancellationToken);
+
+        // A sale taken back hands the money back across the counter. Nothing was bought, so there
+        // is no expense to write for it — the rows that already say it happened are what the
+        // drawer reads: the sale's own cancellation, and the receipt it was paid with (PRD US-32).
+        var handedBack = await database.ShopSales
+            .AsNoTracking()
+            .Where(sale =>
+                sale.VenueId == venueId
+                && sale.CancelledAt >= from
+                && sale.CancelledAt < until)
+            .SelectMany(sale => database.PaymentReceipts
+                .Where(receipt =>
+                    receipt.SaleId == sale.Id && receipt.Method == PaymentMethod.Cash)
+                .Select(receipt => new CashOut(
+                    CashOutKind.SaleTakenBack,
+                    receipt.AmountBaht,
+                    sale.CancelledAt!.Value,
+                    null,
+                    sale.CancelReason)))
+            .ToListAsync(cancellationToken);
+
+        return [.. refunded, .. paidOut, .. handedBack];
+    }
 
     /// <summary>A booking of that day and what it is still short.</summary>
     private sealed record StillOwed(Guid BookingId, decimal Baht);
@@ -493,27 +568,27 @@ public static class CounterMoneyEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, MoneyErrorCodes.InvalidFloat);
         }
 
-        var from = PlatformRequirements.BangkokHour(day, 0);
-        var until = PlatformRequirements.BangkokHour(day.AddDays(1), 0);
+        var (from, until) = await Takings.TillDayAsync(database, venueId, day, cancellationToken);
+
+        await using var transaction =
+            await database.Database.BeginTransactionAsync(cancellationToken);
+
+        // Nothing may be added to this day between what is counted here and the count being
+        // written: money that arrived while the drawer was being counted belongs to tomorrow,
+        // and the receipt decides that by asking whether this row is already there (PRD US-26).
+        await QueueForTheDayAsync(database, venueId, day, cancellationToken);
 
         var cashIn = await database.PaymentReceipts
             .Where(receipt =>
                 receipt.VenueId == venueId
                 && receipt.Method == PaymentMethod.Cash
-                && receipt.ReceivedAt >= from
-                && receipt.ReceivedAt < until)
+                && receipt.CountsOn == day)
             .SumAsync(receipt => (decimal?)receipt.AmountBaht, cancellationToken) ?? 0m;
 
-        var cashOut = await database.RefundRecords
-            .StillStanding()
-            .Where(record =>
-                record.Booking!.VenueId == venueId
-                && record.Method == RefundMethod.Cash
-                && record.RecordedAt >= from
-                && record.RecordedAt < until)
-            .SumAsync(record => (decimal?)record.AmountBaht, cancellationToken) ?? 0m;
+        var cashOut = await CashOutAsync(database, venueId, from, until, cancellationToken);
 
-        var expected = Takings.ExpectedCash(request.OpeningFloatBaht, cashIn, cashOut);
+        var expected = Takings.ExpectedCash(
+            request.OpeningFloatBaht, cashIn, cashOut.Sum(one => one.AmountBaht));
         var counted = decimal.Round(request.CountedCashBaht, 2, MidpointRounding.AwayFromZero);
 
         var closing = new DailyClosing
@@ -538,8 +613,11 @@ public static class CounterMoneyEndpoints
         catch (DbUpdateException exception) when (DbErrors.IsUniqueViolation(exception))
         {
             // Two people counted the same till at the same time. The first count is the count.
+            await transaction.RollbackAsync(cancellationToken);
             return ApiProblem.Of(StatusCodes.Status409Conflict, MoneyErrorCodes.AlreadyClosed);
         }
+
+        await transaction.CommitAsync(cancellationToken);
 
         AppEvents.For(loggers).LogInformation(
             "day_closed {VenueId} {Date} {Difference}", venueId, day, closing.DifferenceBaht);
@@ -554,7 +632,48 @@ public static class CounterMoneyEndpoints
             closing.ClosedAt));
     }
 
+
     /// <summary>What has been taken for one booking so far.</summary>
+    /// <summary>
+    /// Which of the venue's days this money is counted in, and a place in the queue behind
+    /// anyone counting that day (PRD US-26).
+    ///
+    /// Both halves matter together: reading whether the day is closed and writing the receipt
+    /// have to be one decision, or a receipt written while the count is being taken lands in a
+    /// day whose total was read a moment before it — and the till comes up short by exactly that
+    /// receipt, with nothing to explain it.
+    /// </summary>
+    internal static async Task<DateOnly> CountsOnAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateTimeOffset receivedAt,
+        CancellationToken cancellationToken)
+    {
+        var receivedOn = PlatformRequirements.BangkokDateAndHour(receivedAt).Date;
+        await QueueForTheDayAsync(database, venueId, receivedOn, cancellationToken);
+
+        var counted = await database.DailyClosings
+            .AnyAsync(
+                closing => closing.VenueId == venueId && closing.Date == receivedOn,
+                cancellationToken);
+
+        return Takings.CountsOn(receivedOn, counted);
+    }
+
+    /// <summary>
+    /// Queues behind anybody else counting or adding to this venue's day, so a count and a
+    /// receipt cannot pass each other (PRD US-26). One number per venue per day, the same for
+    /// everyone asking for it.
+    /// </summary>
+    internal static Task QueueForTheDayAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateOnly day,
+        CancellationToken cancellationToken) =>
+        database.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({venueId.ToString() + day.ToString("O")}, 0))",
+            cancellationToken);
+
     /// <summary>
     /// Queues this request behind everybody else who is about to read what a booking has had paid
     /// against it and then write from that reading (PRD US-26, US-18). Two reads of "900 owed"
@@ -570,9 +689,7 @@ public static class CounterMoneyEndpoints
         Guid bookingId,
         CancellationToken cancellationToken)
     {
-        await database.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT pg_advisory_xact_lock(hashtextextended({bookingId.ToString()}, 0))",
-            cancellationToken);
+        await Locks.OnAsync(database, bookingId, cancellationToken);
 
         await database.Database.ExecuteSqlInterpolatedAsync(
             $"SELECT 1 FROM \"Bookings\" WHERE \"Id\" = {bookingId} FOR SHARE",
@@ -601,6 +718,8 @@ public static class CounterMoneyEndpoints
             .Select(receipt => new PaymentReceiptResponse(
                 receipt.Id,
                 receipt.BookingId,
+                receipt.PackageId,
+                receipt.SaleId,
                 receipt.AmountBaht,
                 receipt.Method.ToString(),
                 receipt.ReceivedAt,
@@ -633,8 +752,13 @@ public static class CounterMoneyEndpoints
             .Where(booking =>
                 booking.VenueId == venueId
                 && booking.Slots.Any(slot => slot.StartsAt >= from && slot.StartsAt < until)
-                // The same bookings the counter is offered a door on, from the same list.
-                && Takings.StillOwing.Contains(booking.Status))
+                // The same bookings the counter is offered a door on, and on the same terms
+                // (Takings.CanTake): one the venue already says it has the money for owes
+                // nothing, whatever its receipts add up to. A booking paid for with hours has no
+                // receipts at all and would otherwise be offered as the explanation for a till
+                // that came out over — sending somebody to look for cash nobody ever owed.
+                && Takings.StillOwing.Contains(booking.Status)
+                && booking.PaymentState != PaymentState.Received)
             .Select(booking => new
             {
                 booking.Id,

@@ -19,7 +19,7 @@ namespace CourtBooking.Api.Bookings;
 public static class VenueBookingEndpoints
 {
     /// <summary>What one door does to the hours the booking holds.</summary>
-    private enum Hours
+    internal enum Hours
     {
         /// <summary>Nothing. What was recorded about them is what changes.</summary>
         Keep,
@@ -72,6 +72,11 @@ public static class VenueBookingEndpoints
         // One more hour, and a different court (PRD US-29). Both declare their own side of a
         // suspension where they are mapped, so the group's answer is never the one that decides.
         bookings.MapBookingHourEndpoints();
+
+        // Hours instead of money (PRD US-31). Selling, in the sense that matters: it settles a
+        // booking, so a suspended venue may not do it.
+        bookings.MapPost("/{bookingId:guid}/pay-with-package", PackageEndpoints.SpendAsync)
+            .RequireAuthorization(VenuePolicies.Needs(VenuePermissions.ManageBookings));
 
         bookings.MapRefundEndpoints();
         // Money taken at the desk, in parts and in the form it arrived (PRD US-26).
@@ -142,7 +147,7 @@ public static class VenueBookingEndpoints
 
         // The reason goes to its own column as the value that was decided on, not as the
         // string that was sent: the record and the money have to say the same thing (PRD 6.1).
-        if (Recorded(request.Note) is not { } recorded)
+        if (BookingStatusChange.Recorded(request.Note) is not { } recorded)
         {
             // The same column and the same refusal the slip queue gives, so the same code: a
             // reader who has learned what it means should not have to learn a second one.
@@ -337,7 +342,7 @@ public static class VenueBookingEndpoints
         ILoggerFactory loggers,
         CancellationToken cancellationToken)
     {
-        if (Recorded(request.Reason) is not { } recorded)
+        if (BookingStatusChange.Recorded(request.Reason) is not { } recorded)
         {
             // The same column and the same refusal the slip queue gives, so the same code: a
             // reader who has learned what it means should not have to learn a second one.
@@ -406,7 +411,8 @@ public static class VenueBookingEndpoints
             booking.TotalBaht,
             booking.RefundPercent,
             await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken),
-            booking.DepositBaht);
+            booking.DepositBaht,
+            booking.PaidWithHours);
 
         var settled = await database.Bookings
             .Where(candidate =>
@@ -473,12 +479,57 @@ public static class VenueBookingEndpoints
         CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
-        var membership = venue.Require();
 
+        if (await CloseAsync(
+                venueId,
+                bookingId,
+                decided,
+                ask,
+                reason,
+                cause,
+                hours,
+                venue.Require().UserId,
+                now,
+                notifications,
+                database,
+                loggers,
+                cancellationToken) is { } refused)
+        {
+            return Refusal(refused);
+        }
+
+        return TypedResults.Ok(
+            await OneDrawnAsync(database, venueId, bookingId, venue, now, cancellationToken));
+    }
+
+    /// <summary>
+    /// One ending, written down: the hours let go of or taken back, the money worked out, the row
+    /// moved under its own old status, and the history told about every step including the one the
+    /// clock took (PRD 6.1). Answers null once it is written, or the code it was refused with.
+    ///
+    /// Apart from the endpoint so that something ending a whole standing arrangement can come
+    /// through the same door, one week at a time and each on its own terms (PRD US-30). A second
+    /// way of ending a booking would be a second answer about what is owed back.
+    /// </summary>
+    internal static async Task<string?> CloseAsync(
+        Guid venueId,
+        Guid bookingId,
+        BookingStatus decided,
+        Func<Booking, BookingStatus, decimal, DateTimeOffset, Cancellation.Offer> ask,
+        string? reason,
+        CancellationReason? cause,
+        Hours hours,
+        Guid byUserId,
+        DateTimeOffset now,
+        VenueNotifications notifications,
+        AppDbContext database,
+        ILoggerFactory loggers,
+        CancellationToken cancellationToken)
+    {
         var booking = await OneAsync(database, venueId, bookingId).SingleOrDefaultAsync(cancellationToken);
         if (booking is null)
         {
-            return ApiProblem.Of(StatusCodes.Status404NotFound, BookingErrorCodes.NotFound);
+            return BookingErrorCodes.NotFound;
         }
 
         // Two statuses, and the difference matters. What the booking reads as is what the rules
@@ -500,7 +551,7 @@ public static class VenueBookingEndpoints
         if (offer.Refused is { } refused)
         {
             await transaction.RollbackAsync(cancellationToken);
-            return Refusal(refused);
+            return refused;
         }
 
         // Slots before the booking row, which is the order every writer keeps (BookedSlots).
@@ -517,8 +568,7 @@ public static class VenueBookingEndpoints
             case Hours.TakeBack
                 when !await BookedSlots.TakeBackAsync(database, bookingId, now, cancellationToken):
                 await transaction.RollbackAsync(cancellationToken);
-                return ApiProblem.Of(
-                    StatusCodes.Status409Conflict, BookingErrorCodes.HoursAlreadyTaken);
+                return BookingErrorCodes.HoursAlreadyTaken;
         }
 
         var moved = await database.Bookings
@@ -543,8 +593,7 @@ public static class VenueBookingEndpoints
         if (moved == 0)
         {
             await transaction.RollbackAsync(cancellationToken);
-            return ApiProblem.Of(
-                StatusCodes.Status409Conflict, BookingErrorCodes.ChangedMeanwhile);
+            return BookingErrorCodes.ChangedMeanwhile;
         }
 
         // If the clock had already moved it and nothing had written that down, write it down
@@ -556,7 +605,14 @@ public static class VenueBookingEndpoints
         }
 
         database.BookingStatusChanges.Add(BookingTransitions.Record(
-            bookingId, status, decided, membership.UserId, now, reason, cause));
+            bookingId, status, decided, byUserId, now, reason, cause));
+
+        // A booking a package paid for gives back hours, not money (PRD US-31, BR-06): the money
+        // came in when the package was sold and is not the venue's to send anywhere. Written in
+        // this transaction, because a booking cancelled with its hours left spent is a customer
+        // out of pocket with nothing on the page to say so.
+        await PackageEndpoints.GiveHoursBackAsync(
+            database, booking, offer.RefundPercent, byUserId, now, cancellationToken);
 
         await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -578,32 +634,20 @@ public static class VenueBookingEndpoints
         await notifications.MoneyMayBeWaitingAsync(
             venueId, bookingId, offer.RefundBaht, offer.Payment);
 
-        return TypedResults.Ok(
-            await OneDrawnAsync(database, venueId, bookingId, venue, now, cancellationToken));
-    }
-
-    /// <summary>
-    /// What the venue wrote beside the reason, kept as one line of the booking's history
-    /// (PRD 6.1). Null means it does not fit, which is a refusal, not a note to shorten.
-    /// </summary>
-    private static string? Recorded(string? note)
-    {
-        var written = note?.Trim() ?? string.Empty;
-
-        // Refused rather than shortened, the way the slip queue refuses one: a record trimmed
-        // without saying so is a record nobody can trust (PRD 6.1).
-        return written.Length > BookingStatusChange.ReasonMaxLength ? null : written;
+        return null;
     }
 
     private static bool IsOwner(VenueMembership membership) => membership.Role == VenueRole.Owner;
 
     /// <summary>
-    /// Which answer belongs to which refusal. A missing answer is the caller's mistake, a door
-    /// that is the owner's is a matter of who is asking, and everything else is the booking
-    /// having moved on.
+    /// Which answer belongs to which refusal. A missing answer is the caller's mistake, a booking
+    /// this venue does not have is not here at all, a door that is the owner's is a matter of who
+    /// is asking, and everything else is the booking having moved on.
     /// </summary>
-    private static ProblemHttpResult Refusal(string code) => code switch
+    internal static ProblemHttpResult Refusal(string code) => code switch
     {
+        BookingErrorCodes.NotFound => ApiProblem.Of(StatusCodes.Status404NotFound, code),
+
         BookingErrorCodes.ReasonRequired
             or BookingErrorCodes.ReasonNotAllowedHere
             or BookingErrorCodes.PaymentAnswerRequired =>
@@ -663,31 +707,28 @@ public static class VenueBookingEndpoints
             return ApiProblem.Of(StatusCodes.Status403Forbidden, VenueErrorCodes.NotApproved);
         }
 
-        var name = request.CustomerName?.Trim();
-        if (string.IsNullOrEmpty(name) || name.Length > Booking.CustomerNameMaxLength)
+        if (Booking.CustomerRefusal(request.CustomerName, request.CustomerPhone) is { } wrongWho)
         {
-            return ApiProblem.Of(
-                StatusCodes.Status400BadRequest, BookingErrorCodes.InvalidCustomerName);
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, wrongWho);
         }
 
+        var name = request.CustomerName!.Trim();
         var phone = request.CustomerPhone?.Trim();
-        if (!string.IsNullOrEmpty(phone)
-            && (phone.Length > Booking.CustomerPhoneMaxLength
-                || !phone.All(character => char.IsAsciiDigit(character) || character is '+' or '-' or ' ')))
-        {
-            return ApiProblem.Of(
-                StatusCodes.Status400BadRequest, BookingErrorCodes.InvalidCustomerPhone);
-        }
+
+        // Hours instead of money (PRD US-31). Where a package is named nothing is going in the
+        // till, so there is no way of paying to read.
+        var onHours = request.PackageId is not null;
 
         // The names and nothing else: Enum.TryParse would take "1" and "Cash,Transfer".
-        if (request.PaidBy is not { } paidBy
-            || !Enum.GetNames<CounterPayment>().Contains(paidBy, StringComparer.Ordinal))
+        if (!onHours
+            && (request.PaidBy is not { } named
+                || !Enum.GetNames<CounterPayment>().Contains(named, StringComparer.Ordinal)))
         {
             return ApiProblem.Of(
                 StatusCodes.Status400BadRequest, BookingErrorCodes.InvalidCounterPayment);
         }
 
-        var paid = Enum.Parse<CounterPayment>(paidBy);
+        var paid = onHours ? null : (CounterPayment?)Enum.Parse<CounterPayment>(request.PaidBy!);
         var now = timeProvider.GetUtcNow();
         var slots = request.Slots ?? [];
 
@@ -708,34 +749,100 @@ public static class VenueBookingEndpoints
         var policyId = await BookingEndpoints.InForcePolicyIdAsync(
             database, venueId, cancellationToken);
 
-        var booking = Booking.AtCounter(
-            venueId,
-            name,
-            string.IsNullOrEmpty(phone) ? null : phone,
-            paid,
-            policyId,
-            priced.Slots,
-            membership.UserId,
-            now);
+        // Hours somebody bought earlier are read and taken inside the write's own transaction,
+        // under the package's own lock — a balance read before it and acted on after it would let
+        // two tills spend the same hours, and a booking that committed before the hours came off
+        // would be a court given away for nothing (PRD US-31, US-26).
+        var hours = priced.Slots.Length;
+        HourPackage? package = null;
+        string? wrongHours = null;
 
-        if (await BookingEndpoints.WriteNewAsync(database, booking, timeProvider, cancellationToken)
-            is { } refused)
+        var booking = request.PackageId is null
+            ? Booking.AtCounter(
+                venueId,
+                name,
+                string.IsNullOrEmpty(phone) ? null : phone,
+                paid!.Value,
+                policyId,
+                priced.Slots,
+                membership.UserId,
+                now)
+            : Booking.OnHours(
+                venueId,
+                name,
+                string.IsNullOrEmpty(phone) ? null : phone,
+                // Priced from the package the claim below hands back; until then this is only
+                // the shape of the booking, and nothing has been written.
+                await database.HourPackages
+                    .AsNoTracking()
+                    .SingleAsync(one => one.Id == request.PackageId, cancellationToken),
+                hours,
+                policyId,
+                priced.Slots,
+                membership.UserId,
+                now);
+
+        var written = await BookingEndpoints.WriteNewAsync(
+            database,
+            booking,
+            timeProvider,
+            cancellationToken,
+            request.PackageId is not { } packageId
+                ? null
+                : async inside =>
+                {
+                    var (claimed, refusal) = await PackageEndpoints.ClaimAsync(
+                        database,
+                        venueId,
+                        packageId,
+                        hours,
+                        PlatformRequirements.BangkokToday(timeProvider),
+                        inside);
+
+                    if (claimed is null)
+                    {
+                        wrongHours = refusal;
+                        return refusal;
+                    }
+
+                    package = claimed;
+                    PackageEndpoints.SpendHours(
+                        database, claimed.Id, booking.Id, hours, membership.UserId, now);
+
+                    return null;
+                });
+
+        if (written is { } refused)
         {
-            return ApiProblem.Of(StatusCodes.Status409Conflict, refused);
+            return ApiProblem.Of(
+                wrongHours is null || refused != wrongHours
+                    ? StatusCodes.Status409Conflict
+                    : refused == PackageErrorCodes.NotFound
+                        ? StatusCodes.Status404NotFound
+                        : StatusCodes.Status409Conflict,
+                refused);
         }
 
-        // The money was in the venue's hands before the booking was written, which is why it
-        // starts confirmed (PRD US-13) — so the day's count is told about it too (PRD US-26).
-        database.PaymentReceipts.Add(new PaymentReceipt
+        if (package is null)
         {
-            BookingId = booking.Id,
-            VenueId = venueId,
-            AmountBaht = booking.TotalBaht,
-            Method = paid == CounterPayment.Cash ? PaymentMethod.Cash : PaymentMethod.PromptPay,
-            ReceivedAt = now,
-            ReceivedByUserId = membership.UserId,
-        });
-        await database.SaveChangesAsync(cancellationToken);
+            // The money was in the venue's hands before the booking was written, which is why it
+            // starts confirmed (PRD US-13) — so the day's count is told about it too (US-26).
+            database.PaymentReceipts.Add(new PaymentReceipt
+            {
+                BookingId = booking.Id,
+                VenueId = venueId,
+                CountsOn = await CounterMoneyEndpoints.CountsOnAsync(
+                    database, venueId, now, cancellationToken),
+                AmountBaht = booking.TotalBaht,
+                Method = paid == CounterPayment.Cash
+                    ? PaymentMethod.Cash
+                    : PaymentMethod.PromptPay,
+                ReceivedAt = now,
+                ReceivedByUserId = membership.UserId,
+            });
+
+            await database.SaveChangesAsync(cancellationToken);
+        }
 
         AppEvents.For(loggers).LogInformation(
             BookingTransitions.EventName(BookingStatus.Confirmed)
@@ -811,8 +918,8 @@ public static class VenueBookingEndpoints
 
         // What each of them has been paid so far, counted from the receipts (PRD US-26).
         var taken = await database.PaymentReceipts
-            .Where(receipt => bookingIds.Contains(receipt.BookingId))
-            .GroupBy(receipt => receipt.BookingId)
+            .Where(receipt => receipt.BookingId != null && bookingIds.Contains(receipt.BookingId.Value))
+            .GroupBy(receipt => receipt.BookingId!.Value)
             .Select(receipts => new
             {
                 BookingId = receipts.Key,
@@ -916,6 +1023,13 @@ public static class VenueBookingEndpoints
                 .PlayedAfterAllOffer(booking, status, "recorded wrongly", byOwner, now)
                 .Allowed,
             Takings.CanTake(status, booking.PaymentState, outstandingBaht),
+            // Hours instead of money (PRD US-31). The venue's own bookings only, and only while
+            // nothing has been paid against it — the same rule the endpoint keeps, asked here so
+            // the screen draws the button from the server's answer rather than its own.
+            Takings.CanTake(status, booking.PaymentState, outstandingBaht)
+                && booking.Channel == BookingChannel.Staff
+                && booking.PackageId is null
+                && takenBaht == 0m,
             // An hour to run on into, and hours that have not been played yet (PRD US-29). Both
             // are only whether the door is open — which court, and whether one is free, is the
             // hours endpoint's answer, because it depends on the rest of the day.

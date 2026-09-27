@@ -1,0 +1,147 @@
+/**
+ * Three things stacked in the order a shift uses them: selling one, what has been sold, and the
+ * board they are sold from — which is a setting and is folded away until somebody asks for it.
+ */
+
+/** The page is a grid item of the shell, so it has to be told it may be narrower than its rows. */
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.offer-name {
+  font-weight: 500;
+}
+
+.who {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1rem;
+
+  .field {
+    flex: 1 1 15rem;
+  }
+}
+
+.sold-list,
+.board,
+.moves {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sold {
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.sold-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+}
+
+.sold-who {
+  font: var(--mat-sys-title-small);
+}
+
+/**
+ * What is left is the number somebody came to this page for, so it is the one that reads first
+ * and the one that lines up down the list.
+ */
+.sold-left {
+  margin-left: auto;
+  font: var(--mat-sys-title-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+.sold-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 1rem;
+  margin-top: 0.2rem;
+  font: var(--mat-sys-body-medium);
+}
+
+/** Hours about to run out are a phone call, which is what this colour means (PRD US-25). */
+.sold.running-out {
+  .sold-left {
+    background: var(--status-waiting-soft);
+    color: var(--status-waiting-ink);
+    border-radius: var(--mat-sys-corner-small);
+    padding: 0.05rem 0.5rem;
+  }
+}
+
+.sold.spent {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.moves {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.move {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.move-hours {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  font: var(--mat-sys-body-medium);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  button {
+    margin-left: auto;
+  }
+}
+
+.offer.old {
+  color: var(--mat-sys-on-surface-variant);
+
+  .offer-name {
+    text-decoration: line-through;
+  }
+}
+
+.offer-form {
+  margin-top: 1rem;
+
+  .field {
+    max-width: 28rem;
+  }
+}
+
+.gone {
+  margin-top: 1.5rem;
+
+  h2 {
+    margin: 0 0 0.25rem;
+    font: var(--mat-sys-title-medium);
+  }
+}

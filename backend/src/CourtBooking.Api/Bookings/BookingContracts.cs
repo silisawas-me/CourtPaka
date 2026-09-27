@@ -310,7 +310,12 @@ public sealed record CounterBookingRequest(
     BookingSlotRequest[]? Slots,
     string? CustomerName,
     string? CustomerPhone,
-    string? PaidBy);
+    string? PaidBy,
+    /// <summary>
+    /// Hours the customer bought earlier, instead of money (PRD US-31). Where this is given
+    /// <see cref="PaidBy"/> is not read: nothing is going in the till.
+    /// </summary>
+    Guid? PackageId = null);
 
 /// <summary>
 /// One of the venue's bookings for a day, as its counter reads it (PRD US-13). It names an online
@@ -363,6 +368,11 @@ public sealed record VenueBookingActionsResponse(
     bool PlayedAfterAll,
     /// <summary>Taking money for it at the desk, in any form (PRD US-26).</summary>
     bool TakeMoney,
+    /// <summary>
+    /// Settling it with hours somebody bought earlier instead (PRD US-31). Only where nothing has
+    /// been paid against it yet: hours pay instead of money, not alongside it.
+    /// </summary>
+    bool PayWithPackage,
     /// <summary>Selling them the hour they would run on into (PRD US-29).</summary>
     bool Extend,
     /// <summary>Putting the hours they have not played on another court (PRD US-29).</summary>
@@ -445,7 +455,13 @@ public sealed record RefundsResponse(
     decimal RefundDueBaht,
     decimal SentBackBaht,
     decimal OutstandingBaht,
-    RefundRecordResponse[] Records);
+    RefundRecordResponse[] Records,
+    /// <summary>
+    /// The most the person reading may write down in one record (PRD US-18), or null where they
+    /// have no ceiling. It travels with the refunds rather than being asked for separately: the
+    /// screen that shows what is owed is the screen that needs to say what this reader may send.
+    /// </summary>
+    decimal? YourLimitBaht);
 
 public static class RefundErrorCodes
 {
@@ -457,7 +473,210 @@ public static class RefundErrorCodes
     /// <summary>A day in the future is not a transfer that has happened.</summary>
     public const string NotYetSent = "refund.not_yet_sent";
 
+    /// <summary>
+    /// More than this person may send back in one record (PRD US-18). The refusal carries the
+    /// amount they may, because the answer is to hand the booker to somebody who can — and
+    /// nobody can do that without being told the number.
+    /// </summary>
+    public const string OverTheLimit = "refund.over_the_limit";
+
     public const string MethodNotAllowed = "refund.method_not_allowed";
     public const string NoteTooLong = "refund.note_too_long";
     public const string AlreadyVoided = "refund.already_voided";
 }
+
+/// <summary>
+/// An arrangement the venue is agreeing, or the terms taking over from one (PRD US-30). Every
+/// field is nullable so a missing one is refused with a code the screen can say in words, rather
+/// than by the model binder with a message nobody wrote (US-23).
+/// </summary>
+public sealed record BookingSeriesRequest(
+    Guid? CourtId,
+    /// <summary>The weekday's name, spelled as <see cref="DayOfWeek"/> spells it.</summary>
+    string? Day,
+    int? FromHour,
+    int? UntilHour,
+    string? CustomerName,
+    string? CustomerPhone,
+    DateOnly? StartsOn,
+    /// <summary>The last date it may cover, or null to run until somebody stops it.</summary>
+    DateOnly? UntilOn);
+
+/// <summary>Why the venue is standing a group down, in their own words. Optional.</summary>
+public sealed record BookingSeriesStopRequest(string? Note);
+
+/// <summary>One standing arrangement as the venue reads it (PRD US-30).</summary>
+public sealed record BookingSeriesResponse(
+    Guid SeriesId,
+    Guid CourtId,
+    string CourtName,
+    /// <summary>The weekday's name. The screen says it in the reader's language (US-23).</summary>
+    string Day,
+    int FromHour,
+    int UntilHour,
+    string CustomerName,
+    string? CustomerPhone,
+    DateOnly StartsOn,
+    DateOnly? UntilOn,
+    string State,
+    DateTimeOffset? EndedAt,
+    string? EndReason,
+    /// <summary>How many weeks of it have been booked so far.</summary>
+    int Booked,
+    /// <summary>The weeks still to come that could not be booked, and why (PRD US-30).</summary>
+    SeriesMissResponse[] Missed);
+
+/// <summary>A week the arrangement could not have. The code is turned into words by the screen.</summary>
+public sealed record SeriesMissResponse(DateOnly Date, string Refusal);
+
+/// <summary>
+/// What stopping or changing an arrangement did: the arrangement as it now stands, how many of
+/// its weeks were cancelled, and how many would not go — which is a number somebody has to look
+/// at, not one to retry (PRD US-30).
+/// </summary>
+public sealed record BookingSeriesStoppedResponse(
+    BookingSeriesResponse Series,
+    int Cancelled,
+    int Left);
+
+/// <summary>An offer a venue puts on its board (PRD US-31). Nullable so a missing field is
+/// refused with a code the screen can say in words rather than by the model binder (US-23).</summary>
+public sealed record PackageTypeRequest(
+    string? Name,
+    int? Hours,
+    decimal? PriceBaht,
+    int? ValidForDays);
+
+/// <summary>One offer, as the venue reads it.</summary>
+public sealed record PackageTypeResponse(
+    Guid TypeId,
+    string Name,
+    int Hours,
+    decimal PriceBaht,
+    /// <summary>What an hour of it costs. Worked out here so no screen divides it itself.</summary>
+    decimal BahtPerHour,
+    int ValidForDays,
+    /// <summary>When it came off the board, or null while it is still on it.</summary>
+    DateTimeOffset? WithdrawnAt);
+
+/// <summary>Selling one to somebody standing at the counter (PRD US-31).</summary>
+public sealed record SellPackageRequest(
+    Guid PackageTypeId,
+    string? CustomerName,
+    string? CustomerPhone,
+    /// <summary>How they paid, spelled as <see cref="PaymentMethod"/> spells it.</summary>
+    string? PaidBy);
+
+/// <summary>One movement of hours, in or out (PRD US-31).</summary>
+public sealed record PackageMoveResponse(
+    int Hours,
+    string Move,
+    Guid? BookingId,
+    DateTimeOffset At);
+
+/// <summary>One package somebody bought, and everything that has happened to it.</summary>
+public sealed record HourPackageResponse(
+    Guid PackageId,
+    Guid TypeId,
+    string TypeName,
+    string CustomerName,
+    string? CustomerPhone,
+    int HoursSold,
+    decimal PriceBaht,
+    decimal BahtPerHour,
+    /// <summary>What is left: the sum of the movements, never a number anybody keeps.</summary>
+    int HoursLeft,
+    DateOnly ExpiresOn,
+    /// <summary>
+    /// Whether its hours can still be spent. The server's own answer, so a screen never offers a
+    /// package the server would then refuse (PRD US-31).
+    /// </summary>
+    bool Live,
+    /// <summary>Whether somebody should be rung about it before the hours run out (⚠️ S-28).</summary>
+    bool RunningOut,
+    /// <summary>When what was left was written off, or null.</summary>
+    DateTimeOffset? ExpiredAt,
+    DateTimeOffset SoldAt,
+    PackageMoveResponse[] Moves);
+
+/// <summary>Paying for a booking with a package's hours (PRD US-31).</summary>
+public sealed record SpendPackageRequest(Guid PackageId);
+
+/// <summary>A line a venue puts on its counter board (PRD US-32).</summary>
+public sealed record ShopItemRequest(
+    string? Name,
+    decimal? PriceBaht,
+    /// <summary>What one of them is, in the venue's own words: a tube, a bottle, an hour.</summary>
+    string? Unit,
+    bool? Counted,
+    /// <summary>Below this, somebody is told there are not many left. Only for what is counted.</summary>
+    int? TellMeAt);
+
+/// <summary>One line of the board, with how many are left of the ones that are counted.</summary>
+public sealed record ShopItemResponse(
+    Guid ItemId,
+    string Name,
+    decimal PriceBaht,
+    string Unit,
+    bool Counted,
+    int? TellMeAt,
+    /// <summary>Null for what is not counted: a zero there would read as none left.</summary>
+    int? Left,
+    bool RunningLow,
+    DateTimeOffset? WithdrawnAt);
+
+/// <summary>One thing being rung up, and how many of it.</summary>
+public sealed record ShopSaleLineRequest(Guid ItemId, int Quantity);
+
+/// <summary>One trip to the counter (PRD US-32).</summary>
+public sealed record ShopSaleRequest(
+    ShopSaleLineRequest[]? Lines,
+    /// <summary>How they paid, spelled as <see cref="PaymentMethod"/> spells it.</summary>
+    string? PaidBy,
+    /// <summary>The booking it goes beside, or null for somebody who only bought.</summary>
+    Guid? BookingId);
+
+/// <summary>Why a sale is being taken back, or why an expense is being voided.</summary>
+public sealed record ShopSaleCancelRequest(string? Reason);
+
+public sealed record ShopSaleLineResponse(
+    Guid ItemId,
+    /// <summary>The name it was sold under, which is not always the name it has now (BR-05).</summary>
+    string Name,
+    int Quantity,
+    decimal EachBaht);
+
+public sealed record ShopSaleResponse(
+    Guid SaleId,
+    Guid? BookingId,
+    decimal TotalBaht,
+    DateTimeOffset SoldAt,
+    DateTimeOffset? CancelledAt,
+    string? CancelReason,
+    ShopSaleLineResponse[] Lines);
+
+/// <summary>Money the venue paid out (PRD US-33).</summary>
+public sealed record SpendRequest(
+    /// <summary>One of <see cref="SpendKind"/>, spelled as it is spelled.</summary>
+    string? Kind,
+    decimal? AmountBaht,
+    /// <summary>The day it left, in the venue's own week. Today when nothing is said.</summary>
+    DateOnly? PaidOn,
+    string? PaidBy,
+    string? Note,
+    /// <summary>Buying stock says which item and how many; anything else says neither.</summary>
+    Guid? ItemId,
+    int? Quantity);
+
+public sealed record SpendResponse(
+    Guid SpendId,
+    string Kind,
+    decimal AmountBaht,
+    DateOnly PaidOn,
+    string PaidBy,
+    string? Note,
+    DateTimeOffset? VoidedAt,
+    string? VoidReason);
+
+/// <summary>What the shelf actually holds (PRD US-33).</summary>
+public sealed record StockCountRequest(int? Counted, string? Reason);

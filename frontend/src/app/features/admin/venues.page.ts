@@ -6,11 +6,15 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { errorKey } from '../../core/http/api-error';
-import { AppDateTimePipe } from '../../core/i18n/app-date.pipe';
+import { MatDatepickerModule } from '@angular/material/datepicker';
+import { plainDate, venueToday } from '../../core/i18n/plain-date';
+import { provideLocalizedDateAdapter } from '../../shared/localized-date-adapter';
+import { AppDatePipe, AppDateTimePipe } from '../../core/i18n/app-date.pipe';
 import { TranslationService } from '../../core/i18n/translation.service';
 import {
   AdminVenue,
   AdminVenueDetail,
+  CommissionRates,
   AdminVenuesService,
   VenueDecision,
 } from '../../core/venues/admin-venues.service';
@@ -50,9 +54,11 @@ const NEEDS_REASON: VenueDecision[] = ['reject', 'suspend'];
     MatFormFieldModule,
     MatInputModule,
     MatProgressBarModule,
+    MatDatepickerModule,
+    AppDatePipe,
     AppDateTimePipe,
   ],
-  providers: [FORM_FIELD_DEFAULTS],
+  providers: [FORM_FIELD_DEFAULTS, provideLocalizedDateAdapter()],
   templateUrl: './venues.page.html',
   styleUrl: './venues.page.scss',
 })
@@ -83,6 +89,16 @@ export class AdminVenuesPage implements OnInit {
     reason: ['', [Validators.required, Validators.maxLength(REASON_MAX_LENGTH)]],
   });
 
+  /** What the platform charges the open venue, and its history (PRD US-21). */
+  protected readonly commission = signal<CommissionRates | null>(null);
+  protected readonly savingRate = signal(false);
+  protected readonly rateError = signal<string | null>(null);
+
+  protected readonly rateForm = this.forms.nonNullable.group({
+    percent: [null as number | null, Validators.required],
+    effectiveFrom: [venueToday(), Validators.required],
+  });
+
   protected readonly nothingHere = computed(() => !this.loading() && this.venues$().length === 0);
 
   ngOnInit(): void {
@@ -107,7 +123,11 @@ export class AdminVenuesPage implements OnInit {
     this.open.set(null);
     this.asking.set(null);
     this.decideError.set(null);
+    this.commission.set(null);
+    this.rateError.set(null);
+    this.rateForm.reset({ percent: null, effectiveFrom: venueToday() });
     this.refresh(venue.id);
+    this.readCommission(venue.id);
   }
 
   /**
@@ -127,6 +147,51 @@ export class AdminVenuesPage implements OnInit {
         }
       },
       error: (failure: unknown) => this.decideError.set(errorKey(failure)),
+    });
+  }
+
+  /**
+   * What this venue is charged. Read when its application is opened, and checked against the
+   * venue still being the open one — the same reason the application itself is (PRD US-20).
+   */
+  private readCommission(venueId: string): void {
+    this.venues.commission(venueId).subscribe({
+      next: (charged) => {
+        if (this.openId() === venueId) {
+          this.commission.set(charged);
+        }
+      },
+      error: (failure: unknown) => this.rateError.set(errorKey(failure)),
+    });
+  }
+
+  /**
+   * Agrees a rate from a date (PRD US-21). The answer is the whole history, because the new rate
+   * may not be the one in force — the platform tells a venue about a change before it starts.
+   */
+  protected saveRate(): void {
+    const venueId = this.openId();
+    const { percent, effectiveFrom } = this.rateForm.getRawValue();
+
+    if (venueId === null || percent === null || this.savingRate()) {
+      return;
+    }
+
+    this.savingRate.set(true);
+    this.rateError.set(null);
+
+    this.venues.setCommission(venueId, percent, plainDate(effectiveFrom)).subscribe({
+      next: (charged) => {
+        this.savingRate.set(false);
+        if (this.openId() === venueId) {
+          this.commission.set(charged);
+          this.rateForm.reset({ percent: null, effectiveFrom: venueToday() });
+        }
+      },
+      error: (failure: unknown) => {
+        this.savingRate.set(false);
+        this.rateError.set(errorKey(failure));
+      },
     });
   }
 

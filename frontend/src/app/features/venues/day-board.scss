@@ -16,6 +16,21 @@
   overflow-x: auto;
   margin-inline: -0.5rem;
   padding-inline: 0.5rem;
+
+  /*
+   * A shadow on the side there is more to see on, and none on a side there is not. Both pairs of
+   * gradients are backgrounds of this element: the covers scroll with the content and slide off
+   * the shadows as the reader reaches each end, so the page needs no script and no listener.
+   */
+  background:
+    linear-gradient(to right, var(--mat-sys-surface), transparent) left center / 2.5rem 100%
+      no-repeat local,
+    linear-gradient(to left, var(--mat-sys-surface), transparent) right center / 2.5rem 100%
+      no-repeat local,
+    linear-gradient(to right, rgba(20, 32, 43, 0.14), transparent) left center / 1rem 100% no-repeat
+      scroll,
+    linear-gradient(to left, rgba(20, 32, 43, 0.14), transparent) right center / 1rem 100% no-repeat
+      scroll;
 }
 
 .board {
@@ -28,8 +43,12 @@
 .board-hours,
 .board-row {
   display: grid;
-  /* The court's name, then one track per hour. Wide enough for "18:00" and a name beside it. */
-  grid-template-columns: minmax(7rem, max-content) repeat(var(--hours), minmax(3.25rem, 1fr));
+  /*
+   * The court's name, then one track per hour. An hour was 3.25rem, which is wide enough for a
+   * price but not for a person: every block on a phone said "bo…" and told the counter nothing.
+   * The board scrolls anyway, so the hours are given room to carry a name instead.
+   */
+  grid-template-columns: minmax(7rem, max-content) repeat(var(--hours), minmax(5.5rem, 1fr));
   gap: 0.25rem;
   align-items: stretch;
 }

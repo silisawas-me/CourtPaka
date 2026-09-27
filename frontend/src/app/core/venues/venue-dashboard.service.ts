@@ -61,6 +61,33 @@ export interface Dashboard {
   months: DashboardMonth[];
   attention: DashboardAttention;
   recovery: Recovery;
+  /** Hours sold and not yet given (PRD US-31). Never part of the money above. */
+  owedHours: OwedHours;
+  /** The counter's other trade, and the money that went out (PRD US-32, US-33). */
+  trade: Trade;
+}
+
+/**
+ * What the counter sold besides court time and what the venue paid out (PRD US-32, US-33). Kept
+ * apart from the court money because it is a different business with a different margin.
+ */
+export interface Trade {
+  shopBaht: number;
+  spentBaht: number;
+  /** All takings less what went out. Not profit in an accounting sense (⚠️ S-30). */
+  leftOverBaht: number;
+}
+
+/**
+ * Hours the venue has been paid for and not yet given (PRD US-31). Not revenue: the money came
+ * in when the packages were sold, and what the venue has in exchange is an obligation.
+ */
+export interface OwedHours {
+  hours: number;
+  baht: number;
+  packages: number;
+  /** Of those, the ones whose hours are about to run out. */
+  runningOut: number;
 }
 
 @Injectable({ providedIn: 'root' })

@@ -42,6 +42,21 @@ public static class PlatformRequirements
         DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), BangkokTimeZone).DateTime);
 
     /// <summary>
+    /// The range a report was asked for, or this calendar month when it was not. Three screens
+    /// default the same way — the venue's dashboard, the platform's, and what a venue paid out —
+    /// and a fourth spelling of it is a fourth chance to pick a different month.
+    /// </summary>
+    public static (DateOnly First, DateOnly Last) MonthOr(
+        DateOnly? from,
+        DateOnly? to,
+        TimeProvider timeProvider)
+    {
+        var today = BangkokToday(timeProvider);
+        var first = from ?? new DateOnly(today.Year, today.Month, 1);
+        return (first, to ?? first.AddMonths(1).AddDays(-1));
+    }
+
+    /// <summary>
     /// The instant a Bangkok date and whole hour begins, as UTC. Hours are chosen as "6pm on the
     /// 5th" at the venue but stored in UTC (PRD BR-10), and Postgres timestamptz only accepts an
     /// offset of zero. Thailand has no daylight saving, so the conversion is total: every local

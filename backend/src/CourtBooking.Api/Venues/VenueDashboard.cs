@@ -56,6 +56,41 @@ public sealed record DashboardRecoveryResponse(
     int HoursFromQueue,
     decimal FromQueueBaht);
 
+/// <summary>
+/// Hours the venue has been paid for and not yet given (PRD US-31, ⚠️ S-27).
+///
+/// It is not revenue and it is not in the figures above: the money arrived when the packages were
+/// sold, and what the venue has in exchange for it is an obligation to let somebody on a court.
+/// It is here so that obligation is a number somebody can see rather than a surprise on a quiet
+/// Tuesday when four groups turn up having already paid.
+///
+/// Not tied to the range. What is owed is owed today, whatever month is being read.
+/// </summary>
+public sealed record DashboardOwedHoursResponse(
+    int Hours,
+    /// <summary>What those hours were paid for, at what each package charged for an hour.</summary>
+    decimal Baht,
+    /// <summary>How many packages they are spread across.</summary>
+    int Packages,
+    /// <summary>Of those, the ones whose hours are about to run out (⚠️ S-28).</summary>
+    int RunningOut);
+
+/// <summary>
+/// What the counter sold besides court time, and what the venue paid out (PRD US-32, US-33).
+///
+/// Kept apart from the court money above because it is a different business with a different
+/// margin — a venue that cannot tell the two apart cannot tell whether either is working. What
+/// is left over is the plainest subtraction there is, and it is labelled as that: it is not
+/// profit in any sense an accountant would sign, which is what S-30 goes to them with.
+/// </summary>
+public sealed record DashboardTradeResponse(
+    /// <summary>What was rung up at the counter, less what was taken back.</summary>
+    decimal ShopBaht,
+    /// <summary>What the venue wrote down as paid out, less what was voided.</summary>
+    decimal SpentBaht,
+    /// <summary>Court money plus shop money, less what was paid out. Not profit (⚠️ S-30).</summary>
+    decimal LeftOverBaht);
+
 public sealed record DashboardResponse(
     DateOnly From,
     DateOnly To,
@@ -70,7 +105,11 @@ public sealed record DashboardResponse(
     DashboardDayResponse[] Days,
     DashboardMonthResponse[] Months,
     DashboardAttentionResponse Attention,
-    DashboardRecoveryResponse Recovery);
+    DashboardRecoveryResponse Recovery,
+    /// <summary>Hours sold and not yet given (PRD US-31). Never part of the money above.</summary>
+    DashboardOwedHoursResponse OwedHours,
+    /// <summary>The counter's other trade, and the money that went out (PRD US-32, US-33).</summary>
+    DashboardTradeResponse Trade);
 
 public static class DashboardErrorCodes
 {
@@ -140,9 +179,7 @@ public static class VenueDashboard
         CancellationToken cancellationToken)
     {
         // This month, when nothing is asked for: the question an owner opens the page with.
-        var today = PlatformRequirements.BangkokToday(timeProvider);
-        var first = from ?? new DateOnly(today.Year, today.Month, 1);
-        var last = to ?? first.AddMonths(1).AddDays(-1);
+        var (first, last) = PlatformRequirements.MonthOr(from, to, timeProvider);
 
         if (last < first || last.DayNumber - first.DayNumber + 1 > MaxDays)
         {
@@ -204,12 +241,14 @@ public static class VenueDashboard
 
         var sellableHours = days.Sum(day => day.SellableHours);
         var bookedHours = days.Sum(day => day.BookedHours);
+        var onlineBaht = days.Sum(day => day.OnlineBaht);
+        var staffBaht = days.Sum(day => day.StaffBaht);
 
         return new DashboardResponse(
             first,
             last,
-            days.Sum(day => day.OnlineBaht),
-            days.Sum(day => day.StaffBaht),
+            onlineBaht,
+            staffBaht,
             await AdvanceAsync(database, venueId, now, cancellationToken),
             sellableHours,
             bookedHours,
@@ -219,7 +258,105 @@ public static class VenueDashboard
             days,
             months,
             await AttentionAsync(database, venueId, cancellationToken),
-            await RecoveryAsync(database, venueId, since, until, cancellationToken));
+            await RecoveryAsync(database, venueId, since, until, cancellationToken),
+            await OwedHoursAsync(database, venueId, now, cancellationToken),
+            await TradeAsync(
+                database, venueId, first, last, since, until, onlineBaht + staffBaht,
+                cancellationToken));
+    }
+
+    /// <summary>
+    /// What the counter sold and what the venue paid out over the range (PRD US-32, US-33).
+    ///
+    /// Both are counted on the day they happened — a sale on the day it was rung up, an expense
+    /// on the day the venue says the money left — rather than on a day of service, because
+    /// neither is a booking and neither has one.
+    /// </summary>
+    private static async Task<DashboardTradeResponse> TradeAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateOnly first,
+        DateOnly last,
+        DateTimeOffset since,
+        DateTimeOffset until,
+        decimal courtBaht,
+        CancellationToken cancellationToken)
+    {
+        // Everything rung up in the range, less what was handed back in it — netted on the day
+        // the money moved rather than by dropping the sale outright. A June sale taken back in
+        // July is June's takings and July's refund: leaving it out of June instead would change
+        // a month that had already been read, and would disagree with the drawer, which counts
+        // the money going out on the day it went (PRD US-32).
+        var rungUp = await database.ShopSales
+            .AsNoTracking()
+            .Where(sale =>
+                sale.VenueId == venueId
+                && sale.SoldAt >= since
+                && sale.SoldAt < until)
+            .SumAsync(sale => (decimal?)sale.TotalBaht, cancellationToken) ?? 0m;
+
+        var handedBack = await database.ShopSales
+            .AsNoTracking()
+            .Where(sale =>
+                sale.VenueId == venueId
+                && sale.CancelledAt >= since
+                && sale.CancelledAt < until)
+            .SumAsync(sale => (decimal?)sale.TotalBaht, cancellationToken) ?? 0m;
+
+        var shop = rungUp - handedBack;
+
+        var spent = await database.Spends
+            .AsNoTracking()
+            .Where(spend =>
+                spend.VenueId == venueId
+                && spend.VoidedAt == null
+                && spend.PaidOn >= first
+                && spend.PaidOn <= last)
+            .SumAsync(spend => (decimal?)spend.AmountBaht, cancellationToken) ?? 0m;
+
+        return new DashboardTradeResponse(
+            shop,
+            spent,
+            decimal.Round(courtBaht + shop - spent, 2, MidpointRounding.AwayFromZero));
+    }
+
+    /// <summary>
+    /// What the venue still owes in hours (PRD US-31). Counted from the movements, like every
+    /// other answer about a package: a balance nobody writes down is a balance that cannot drift.
+    ///
+    /// Packages whose hours have been written off are not in it — the day passed, and what the
+    /// venue owed stopped being owed (⚠️ S-28, and what happens to the money then is the question
+    /// S-27 goes to the accountant with).
+    /// </summary>
+    private static async Task<DashboardOwedHoursResponse> OwedHoursAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var today = PlatformRequirements.BangkokDateAndHour(now).Date;
+
+        var standing = await database.HourPackages
+            .AsNoTracking()
+            .Where(one => one.VenueId == venueId && one.ExpiredAt == null)
+            .Select(one => new
+            {
+                one.PriceBaht,
+                one.HoursSold,
+                one.ExpiresOn,
+                Left = one.Entries.Sum(entry => (int?)entry.Hours) ?? 0,
+            })
+            .ToListAsync(cancellationToken);
+
+        var owed = standing.Where(one => one.Left > 0).ToList();
+
+        return new DashboardOwedHoursResponse(
+            owed.Sum(one => one.Left),
+            owed.Sum(one => Packages.Worth(one.PriceBaht, one.HoursSold, one.Left)),
+            owed.Count,
+            owed.Count(one =>
+                one.ExpiresOn >= today
+                && one.ExpiresOn <= today.AddDays(Packages.RunningOutWithinDays)));
     }
 
     /// <summary>
@@ -261,6 +398,9 @@ public static class VenueDashboard
                 booking.RefundDueBaht,
                 booking.PaymentState,
                 booking.DepositBaht,
+                // Null where no package paid for it. Zero is a different answer: a package
+                // booking that gave all its hours back kept nothing (PRD US-31).
+                PaidWithHours = booking.PackageId == null ? (decimal?)null : booking.PackageBaht,
                 // What arrived, which since deposits is not always the price (PRD US-28). A
                 // booking the venue is holding nothing for is not revenue, whatever it cost.
                 Taken = database.PaymentReceipts
@@ -288,18 +428,28 @@ public static class VenueDashboard
                 continue;
             }
 
-            var held = Math.Min(
-                booking.TotalBaht,
-                Takings.HeldFor(booking.PaymentState, booking.Taken, booking.DepositBaht));
-
             // Money that never arrived is not revenue, and a booking held on a deposit is revenue
-            // for the deposit until the desk collects the rest (PRD US-28).
-            if (held <= 0m)
+            // for the deposit until the desk collects the rest (PRD US-28). Asked of what the
+            // venue holds rather than of what it keeps: a booking whose whole price is owed back
+            // still happened, and the month has to count it and say what is owed on it.
+            if (Takings.HeldUpToPrice(
+                    booking.PaymentState,
+                    booking.TotalBaht,
+                    booking.Taken,
+                    booking.DepositBaht,
+                    booking.PaidWithHours) <= 0m)
             {
                 continue;
             }
 
-            var keeps = held - booking.RefundDueBaht;
+            // The same rule the platform's own numbers are built from (PRD 6.2).
+            var keeps = Takings.KeptBy(
+                booking.PaymentState,
+                booking.TotalBaht,
+                booking.RefundDueBaht,
+                booking.Taken,
+                booking.DepositBaht,
+                booking.PaidWithHours);
             var day = PlatformRequirements.BangkokDateAndHour(booking.FirstStart).Date;
             var so_far = byDay.GetValueOrDefault(day);
 

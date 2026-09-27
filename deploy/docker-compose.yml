@@ -42,6 +42,7 @@ services:
       # so a deployment without a LINE channel still works.
       App__Line__ChannelId: ${LINE_CHANNEL_ID:-}
       App__Line__ChannelSecret: ${LINE_CHANNEL_SECRET:-}
+      App__Line__MessagingToken: ${LINE_MESSAGING_TOKEN:-}
     volumes:
       - api-keys:/keys
       - api-slips:/slips

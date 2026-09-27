@@ -1,3 +1,5 @@
+using CourtBooking.Api.Identity;
+
 namespace CourtBooking.Api.Bookings;
 
 /// <summary>What a booker is told about (PRD US-06). Stored, so the numbers must not move.</summary>
@@ -67,6 +69,14 @@ public sealed class BookerNotice
     public required Guid SourceId { get; init; }
 
     public required DateTimeOffset ClaimedAt { get; init; }
+
+    /// <summary>
+    /// How it actually went out, once it has (PRD US-34). Null means claimed and never delivered —
+    /// which is a real state, because the claim is taken before the sending so that two senders
+    /// cannot both try, and a send that fails is not tried again. Null on every row written before
+    /// there was more than one way to tell somebody, rather than a guess at what those were.
+    /// </summary>
+    public BookerChannel? SentBy { get; set; }
 
     public Booking? Booking { get; init; }
 }

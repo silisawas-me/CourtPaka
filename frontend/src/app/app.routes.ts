@@ -62,6 +62,24 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    path: 'venues/:venueId/shop',
+    data: { venueShell: true },
+    loadComponent: () => import('./features/venues/shop.page').then((m) => m.ShopPage),
+    canActivate: [authGuard],
+  },
+  {
+    path: 'venues/:venueId/packages',
+    data: { venueShell: true },
+    loadComponent: () => import('./features/venues/packages.page').then((m) => m.PackagesPage),
+    canActivate: [authGuard],
+  },
+  {
+    path: 'venues/:venueId/series',
+    data: { venueShell: true },
+    loadComponent: () => import('./features/venues/series.page').then((m) => m.SeriesPage),
+    canActivate: [authGuard],
+  },
+  {
     path: 'venues/:venueId/slip-queue',
     data: { venueShell: true },
     loadComponent: () => import('./features/venues/slip-queue.page').then((m) => m.SlipQueuePage),
@@ -91,6 +109,12 @@ export const routes: Routes = [
     path: 'admin/dashboard',
     loadComponent: () =>
       import('./features/admin/dashboard.page').then((m) => m.AdminDashboardPage),
+    canActivate: [authGuard],
+  },
+  {
+    path: 'admin/commission',
+    loadComponent: () =>
+      import('./features/admin/commission.page').then((m) => m.AdminCommissionPage),
     canActivate: [authGuard],
   },
   {

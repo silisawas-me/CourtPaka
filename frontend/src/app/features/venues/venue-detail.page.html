@@ -93,6 +93,170 @@
     </mat-card-content>
   </mat-card>
 
+  <!--
+    What this venue owes the platform (PRD US-21). On the page the owner already opens rather
+    than a screen of its own: it is one card most months and an empty one the rest of the time,
+    and a venue should not have to go looking to find out it is late.
+  -->
+  @if (commission(); as owed) {
+    @if (owed.invoices.length > 0) {
+      <mat-card data-testid="commission">
+        <mat-card-header>
+          <mat-card-title>{{ i18n.t('commission.title') }}</mat-card-title>
+          @if (owed.account; as account) {
+            <mat-card-subtitle data-testid="pay-to">
+              {{ i18n.t('commission.payTo') }} {{ account.promptPayId }}
+              @if (account.accountName) {
+                · {{ account.accountName }}
+              }
+            </mat-card-subtitle>
+          } @else {
+            <mat-card-subtitle class="muted" data-testid="no-account">
+              {{ i18n.t('commission.noAccount') }}
+            </mat-card-subtitle>
+          }
+        </mat-card-header>
+
+        <mat-card-content>
+          <div class="stack" data-testid="invoice-list">
+            @for (invoice of owed.invoices; track invoice.id) {
+              <div class="entry invoice" [attr.data-testid]="'invoice-' + invoice.id">
+                <div class="stack">
+                  <span class="entry-name">{{ invoice.amountBaht | baht: i18n.locale() }}</span>
+                  <span class="muted">
+                    {{ invoice.number }} · {{ invoice.month | appDate: i18n.locale() }}
+                  </span>
+                </div>
+
+                <span class="badge">{{ i18n.t('commission.status.' + invoice.status) }}</span>
+
+                @if (invoice.overdue) {
+                  <span class="badge late" [attr.data-testid]="'overdue-' + invoice.id">
+                    {{ i18n.t('commission.overdue') }}
+                  </span>
+                }
+
+                <span class="muted">
+                  {{ i18n.t('commission.dueOn') }} {{ invoice.dueOn | appDate: i18n.locale() }}
+                </span>
+
+                <span class="spacer"></span>
+
+                <!--
+                  Showing the platform the transfer is the owner's alone (PRD US-14), so staff
+                  reading this card see what is owed and no way to answer it.
+                -->
+                @if (canManage() && invoice.status !== 'Paid') {
+                  <label class="send" [attr.data-testid]="'send-' + invoice.id">
+                    <span matButton="filled">{{ i18n.t('commission.sendEvidence') }}</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,application/pdf"
+                      [disabled]="sendingFor() !== null"
+                      (change)="sendEvidence(invoice, $event)"
+                    />
+                  </label>
+                }
+
+                @if (invoice.refusedReason; as why) {
+                  <p class="form-error refused" [attr.data-testid]="'refused-' + invoice.id">
+                    {{ i18n.t('commission.refused') }}: {{ why }}
+                  </p>
+                }
+              </div>
+            }
+          </div>
+
+          @if (commissionError(); as key) {
+            <p class="form-error" data-testid="commission-error">{{ i18n.t(key) }}</p>
+          }
+        </mat-card-content>
+      </mat-card>
+    }
+  }
+
+  <!--
+    What this venue owes the platform (PRD US-21). On the page the owner already opens rather
+    than a screen of its own: it is one card most months and an empty one the rest of the time,
+    and a venue should not have to go looking to find out it is late.
+  -->
+  @if (commission(); as owed) {
+    @if (owed.invoices.length > 0) {
+      <mat-card data-testid="commission">
+        <mat-card-header>
+          <mat-card-title>{{ i18n.t('commission.title') }}</mat-card-title>
+          @if (owed.account; as account) {
+            <mat-card-subtitle data-testid="pay-to">
+              {{ i18n.t('commission.payTo') }} {{ account.promptPayId }}
+              @if (account.accountName) {
+                · {{ account.accountName }}
+              }
+            </mat-card-subtitle>
+          } @else {
+            <mat-card-subtitle class="muted" data-testid="no-account">
+              {{ i18n.t('commission.noAccount') }}
+            </mat-card-subtitle>
+          }
+        </mat-card-header>
+
+        <mat-card-content>
+          <div class="stack" data-testid="invoice-list">
+            @for (invoice of owed.invoices; track invoice.id) {
+              <div class="entry invoice" [attr.data-testid]="'invoice-' + invoice.id">
+                <div class="stack">
+                  <span class="entry-name">{{ invoice.amountBaht | baht: i18n.locale() }}</span>
+                  <span class="muted">
+                    {{ invoice.number }} · {{ invoice.month | appDate: i18n.locale() }}
+                  </span>
+                </div>
+
+                <span class="badge">{{ i18n.t('commission.status.' + invoice.status) }}</span>
+
+                @if (invoice.overdue) {
+                  <span class="badge late" [attr.data-testid]="'overdue-' + invoice.id">
+                    {{ i18n.t('commission.overdue') }}
+                  </span>
+                }
+
+                <span class="muted">
+                  {{ i18n.t('commission.dueOn') }} {{ invoice.dueOn | appDate: i18n.locale() }}
+                </span>
+
+                <span class="spacer"></span>
+
+                <!--
+                  Showing the platform the transfer is the owner's alone (PRD US-14), so staff
+                  reading this card see what is owed and no way to answer it.
+                -->
+                @if (canManage() && invoice.status !== 'Paid') {
+                  <label class="send" [attr.data-testid]="'send-' + invoice.id">
+                    <span matButton="filled">{{ i18n.t('commission.sendEvidence') }}</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,application/pdf"
+                      [disabled]="sendingFor() !== null"
+                      (change)="sendEvidence(invoice, $event)"
+                    />
+                  </label>
+                }
+
+                @if (invoice.refusedReason; as why) {
+                  <p class="form-error refused" [attr.data-testid]="'refused-' + invoice.id">
+                    {{ i18n.t('commission.refused') }}: {{ why }}
+                  </p>
+                }
+              </div>
+            }
+          </div>
+
+          @if (commissionError(); as key) {
+            <p class="form-error" data-testid="commission-error">{{ i18n.t(key) }}</p>
+          }
+        </mat-card-content>
+      </mat-card>
+    }
+  }
+
   <mat-card>
     <mat-card-header>
       <mat-card-title>{{ i18n.t('venues.members.title') }}</mat-card-title>
@@ -126,6 +290,25 @@
                   </mat-checkbox>
                 }
               </span>
+
+              <!--
+                What they may send back in one go (PRD US-18). On the row rather than behind a
+                dialog: it is one number and it belongs beside the permissions it qualifies —
+                the one that lets somebody record a refund is ticked two inches to the left.
+              -->
+              <mat-form-field class="limit" subscriptSizing="dynamic">
+                <mat-label>{{ i18n.t('venues.members.refundLimit') }}</mat-label>
+                <input
+                  matInput
+                  type="number"
+                  min="0"
+                  inputmode="numeric"
+                  [disabled]="!canManage() || savingMember() !== null"
+                  [value]="row.member.refundLimitBaht ?? 0"
+                  [attr.data-testid]="'refund-limit-' + row.member.userId"
+                  (change)="setRefundLimit(row.member, $event)"
+                />
+              </mat-form-field>
 
               @if (canManage()) {
                 <button

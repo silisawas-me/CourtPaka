@@ -50,8 +50,18 @@ public sealed class Caretaker(
         // After the holds that ran out, so hours let go of this sweep are offered in it.
         await DoAsync("hours somebody was waiting for", WaitlistOffersAsync, stopping);
 
+        // Hours somebody bought and did not use, on the day after they were good for (US-31).
+        await DoAsync("hours that ran out", HoursThatRanOutAsync, stopping);
+
+        // Before the post, so a week made this sweep is one the day's list already has.
+        await DoAsync("weeks of standing arrangements", SeriesWeeksAsync, stopping);
+
         // Last, so a hold this sweep let go of is told about in the same sweep.
         await DoAsync("telling bookers", TellBookersAsync, stopping);
+
+        // Once a month this writes invoices; every other tick it finds nothing due and does
+        // nothing. After the rest, because what it bills for is what the rest has settled.
+        await DoAsync("the month's commission", BillTheMonthAsync, stopping);
     }
 
     /// <summary>
@@ -65,6 +75,27 @@ public sealed class Caretaker(
         await services.GetRequiredService<WaitlistOffers>().WorkAsync(stopping);
 
     /// <summary>
+    /// What is left on a package whose day has passed, written off (PRD US-31, S-28). Nobody asks
+    /// for it: the day passing is the whole of the reason.
+    /// </summary>
+    private async Task HoursThatRanOutAsync(
+        AppDbContext database,
+        IServiceProvider services,
+        CancellationToken stopping) =>
+        await services.GetRequiredService<PackageExpiry>().WorkAsync(stopping);
+
+    /// <summary>
+    /// The weeks of every standing arrangement that have come inside the booking window
+    /// (PRD US-30). Not called from where an arrangement is agreed: the weeks appear as the window
+    /// rolls, which is a thing the clock does and nobody asks for.
+    /// </summary>
+    private async Task SeriesWeeksAsync(
+        AppDbContext database,
+        IServiceProvider services,
+        CancellationToken stopping) =>
+        await services.GetRequiredService<SeriesBookings>().WorkAsync(stopping);
+
+    /// <summary>
     /// What happened to each booker's bookings since the last sweep, and the reminder before
     /// play (PRD US-06). A message arrives at most one interval after the thing it is about.
     /// </summary>
@@ -74,6 +105,17 @@ public sealed class Caretaker(
         CancellationToken stopping) =>
         await services.GetRequiredService<BookerMail>()
             .SendDueAsync(timeProvider.GetUtcNow(), stopping);
+
+    /// <summary>
+    /// The commission invoices for any month whose cut-off has passed and which nobody has
+    /// billed yet (PRD US-21, BR-08). Almost every tick finds nothing to do.
+    /// </summary>
+    private async Task BillTheMonthAsync(
+        AppDbContext database,
+        IServiceProvider services,
+        CancellationToken stopping) =>
+        await services.GetRequiredService<MonthlyBilling>()
+            .IssueDueAsync(timeProvider.GetUtcNow(), stopping);
 
     /// <summary>
     /// Hours held by a booking whose fifteen minutes are up, given back (PRD BR-02, 9.2). The

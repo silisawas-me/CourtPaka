@@ -108,6 +108,41 @@ with sync_playwright() as p:
     box.click()  # put the permission back the way it was found
     expect(box).to_be_checked(checked=before)
 
+    # 6b. What that person may send back in one record (US-18). Holding the permission is being
+    # given the work, not being trusted with any amount of the venue's money.
+    who = staff_permission.removeprefix("permission-").removesuffix("-ViewReports")
+    limit = page.locator(f"[data-testid=refund-limit-{who}]")
+    check("a staff member's row carries a refund limit", limit.count() == 1, page)
+    check(
+        "and the owner's own row does not, because they have no ceiling",
+        page.locator("[data-testid^=refund-limit-]").count()
+        < page.locator("[data-testid=member-list] .entry").count(),
+        page,
+    )
+
+    with page.expect_response(lambda r: "/permissions" in r.url and r.request.method == "PUT") as set_to:
+        limit.fill("750")
+        limit.blur()
+    check("setting it is saved", set_to.value.status == 204)
+    check(
+        "and it is sent with the permissions they already had, not instead of them",
+        set_to.value.request.post_data_json.get("refundLimitBaht") == 750
+        and len(set_to.value.request.post_data_json.get("permissions", [])) > 0,
+    )
+
+    page.reload()
+    page.wait_for_selector(f"[data-testid=refund-limit-{who}]")
+    check(
+        "and it is still there when the page is opened again",
+        page.locator(f"[data-testid=refund-limit-{who}]").input_value() == "750",
+        page,
+    )
+
+    # Put it back, so the next run of this script starts where this one found things.
+    with page.expect_response(lambda r: "/permissions" in r.url and r.request.method == "PUT"):
+        limit.fill("0")
+        limit.blur()
+
     # 7. A staff member sees the roster read-only.
     page.goto(f"{BASE}/")
     page.click("[data-testid=sign-out]")

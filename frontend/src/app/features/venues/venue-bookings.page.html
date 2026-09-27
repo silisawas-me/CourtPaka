@@ -284,6 +284,22 @@
                   {{ i18n.t('money.take') }}
                 </button>
               }
+              <!--
+                Hours somebody bought earlier, instead of money (PRD US-31). Only drawn when the
+                venue has a package with hours on it — a button that can only say "there are
+                none" is a button that wastes a press at a counter.
+              -->
+              @if (booking.can.payWithPackage && packagesWithHours().length > 0) {
+                <button
+                  matButton
+                  type="button"
+                  [attr.data-testid]="'pay-with-package-' + booking.bookingId"
+                  [disabled]="deciding()"
+                  (click)="ask(booking.bookingId, 'package')"
+                >
+                  {{ i18n.t('packages.payWith') }}
+                </button>
+              }
               @if (booking.can.settlePayment) {
                 <button
                   matButton="filled"
@@ -414,6 +430,39 @@
                     </button>
                   </div>
                 </form>
+              </div>
+            }
+
+            <!--
+              Whose hours. The list is the venue's own packages with hours left, named by the
+              customer who bought them — matching them up is the counter's job, not the page's.
+            -->
+            @if (asked(booking.bookingId, 'package')) {
+              <div class="asking" data-testid="asking">
+                <p class="muted">{{ i18n.t('packages.whoseHours') }}</p>
+                <ul class="package-choices">
+                  @for (one of packagesWithHours(); track one.packageId) {
+                    <li>
+                      <button
+                        matButton
+                        type="button"
+                        [attr.data-testid]="'spend-' + one.packageId"
+                        [disabled]="deciding()"
+                        (click)="payWithPackage(booking, one.packageId)"
+                      >
+                        {{ one.customerName }}
+                        <span class="muted">
+                          ({{ one.hoursLeft }} {{ i18n.t('packages.hours') }})
+                        </span>
+                      </button>
+                    </li>
+                  }
+                </ul>
+                <div class="row">
+                  <button matButton type="button" data-testid="close" (click)="close()">
+                    {{ i18n.t('common.cancel') }}
+                  </button>
+                </div>
               </div>
             }
 
@@ -670,6 +719,17 @@
                           [appFieldError]="refundForm.controls.amountBaht"
                           testId="amount-error"
                         ></mat-error>
+                        <!--
+                          What this person may send in one record, said before they type rather
+                          than after they are refused (PRD US-18). The server decides it; this
+                          only repeats what it said about the reader.
+                        -->
+                        @if (sent.yourLimitBaht !== null) {
+                          <mat-hint data-testid="refund-limit">
+                            {{ i18n.t('refunds.yourLimit') }}
+                            {{ sent.yourLimitBaht | baht: i18n.locale() }}
+                          </mat-hint>
+                        }
                       </mat-form-field>
 
                       <mat-form-field class="field">

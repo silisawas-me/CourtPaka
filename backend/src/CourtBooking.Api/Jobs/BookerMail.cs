@@ -1,6 +1,7 @@
 using CourtBooking.Api.Bookings;
 using CourtBooking.Api.Data;
 using CourtBooking.Api.Email;
+using CourtBooking.Api.Identity;
 using CourtBooking.Api.Observability;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -22,10 +23,15 @@ namespace CourtBooking.Api.Jobs;
 /// about), so two instances, or two ticks, send it once.
 ///
 /// Counter bookings are left out: the customer has no account and nothing to send to (US-06).
+///
+/// Which way it goes out is <see cref="BookerReach"/>'s answer, not this one's: somebody who
+/// signed in with LINE hears on LINE, and may never have proved an email address at all, which
+/// until there was a second way to reach them meant they heard nothing (PRD US-34).
 /// </summary>
 public sealed class BookerMail(
     AppDbContext database,
     ITransactionalEmailSender emails,
+    ILineMessenger line,
     IOptions<AppOptions> options,
     ILoggerFactory loggers)
 {
@@ -259,6 +265,15 @@ public sealed class BookerMail(
                 Address = one.Booker!.DeletedAt == null && one.Booker.EmailConfirmed
                     ? one.Booker.Email
                     : null,
+
+                // Deleting an account takes its LINE login row with it, because a LINE id names a
+                // person — so this is null for somebody who has gone, without asking again.
+                LineUserId = database.UserLogins
+                    .Where(login =>
+                        login.UserId == one.BookerUserId
+                        && login.LoginProvider == LineLoginEndpoints.Provider)
+                    .Select(login => login.ProviderKey)
+                    .FirstOrDefault(),
                 one.Booker!.Language,
                 VenueName = one.Venue!.Name,
                 one.TotalBaht,
@@ -272,8 +287,15 @@ public sealed class BookerMail(
             })
             .SingleOrDefaultAsync(CancellationToken.None);
 
-        // A booker who asked to be forgotten has no address left to write to (PRD 8).
-        if (booking is null || string.IsNullOrEmpty(booking.Address))
+        if (booking is null)
+        {
+            return false;
+        }
+
+        // A booker who asked to be forgotten has nowhere left to be written to (PRD 8), and one
+        // who never proved an address and never signed in with LINE has nowhere yet.
+        var reach = BookerReach.For(booking.LineUserId, booking.Address, line.IsEnabled);
+        if (reach.Channel == BookerChannel.None)
         {
             return false;
         }
@@ -333,10 +355,55 @@ public sealed class BookerMail(
         }
 
         var (subject, body) = BookerLetters.Write(letter, booking.Language);
+        var template = $"booker.{due.Kind}";
 
-        await emails.SendAsync(
-            new EmailMessage(booking.Address, booking.Language, subject, body, $"booker.{due.Kind}"),
-            CancellationToken.None);
+        if (reach.Channel == BookerChannel.Line)
+        {
+            // The letter's own words, with what was its subject as the first line. One set of
+            // sentences for both ways of sending, so neither can say something the other does not
+            // (PRD US-23, US-34).
+            var said = await line.SendAsync(
+                new LineMessage(reach.Address!, booking.Language, $"{subject}\n\n{body}", template),
+                CancellationToken.None);
+
+            if (!said)
+            {
+                // Claimed and not said. Not tried again, and not quietly turned into an email
+                // either: falling back would send to an address this person may never read, and
+                // the two ways of hearing would stop being one message.
+                loggers.CreateLogger<BookerMail>().LogWarning(
+                    "LINE would not carry {Kind} for booking {BookingId}.", due.Kind, due.BookingId);
+
+                return false;
+            }
+        }
+        else
+        {
+            await emails.SendAsync(
+                new EmailMessage(reach.Address!, booking.Language, subject, body, template),
+                CancellationToken.None);
+        }
+
+        // Which way it went. Written after, because until now it had not gone anywhere — and
+        // wrapped, because by this point it has. A failure here is a note not taken, not a
+        // message not sent: letting it fall through would hand a delivered message to the catch
+        // that logs "could not tell the booker", and the row would say it never went out.
+        try
+        {
+            await database.BookerNotices
+                .Where(one => one.SourceId == due.SourceId && one.Kind == due.Kind)
+                .ExecuteUpdateAsync(
+                    set => set.SetProperty(one => one.SentBy, reach.Channel),
+                    CancellationToken.None);
+        }
+        catch (Exception failure)
+        {
+            loggers.CreateLogger<BookerMail>().LogWarning(
+                failure,
+                "Told the booker of {BookingId} about {Kind} by {Channel}, and could not write "
+                    + "down which way it went.",
+                due.BookingId, due.Kind, reach.Channel);
+        }
 
         // Somebody has now been asked whether they are coming, which is what the counter reads
         // as Reminded (PRD US-24). Written after the message, because it is about a message that
@@ -365,9 +432,10 @@ public sealed class BookerMail(
             }
         }
 
-        // Not a name PRD 8 lists, like venue_notified; written down with that debt in CLAUDE.md.
+        // Which way it went as well as that it went, because whether anybody reads LINE is the
+        // question this feature exists to answer (PRD 8.1, US-34).
         AppEvents.For(loggers).LogInformation(
-            "booker_notified {BookingId} {Kind}", due.BookingId, due.Kind);
+            "booker_notified {BookingId} {Kind} {Channel}", due.BookingId, due.Kind, reach.Channel);
 
         return true;
     }

@@ -14,6 +14,17 @@ public sealed class BookingStatusChange
     /// <summary>As much as a venue needs to explain itself, and no more.</summary>
     public const int ReasonMaxLength = 500;
 
+    /// <summary>
+    /// What the venue wrote, ready to be kept — or null, meaning it does not fit. Refused rather
+    /// than shortened: a record trimmed without saying so is a record nobody can trust (PRD 6.1).
+    /// Here rather than beside one of its callers, because the length it has to fit is here.
+    /// </summary>
+    public static string? Recorded(string? note)
+    {
+        var written = note?.Trim() ?? string.Empty;
+        return written.Length > ReasonMaxLength ? null : written;
+    }
+
     public Guid Id { get; init; } = Guid.CreateVersion7();
 
     /// <summary>

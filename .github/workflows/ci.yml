@@ -13,7 +13,53 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # What this change actually touched. Everything below asks this rather than running anyway:
+  # a private repository pays for its minutes, and fifteen of them to check that a sentence in
+  # a Markdown file has not broken a Docker build is fifteen minutes that buy nothing.
+  #
+  # The workflow is in every list, so a change to CI itself is always checked in full.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.what.outputs.backend }}
+      frontend: ${{ steps.what.outputs.frontend }}
+      stack: ${{ steps.what.outputs.stack }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Both sides of the comparison below have to be here.
+          fetch-depth: 0
+
+      - id: what
+        name: Work out what was touched
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # A push to a branch nobody has seen before has no "before" to compare with, and a
+          # forced push can name a commit that is gone. Either way the safe answer is everything.
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "No base to compare against; checking everything."
+            touched=""
+          else
+            touched=$(git diff --name-only "$BASE" HEAD)
+            echo "Touched:"; echo "$touched"
+          fi
+
+          matches() {
+            [ -z "$touched" ] && { echo true; return; }
+            echo "$touched" | grep -Eq "$1" && echo true || echo false
+          }
+
+          {
+            echo "backend=$(matches '^(backend/|\.github/workflows/)')"
+            echo "frontend=$(matches '^(frontend/|\.github/workflows/)')"
+            echo "stack=$(matches '^(backend/|frontend/|scripts/|docker-compose|\.github/workflows/)')"
+          } >> "$GITHUB_OUTPUT"
+
   backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -46,6 +92,8 @@ jobs:
         run: dotnet test --no-build -c Release
 
   frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -76,6 +124,8 @@ jobs:
 
   # Runs alongside the test jobs: it verifies the images build, it does not gate on tests.
   docker:
+    needs: changes
+    if: needs.changes.outputs.stack == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -120,6 +170,13 @@ jobs:
   # side of a slip, the money crossing the counter, and signing in with LINE. The rest stay a
   # local command (scripts/verify/README).
   flows:
+    needs: changes
+    # Skipped on a draft: the flow scripts stands the whole stack up, which is seven of this
+    # workflow's fifteen billed minutes between the two of them, and a branch still being
+    # written is not a branch to spend that on. Marking the pull request ready runs them.
+    if: >-
+      needs.changes.outputs.stack == 'true'
+      && github.event.pull_request.draft != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -159,6 +216,13 @@ jobs:
   # the local one (Development settings, plain HTTP) behind the same Caddyfile the deployments
   # use, which is where the headers the scan reads are set.
   zap:
+    needs: changes
+    # Skipped on a draft: the security scan stands the whole stack up, which is seven of this
+    # workflow's fifteen billed minutes between the two of them, and a branch still being
+    # written is not a branch to spend that on. Marking the pull request ready runs them.
+    if: >-
+      needs.changes.outputs.stack == 'true'
+      && github.event.pull_request.draft != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

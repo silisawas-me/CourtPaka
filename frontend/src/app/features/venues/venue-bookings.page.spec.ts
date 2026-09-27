@@ -45,6 +45,7 @@ function booking(overrides: Record<string, unknown> = {}) {
       settlePayment: false,
       playedAfterAll: false,
       takeMoney: false,
+      payWithPackage: false,
       cancelChoices: [
         { reason: 'CustomerRequest', refundBaht: 400 },
         { reason: 'VenueInitiated', refundBaht: 400 },
@@ -91,6 +92,7 @@ describe('VenueBookingsPage', () => {
     day: object[] = [booking()],
     floor: object | null = grid(),
     queue: object[] = [],
+    packages: object[] = [],
   ): void {
     fixture = TestBed.createComponent(VenueBookingsPage);
     fixture.componentRef.setInput('venueId', 'v1');
@@ -105,6 +107,9 @@ describe('VenueBookingsPage', () => {
 
     // The queue for the day is asked for with it (PRD US-27).
     httpMock.expectOne((request) => request.url === '/api/venues/v1/waitlist').flush(queue);
+
+    // And what customers have already paid for, for the same reason (PRD US-31).
+    httpMock.expectOne('/api/venues/v1/packages').flush(packages);
 
     httpMock.expectOne((request) => request.url === '/api/venues/v1/bookings').flush(day);
     fixture.detectChanges();
@@ -321,6 +326,53 @@ describe('VenueBookingsPage', () => {
     fixture.detectChanges();
   });
 
+  /**
+   * Hours somebody bought earlier settle a booking the venue is already holding (PRD US-31).
+   * The button is drawn from the server's answer, and only where there are hours to offer.
+   */
+  it('pays a standing booking with a package the venue has sold', () => {
+    const live = {
+      packageId: 'p1',
+      typeId: 't1',
+      typeName: 'ชุด 10 ชั่วโมง',
+      customerName: 'ก๊วนเหมา',
+      customerPhone: null,
+      hoursSold: 10,
+      priceBaht: 1800,
+      bahtPerHour: 180,
+      hoursLeft: 8,
+      expiresOn: '2026-12-25',
+      live: true,
+      runningOut: false,
+      expiredAt: null,
+      soldAt: '2026-09-26T04:00:00Z',
+      moves: [],
+    };
+
+    render([booking({ can: { ...booking().can, payWithPackage: true } })], grid(), [], [live]);
+
+    clickOn(fixture, 'pay-with-package-b1');
+    fixture.detectChanges();
+    clickOn(fixture, 'spend-p1');
+
+    const request = httpMock.expectOne('/api/venues/v1/bookings/b1/pay-with-package');
+    expect(request.request.body).toEqual({ packageId: 'p1' });
+
+    request.flush(booking({ paymentState: 'Received' }));
+
+    // The package has fewer hours on it now, so the list is read again.
+    httpMock.expectOne('/api/venues/v1/packages').flush([{ ...live, hoursLeft: 7 }]);
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, 'pay-with-package-b1')).toBeNull();
+  });
+
+  it('offers no hours when the venue has sold none', () => {
+    render([booking({ can: { ...booking().can, payWithPackage: true } })]);
+
+    expect(elementOf(fixture, 'pay-with-package-b1')).toBeNull();
+  });
+
   it('translates a venue the reader may not look at', () => {
     fixture = TestBed.createComponent(VenueBookingsPage);
     fixture.componentRef.setInput('venueId', 'v1');
@@ -332,6 +384,9 @@ describe('VenueBookingsPage', () => {
       .flush({ code: 'venue.not_found' }, { status: 404, statusText: 'Not Found' });
     httpMock
       .expectOne((request) => request.url === '/api/venues/v1/waitlist')
+      .flush({ code: 'venue.not_member' }, { status: 403, statusText: 'Forbidden' });
+    httpMock
+      .expectOne('/api/venues/v1/packages')
       .flush({ code: 'venue.not_member' }, { status: 403, statusText: 'Forbidden' });
     httpMock
       .expectOne((request) => request.url === '/api/venues/v1/bookings')
@@ -508,7 +563,12 @@ describe('VenueBookingsPage', () => {
       const block = elementOf(fixture, 'board-block-b1');
       expect(block).not.toBeNull();
       expect(block?.getAttribute('style')).toContain('--span: 2');
-      expect(block?.textContent).toContain('player@example.com');
+
+      // Named by the part before the @, not the whole address: a block is narrow, and the rest
+      // of an address is the same for everybody at the same provider. The row below the board
+      // still carries the whole of it.
+      expect(block?.textContent).toContain('player');
+      expect(block?.textContent).not.toContain('@example.com');
 
       // The hour nobody has taken is a button that sells it; the one off sale is not.
       expect(elementOf(fixture, 'board-free-c1-20')).not.toBeNull();

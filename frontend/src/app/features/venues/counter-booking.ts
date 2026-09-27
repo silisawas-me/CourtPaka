@@ -7,6 +7,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { errorKey } from '../../core/http/api-error';
 import { venueNow } from '../../core/i18n/plain-date';
 import { TranslationService } from '../../core/i18n/translation.service';
+import { HourPackage, PackagesService } from '../../core/venues/packages.service';
 import { Availability, PublicVenueService } from '../../core/venues/public-venue.service';
 import {
   CounterPayment,
@@ -56,6 +57,7 @@ interface Pick {
 export class CounterBooking {
   private readonly publicVenues = inject(PublicVenueService);
   private readonly bookings = inject(VenueBookingsService);
+  private readonly packages = inject(PackagesService);
   private readonly forms = inject(FormBuilder);
 
   protected readonly i18n = inject(TranslationService);
@@ -78,11 +80,31 @@ export class CounterBooking {
   protected readonly sending = signal(false);
   protected readonly error = signal<string | null>(null);
 
+  /**
+   * The packages this venue has sold that still have hours on them (PRD US-31). Loaded with the
+   * grid rather than when somebody asks: the question "are they on a package?" is asked while
+   * the customer is standing there, and a second round trip then is a queue.
+   */
+  protected readonly packagesWithHours = signal<HourPackage[]>([]);
+
+  /**
+   * How this one is paid for: one of the ways money arrives, or the id of a package whose hours
+   * pay for it instead (PRD US-31). One control, because it is one question — two of them meant
+   * both could read as chosen at once, and every reader had to be told which won.
+   */
   protected readonly form = this.forms.nonNullable.group({
     customerName: ['', [Validators.required, Validators.maxLength(NAME_MAX_LENGTH)]],
     customerPhone: ['', Validators.maxLength(PHONE_MAX_LENGTH)],
-    paidBy: this.forms.nonNullable.control<CounterPayment>('Cash'),
+    paidBy: this.forms.nonNullable.control<string>('Cash'),
   });
+
+  /** Whether hours are paying for this one rather than money. */
+  protected readonly onHours = computed(() =>
+    this.packagesWithHours().some((one) => one.packageId === this.paying()),
+  );
+
+  /** What is currently chosen, as a signal so the total above it can follow. */
+  private readonly paying = signal<string>('Cash');
 
   /** What the picks come to, from the prices the grid was drawn with. The server charges its own. */
   protected readonly total = computed(() => {
@@ -114,6 +136,11 @@ export class CounterBooking {
     return this.picks().some((pick) => pick.courtId === courtId && pick.hour === hour);
   }
 
+  /** Keeps the signal the total reads in step with the control the form holds. */
+  protected choosePayment(chosen: string): void {
+    this.paying.set(chosen);
+  }
+
   protected toggle(courtId: string, hour: number): void {
     this.error.set(null);
     this.picks.update((picks) =>
@@ -133,6 +160,7 @@ export class CounterBooking {
     }
 
     const { customerName, customerPhone, paidBy } = this.form.getRawValue();
+    const onPackage = this.packagesWithHours().some((one) => one.packageId === paidBy);
     this.sending.set(true);
     this.error.set(null);
 
@@ -145,13 +173,18 @@ export class CounterBooking {
         })),
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim() || null,
-        paidBy,
+        paidBy: onPackage ? null : (paidBy as CounterPayment),
+        packageId: onPackage ? paidBy : null,
       })
       .subscribe({
         next: (booking) => {
           this.sending.set(false);
           this.picks.set([]);
           this.form.reset({ customerName: '', customerPhone: '', paidBy: 'Cash' });
+          this.paying.set('Cash');
+
+          // A package that just paid for something has fewer hours on it now.
+          this.loadPackages(this.venueId());
           this.taken.emit(booking);
         },
         error: (failure: unknown) => {
@@ -170,8 +203,22 @@ export class CounterBooking {
     return date < now.date || (date === now.date && hour + 1 <= now.hour + now.minute / 60);
   }
 
+  /**
+   * The packages this venue has sold that still have hours on them. A refusal is not put on the
+   * screen: a counter that cannot read them can still take money, which is the thing it is for.
+   */
+  private loadPackages(venueId: string): void {
+    this.packages.sold(venueId).subscribe({
+      // The server's own answer about which can still be spent, rather than one worked out here:
+      // a list that disagrees with it offers a package the counter is then refused (PRD US-31).
+      next: (sold) => this.packagesWithHours.set(sold.filter((one) => one.live)),
+      error: () => this.packagesWithHours.set([]),
+    });
+  }
+
   private load(venueId: string, date: string): void {
     this.loading.set(true);
+    this.loadPackages(venueId);
 
     this.publicVenues.availability(venueId, date).subscribe({
       next: (grid) => {

@@ -38,6 +38,9 @@ namespace CourtBooking.Api.Data.Migrations
                     b.Property<int>("Kind")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("SentBy")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("SourceId")
                         .HasColumnType("uuid");
 
@@ -95,6 +98,16 @@ namespace CourtBooking.Api.Data.Migrations
                     b.Property<DateTimeOffset>("HoldExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<decimal>("PackageBaht")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
+                    b.Property<int>("PackageHours")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("PackageId")
+                        .HasColumnType("uuid");
+
                     b.Property<int?>("PaidAtCounter")
                         .HasColumnType("integer");
 
@@ -107,6 +120,9 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.Property<int>("RefundPercent")
                         .HasColumnType("integer");
+
+                    b.Property<Guid?>("SeriesId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset?>("SlipReminderSentAt")
                         .HasColumnType("timestamp with time zone");
@@ -125,13 +141,19 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("CancellationPolicyId");
 
+                    b.HasIndex("PackageId");
+
+                    b.HasIndex("SeriesId");
+
                     b.HasIndex("BookerUserId", "Status");
 
                     b.HasIndex("VenueId", "CreatedAt");
 
                     b.ToTable("Bookings", t =>
                         {
-                            t.HasCheckConstraint("CK_Bookings_BookerOrCustomer", "(\"Channel\" = 1 AND \"BookerUserId\" IS NOT NULL AND \"CustomerName\" IS NULL) OR (\"Channel\" = 2 AND \"BookerUserId\" IS NULL AND \"CustomerName\" IS NOT NULL AND \"PaidAtCounter\" IS NOT NULL)");
+                            t.HasCheckConstraint("CK_Bookings_BookerOrCustomer", "(\"Channel\" = 1 AND \"BookerUserId\" IS NOT NULL AND \"CustomerName\" IS NULL) OR (\"Channel\" = 2 AND \"BookerUserId\" IS NULL AND \"CustomerName\" IS NOT NULL AND (\"PaidAtCounter\" IS NOT NULL OR \"SeriesId\" IS NOT NULL OR \"PackageId\" IS NOT NULL))");
+
+                            t.HasCheckConstraint("CK_Bookings_PackagePaysForItWhole", "(\"PackageId\" IS NULL AND \"PackageHours\" = 0 AND \"PackageBaht\" = 0) OR (\"PackageId\" IS NOT NULL AND \"PackageHours\" > 0 AND \"PackageBaht\" >= 0)");
                         });
                 });
 
@@ -163,6 +185,82 @@ namespace CourtBooking.Api.Data.Migrations
                     b.HasIndex("BookingId", "ChangedAt");
 
                     b.ToTable("BookingArrivalChanges");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Bookings.BookingSeries", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CourtId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CustomerName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CustomerPhone")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("Day")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EndReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("EndedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("FromHour")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("ReplacedSeriesId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("StartsOn")
+                        .HasColumnType("date");
+
+                    b.Property<int>("State")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("UntilHour")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("UntilOn")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("VenueId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourtId");
+
+                    b.HasIndex("ReplacedSeriesId");
+
+                    b.HasIndex("VenueId", "State", "CreatedAt");
+
+                    b.HasIndex("VenueId", "CourtId", "Day", "FromHour", "UntilHour")
+                        .IsUnique()
+                        .HasFilter("\"State\" = 1");
+
+                    b.ToTable("BookingSeries", t =>
+                        {
+                            t.HasCheckConstraint("CK_BookingSeries_HoursAreAWindow", "\"FromHour\" >= 0 AND \"UntilHour\" <= 24 AND \"FromHour\" < \"UntilHour\"");
+                        });
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Bookings.BookingSlot", b =>
@@ -388,6 +486,144 @@ namespace CourtBooking.Api.Data.Migrations
                     b.ToTable("DailyClosings");
                 });
 
+            modelBuilder.Entity("CourtBooking.Api.Bookings.HourPackage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CustomerName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CustomerPhone")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset?>("ExpiredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("ExpiresOn")
+                        .HasColumnType("date");
+
+                    b.Property<int>("HoursSold")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PackageTypeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("PriceBaht")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
+                    b.Property<DateTimeOffset>("SoldAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SoldByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("VenueId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PackageTypeId");
+
+                    b.HasIndex("VenueId", "SoldAt");
+
+                    b.HasIndex("VenueId", "ExpiresOn", "ExpiredAt");
+
+                    b.ToTable("HourPackages", t =>
+                        {
+                            t.HasCheckConstraint("CK_HourPackages_WasSold", "\"HoursSold\" > 0 AND \"PriceBaht\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Bookings.PackageEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("BookingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Hours")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Move")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PackageId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookingId");
+
+                    b.HasIndex("ByUserId");
+
+                    b.HasIndex("PackageId", "At");
+
+                    b.ToTable("PackageEntries", t =>
+                        {
+                            t.HasCheckConstraint("CK_PackageEntries_HoursMoved", "\"Hours\" <> 0");
+                        });
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Bookings.PackageType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Hours")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("PriceBaht")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
+                    b.Property<int>("ValidForDays")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("VenueId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("WithdrawnAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("WithdrawnByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VenueId", "WithdrawnAt", "CreatedAt");
+
+                    b.ToTable("PackageTypes", t =>
+                        {
+                            t.HasCheckConstraint("CK_PackageTypes_IsAnOffer", "\"Hours\" > 0 AND \"Hours\" <= 200 AND \"PriceBaht\" > 0 AND \"ValidForDays\" > 0 AND \"ValidForDays\" <= 730");
+                        });
+                });
+
             modelBuilder.Entity("CourtBooking.Api.Bookings.PaymentReceipt", b =>
                 {
                     b.Property<Guid>("Id")
@@ -398,8 +634,11 @@ namespace CourtBooking.Api.Data.Migrations
                         .HasPrecision(10, 2)
                         .HasColumnType("numeric(10,2)");
 
-                    b.Property<Guid>("BookingId")
+                    b.Property<Guid?>("BookingId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("CountsOn")
+                        .HasColumnType("date");
 
                     b.Property<int>("Method")
                         .HasColumnType("integer");
@@ -408,10 +647,16 @@ namespace CourtBooking.Api.Data.Migrations
                         .HasMaxLength(400)
                         .HasColumnType("character varying(400)");
 
+                    b.Property<Guid?>("PackageId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("ReceivedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("ReceivedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SaleId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("VenueId")
@@ -421,13 +666,19 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("BookingId");
 
+                    b.HasIndex("PackageId");
+
                     b.HasIndex("ReceivedByUserId");
 
-                    b.HasIndex("VenueId", "ReceivedAt");
+                    b.HasIndex("SaleId");
+
+                    b.HasIndex("VenueId", "CountsOn");
 
                     b.ToTable("PaymentReceipts", t =>
                         {
                             t.HasCheckConstraint("CK_PaymentReceipts_AmountIsMoney", "\"AmountBaht\" > 0");
+
+                            t.HasCheckConstraint("CK_PaymentReceipts_ForOneThing", "(CASE WHEN \"BookingId\" IS NULL THEN 0 ELSE 1 END + CASE WHEN \"PackageId\" IS NULL THEN 0 ELSE 1 END + CASE WHEN \"SaleId\" IS NULL THEN 0 ELSE 1 END) = 1");
                         });
                 });
 
@@ -533,6 +784,165 @@ namespace CourtBooking.Api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("CourtBooking.Api.Bookings.SeriesMiss", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("NoticedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Refusal")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<Guid>("SeriesId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SeriesId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("SeriesMisses");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Bookings.ShopItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Counted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<decimal>("PriceBaht")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
+                    b.Property<int?>("TellMeAt")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid>("VenueId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("WithdrawnAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("WithdrawnByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VenueId", "WithdrawnAt", "Name");
+
+                    b.ToTable("ShopItems", t =>
+                        {
+                            t.HasCheckConstraint("CK_ShopItems_IsSomethingToSell", "\"PriceBaht\" > 0 AND (\"TellMeAt\" IS NULL OR \"TellMeAt\" >= 0)");
+                        });
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Bookings.ShopSale", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BookingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CancelledByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("SoldAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SoldByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("TotalBaht")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
+                    b.Property<Guid>("VenueId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookingId");
+
+                    b.HasIndex("VenueId", "SoldAt");
+
+                    b.ToTable("ShopSales", t =>
+                        {
+                            t.HasCheckConstraint("CK_ShopSales_CameToSomething", "\"TotalBaht\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Bookings.ShopSaleLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("EachBaht")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SaleId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("SaleId");
+
+                    b.ToTable("ShopSaleLines", t =>
+                        {
+                            t.HasCheckConstraint("CK_ShopSaleLines_IsALine", "\"Quantity\" > 0 AND \"Quantity\" <= 100 AND \"EachBaht\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("CourtBooking.Api.Bookings.SlipViewing", b =>
                 {
                     b.Property<Guid>("Id")
@@ -560,6 +970,109 @@ namespace CourtBooking.Api.Data.Migrations
                     b.HasIndex("ComplaintId", "ViewedAt");
 
                     b.ToTable("SlipViewings");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Bookings.Spend", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("AmountBaht")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<int>("PaidBy")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("PaidOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RecordedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("VenueId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("VoidReason")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<DateTimeOffset?>("VoidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("VoidedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecordedByUserId");
+
+                    b.HasIndex("VenueId", "PaidOn");
+
+                    b.HasIndex("VenueId", "RecordedAt");
+
+                    b.ToTable("Spends", t =>
+                        {
+                            t.HasCheckConstraint("CK_Spends_IsMoney", "\"AmountBaht\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Bookings.StockEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Move")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("SaleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SpendId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ByUserId");
+
+                    b.HasIndex("SaleId");
+
+                    b.HasIndex("SpendId");
+
+                    b.HasIndex("ItemId", "At");
+
+                    b.ToTable("StockEntries", t =>
+                        {
+                            t.HasCheckConstraint("CK_StockEntries_SomethingMoved", "\"Quantity\" <> 0");
+                        });
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Bookings.WaitlistEntry", b =>
@@ -611,6 +1124,34 @@ namespace CourtBooking.Api.Data.Migrations
                     b.HasIndex("VenueId", "Date", "State", "AskedAt");
 
                     b.ToTable("WaitlistEntries");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Documents.DocumentSeries", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Issued")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SeriesCode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SeriesCode", "Kind", "Year")
+                        .IsUnique();
+
+                    b.ToTable("DocumentSeries");
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Identity.AccountStatusChange", b =>
@@ -794,6 +1335,137 @@ namespace CourtBooking.Api.Data.Migrations
                     b.ToTable("CancellationTiers");
                 });
 
+            modelBuilder.Entity("CourtBooking.Api.Venues.CommissionInvoice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("AmountBaht")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
+                    b.Property<DateOnly>("DueOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("EvidenceKey")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("IssuedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("Month")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("PaidAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("PaidByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RefusedReason")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("VenueId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Number")
+                        .IsUnique();
+
+                    b.HasIndex("PaidByUserId");
+
+                    b.HasIndex("VenueId", "Month")
+                        .IsUnique();
+
+                    b.ToTable("CommissionInvoices");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Venues.CommissionInvoiceLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("AmountBaht")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("KeptBaht")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
+                    b.Property<decimal>("Percent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<DateOnly>("ServedOn")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookingId")
+                        .IsUnique();
+
+                    b.HasIndex("InvoiceId");
+
+                    b.ToTable("CommissionInvoiceLines");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Venues.CommissionRate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<decimal>("Percent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<DateTimeOffset>("SetAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SetByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("VenueId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SetByUserId");
+
+                    b.HasIndex("VenueId", "EffectiveFrom");
+
+                    b.ToTable("CommissionRates");
+                });
+
             modelBuilder.Entity("CourtBooking.Api.Venues.Court", b =>
                 {
                     b.Property<Guid>("Id")
@@ -913,6 +1585,14 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.Property<int?>("PermissionsBefore")
                         .HasColumnType("integer");
+
+                    b.Property<decimal?>("RefundLimitAfter")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
+                    b.Property<decimal?>("RefundLimitBefore")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
 
                     b.Property<int>("Role")
                         .HasColumnType("integer");
@@ -1226,6 +1906,10 @@ namespace CourtBooking.Api.Data.Migrations
                     b.Property<int>("Permissions")
                         .HasColumnType("integer");
 
+                    b.Property<decimal>("RefundLimitBaht")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
                     b.Property<int>("Role")
                         .HasColumnType("integer");
 
@@ -1438,6 +2122,16 @@ namespace CourtBooking.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("CourtBooking.Api.Bookings.HourPackage", "Package")
+                        .WithMany()
+                        .HasForeignKey("PackageId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CourtBooking.Api.Bookings.BookingSeries", "Series")
+                        .WithMany()
+                        .HasForeignKey("SeriesId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("CourtBooking.Api.Venues.Venue", "Venue")
                         .WithMany()
                         .HasForeignKey("VenueId")
@@ -1447,6 +2141,10 @@ namespace CourtBooking.Api.Data.Migrations
                     b.Navigation("Booker");
 
                     b.Navigation("CancellationPolicy");
+
+                    b.Navigation("Package");
+
+                    b.Navigation("Series");
 
                     b.Navigation("Venue");
                 });
@@ -1467,6 +2165,32 @@ namespace CourtBooking.Api.Data.Migrations
                     b.Navigation("Booking");
 
                     b.Navigation("ChangedBy");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Bookings.BookingSeries", b =>
+                {
+                    b.HasOne("CourtBooking.Api.Venues.Court", "Court")
+                        .WithMany()
+                        .HasForeignKey("CourtId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CourtBooking.Api.Bookings.BookingSeries", "Replaced")
+                        .WithMany()
+                        .HasForeignKey("ReplacedSeriesId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CourtBooking.Api.Venues.Venue", "Venue")
+                        .WithMany()
+                        .HasForeignKey("VenueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Court");
+
+                    b.Navigation("Replaced");
+
+                    b.Navigation("Venue");
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Bookings.BookingSlot", b =>
@@ -1585,18 +2309,82 @@ namespace CourtBooking.Api.Data.Migrations
                     b.Navigation("Venue");
                 });
 
+            modelBuilder.Entity("CourtBooking.Api.Bookings.HourPackage", b =>
+                {
+                    b.HasOne("CourtBooking.Api.Bookings.PackageType", "Type")
+                        .WithMany()
+                        .HasForeignKey("PackageTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CourtBooking.Api.Venues.Venue", "Venue")
+                        .WithMany()
+                        .HasForeignKey("VenueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Type");
+
+                    b.Navigation("Venue");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Bookings.PackageEntry", b =>
+                {
+                    b.HasOne("CourtBooking.Api.Bookings.Booking", "Booking")
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CourtBooking.Api.Identity.AppUser", "By")
+                        .WithMany()
+                        .HasForeignKey("ByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CourtBooking.Api.Bookings.HourPackage", "Package")
+                        .WithMany("Entries")
+                        .HasForeignKey("PackageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Booking");
+
+                    b.Navigation("By");
+
+                    b.Navigation("Package");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Bookings.PackageType", b =>
+                {
+                    b.HasOne("CourtBooking.Api.Venues.Venue", "Venue")
+                        .WithMany()
+                        .HasForeignKey("VenueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Venue");
+                });
+
             modelBuilder.Entity("CourtBooking.Api.Bookings.PaymentReceipt", b =>
                 {
                     b.HasOne("CourtBooking.Api.Bookings.Booking", "Booking")
                         .WithMany()
                         .HasForeignKey("BookingId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("CourtBooking.Api.Bookings.HourPackage", "Package")
+                        .WithMany()
+                        .HasForeignKey("PackageId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("CourtBooking.Api.Identity.AppUser", "ReceivedBy")
                         .WithMany()
                         .HasForeignKey("ReceivedByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CourtBooking.Api.Bookings.ShopSale", "Sale")
+                        .WithMany()
+                        .HasForeignKey("SaleId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("CourtBooking.Api.Venues.Venue", "Venue")
                         .WithMany()
@@ -1606,7 +2394,11 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.Navigation("Booking");
 
+                    b.Navigation("Package");
+
                     b.Navigation("ReceivedBy");
+
+                    b.Navigation("Sale");
 
                     b.Navigation("Venue");
                 });
@@ -1654,6 +2446,65 @@ namespace CourtBooking.Api.Data.Migrations
                     b.Navigation("RecordedBy");
                 });
 
+            modelBuilder.Entity("CourtBooking.Api.Bookings.SeriesMiss", b =>
+                {
+                    b.HasOne("CourtBooking.Api.Bookings.BookingSeries", "Series")
+                        .WithMany()
+                        .HasForeignKey("SeriesId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Series");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Bookings.ShopItem", b =>
+                {
+                    b.HasOne("CourtBooking.Api.Venues.Venue", "Venue")
+                        .WithMany()
+                        .HasForeignKey("VenueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Venue");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Bookings.ShopSale", b =>
+                {
+                    b.HasOne("CourtBooking.Api.Bookings.Booking", "Booking")
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CourtBooking.Api.Venues.Venue", "Venue")
+                        .WithMany()
+                        .HasForeignKey("VenueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Booking");
+
+                    b.Navigation("Venue");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Bookings.ShopSaleLine", b =>
+                {
+                    b.HasOne("CourtBooking.Api.Bookings.ShopItem", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CourtBooking.Api.Bookings.ShopSale", "Sale")
+                        .WithMany("Lines")
+                        .HasForeignKey("SaleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+
+                    b.Navigation("Sale");
+                });
+
             modelBuilder.Entity("CourtBooking.Api.Bookings.SlipViewing", b =>
                 {
                     b.HasOne("CourtBooking.Api.Bookings.Complaint", "Complaint")
@@ -1679,6 +2530,58 @@ namespace CourtBooking.Api.Data.Migrations
                     b.Navigation("Slip");
 
                     b.Navigation("ViewedBy");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Bookings.Spend", b =>
+                {
+                    b.HasOne("CourtBooking.Api.Identity.AppUser", "RecordedBy")
+                        .WithMany()
+                        .HasForeignKey("RecordedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CourtBooking.Api.Venues.Venue", "Venue")
+                        .WithMany()
+                        .HasForeignKey("VenueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RecordedBy");
+
+                    b.Navigation("Venue");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Bookings.StockEntry", b =>
+                {
+                    b.HasOne("CourtBooking.Api.Identity.AppUser", "By")
+                        .WithMany()
+                        .HasForeignKey("ByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CourtBooking.Api.Bookings.ShopItem", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CourtBooking.Api.Bookings.ShopSale", "Sale")
+                        .WithMany()
+                        .HasForeignKey("SaleId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CourtBooking.Api.Bookings.Spend", "Spend")
+                        .WithMany()
+                        .HasForeignKey("SpendId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("By");
+
+                    b.Navigation("Item");
+
+                    b.Navigation("Sale");
+
+                    b.Navigation("Spend");
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Bookings.WaitlistEntry", b =>
@@ -1755,6 +2658,62 @@ namespace CourtBooking.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Policy");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Venues.CommissionInvoice", b =>
+                {
+                    b.HasOne("CourtBooking.Api.Identity.AppUser", "PaidBy")
+                        .WithMany()
+                        .HasForeignKey("PaidByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CourtBooking.Api.Venues.Venue", "Venue")
+                        .WithMany()
+                        .HasForeignKey("VenueId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PaidBy");
+
+                    b.Navigation("Venue");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Venues.CommissionInvoiceLine", b =>
+                {
+                    b.HasOne("CourtBooking.Api.Bookings.Booking", "Booking")
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CourtBooking.Api.Venues.CommissionInvoice", "Invoice")
+                        .WithMany("Lines")
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Booking");
+
+                    b.Navigation("Invoice");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Venues.CommissionRate", b =>
+                {
+                    b.HasOne("CourtBooking.Api.Identity.AppUser", "SetBy")
+                        .WithMany()
+                        .HasForeignKey("SetByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CourtBooking.Api.Venues.Venue", "Venue")
+                        .WithMany()
+                        .HasForeignKey("VenueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SetBy");
+
+                    b.Navigation("Venue");
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.Court", b =>
@@ -1980,6 +2939,16 @@ namespace CourtBooking.Api.Data.Migrations
                     b.Navigation("StatusChanges");
                 });
 
+            modelBuilder.Entity("CourtBooking.Api.Bookings.HourPackage", b =>
+                {
+                    b.Navigation("Entries");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Bookings.ShopSale", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
             modelBuilder.Entity("CourtBooking.Api.Identity.AppUser", b =>
                 {
                     b.Navigation("Consents");
@@ -1988,6 +2957,11 @@ namespace CourtBooking.Api.Data.Migrations
             modelBuilder.Entity("CourtBooking.Api.Venues.CancellationPolicy", b =>
                 {
                     b.Navigation("Tiers");
+                });
+
+            modelBuilder.Entity("CourtBooking.Api.Venues.CommissionInvoice", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.OpeningHoursSchedule", b =>

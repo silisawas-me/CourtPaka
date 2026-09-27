@@ -38,6 +38,8 @@ function figures(overrides: Record<string, unknown> = {}) {
       hoursFromQueue: 0,
       fromQueueBaht: 0,
     },
+    owedHours: { hours: 0, baht: 0, packages: 0, runningOut: 0 },
+    trade: { shopBaht: 0, spentBaht: 0, leftOverBaht: 0 },
     ...overrides,
   };
 }
@@ -84,6 +86,23 @@ describe('VenueDashboardPage', () => {
     expect(textOf(fixture, 'revenue-online')).toBe('1,200');
     expect(textOf(fixture, 'revenue-counter')).toBe('400');
     expect(textOf(fixture, 'advance')).toBe('600');
+  });
+
+  /**
+   * Hours somebody bought and has not used are an obligation, not earnings — the money arrived
+   * when the package was sold (PRD US-31, S-27).
+   */
+  it('shows hours it still owes, apart from the money', () => {
+    render(figures({ owedHours: { hours: 14, baht: 2520, packages: 2, runningOut: 1 } }));
+
+    expect(textOf(fixture, 'owed-hours')).toContain('14');
+    expect(textOf(fixture, 'owed-running-out')).toContain('1');
+  });
+
+  it('says nothing about owed hours when none are owed', () => {
+    render(figures());
+
+    expect(elementOf(fixture, 'owed-hours')).toBeNull();
   });
 
   it('shows utilisation with the hours behind it', () => {

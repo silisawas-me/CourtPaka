@@ -28,6 +28,8 @@ export interface VenueBookingActions {
   playedAfterAll: boolean;
   /** Taking money for it at the desk, in any form (PRD US-26). */
   takeMoney: boolean;
+  /** Settling it with hours somebody bought earlier instead (PRD US-31). */
+  payWithPackage: boolean;
   /** Selling them the hour they would run on into (PRD US-29). */
   extend: boolean;
   /** Putting the hours they have not played on another court (PRD US-29). */
@@ -54,7 +56,9 @@ export interface CounterBookingRequest {
   slots: { courtId: string; date: string; hour: number }[];
   customerName: string;
   customerPhone: string | null;
-  paidBy: CounterPayment;
+  paidBy: CounterPayment | null;
+  /** Hours the customer bought earlier, instead of money (PRD US-31). */
+  packageId?: string | null;
 }
 
 /** One of the venue's bookings for a day, as its counter reads it (PRD US-13). */
@@ -111,8 +115,13 @@ export interface BookingHours {
   move: { hours: number; courts: FreeCourt[] } | null;
 }
 
-/** How money reached the venue (PRD US-26). */
-export type PaymentMethod = 'Cash' | 'PromptPay' | 'Card';
+/**
+ * How money reached the venue (PRD US-26). One list, in the order a counter reaches for them, so
+ * that a screen offering a choice of method cannot quietly be missing one.
+ */
+export const PAYMENT_METHODS = ['Cash', 'PromptPay', 'Card'] as const;
+
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 /** One amount the venue took, as the counter reads it back. */
 export interface PaymentReceipt {
@@ -154,7 +163,10 @@ export interface DayMoney {
   cashBaht: number;
   promptPayBaht: number;
   cardBaht: number;
+  /** Cash handed back: to a booker, or over the counter for a sale taken back (US-18, US-32). */
   cashRefundedBaht: number;
+  /** Cash the venue paid out. Out of the same drawer, but not back to anybody (US-33). */
+  cashPaidOutBaht: number;
   outstandingBaht: number;
   cashReceipts: PaymentReceipt[];
   closed: DailyClosing | null;
@@ -194,6 +206,11 @@ export interface Refunds {
   sentBackBaht: number;
   outstandingBaht: number;
   records: RefundRecord[];
+  /**
+   * The most the person reading may write down in one record (PRD US-18), or null where they
+   * have no ceiling. The server decides it; the page only repeats what it said.
+   */
+  yourLimitBaht: number | null;
 }
 
 /** The counter's side of the bookings a venue has taken (PRD US-13). */

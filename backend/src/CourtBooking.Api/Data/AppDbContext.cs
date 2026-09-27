@@ -1,4 +1,5 @@
 using CourtBooking.Api.Bookings;
+using CourtBooking.Api.Documents;
 using CourtBooking.Api.Identity;
 using CourtBooking.Api.Venues;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -26,6 +27,26 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<CourtClosure> CourtClosures => Set<CourtClosure>();
 
     public DbSet<WaitlistEntry> WaitlistEntries => Set<WaitlistEntry>();
+
+    public DbSet<BookingSeries> BookingSeries => Set<BookingSeries>();
+
+    public DbSet<SeriesMiss> SeriesMisses => Set<SeriesMiss>();
+
+    public DbSet<PackageType> PackageTypes => Set<PackageType>();
+
+    public DbSet<HourPackage> HourPackages => Set<HourPackage>();
+
+    public DbSet<PackageEntry> PackageEntries => Set<PackageEntry>();
+
+    public DbSet<ShopItem> ShopItems => Set<ShopItem>();
+
+    public DbSet<ShopSale> ShopSales => Set<ShopSale>();
+
+    public DbSet<ShopSaleLine> ShopSaleLines => Set<ShopSaleLine>();
+
+    public DbSet<StockEntry> StockEntries => Set<StockEntry>();
+
+    public DbSet<Spend> Spends => Set<Spend>();
 
     public DbSet<CourtStatusChange> CourtStatusChanges => Set<CourtStatusChange>();
 
@@ -66,6 +87,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<SlipViewing> SlipViewings => Set<SlipViewing>();
 
     public DbSet<MembershipChange> MembershipChanges => Set<MembershipChange>();
+
+    public DbSet<DocumentSeries> DocumentSeries => Set<DocumentSeries>();
+
+    public DbSet<CommissionRate> CommissionRates => Set<CommissionRate>();
+
+    public DbSet<CommissionInvoice> CommissionInvoices => Set<CommissionInvoice>();
+
+    public DbSet<CommissionInvoiceLine> CommissionInvoiceLines => Set<CommissionInvoiceLine>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -169,6 +198,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             // nobody asked to stop (PRD US-17).
             member.Property(m => m.WantsSlipEmails).HasDefaultValue(true);
 
+            // Money, so it is stored like every other amount (PRD US-18).
+            member.Property(m => m.RefundLimitBaht).HasPrecision(10, 2);
+
             // One row per person per venue: permissions are the venue's answer about that person.
             member.HasIndex(m => new { m.VenueId, m.UserId }).IsUnique();
             member.HasOne(m => m.Venue)
@@ -253,7 +285,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 "CK_Bookings_BookerOrCustomer",
                 "(\"Channel\" = 1 AND \"BookerUserId\" IS NOT NULL AND \"CustomerName\" IS NULL)"
                 + " OR (\"Channel\" = 2 AND \"BookerUserId\" IS NULL"
-                + " AND \"CustomerName\" IS NOT NULL AND \"PaidAtCounter\" IS NOT NULL)"));
+                + " AND \"CustomerName\" IS NOT NULL"
+                // How they paid, or the reason it is theirs without money changing hands
+                // today: a standing group's week is confirmed before anybody has paid for it
+                // and the desk takes the money when they turn up (PRD US-30), and a booking
+                // on a package was paid for when the package was sold (PRD US-31).
+                + " AND (\"PaidAtCounter\" IS NOT NULL OR \"SeriesId\" IS NOT NULL"
+                + " OR \"PackageId\" IS NOT NULL))"));
             // The booker's own history (US-05), and the check that they hold only one (PRD S-22).
             booking.HasIndex(b => new { b.BookerUserId, b.Status });
             booking.HasIndex(b => new { b.VenueId, b.CreatedAt });
@@ -271,6 +309,94 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .WithMany()
                 .HasForeignKey(b => b.CancellationPolicyId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            booking.Property(b => b.PackageBaht).HasPrecision(10, 2);
+
+            // Paid with hours or paid with money, never partly both (PRD US-31): a booking with
+            // hours on it owes nothing, so hours and an amount of money would be two answers to
+            // the same question.
+            booking.ToTable(table => table.HasCheckConstraint(
+                "CK_Bookings_PackagePaysForItWhole",
+                "(\"PackageId\" IS NULL AND \"PackageHours\" = 0 AND \"PackageBaht\" = 0)"
+                // Nothing, once it has been cancelled and every hour has gone back: what it kept
+                // is what it earned, and it kept none of it (PRD US-31).
+                + " OR (\"PackageId\" IS NOT NULL AND \"PackageHours\" > 0"
+                + " AND \"PackageBaht\" >= 0)"));
+
+            booking.HasIndex(b => b.PackageId);
+            booking.HasOne(b => b.Package)
+                .WithMany()
+                .HasForeignKey(b => b.PackageId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Which weeks an arrangement has already made (PRD US-30). The job asks this of every
+            // running arrangement on every sweep, so it is the index that answers it.
+            booking.HasIndex(b => b.SeriesId);
+            booking.HasOne(b => b.Series)
+                .WithMany()
+                .HasForeignKey(b => b.SeriesId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<BookingSeries>(series =>
+        {
+            series.Property(one => one.CustomerName).HasMaxLength(Booking.CustomerNameMaxLength);
+            series.Property(one => one.CustomerPhone).HasMaxLength(Booking.CustomerPhoneMaxLength);
+            series.Property(one => one.EndReason).HasMaxLength(BookingStatusChange.ReasonMaxLength);
+
+            // The hours are a window, and the same one every week — guarded here as well as in the
+            // rules, because a backwards window would ask the floor for hours that do not exist.
+            series.ToTable(table => table.HasCheckConstraint(
+                "CK_BookingSeries_HoursAreAWindow",
+                "\"FromHour\" >= 0 AND \"UntilHour\" <= 24 AND \"FromHour\" < \"UntilHour\""));
+
+            // Every read is "what does this venue have standing", newest first.
+            series.HasIndex(one => new { one.VenueId, one.State, one.CreatedAt });
+
+            // One group per court, per day, per pair of hours, at the database rather than only
+            // in the handler: a second one could never have a single week of it, and every week
+            // it missed would be written off for good.
+            series.HasIndex(one => new
+                {
+                    one.VenueId,
+                    one.CourtId,
+                    one.Day,
+                    one.FromHour,
+                    one.UntilHour,
+                })
+                .IsUnique()
+                .HasFilter($"\"State\" = {(int)SeriesState.Running}");
+
+            series.HasOne(one => one.Venue)
+                .WithMany()
+                .HasForeignKey(one => one.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            series.HasOne(one => one.Court)
+                .WithMany()
+                .HasForeignKey(one => one.CourtId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // The arrangement this one took over from. Restrict: the thread between them is the
+            // only thing that says the group did not simply appear one week under new terms.
+            series.HasOne(one => one.Replaced)
+                .WithMany()
+                .HasForeignKey(one => one.ReplacedSeriesId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<SeriesMiss>(miss =>
+        {
+            miss.Property(one => one.Refusal).HasMaxLength(Series.RefusalMaxLength);
+
+            // One row per week, at the database: a week noticed twice would be told to the venue
+            // twice, and the job leans on this to know which weeks it has already given up on.
+            miss.HasIndex(one => new { one.SeriesId, one.Date }).IsUnique();
+
+            miss.HasOne(one => one.Series)
+                .WithMany()
+                .HasForeignKey(one => one.SeriesId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<BookingSlot>(slot =>
@@ -445,16 +571,100 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        builder.Entity<DocumentSeries>(series =>
+        {
+            series.Property(s => s.SeriesCode).HasMaxLength(Documents.DocumentSeries.SeriesCodeMaxLength);
+
+            // One count per series, and the index is what makes taking a number from it safe:
+            // two writers creating the same series at once meet here, and the loser reads the
+            // winner's row instead of writing a second count (PRD 7.4).
+            series.HasIndex(s => new { s.SeriesCode, s.Kind, s.Year }).IsUnique();
+        });
+
+        builder.Entity<CommissionRate>(rate =>
+        {
+            rate.Property(r => r.Percent).HasPrecision(5, 2);
+            rate.Property(r => r.Note).HasMaxLength(CommissionRate.NoteMaxLength);
+
+            // Read one venue at a time, newest first: an invoice asks "what was the rate on this
+            // day", and a screen asks "what is it now and what was it before" (PRD US-21).
+            rate.HasIndex(r => new { r.VenueId, r.EffectiveFrom });
+            rate.HasOne(r => r.Venue)
+                .WithMany()
+                .HasForeignKey(r => r.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Restrict, like every other reference to an account (PRD 8, S-15).
+            rate.HasOne(r => r.SetBy)
+                .WithMany()
+                .HasForeignKey(r => r.SetByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<CommissionInvoice>(invoice =>
+        {
+            invoice.Property(i => i.AmountBaht).HasPrecision(10, 2);
+            invoice.Property(i => i.Number).HasMaxLength(64);
+            invoice.Property(i => i.RefusedReason).HasMaxLength(CommissionInvoice.ReasonMaxLength);
+
+            // A document number is how a venue and the platform talk about one invoice, so two
+            // of anything carrying the same number is not something to find out later (PRD 7.4).
+            invoice.HasIndex(i => i.Number).IsUnique();
+
+            // One invoice per venue per month. The run is built to be safe to repeat, and this
+            // is the answer if it ever is not (PRD US-21).
+            invoice.HasIndex(i => new { i.VenueId, i.Month }).IsUnique();
+
+            invoice.HasOne(i => i.Venue)
+                .WithMany()
+                .HasForeignKey(i => i.VenueId)
+                .OnDelete(DeleteBehavior.Restrict);
+            invoice.HasOne(i => i.PaidBy)
+                .WithMany()
+                .HasForeignKey(i => i.PaidByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<CommissionInvoiceLine>(line =>
+        {
+            line.Property(l => l.KeptBaht).HasPrecision(10, 2);
+            line.Property(l => l.Percent).HasPrecision(5, 2);
+            line.Property(l => l.AmountBaht).HasPrecision(10, 2);
+
+            // The rule that a booking is billed once, kept by the database rather than by the
+            // run being careful (PRD BR-08).
+            line.HasIndex(l => l.BookingId).IsUnique();
+
+            line.HasOne(l => l.Invoice)
+                .WithMany(i => i.Lines)
+                .HasForeignKey(l => l.InvoiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            line.HasOne(l => l.Booking)
+                .WithMany()
+                .HasForeignKey(l => l.BookingId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
         builder.Entity<PaymentReceipt>(receipt =>
         {
             receipt.Property(r => r.AmountBaht).HasPrecision(10, 2);
             receipt.Property(r => r.Note).HasMaxLength(PaymentReceipt.NoteMaxLength);
-            // Counting a venue's day is one query over its own money, in the order it came in.
-            receipt.HasIndex(r => new { r.VenueId, r.ReceivedAt });
+            // Counting a venue's day is one query over its own money, by the day it counts in
+            // — which is its own day unless that one had already been counted (PRD US-26).
+            receipt.HasIndex(r => new { r.VenueId, r.CountsOn });
             receipt.HasIndex(r => r.BookingId);
+            receipt.HasIndex(r => r.PackageId);
+            receipt.HasIndex(r => r.SaleId);
             receipt.HasOne(r => r.Booking)
                 .WithMany()
                 .HasForeignKey(r => r.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            receipt.HasOne(r => r.Package)
+                .WithMany()
+                .HasForeignKey(r => r.PackageId)
+                .OnDelete(DeleteBehavior.Cascade);
+            receipt.HasOne(r => r.Sale)
+                .WithMany()
+                .HasForeignKey(r => r.SaleId)
                 .OnDelete(DeleteBehavior.Cascade);
             receipt.HasOne(r => r.Venue)
                 .WithMany()
@@ -467,6 +677,220 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             // Money that came in is money that came in: nothing below zero, nothing free.
             receipt.ToTable(table => table.HasCheckConstraint(
                 "CK_PaymentReceipts_AmountIsMoney", "\"AmountBaht\" > 0"));
+
+            // And it came in for exactly one thing: a booking, a package being sold (US-31), or
+            // something bought across the counter (US-32). Money that names none of them is money
+            // nobody can account for afterwards, and money that names two would be counted twice
+            // by whichever reader asked second.
+            receipt.ToTable(table => table.HasCheckConstraint(
+                "CK_PaymentReceipts_ForOneThing",
+                "(CASE WHEN \"BookingId\" IS NULL THEN 0 ELSE 1 END"
+                + " + CASE WHEN \"PackageId\" IS NULL THEN 0 ELSE 1 END"
+                + " + CASE WHEN \"SaleId\" IS NULL THEN 0 ELSE 1 END) = 1"));
+        });
+
+        builder.Entity<PackageType>(type =>
+        {
+            type.Property(one => one.Name).HasMaxLength(PackageType.NameMaxLength);
+            type.Property(one => one.PriceBaht).HasPrecision(10, 2);
+
+            // What is on the board now, which is every read this table has.
+            type.HasIndex(one => new { one.VenueId, one.WithdrawnAt, one.CreatedAt });
+
+            // The same bounds the rules keep, kept again where they cannot be got round: hours
+            // that are worth nothing, or a price of nothing, would divide by nothing later.
+            type.ToTable(table => table.HasCheckConstraint(
+                "CK_PackageTypes_IsAnOffer",
+                $"\"Hours\" > 0 AND \"Hours\" <= {Packages.MostHours}"
+                + " AND \"PriceBaht\" > 0"
+                + $" AND \"ValidForDays\" > 0 AND \"ValidForDays\" <= {Packages.MostDays}"));
+
+            type.HasOne(one => one.Venue)
+                .WithMany()
+                .HasForeignKey(one => one.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<HourPackage>(package =>
+        {
+            package.Property(one => one.CustomerName).HasMaxLength(Booking.CustomerNameMaxLength);
+            package.Property(one => one.CustomerPhone).HasMaxLength(Booking.CustomerPhoneMaxLength);
+            package.Property(one => one.PriceBaht).HasPrecision(10, 2);
+
+            // "What has this venue sold, newest first" and "whose hours run out soon" are the two
+            // questions asked of this table.
+            package.HasIndex(one => new { one.VenueId, one.SoldAt });
+            package.HasIndex(one => new { one.VenueId, one.ExpiresOn, one.ExpiredAt });
+
+            package.ToTable(table => table.HasCheckConstraint(
+                "CK_HourPackages_WasSold",
+                "\"HoursSold\" > 0 AND \"PriceBaht\" > 0"));
+
+            package.HasOne(one => one.Venue)
+                .WithMany()
+                .HasForeignKey(one => one.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // The offer it was sold from stays readable for as long as the package does, the same
+            // way a booking keeps the cancellation terms it was made under (BR-05).
+            package.HasOne(one => one.Type)
+                .WithMany()
+                .HasForeignKey(one => one.PackageTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<PackageEntry>(entry =>
+        {
+            // Reading a package is reading its movements in order; the balance is their sum.
+            entry.HasIndex(one => new { one.PackageId, one.At });
+
+            // Nothing moves by nothing: a row of zero hours is a row that says nothing happened.
+            entry.ToTable(table => table.HasCheckConstraint(
+                "CK_PackageEntries_HoursMoved", "\"Hours\" <> 0"));
+
+            entry.HasOne(one => one.Package)
+                .WithMany(one => one.Entries)
+                .HasForeignKey(one => one.PackageId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entry.HasOne(one => one.Booking)
+                .WithMany()
+                .HasForeignKey(one => one.BookingId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entry.HasOne(one => one.By)
+                .WithMany()
+                .HasForeignKey(one => one.ByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<ShopItem>(item =>
+        {
+            item.Property(one => one.Name).HasMaxLength(ShopItem.NameMaxLength);
+            item.Property(one => one.Unit).HasMaxLength(ShopItem.UnitMaxLength);
+            item.Property(one => one.PriceBaht).HasPrecision(10, 2);
+
+            // What is on the board now, which is every read this table has.
+            item.HasIndex(one => new { one.VenueId, one.WithdrawnAt, one.Name });
+
+            item.ToTable(table => table.HasCheckConstraint(
+                "CK_ShopItems_IsSomethingToSell",
+                "\"PriceBaht\" > 0 AND (\"TellMeAt\" IS NULL OR \"TellMeAt\" >= 0)"));
+
+            item.HasOne(one => one.Venue)
+                .WithMany()
+                .HasForeignKey(one => one.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<ShopSale>(sale =>
+        {
+            sale.Property(one => one.TotalBaht).HasPrecision(10, 2);
+            sale.Property(one => one.CancelReason).HasMaxLength(BookingStatusChange.ReasonMaxLength);
+
+            // "What did this venue sell today" and "what did this booking buy" are the two
+            // questions asked of it.
+            sale.HasIndex(one => new { one.VenueId, one.SoldAt });
+            sale.HasIndex(one => one.BookingId);
+
+            sale.ToTable(table => table.HasCheckConstraint(
+                "CK_ShopSales_CameToSomething", "\"TotalBaht\" > 0"));
+
+            sale.HasOne(one => one.Venue)
+                .WithMany()
+                .HasForeignKey(one => one.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Restrict, not cascade: a booking is never deleted, and losing what somebody bought
+            // beside it would lose money that was taken.
+            sale.HasOne(one => one.Booking)
+                .WithMany()
+                .HasForeignKey(one => one.BookingId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<ShopSaleLine>(line =>
+        {
+            line.Property(one => one.Name).HasMaxLength(ShopItem.NameMaxLength);
+            line.Property(one => one.EachBaht).HasPrecision(10, 2);
+            line.Ignore(one => one.Baht);
+
+            line.ToTable(table => table.HasCheckConstraint(
+                "CK_ShopSaleLines_IsALine",
+                $"\"Quantity\" > 0 AND \"Quantity\" <= {Shop.MostOfOneThing}"
+                + " AND \"EachBaht\" > 0"));
+
+            line.HasOne(one => one.Sale)
+                .WithMany(one => one.Lines)
+                .HasForeignKey(one => one.SaleId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // The line keeps the name it was sold under, so the item it points at is only for
+            // counting stock — and it stays readable for as long as the sale does.
+            line.HasOne(one => one.Item)
+                .WithMany()
+                .HasForeignKey(one => one.ItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<StockEntry>(entry =>
+        {
+            entry.Property(one => one.Reason).HasMaxLength(StockEntry.ReasonMaxLength);
+
+            // Reading an item's stock is reading its movements in order; the balance is their sum.
+            entry.HasIndex(one => new { one.ItemId, one.At });
+
+            entry.ToTable(table => table.HasCheckConstraint(
+                "CK_StockEntries_SomethingMoved", "\"Quantity\" <> 0"));
+
+            entry.HasOne(one => one.Item)
+                .WithMany()
+                .HasForeignKey(one => one.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entry.HasOne(one => one.Sale)
+                .WithMany()
+                .HasForeignKey(one => one.SaleId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // The delivery it arrived on, the same way a sale is the sale it went out on: the row
+            // that says the stock came in and the row that says what it cost are one purchase, and
+            // an id with nothing holding it to the other end is a note, not a link.
+            entry.HasOne(one => one.Spend)
+                .WithMany()
+                .HasForeignKey(one => one.SpendId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entry.HasOne(one => one.By)
+                .WithMany()
+                .HasForeignKey(one => one.ByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<Spend>(spend =>
+        {
+            spend.Property(one => one.AmountBaht).HasPrecision(10, 2);
+            spend.Property(one => one.Note).HasMaxLength(Spend.NoteMaxLength);
+            spend.Property(one => one.VoidReason).HasMaxLength(Spend.NoteMaxLength);
+
+            // "What did this venue pay out, and when" is the whole of what is asked of it —
+            // asked twice, because a report reads the date the venue says the money was paid and
+            // the drawer reads the moment the notes left it, and they are not the same day.
+            spend.HasIndex(one => new { one.VenueId, one.PaidOn });
+            spend.HasIndex(one => new { one.VenueId, one.RecordedAt });
+
+            spend.ToTable(table => table.HasCheckConstraint(
+                "CK_Spends_IsMoney", "\"AmountBaht\" > 0"));
+
+            spend.HasOne(one => one.Venue)
+                .WithMany()
+                .HasForeignKey(one => one.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            spend.HasOne(one => one.RecordedBy)
+                .WithMany()
+                .HasForeignKey(one => one.RecordedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<DailyClosing>(closing =>
@@ -522,6 +946,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<MembershipChange>(change =>
         {
+            change.Property(c => c.RefundLimitBefore).HasPrecision(10, 2);
+            change.Property(c => c.RefundLimitAfter).HasPrecision(10, 2);
             // A venue's roster over time, read one venue at a time (PRD 8, US-14).
             change.HasIndex(c => new { c.VenueId, c.ChangedAt });
             change.HasOne(c => c.Venue)
@@ -559,6 +985,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             // The claim: one message per thing it is about, whoever tries to send it (PRD US-06).
             notice.HasIndex(n => new { n.SourceId, n.Kind }).IsUnique();
+            notice.Property(n => n.SentBy).HasConversion<int?>();
             notice.HasIndex(n => n.BookingId);
             notice.HasOne(n => n.Booking)
                 .WithMany()

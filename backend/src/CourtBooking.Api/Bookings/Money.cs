@@ -1,5 +1,8 @@
+using CourtBooking.Api.Data;
 using CourtBooking.Api.Identity;
+using CourtBooking.Api.Localization;
 using CourtBooking.Api.Venues;
+using Microsoft.EntityFrameworkCore;
 
 namespace CourtBooking.Api.Bookings;
 
@@ -12,18 +15,30 @@ public enum PaymentMethod
 }
 
 /// <summary>
-/// One amount the venue took for one booking (PRD US-26). Rows are only added: a deposit and the
-/// rest are two of these, and nothing edits either afterwards — the day is counted from them, and
-/// a count you can rewrite is not a count.
+/// One amount the venue took (PRD US-26). Rows are only added: a deposit and the rest are two of
+/// these, and nothing edits either afterwards — the day is counted from them, and a count you can
+/// rewrite is not a count.
 ///
 /// It is not the same thing as <see cref="PaymentState"/>, which says whether the venue considers
 /// itself paid. These say what actually came in, when, in what form, and from whose hands.
+///
+/// Most of it is money for a booking. Selling a package is money too (PRD US-31), and so is a
+/// tube of shuttlecocks (US-32) — both go in the same till on the same day, so both are one of
+/// these, with what they were for named instead of a booking. Exactly one of the three, which
+/// the database sees to.
 /// </summary>
 public sealed class PaymentReceipt
 {
     public Guid Id { get; init; } = Guid.CreateVersion7();
 
-    public required Guid BookingId { get; init; }
+    /// <summary>The booking it was for, or null where it was a package being sold.</summary>
+    public Guid? BookingId { get; init; }
+
+    /// <summary>The package that was sold, or null where it was money for a booking (US-31).</summary>
+    public Guid? PackageId { get; init; }
+
+    /// <summary>What somebody bought across the counter, where that is what it was (US-32).</summary>
+    public Guid? SaleId { get; init; }
 
     /// <summary>Kept beside the booking's own so a venue's day can be counted in one query.</summary>
     public required Guid VenueId { get; init; }
@@ -34,6 +49,17 @@ public sealed class PaymentReceipt
 
     public required DateTimeOffset ReceivedAt { get; init; }
 
+    /// <summary>
+    /// The venue's day this is counted in (PRD US-26, BR-10). Its own day, except where that day
+    /// had already been counted when it was written — a till that has been closed cannot take
+    /// money into it afterwards, so the money belongs to the next one.
+    ///
+    /// Decided when the receipt is written and never again, like everything else on this row: a
+    /// day that was counted stays counted, and a number somebody has signed off must not move
+    /// because of something that happened later.
+    /// </summary>
+    public required DateOnly CountsOn { get; init; }
+
     /// <summary>Whose hands. Null for the money a booker sent before anybody was at the desk.</summary>
     public Guid? ReceivedByUserId { get; init; }
 
@@ -42,6 +68,10 @@ public sealed class PaymentReceipt
     public const int NoteMaxLength = 400;
 
     public Booking? Booking { get; init; }
+
+    public HourPackage? Package { get; init; }
+
+    public ShopSale? Sale { get; init; }
 
     public Venue? Venue { get; init; }
 
@@ -103,7 +133,39 @@ public enum MoneyLeadKind
 
     /// <summary>A booking of that day still owing this. Over by exactly this = taken, not written.</summary>
     StillOwed = 3,
+
+    /// <summary>Cash the venue paid out that day. Over by exactly this = it never left.</summary>
+    CashPaidOut = 4,
 }
+
+/// <summary>Which door cash left the drawer by (PRD US-18, US-32, US-33).</summary>
+public enum CashOutKind
+{
+    /// <summary>Sent back to a booker (PRD US-18).</summary>
+    Refunded = 1,
+
+    /// <summary>An expense the venue paid in cash (PRD US-33).</summary>
+    PaidOut = 2,
+
+    /// <summary>Handed back over the counter because a sale was taken back (PRD US-32).</summary>
+    SaleTakenBack = 3,
+}
+
+/// <summary>
+/// One lot of cash out of the drawer, and which door it left by (PRD US-26).
+///
+/// The count and the page both read these rows rather than each summing their own: money out is
+/// the part of a till that gains new doors — a refund, then an expense, then a sale taken back —
+/// and a screen that shows one sum while the count expects another is a difference nobody can
+/// explain.
+/// </summary>
+/// <param name="BookingId">The booking it concerned, when it concerned one.</param>
+public sealed record CashOut(
+    CashOutKind Kind,
+    decimal AmountBaht,
+    DateTimeOffset At,
+    Guid? BookingId,
+    string? Note);
 
 /// <summary>
 /// What a venue is owed and what it has taken (PRD US-26, 6.2). One place, because the number on
@@ -121,8 +183,73 @@ public static class Takings
     /// answer before receipts existed, and what arrived was what was asked for. Every booking made
     /// before deposits were possible was asked for its whole price.
     /// </summary>
-    public static decimal HeldFor(PaymentState payment, decimal takenBaht, decimal askedBaht) =>
-        Math.Max(0m, payment == PaymentState.Received ? Math.Max(takenBaht, askedBaht) : takenBaht);
+    /// <param name="packageBaht">
+    /// What a package's hours paid for this booking (PRD US-31), or null where no package did.
+    /// Where there is one it is the whole answer: the money came in when the package was sold, at
+    /// what the customer paid for an hour then — not at the price on the board the day the hours
+    /// were spent, which is what they chose not to pay. Nothing else is owed, because hours pay
+    /// instead of money.
+    ///
+    /// Null and zero are different answers. A package booking that was cancelled and gave all of
+    /// its hours back kept nothing, and reading that as "no package" would hand it the whole
+    /// price as money the venue is holding.
+    /// </param>
+    public static decimal HeldFor(
+        PaymentState payment,
+        decimal takenBaht,
+        decimal askedBaht,
+        decimal? packageBaht = null) =>
+        packageBaht is { } worth
+            ? Math.Max(0m, decimal.Round(worth, 2, MidpointRounding.AwayFromZero))
+            : Math.Max(
+                0m,
+                payment == PaymentState.Received
+                    ? Math.Max(takenBaht, askedBaht)
+                    : takenBaht);
+
+    /// <summary>
+    /// What the venue keeps out of one booking (PRD 6.2, "ยอดที่สนามเก็บไว้"): what it holds,
+    /// never more than the price, less what it owes back. Nought where nothing arrived.
+    ///
+    /// It uses what is owed back rather than what has been sent back, so the number does not
+    /// move with the day a venue happens to record a transfer on. And it reads what the venue
+    /// holds rather than the payment state alone — a booking held on a deposit is revenue for
+    /// the deposit until the desk collects the rest (PRD US-28), which is the correction PRD 6.2's
+    /// own wording predates.
+    ///
+    /// One place, because the venue's revenue (US-15), the platform's GMV (US-22) and what the
+    /// platform charges commission on (BR-08) are the same question asked by three readers.
+    /// </summary>
+    /// <param name="packageBaht">
+    /// What the hours this booking was paid with cost, or null when it was not paid with hours.
+    /// Not optional: a caller that forgets it values the booking at the board price the customer
+    /// chose not to pay, and the number is revenue (PRD US-31, ⚠️ S-27).
+    /// </param>
+    public static decimal KeptBy(
+        PaymentState payment,
+        decimal totalBaht,
+        decimal refundDueBaht,
+        decimal takenBaht,
+        decimal askedBaht,
+        decimal? packageBaht)
+    {
+        var held = HeldUpToPrice(payment, totalBaht, takenBaht, askedBaht, packageBaht);
+        return held <= 0m ? 0m : held - refundDueBaht;
+    }
+
+    /// <summary>
+    /// What the venue holds of a booking, never counting more than the booking cost. Its own
+    /// name because "did any money arrive at all" and "what does the venue keep" are different
+    /// questions with different answers: a booking whose whole price is owed back still had
+    /// money arrive, and it is still a booking that happened.
+    /// </summary>
+    public static decimal HeldUpToPrice(
+        PaymentState payment,
+        decimal totalBaht,
+        decimal takenBaht,
+        decimal askedBaht,
+        decimal? packageBaht) =>
+        Math.Min(totalBaht, HeldFor(payment, takenBaht, askedBaht, packageBaht));
 
     /// <summary>
     /// Whether money may still be taken for this booking (PRD US-26). Something has to be owed,
@@ -164,6 +291,72 @@ public static class Takings
     /// </summary>
     public static bool PayingInFullConfirms(BookingStatus status) =>
         BookingTransitions.CanMove(status, BookingStatus.Confirmed);
+
+    /// <summary>
+    /// Which of the venue's days a receipt is counted in (PRD US-26). Its own, unless that day
+    /// has already been counted: the till is shut, the money is in tomorrow's drawer, and the
+    /// day that was signed off keeps the number it was signed off with.
+    ///
+    /// The next day can never itself be closed, because a day in the future cannot be counted —
+    /// so this needs no loop and always lands somewhere.
+    /// </summary>
+    public static DateOnly CountsOn(DateOnly receivedOn, bool alreadyCounted) =>
+        alreadyCounted ? receivedOn.AddDays(1) : receivedOn;
+    /// When a day's takings start and stop being that day's (PRD US-26).
+    ///
+    /// A day is midnight to midnight until somebody counts the till. Once they have, that count
+    /// is the end of it: money taken afterwards belongs to the next day, because the drawer it
+    /// went into has already been counted and written down, and a count that can still move is
+    /// not a count. The day after it picks that money up, which is why a day also starts at the
+    /// previous day's count rather than at its midnight.
+    ///
+    /// It cannot chain. A day may not be closed before it happens, so the closing that ends a day
+    /// is always later than anything the day before it could carry in.
+    /// </summary>
+    public static (DateTimeOffset From, DateTimeOffset Until) TillDay(
+        DateOnly day,
+        DateTimeOffset? closedYesterday,
+        DateTimeOffset? closedToday)
+    {
+        var midnight = PlatformRequirements.BangkokHour(day, 0);
+        var nextMidnight = PlatformRequirements.BangkokHour(day.AddDays(1), 0);
+
+        // Never past its own midnight, either end. A count can come days late — a venue catching
+        // up on a week it never closed — and a window that ran to the moment of counting would
+        // swallow every day in between.
+        return (
+            Earlier(closedYesterday ?? midnight, midnight),
+            Earlier(closedToday ?? nextMidnight, nextMidnight));
+    }
+
+    private static DateTimeOffset Earlier(DateTimeOffset one, DateTimeOffset other) =>
+        one < other ? one : other;
+
+    /// <summary>
+    /// The same window, read from the counts either side of the day. Every reader of a venue's
+    /// money for one day asks this rather than working it out — the page that shows the day, the
+    /// count that closes it and the list of what the counter sold all have to be looking at the
+    /// same money, or the venue is keeping two books again (PRD US-26, US-32).
+    /// </summary>
+    public static async Task<(DateTimeOffset From, DateTimeOffset Until)> TillDayAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateOnly day,
+        CancellationToken cancellationToken)
+    {
+        var counts = await database.DailyClosings
+            .AsNoTracking()
+            .Where(closing =>
+                closing.VenueId == venueId
+                && (closing.Date == day || closing.Date == day.AddDays(-1)))
+            .Select(closing => new { closing.Date, closing.ClosedAt })
+            .ToListAsync(cancellationToken);
+
+        return TillDay(
+            day,
+            counts.SingleOrDefault(one => one.Date == day.AddDays(-1))?.ClosedAt,
+            counts.SingleOrDefault(one => one.Date == day)?.ClosedAt);
+    }
 
     /// <summary>
     /// What the till should hold at the end of the day: what it started with, plus the cash that

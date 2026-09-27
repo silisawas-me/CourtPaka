@@ -1,3 +1,4 @@
+import { CommissionInvoice } from './admin-venues.service';
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
@@ -63,6 +64,11 @@ export interface Venue extends VenueAddress {
   depositPercent: number;
   /** When this venue asks for more than that share, and of whom (PRD US-28). */
   risk: VenueRiskRule;
+  /**
+   * The most the person reading may write down as sent back in one record (PRD US-18), or null
+   * where they have no ceiling. Beside the permissions because it is one of them.
+   */
+  refundLimitBaht: number | null;
 }
 
 /** What a venue counts as too often, and which hours it will not lose (PRD US-28). */
@@ -81,6 +87,26 @@ export interface VenueMember {
   email: string;
   role: 'Owner' | 'Staff';
   permissions: VenuePermission[];
+  /**
+   * The most they may write down as sent back in one record (PRD US-18). Null for the owner,
+   * who has no ceiling — there is nobody above them to raise one.
+   */
+  refundLimitBaht: number | null;
+}
+
+/** Where the platform takes its commission (PRD US-21). */
+export interface PlatformAccount {
+  promptPayId: string;
+  accountName: string | null;
+}
+
+/**
+ * What this venue owes the platform, and how to pay it. The account travels with the invoices
+ * because a venue paying one is looking at it. Null where the platform has not said yet.
+ */
+export interface VenueCommission {
+  account: PlatformAccount | null;
+  invoices: CommissionInvoice[];
 }
 
 export interface VenueInvitation {
@@ -168,14 +194,42 @@ export class VenueService {
     });
   }
 
+  /**
+   * What a member may do, and optionally how much they may send back in one record (PRD US-18).
+   * The limit is left out where it is not being changed, so ticking a permission cannot quietly
+   * reset what somebody was trusted with.
+   */
   changePermissions(
     venueId: string,
     userId: string,
     permissions: readonly VenuePermission[],
+    refundLimitBaht?: number,
   ): Observable<void> {
+    // Left out rather than sent as null when it is not being changed: the server reads a missing
+    // limit as "leave it alone", and a request that says nothing about it should look like one.
     return this.http.put<void>(`/api/venues/${venueId}/members/${userId}/permissions`, {
       permissions,
+      ...(refundLimitBaht === undefined ? {} : { refundLimitBaht }),
     });
+  }
+
+  /** What this venue owes the platform, and where to send it (PRD US-21). */
+  commission(venueId: string): Observable<VenueCommission> {
+    return this.http.get<VenueCommission>(`/api/venues/${venueId}/commission`);
+  }
+
+  /** The owner says it has transferred, and shows something for it. */
+  submitCommissionPayment(
+    venueId: string,
+    invoiceId: string,
+    file: File,
+  ): Observable<CommissionInvoice> {
+    const form = new FormData();
+    form.append('file', file);
+    return this.http.post<CommissionInvoice>(
+      `/api/venues/${venueId}/commission/${invoiceId}/payment`,
+      form,
+    );
   }
 
   removeMember(venueId: string, userId: string): Observable<void> {

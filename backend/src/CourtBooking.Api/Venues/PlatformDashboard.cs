@@ -66,9 +66,7 @@ public static class PlatformDashboard
         ILoggerFactory loggers,
         CancellationToken cancellationToken)
     {
-        var today = PlatformRequirements.BangkokToday(timeProvider);
-        var first = from ?? new DateOnly(today.Year, today.Month, 1);
-        var last = to ?? first.AddMonths(1).AddDays(-1);
+        var (first, last) = PlatformRequirements.MonthOr(from, to, timeProvider);
 
         if (last < first || last.DayNumber - first.DayNumber + 1 > VenueDashboard.MaxDays)
         {
@@ -121,6 +119,8 @@ public static class PlatformDashboard
                 booking.TotalBaht,
                 booking.RefundDueBaht,
                 booking.DepositBaht,
+                // Null where no package paid for it; zero is a different answer (PRD US-31).
+                PaidWithHours = booking.PackageId == null ? (decimal?)null : booking.PackageBaht,
                 // What arrived, which since deposits is not always the price (PRD US-28).
                 Taken = database.PaymentReceipts
                     .Where(receipt => receipt.BookingId == booking.Id)
@@ -155,7 +155,10 @@ public static class PlatformDashboard
                         Math.Min(
                             booking.TotalBaht,
                             Takings.HeldFor(
-                                booking.PaymentState, booking.Taken, booking.DepositBaht))
+                                booking.PaymentState,
+                                booking.Taken,
+                                booking.DepositBaht,
+                                booking.PaidWithHours))
                         - booking.RefundDueBaht));
 
                 return new PlatformVenueFigures(

@@ -44,6 +44,15 @@ public sealed class MembershipChange
     /// <summary>What they can do after; null when they no longer have a seat.</summary>
     public VenuePermissions? PermissionsAfter { get; init; }
 
+    /// <summary>
+    /// What they could send back in one record before, and after (PRD US-18). Null where they
+    /// had no seat, or no longer have one. A number somebody was trusted with is as much a
+    /// permission as a flag is, and a complaint about money asks who could have sent it.
+    /// </summary>
+    public decimal? RefundLimitBefore { get; init; }
+
+    public decimal? RefundLimitAfter { get; init; }
+
     /// <summary>Who made the change: the owner, or the person themselves when they joined or left.</summary>
     public required Guid ChangedByUserId { get; init; }
 

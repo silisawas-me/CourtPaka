@@ -182,12 +182,17 @@ export class DayBoard {
   }
 
   private whoFor(booking: VenueBooking): string {
-    return (
-      booking.customerName ??
-      booking.bookerEmail ??
-      booking.bookerPhone ??
-      this.i18n.t('booker.deleted')
-    );
+    if (booking.customerName) {
+      return booking.customerName;
+    }
+
+    // The part before the @, because the rest is the same for everybody at gmail and a block is
+    // narrow. The row below the board still carries the whole address for anyone who needs it.
+    if (booking.bookerEmail) {
+      return booking.bookerEmail.split('@')[0];
+    }
+
+    return booking.bookerPhone ?? this.i18n.t('booker.deleted');
   }
 
   private noteFor(booking: VenueBooking): string {

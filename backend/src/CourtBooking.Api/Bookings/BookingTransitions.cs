@@ -128,7 +128,7 @@ public static class BookingTransitions
     public static BookingStatusChange Created(
         Guid bookingId,
         BookingStatus status,
-        Guid byUserId,
+        Guid? byUserId,
         DateTimeOffset at) =>
         new()
         {

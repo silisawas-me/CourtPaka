@@ -3,12 +3,12 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TRANSLATIONS } from '../../testing/translations';
 import {
   check,
+  controlOf,
   elementOf,
   isDisabled,
   isOn,
   pageProviders,
   signInAs,
-  controlOf,
   textOf,
 } from '../../testing/dom';
 import { VenueDetailPage } from './venue-detail.page';
@@ -61,6 +61,11 @@ describe('VenueDetailPage', () => {
     fixture.detectChanges();
     httpMock.expectOne('/api/venues/v1').flush(venueAs(role));
     httpMock.expectOne('/api/venues/v1/members').flush(members);
+    fixture.detectChanges();
+
+    // What the venue owes the platform is read with the page (PRD US-21). Most venues have
+    // nothing, and then the card is not drawn at all.
+    httpMock.expectOne('/api/venues/v1/commission').flush({ account: null, invoices: [] });
     fixture.detectChanges();
     if (role === 'Owner') {
       httpMock.expectOne('/api/venues/v1/invitations').flush([]);
@@ -161,6 +166,8 @@ describe('VenueDetailPage', () => {
       .flush({ ...venueAs('Owner'), id: 'v2', name: 'Second Court' });
     httpMock.expectOne('/api/venues/v2/members').flush([OWNER]);
     fixture.detectChanges();
+    httpMock.expectOne('/api/venues/v2/commission').flush({ account: null, invoices: [] });
+    fixture.detectChanges();
     httpMock.expectOne('/api/venues/v2/invitations').flush([]);
     fixture.detectChanges();
 
@@ -208,6 +215,10 @@ describe('VenueDetailPage', () => {
     fixture.detectChanges();
     httpMock.expectOne('/api/venues/v1').flush({ ...venueAs('Owner'), status: 'Suspended' });
     httpMock.expectOne('/api/venues/v1/members').flush([OWNER, STAFF]);
+    fixture.detectChanges();
+
+    // A suspended venue still owes what it owed, so it is still asked for (PRD US-20, US-21).
+    httpMock.expectOne('/api/venues/v1/commission').flush({ account: null, invoices: [] });
     fixture.detectChanges();
 
     const element = fixture.nativeElement as HTMLElement;
@@ -291,4 +302,147 @@ describe('VenueDetailPage', () => {
     expect(isOn(fixture, 'slip-emails')).toBe(true);
     expect(elementOf(fixture, 'slip-emails-error')).not.toBeNull();
   });
+
+  /**
+   * Holding the permission is being given the work, not being trusted with any amount of the
+   * venue's money (PRD US-18). The owner says the number, on the row that carries the permission
+   * it qualifies.
+   */
+  it('sends what the owner trusts a member with, keeping the permissions they already had', () => {
+    render('Owner', [OWNER, STAFF]);
+
+    // The test id is on the input itself, the way every other number field on this page does it.
+    const input = controlOf(fixture, '[data-testid="refund-limit-u2"]') as HTMLInputElement;
+    input.value = '500';
+    input.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const sent = httpMock.expectOne('/api/venues/v1/members/u2/permissions');
+    expect(sent.request.body).toEqual({
+      permissions: ['VerifySlip', 'ManageBookings', 'CloseCourt'],
+      refundLimitBaht: 500,
+    });
+    sent.flush(null);
+    fixture.detectChanges();
+
+    expect(input.value).toBe('500');
+  });
+
+  /**
+   * Ticking a permission must not quietly take away what somebody was trusted with, so a request
+   * that is not about the limit says nothing about it (PRD US-18).
+   */
+  it('says nothing about the limit when only a permission changed', () => {
+    render('Owner', [OWNER, STAFF]);
+
+    check(fixture, '[data-testid="permission-u2-ViewReports"]');
+
+    const sent = httpMock.expectOne('/api/venues/v1/members/u2/permissions');
+    expect(sent.request.body).not.toHaveProperty('refundLimitBaht');
+    sent.flush(null);
+  });
+
+  /** The owner has no ceiling, so there is no number to set against their own row. */
+  it('offers no limit against the owner', () => {
+    render('Owner', [OWNER, STAFF]);
+
+    expect(elementOf(fixture, 'refund-limit-u1')).toBeNull();
+  });
+
+  /**
+   * What this venue owes the platform (PRD US-21). On the page the owner already opens: a venue
+   * should not have to go looking to find out it is late.
+   */
+  it('draws no commission card for a venue that has never been billed', () => {
+    render('Owner', [OWNER]);
+
+    expect(elementOf(fixture, 'commission')).toBeNull();
+  });
+
+  it('says what is owed, where to send it, and that it is late', () => {
+    renderWithCommission({
+      account: { promptPayId: '0899999999', accountName: 'CourtPaka' },
+      invoices: [invoice({ overdue: true })],
+    });
+
+    expect(textOf(fixture, 'pay-to')).toContain('0899999999');
+    expect(textOf(fixture, 'invoice-i1')).toContain('4,000');
+
+    // Late is shown beside the status, not instead of it (PRD US-21).
+    expect(textOf(fixture, 'overdue-i1')).toBe(TRANSLATIONS.th['commission.overdue']);
+    expect(textOf(fixture, 'invoice-i1')).toContain(TRANSLATIONS.th['commission.status.Issued']);
+  });
+
+  it('says so when the platform has not given an account to pay into', () => {
+    renderWithCommission({ account: null, invoices: [invoice()] });
+
+    expect(textOf(fixture, 'no-account')).toBe(TRANSLATIONS.th['commission.noAccount']);
+  });
+
+  it('sends the transfer and replaces the row with what the server says', () => {
+    renderWithCommission({ account: null, invoices: [invoice()] });
+
+    const input = elementOf<HTMLElement>(fixture, 'send-i1')!.querySelector('input')!;
+    Object.defineProperty(input, 'files', {
+      value: [new File([new Uint8Array([1, 2])], 'transfer.jpg', { type: 'image/jpeg' })],
+    });
+    input.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const sent = httpMock.expectOne('/api/venues/v1/commission/i1/payment');
+    expect(sent.request.body instanceof FormData).toBe(true);
+
+    sent.flush(invoice({ status: 'PaymentSubmitted', hasEvidence: true }));
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'invoice-i1')).toContain(
+      TRANSLATIONS.th['commission.status.PaymentSubmitted'],
+    );
+  });
+
+  /** Showing the platform the transfer is the owner's alone (PRD US-14). */
+  it('offers staff no way to say the platform has been paid', () => {
+    renderWithCommission({ account: null, invoices: [invoice()] }, 'Staff');
+
+    expect(elementOf(fixture, 'invoice-i1')).not.toBeNull();
+    expect(elementOf(fixture, 'send-i1')).toBeNull();
+  });
+
+  function invoice(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'i1',
+      venueId: 'v1',
+      venueName: null,
+      number: 'PLT-INV-2027-000001',
+      month: '2027-01-01',
+      amountBaht: 4000,
+      status: 'Issued',
+      overdue: false,
+      issuedAt: '2027-02-02T02:00:00Z',
+      dueOn: '2027-02-16',
+      submittedAt: null,
+      hasEvidence: false,
+      paidAt: null,
+      refusedReason: null,
+      lines: [{ servedOn: '2027-01-10', keptBaht: 40000, percent: 10, amountBaht: 4000 }],
+      ...overrides,
+    };
+  }
+
+  /** Renders with a commission answer instead of the empty one render() flushes. */
+  function renderWithCommission(owed: object, role: 'Owner' | 'Staff' = 'Owner'): void {
+    signInAs(role === 'Owner' ? OWNER.email : STAFF.email);
+    fixture = TestBed.createComponent(VenueDetailPage);
+    fixture.componentRef.setInput('venueId', 'v1');
+    fixture.detectChanges();
+    httpMock.expectOne('/api/venues/v1').flush(venueAs(role));
+    httpMock.expectOne('/api/venues/v1/members').flush([OWNER, STAFF]);
+    fixture.detectChanges();
+    httpMock.expectOne('/api/venues/v1/commission').flush(owed);
+    fixture.detectChanges();
+    if (role === 'Owner') {
+      httpMock.expectOne('/api/venues/v1/invitations').flush([]);
+      fixture.detectChanges();
+    }
+  }
 });

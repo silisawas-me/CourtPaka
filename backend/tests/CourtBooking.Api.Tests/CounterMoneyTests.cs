@@ -228,6 +228,71 @@ public sealed class CounterMoneyTests(ApiTestFixture api)
     }
 
     /// <summary>
+    /// Money taken after the till has been counted belongs to the next day (PRD US-26). The count
+    /// that was written down cannot move, so the day after it picks the money up — which is why a
+    /// venue's day runs from one count to the next rather than from midnight to midnight.
+    /// </summary>
+    [Fact]
+    public async Task Money_taken_after_the_count_belongs_to_the_next_day()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, first) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        await Take(owner, venue.Id, first.Id, 100m, nameof(PaymentMethod.Cash));
+
+        var counted = await VenueScenario.ReadAsync<DailyClosingResponse>(
+            await owner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/money/closing",
+                new CloseDayRequest(0m, 100m, null)));
+        Assert.Equal(0m, counted.DifferenceBaht);
+
+        // Somebody pays after the drawer has been counted.
+        var (_, late) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 19);
+        await Take(owner, venue.Id, late.Id, 150m, nameof(PaymentMethod.Cash));
+
+        // Today still says what it was counted against — the count is written down and does not
+        // move — and the late money is not in it.
+        var today = await Money(owner, venue.Id);
+        Assert.Equal(100m, today.CashBaht);
+        Assert.DoesNotContain(today.CashReceipts, receipt => receipt.AmountBaht == 150m);
+
+        // Tomorrow has it.
+        var tomorrow = await Money(owner, venue.Id, VenueScenario.Today.AddDays(1));
+        Assert.Equal(150m, tomorrow.CashBaht);
+        Assert.Contains(tomorrow.CashReceipts, receipt => receipt.AmountBaht == 150m);
+
+        // Which is where it will be counted: a day that has not happened yet cannot be closed,
+        // so the money waits for the next count rather than being lost between two.
+        Assert.Null(tomorrow.Closed);
+    }
+
+    /// <summary>
+    /// A count that comes days late closes its own day and no more. A venue catching up on a week
+    /// it never counted must not have one of those days swallow all the others (PRD US-26).
+    /// </summary>
+    [Fact]
+    public async Task A_count_that_comes_late_still_only_counts_its_own_day()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        await Take(owner, venue.Id, booking.Id, 200m, nameof(PaymentMethod.Cash));
+
+        // Yesterday was never counted, and is counted now — a day after the money came in.
+        var late = VenueScenario.Today.AddDays(-1);
+        var counted = await VenueScenario.ReadAsync<DailyClosingResponse>(
+            await owner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/money/closing?date={late:yyyy-MM-dd}",
+                new CloseDayRequest(0m, 0m, null)));
+
+        // Nothing was taken yesterday, so nothing is what it should hold — today's money is
+        // today's, whatever hour the count happened to be written at.
+        Assert.Equal(0m, counted.ExpectedCashBaht);
+        Assert.Equal(0m, counted.DifferenceBaht);
+
+        var today = await Money(owner, venue.Id);
+        Assert.Equal(200m, today.CashBaht);
+    }
+
+    /// <summary>
     /// The count: what the till should hold is the float plus the cash that came in, less the
     /// cash that went back out — and the difference is the server's arithmetic (PRD US-26).
     /// </summary>
@@ -375,6 +440,61 @@ public sealed class CounterMoneyTests(ApiTestFixture api)
                 new CloseDayRequest(0m, 0m, null))).StatusCode);
     }
 
+    /// <summary>
+    /// A day that has been counted stays counted (PRD US-26). Money still arrives after the till
+    /// is shut — somebody pays for the court they are standing on — and it goes into tomorrow's
+    /// drawer, because it is not in the one that was just counted and signed off.
+    /// </summary>
+    [Fact]
+    public async Task Money_taken_after_the_till_is_counted_is_the_next_day_s()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+
+        await Take(owner, venue.Id, booking.Id, 100m, nameof(PaymentMethod.Cash));
+
+        var closed = await VenueScenario.ReadAsync<DailyClosingResponse>(
+            await owner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/money/closing",
+                new CloseDayRequest(1_000m, 1_100m, null)));
+        Assert.Equal(0m, closed.DifferenceBaht);
+
+        // The rest is paid after the count, at the desk, in cash.
+        await Take(owner, venue.Id, booking.Id, 100m, nameof(PaymentMethod.Cash));
+
+        // Today is what it was counted as: the count that was signed off does not move.
+        var today = await Money(owner, venue.Id);
+        Assert.Equal(100m, today.CashBaht);
+        Assert.Single(today.CashReceipts);
+        Assert.Equal(0m, today.Closed!.DifferenceBaht);
+
+        // And the money is in tomorrow's drawer, where somebody will count it.
+        var tomorrow = await MoneyOn(owner, venue.Id, VenueScenario.Today.AddDays(1));
+        Assert.Equal(100m, tomorrow.CashBaht);
+        Assert.Equal(100m, Assert.Single(tomorrow.CashReceipts).AmountBaht);
+        Assert.Null(tomorrow.Closed);
+    }
+
+    /// <summary>
+    /// The booking still knows it has been paid in full. Which day the money is counted in is a
+    /// question about the till, not about what the booker owes (PRD US-26).
+    /// </summary>
+    [Fact]
+    public async Task What_a_booking_has_been_paid_does_not_depend_on_the_till_being_counted()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+
+        await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/money/closing", new CloseDayRequest(0m, 0m, null));
+
+        var paid = await Take(owner, venue.Id, booking.Id, booking.TotalBaht, nameof(PaymentMethod.Cash));
+
+        Assert.Equal(0m, paid.ToPayBaht);
+        Assert.Equal(booking.TotalBaht, paid.TakenBaht);
+        Assert.Equal(nameof(PaymentState.Received), paid.PaymentState);
+    }
+
     private static async Task<VenueBookingResponse> Take(
         HttpClient client, Guid venueId, Guid bookingId, decimal amount, string method) =>
         await VenueScenario.ReadAsync<VenueBookingResponse>(
@@ -387,9 +507,20 @@ public sealed class CounterMoneyTests(ApiTestFixture api)
         await VenueScenario.ReadAsync<TakingsResponse>(
             await client.GetAsync($"/api/venues/{venueId}/bookings/{bookingId}/payments"));
 
-    private static async Task<DayMoneyResponse> Money(HttpClient client, Guid venueId) =>
+    private static async Task<DayMoneyResponse> Money(
+        HttpClient client,
+        Guid venueId,
+        DateOnly? date = null) =>
         await VenueScenario.ReadAsync<DayMoneyResponse>(
-            await client.GetAsync($"/api/venues/{venueId}/money"));
+            await client.GetAsync(
+                date is { } day
+                    ? $"/api/venues/{venueId}/money?date={day:yyyy-MM-dd}"
+                    : $"/api/venues/{venueId}/money"));
+
+    private static async Task<DayMoneyResponse> MoneyOn(
+        HttpClient client, Guid venueId, DateOnly date) =>
+        await VenueScenario.ReadAsync<DayMoneyResponse>(
+            await client.GetAsync($"/api/venues/{venueId}/money?date={date:yyyy-MM-dd}"));
 
     private static async Task<VenueBookingResponse> Row(
         HttpClient client, Guid venueId, Guid bookingId)

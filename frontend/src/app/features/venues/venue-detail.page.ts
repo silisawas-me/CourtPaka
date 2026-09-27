@@ -7,16 +7,19 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { BahtPipe } from '../../core/i18n/baht.pipe';
 import { AppDatePipe } from '../../core/i18n/app-date.pipe';
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { errorKey } from '../../core/http/api-error';
 import { TranslationService } from '../../core/i18n/translation.service';
+import { CommissionInvoice } from '../../core/venues/admin-venues.service';
 import {
   STAFF_DEFAULT_PERMISSIONS,
   Venue,
   VenueInvitation,
   VenueMember,
+  VenueCommission,
   VenuePermission,
   VENUE_PERMISSIONS,
   VenueService,
@@ -40,9 +43,11 @@ import { VenueAddressPipe } from '../../shared/venue-address.pipe';
     MatProgressBarModule,
     MatSlideToggleModule,
     AppDatePipe,
+    BahtPipe,
   ],
   providers: [FORM_FIELD_DEFAULTS],
   templateUrl: './venue-detail.page.html',
+  styleUrl: './venue-detail.page.scss',
 })
 export class VenueDetailPage {
   private readonly venues = inject(VenueService);
@@ -127,6 +132,87 @@ export class VenueDetailPage {
     });
   }
 
+  /**
+   * What this person may send back in one record (PRD US-18). Sent on change rather than on
+   * every keystroke: it is a number somebody types in full, and a request per digit would write
+   * a history row per digit as well.
+   */
+  protected setRefundLimit(member: VenueMember, event: Event): void {
+    const typed = Number((event.target as HTMLInputElement).value);
+    const current = this.members().find((item) => item.userId === member.userId);
+
+    if (!current || this.savingMember() !== null || !Number.isFinite(typed) || typed < 0) {
+      return;
+    }
+
+    this.savingMember.set(member.userId);
+    this.memberError.set(null);
+
+    this.venues
+      .changePermissions(this.venueId(), member.userId, current.permissions, typed)
+      .subscribe({
+        next: () => {
+          this.savingMember.set(null);
+          this.members.update((all) =>
+            all.map((item) =>
+              item.userId === member.userId ? { ...item, refundLimitBaht: typed } : item,
+            ),
+          );
+        },
+        error: (error: unknown) => {
+          this.savingMember.set(null);
+          this.memberError.set(errorKey(error));
+          // Put back what the server still holds, so the box never shows a number nobody has.
+          this.members.update((all) => [...all]);
+        },
+      });
+  }
+
+  /** What this venue owes the platform, once it has been asked for (PRD US-21). */
+  protected readonly commission = signal<VenueCommission | null>(null);
+  protected readonly commissionError = signal<string | null>(null);
+
+  /** Which invoice a transfer is being sent for, where one is. One at a time. */
+  protected readonly sendingFor = signal<string | null>(null);
+
+  /**
+   * Shows the platform the transfer for one invoice (PRD US-21). The answer is the invoice as
+   * the server now reads it, so the row is replaced rather than the card reloaded.
+   */
+  protected sendEvidence(invoice: CommissionInvoice, event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+
+    if (!file || this.sendingFor() !== null) {
+      return;
+    }
+
+    this.sendingFor.set(invoice.id);
+    this.commissionError.set(null);
+
+    this.venues.submitCommissionPayment(this.venueId(), invoice.id, file).subscribe({
+      next: (sent) => {
+        this.sendingFor.set(null);
+        // So the same file can be chosen again after a refusal; a file input holds on to it
+        // otherwise, and choosing it twice fires nothing.
+        input.value = '';
+        this.commission.update((owed) =>
+          owed === null
+            ? owed
+            : {
+                ...owed,
+                invoices: owed.invoices.map((one) => (one.id === sent.id ? sent : one)),
+              },
+        );
+      },
+      error: (failure: unknown) => {
+        this.sendingFor.set(null);
+        input.value = '';
+        this.commissionError.set(errorKey(failure));
+      },
+    });
+  }
+
   protected togglePermission(
     member: VenueMember,
     permission: VenuePermission,
@@ -207,6 +293,8 @@ export class VenueDetailPage {
     this.invitations.set([]);
     this.pageError.set(null);
     this.memberError.set(null);
+    this.commission.set(null);
+    this.commissionError.set(null);
 
     forkJoin({
       venue: this.venues.get(venueId),
@@ -219,6 +307,13 @@ export class VenueDetailPage {
         // says something the venue did not choose.
         this.slipEmails.set(venue.wantsSlipEmails);
         this.loading.set(false);
+
+        // Asked for on its own rather than with the rest: a venue that has never been billed
+        // gets an empty answer and draws no card, and nothing else on the page waits for it.
+        this.venues.commission(venueId).subscribe({
+          next: (owed) => this.commission.set(owed),
+          error: (failure: unknown) => this.commissionError.set(errorKey(failure)),
+        });
 
         // Only fetched when the invite section can be shown, so a frozen venue asks for nothing.
         if (venue.role === 'Owner' && venue.status === 'Approved') {
