@@ -66,9 +66,7 @@ public static class PlatformDashboard
         ILoggerFactory loggers,
         CancellationToken cancellationToken)
     {
-        var today = PlatformRequirements.BangkokToday(timeProvider);
-        var first = from ?? new DateOnly(today.Year, today.Month, 1);
-        var last = to ?? first.AddMonths(1).AddDays(-1);
+        var (first, last) = PlatformRequirements.MonthOr(from, to, timeProvider);
 
         if (last < first || last.DayNumber - first.DayNumber + 1 > VenueDashboard.MaxDays)
         {

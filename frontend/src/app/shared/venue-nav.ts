@@ -55,6 +55,7 @@ export const VENUE_BACK_OF_HOUSE: readonly VenueLink[] = [
   },
   { to: ['series'], label: 'series.title', testId: 'nav-series' },
   { to: ['packages'], label: 'packages.title', testId: 'nav-packages' },
+  { to: ['shop'], label: 'shop.title', testId: 'nav-shop' },
   { to: ['settings'], label: 'settings.title', testId: 'nav-settings' },
   { to: ['closures'], label: 'closures.title', testId: 'nav-closures' },
   { to: [], label: 'venues.detail', short: 'nav.tab.more', testId: 'nav-venue' },

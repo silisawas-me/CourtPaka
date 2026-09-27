@@ -518,9 +518,7 @@ public static class PackageEndpoints
         DateOnly today,
         CancellationToken cancellationToken)
     {
-        await database.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT pg_advisory_xact_lock(hashtextextended({packageId.ToString()}, 0))",
-            cancellationToken);
+        await Locks.OnAsync(database, packageId, cancellationToken);
 
         var package = await database.HourPackages
             .AsNoTracking()

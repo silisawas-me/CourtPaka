@@ -17,6 +17,7 @@ import { TranslationService } from '../../core/i18n/translation.service';
 import {
   BookingHours,
   CancellationReason,
+  PAYMENT_METHODS,
   PaymentMethod,
   RefundMethod,
   Refunds,
@@ -43,7 +44,6 @@ type Asking = 'cancel' | 'noShow' | 'settle' | 'played' | 'refund' | 'take' | 'h
 const REFUND_METHODS: RefundMethod[] = ['Transfer', 'Cash'];
 
 /** The three ways money reaches the counter (PRD US-26). */
-const PAYMENT_METHODS: PaymentMethod[] = ['Cash', 'PromptPay', 'Card'];
 
 /**
  * A day at the counter (PRD US-13): who booked what, and every door the venue can press on it.

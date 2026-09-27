@@ -31,6 +31,7 @@ public sealed class AuditTrailTests(ApiTestFixture api) : IClassFixture<ApiTestF
     [InlineData("DailyClosings")]
     [InlineData("SeriesMisses")]
     [InlineData("PackageEntries")]
+    [InlineData("StockEntries")]
     public async Task A_history_row_cannot_be_changed_or_removed(string table)
     {
         await EveryHistoryHasARowAsync();
@@ -77,6 +78,48 @@ public sealed class AuditTrailTests(ApiTestFixture api) : IClassFixture<ApiTestF
             $"""UPDATE "RefundRecords" SET "VoidedAt" = NULL WHERE "Id" = '{record}'"""));
         Assert.True(await RefusedAsync(
             $"""UPDATE "RefundRecords" SET "VoidReason" = 'อย่างอื่น' WHERE "Id" = '{record}'"""));
+    }
+
+    /// <summary>
+    /// What a venue paid out is a record like a refund is: the only thing that may happen to it
+    /// afterwards is being voided, once, with a reason. Its own trigger, so its own test — the
+    /// theory above covers the tables that refuse every write, and this one refuses all but three
+    /// columns (PRD US-33).
+    /// </summary>
+    [Fact]
+    public async Task What_a_venue_paid_out_can_only_ever_be_voided()
+    {
+        var (owner, venue, _) = await scenario.BookableVenueAsync();
+
+        var spend = await VenueScenario.ReadAsync<SpendResponse>(
+            await owner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/spending",
+                new SpendRequest(
+                    nameof(SpendKind.Utilities), 480m, null, nameof(PaymentMethod.Cash),
+                    "ค่าน้ำ", null, null)),
+            HttpStatusCode.Created);
+
+        // What was paid, for what, on what day, by whom: none of it moves.
+        Assert.True(await RefusedAsync(
+            $"""UPDATE "Spends" SET "AmountBaht" = 1 WHERE "Id" = '{spend.SpendId}'"""));
+        Assert.True(await RefusedAsync(
+            $"""UPDATE "Spends" SET "Kind" = 5 WHERE "Id" = '{spend.SpendId}'"""));
+        Assert.True(await RefusedAsync(
+            $"""UPDATE "Spends" SET "Note" = 'อย่างอื่น' WHERE "Id" = '{spend.SpendId}'"""));
+        Assert.True(await RefusedAsync(
+            $"""DELETE FROM "Spends" WHERE "Id" = '{spend.SpendId}'"""));
+        Assert.True(await RefusedAsync("""TRUNCATE "Spends" CASCADE"""));
+
+        var voided = await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/spending/{spend.SpendId}/void",
+            new ShopSaleCancelRequest("คีย์ผิด"));
+        Assert.Equal(HttpStatusCode.OK, voided.StatusCode);
+
+        // Voided, it stays as it was voided: not un-voided, not voided again with another reason.
+        Assert.True(await RefusedAsync(
+            $"""UPDATE "Spends" SET "VoidedAt" = NULL WHERE "Id" = '{spend.SpendId}'"""));
+        Assert.True(await RefusedAsync(
+            $"""UPDATE "Spends" SET "VoidReason" = 'อย่างอื่น' WHERE "Id" = '{spend.SpendId}'"""));
     }
 
     /// <summary>
@@ -136,6 +179,21 @@ public sealed class AuditTrailTests(ApiTestFixture api) : IClassFixture<ApiTestF
         Assert.Equal(
             HttpStatusCode.OK,
             (await admin.GetAsync($"/api/admin/complaints/{complaint.Id}/slip")).StatusCode);
+
+        // Something on the shelf, which is the row StockEntries keeps (PRD US-32, US-33).
+        var stock = await VenueScenario.ReadAsync<ShopItemResponse>(
+            await venueOwner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/shop/items",
+                new ShopItemRequest("ลูกขนไก่ทดสอบ", 90m, "ลูก", true, null)),
+            HttpStatusCode.Created);
+
+        Assert.Equal(
+            HttpStatusCode.Created,
+            (await venueOwner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/spending",
+                new SpendRequest(
+                    nameof(SpendKind.Stock), 700m, null, nameof(PaymentMethod.PromptPay),
+                    null, stock.ItemId, 10))).StatusCode);
 
         // Hours somebody bought, which is the row PackageEntries keeps (PRD US-31).
         var offer = await VenueScenario.ReadAsync<PackageTypeResponse>(

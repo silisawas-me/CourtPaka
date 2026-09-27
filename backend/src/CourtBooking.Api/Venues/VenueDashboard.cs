@@ -75,6 +75,22 @@ public sealed record DashboardOwedHoursResponse(
     /// <summary>Of those, the ones whose hours are about to run out (⚠️ S-28).</summary>
     int RunningOut);
 
+/// <summary>
+/// What the counter sold besides court time, and what the venue paid out (PRD US-32, US-33).
+///
+/// Kept apart from the court money above because it is a different business with a different
+/// margin — a venue that cannot tell the two apart cannot tell whether either is working. What
+/// is left over is the plainest subtraction there is, and it is labelled as that: it is not
+/// profit in any sense an accountant would sign, which is what S-30 goes to them with.
+/// </summary>
+public sealed record DashboardTradeResponse(
+    /// <summary>What was rung up at the counter, less what was taken back.</summary>
+    decimal ShopBaht,
+    /// <summary>What the venue wrote down as paid out, less what was voided.</summary>
+    decimal SpentBaht,
+    /// <summary>Court money plus shop money, less what was paid out. Not profit (⚠️ S-30).</summary>
+    decimal LeftOverBaht);
+
 public sealed record DashboardResponse(
     DateOnly From,
     DateOnly To,
@@ -91,7 +107,9 @@ public sealed record DashboardResponse(
     DashboardAttentionResponse Attention,
     DashboardRecoveryResponse Recovery,
     /// <summary>Hours sold and not yet given (PRD US-31). Never part of the money above.</summary>
-    DashboardOwedHoursResponse OwedHours);
+    DashboardOwedHoursResponse OwedHours,
+    /// <summary>The counter's other trade, and the money that went out (PRD US-32, US-33).</summary>
+    DashboardTradeResponse Trade);
 
 public static class DashboardErrorCodes
 {
@@ -161,9 +179,7 @@ public static class VenueDashboard
         CancellationToken cancellationToken)
     {
         // This month, when nothing is asked for: the question an owner opens the page with.
-        var today = PlatformRequirements.BangkokToday(timeProvider);
-        var first = from ?? new DateOnly(today.Year, today.Month, 1);
-        var last = to ?? first.AddMonths(1).AddDays(-1);
+        var (first, last) = PlatformRequirements.MonthOr(from, to, timeProvider);
 
         if (last < first || last.DayNumber - first.DayNumber + 1 > MaxDays)
         {
@@ -225,12 +241,14 @@ public static class VenueDashboard
 
         var sellableHours = days.Sum(day => day.SellableHours);
         var bookedHours = days.Sum(day => day.BookedHours);
+        var onlineBaht = days.Sum(day => day.OnlineBaht);
+        var staffBaht = days.Sum(day => day.StaffBaht);
 
         return new DashboardResponse(
             first,
             last,
-            days.Sum(day => day.OnlineBaht),
-            days.Sum(day => day.StaffBaht),
+            onlineBaht,
+            staffBaht,
             await AdvanceAsync(database, venueId, now, cancellationToken),
             sellableHours,
             bookedHours,
@@ -241,7 +259,65 @@ public static class VenueDashboard
             months,
             await AttentionAsync(database, venueId, cancellationToken),
             await RecoveryAsync(database, venueId, since, until, cancellationToken),
-            await OwedHoursAsync(database, venueId, now, cancellationToken));
+            await OwedHoursAsync(database, venueId, now, cancellationToken),
+            await TradeAsync(
+                database, venueId, first, last, since, until, onlineBaht + staffBaht,
+                cancellationToken));
+    }
+
+    /// <summary>
+    /// What the counter sold and what the venue paid out over the range (PRD US-32, US-33).
+    ///
+    /// Both are counted on the day they happened — a sale on the day it was rung up, an expense
+    /// on the day the venue says the money left — rather than on a day of service, because
+    /// neither is a booking and neither has one.
+    /// </summary>
+    private static async Task<DashboardTradeResponse> TradeAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateOnly first,
+        DateOnly last,
+        DateTimeOffset since,
+        DateTimeOffset until,
+        decimal courtBaht,
+        CancellationToken cancellationToken)
+    {
+        // Everything rung up in the range, less what was handed back in it — netted on the day
+        // the money moved rather than by dropping the sale outright. A June sale taken back in
+        // July is June's takings and July's refund: leaving it out of June instead would change
+        // a month that had already been read, and would disagree with the drawer, which counts
+        // the money going out on the day it went (PRD US-32).
+        var rungUp = await database.ShopSales
+            .AsNoTracking()
+            .Where(sale =>
+                sale.VenueId == venueId
+                && sale.SoldAt >= since
+                && sale.SoldAt < until)
+            .SumAsync(sale => (decimal?)sale.TotalBaht, cancellationToken) ?? 0m;
+
+        var handedBack = await database.ShopSales
+            .AsNoTracking()
+            .Where(sale =>
+                sale.VenueId == venueId
+                && sale.CancelledAt >= since
+                && sale.CancelledAt < until)
+            .SumAsync(sale => (decimal?)sale.TotalBaht, cancellationToken) ?? 0m;
+
+        var shop = rungUp - handedBack;
+
+        var spent = await database.Spends
+            .AsNoTracking()
+            .Where(spend =>
+                spend.VenueId == venueId
+                && spend.VoidedAt == null
+                && spend.PaidOn >= first
+                && spend.PaidOn <= last)
+            .SumAsync(spend => (decimal?)spend.AmountBaht, cancellationToken) ?? 0m;
+
+        return new DashboardTradeResponse(
+            shop,
+            spent,
+            decimal.Round(courtBaht + shop - spent, 2, MidpointRounding.AwayFromZero));
     }
 
     /// <summary>

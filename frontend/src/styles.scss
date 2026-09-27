@@ -380,6 +380,60 @@ a {
   }
 }
 
+/** A list of things, not of bullets. */
+.plain-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/**
+ * A few things to pick one of, laid out as a row that wraps. A radio group rather than a select,
+ * because three or four options are faster to hit than a menu is to open — and on a counter the
+ * hand holding the phone is the one that has to do it.
+ */
+.methods {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+
+  legend {
+    padding: 0;
+    margin-bottom: 0.35rem;
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-body-medium);
+  }
+}
+
+.method-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+
+  input {
+    accent-color: var(--mat-sys-primary);
+  }
+}
+
+/** Numbers that belong to one sentence: a name, a price, a unit. */
+.numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1rem;
+
+  .field {
+    flex: 1 1 14rem;
+  }
+
+  .number {
+    flex: 0 1 10rem;
+  }
+}
+
 /** A row in a list of things, with its actions pushed to the end on a wide screen. */
 .entry {
   display: flex;

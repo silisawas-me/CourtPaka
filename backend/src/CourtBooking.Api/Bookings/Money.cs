@@ -1,6 +1,8 @@
+using CourtBooking.Api.Data;
 using CourtBooking.Api.Identity;
 using CourtBooking.Api.Localization;
 using CourtBooking.Api.Venues;
+using Microsoft.EntityFrameworkCore;
 
 namespace CourtBooking.Api.Bookings;
 
@@ -20,9 +22,10 @@ public enum PaymentMethod
 /// It is not the same thing as <see cref="PaymentState"/>, which says whether the venue considers
 /// itself paid. These say what actually came in, when, in what form, and from whose hands.
 ///
-/// Most of it is money for a booking. Selling a package is money too, and it goes in the same
-/// till on the same day (PRD US-31), so it is one of these as well — with the package named
-/// instead of a booking. Exactly one of the two, which the database sees to.
+/// Most of it is money for a booking. Selling a package is money too (PRD US-31), and so is a
+/// tube of shuttlecocks (US-32) — both go in the same till on the same day, so both are one of
+/// these, with what they were for named instead of a booking. Exactly one of the three, which
+/// the database sees to.
 /// </summary>
 public sealed class PaymentReceipt
 {
@@ -33,6 +36,9 @@ public sealed class PaymentReceipt
 
     /// <summary>The package that was sold, or null where it was money for a booking (US-31).</summary>
     public Guid? PackageId { get; init; }
+
+    /// <summary>What somebody bought across the counter, where that is what it was (US-32).</summary>
+    public Guid? SaleId { get; init; }
 
     /// <summary>Kept beside the booking's own so a venue's day can be counted in one query.</summary>
     public required Guid VenueId { get; init; }
@@ -64,6 +70,8 @@ public sealed class PaymentReceipt
     public Booking? Booking { get; init; }
 
     public HourPackage? Package { get; init; }
+
+    public ShopSale? Sale { get; init; }
 
     public Venue? Venue { get; init; }
 
@@ -125,7 +133,39 @@ public enum MoneyLeadKind
 
     /// <summary>A booking of that day still owing this. Over by exactly this = taken, not written.</summary>
     StillOwed = 3,
+
+    /// <summary>Cash the venue paid out that day. Over by exactly this = it never left.</summary>
+    CashPaidOut = 4,
 }
+
+/// <summary>Which door cash left the drawer by (PRD US-18, US-32, US-33).</summary>
+public enum CashOutKind
+{
+    /// <summary>Sent back to a booker (PRD US-18).</summary>
+    Refunded = 1,
+
+    /// <summary>An expense the venue paid in cash (PRD US-33).</summary>
+    PaidOut = 2,
+
+    /// <summary>Handed back over the counter because a sale was taken back (PRD US-32).</summary>
+    SaleTakenBack = 3,
+}
+
+/// <summary>
+/// One lot of cash out of the drawer, and which door it left by (PRD US-26).
+///
+/// The count and the page both read these rows rather than each summing their own: money out is
+/// the part of a till that gains new doors — a refund, then an expense, then a sale taken back —
+/// and a screen that shows one sum while the count expects another is a difference nobody can
+/// explain.
+/// </summary>
+/// <param name="BookingId">The booking it concerned, when it concerned one.</param>
+public sealed record CashOut(
+    CashOutKind Kind,
+    decimal AmountBaht,
+    DateTimeOffset At,
+    Guid? BookingId,
+    string? Note);
 
 /// <summary>
 /// What a venue is owed and what it has taken (PRD US-26, 6.2). One place, because the number on
@@ -284,6 +324,32 @@ public static class Takings
 
     private static DateTimeOffset Earlier(DateTimeOffset one, DateTimeOffset other) =>
         one < other ? one : other;
+
+    /// <summary>
+    /// The same window, read from the counts either side of the day. Every reader of a venue's
+    /// money for one day asks this rather than working it out — the page that shows the day, the
+    /// count that closes it and the list of what the counter sold all have to be looking at the
+    /// same money, or the venue is keeping two books again (PRD US-26, US-32).
+    /// </summary>
+    public static async Task<(DateTimeOffset From, DateTimeOffset Until)> TillDayAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateOnly day,
+        CancellationToken cancellationToken)
+    {
+        var counts = await database.DailyClosings
+            .AsNoTracking()
+            .Where(closing =>
+                closing.VenueId == venueId
+                && (closing.Date == day || closing.Date == day.AddDays(-1)))
+            .Select(closing => new { closing.Date, closing.ClosedAt })
+            .ToListAsync(cancellationToken);
+
+        return TillDay(
+            day,
+            counts.SingleOrDefault(one => one.Date == day.AddDays(-1))?.ClosedAt,
+            counts.SingleOrDefault(one => one.Date == day)?.ClosedAt);
+    }
 
     /// <summary>
     /// What the till should hold at the end of the day: what it started with, plus the cash that

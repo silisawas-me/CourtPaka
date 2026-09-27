@@ -310,8 +310,9 @@ public sealed class BookingHoursTests(ApiTestFixture api) : IClassFixture<ApiTes
 
         var moved = await Move(owner, venue.Id, booking.Id, courts[1]);
 
-        Assert.Equal(courts[0], moved.Slots.OrderBy(slot => slot.Hour).First().CourtId);
-        Assert.Equal(courts[1], moved.Slots.OrderBy(slot => slot.Hour).Last().CourtId);
+        // In the order they are played, which is not the order of their hour numbers: the two
+        // hours straddle midnight whenever the suite runs just after it, and 23 then sorts after 0.
+        Assert.Equal([courts[0], courts[1]], moved.Slots.Select(slot => slot.CourtId));
     }
 
     [Fact]

@@ -62,6 +62,12 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    path: 'venues/:venueId/shop',
+    data: { venueShell: true },
+    loadComponent: () => import('./features/venues/shop.page').then((m) => m.ShopPage),
+    canActivate: [authGuard],
+  },
+  {
     path: 'venues/:venueId/packages',
     data: { venueShell: true },
     loadComponent: () => import('./features/venues/packages.page').then((m) => m.PackagesPage),

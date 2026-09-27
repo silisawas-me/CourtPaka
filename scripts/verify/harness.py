@@ -99,10 +99,11 @@ def verify_email(page, email: str) -> None:
         raise RuntimeError(f"Could not verify {email}: {verified.status} {verified.text()}")
 
 
-def logged_mail(email: str) -> list[str]:
-    """Every message the Development sender logged to this address, oldest first, each as its
-    header line and body. Entries in the log start at column 0 ("info: ..."), and everything a
-    message says is indented under it, so a message runs until the next unindented line."""
+def _logged(marker: str) -> list[str]:
+    """Every message the Development senders logged whose first line carries this marker, oldest
+    first, each as its header line and body. Entries in the log start at column 0 ("info: ..."),
+    and everything a message says is indented under it, so a message runs until the next
+    unindented line."""
     logs = subprocess.run(
         ["docker", "compose", "logs", "--no-log-prefix", "api"],
         cwd=pathlib.Path(__file__).resolve().parents[2],
@@ -119,13 +120,23 @@ def logged_mail(email: str) -> list[str]:
         if current is not None and line and not line[0].isspace():
             messages.append("\n".join(current))
             current = None
-        if f"Email to {email} [" in line:
+        if marker in line:
             current = [line.strip()]
         elif current is not None:
             current.append(line.strip())
     if current is not None:
         messages.append("\n".join(current))
     return messages
+
+
+def logged_mail(email: str) -> list[str]:
+    """Every email the Development sender logged to this address."""
+    return _logged(f"Email to {email} [")
+
+
+def logged_line(line_user_id: str) -> list[str]:
+    """Every LINE message the Development messenger logged to this LINE id (PRD US-34)."""
+    return _logged(f"LINE to {line_user_id} (")
 
 
 def run_out_hold(booking_id: str) -> None:
@@ -474,7 +485,20 @@ def ensure_bookable(browser, venue_id) -> None:
     # counts have to step around.
     clear_package_board(page, venue_id)
 
+    # And with nothing on the counter's own board. shop.py puts things on it because that is what
+    # it is about (PRD US-32), and one left there is a row every other script has to step around.
+    clear_shop_board(page, venue_id)
+
     page.close()
+
+
+def clear_shop_board(page, venue_id) -> None:
+    """Takes everything off the counter's board. Through the API: it is the setup, not the
+    subject."""
+    for one in page.request.get(f"{BASE}/api/venues/{venue_id}/shop/items").json():
+        if one["withdrawnAt"] is None:
+            page.request.post(
+                f"{BASE}/api/venues/{venue_id}/shop/items/{one['itemId']}/withdraw")
 
 
 def clear_package_board(page, venue_id) -> None:

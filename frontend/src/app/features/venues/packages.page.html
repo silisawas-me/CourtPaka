@@ -30,10 +30,10 @@
             The offers as a row of choices rather than a dropdown: a venue has a handful, and
             seeing the prices side by side is how somebody answers "which one?" at a counter.
           -->
-          <fieldset class="offers">
+          <fieldset class="methods">
             <legend>{{ i18n.t('packages.whichOffer') }}</legend>
             @for (one of onSale(); track one.typeId) {
-              <label class="offer-choice">
+              <label class="method-choice">
                 <input
                   type="radio"
                   formControlName="packageTypeId"

@@ -146,6 +146,18 @@ else
 {
     builder.Services.AddHttpClient<ILineLogin, LineLoginClient>(client => client.Timeout = TimeSpan.FromSeconds(10));
 }
+
+// Telling a booker on LINE (PRD US-34). The stand-in takes the same two locks as the login's,
+// since a local stack has nobody real to push to; everywhere else it is switched on by having a
+// channel access token, and without one every booker is written to by email as before.
+if (builder.Environment.IsDevelopment() && appOptions?.Line.UseDevelopmentFake == true)
+{
+    builder.Services.AddSingleton<ILineMessenger, LoggingLineMessenger>();
+}
+else
+{
+    builder.Services.AddHttpClient<ILineMessenger, LineMessenger>(client => client.Timeout = TimeSpan.FromSeconds(10));
+}
 // Venue endpoints declare the permission they need inline; the handler answers it per venue (PRD US-14).
 builder.Services.AddScoped<CurrentVenue>();
 builder.Services.AddScoped<VenueNotifications>();

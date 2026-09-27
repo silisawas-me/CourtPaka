@@ -168,7 +168,10 @@ with sync_playwright() as p:
 
     before = page.request.get(
         f"{BASE}/api/venues/{venue_id}/money?date={counting.isoformat()}").json()
-    expected = 1000 + before["cashBaht"] - before["cashRefundedBaht"]
+    # Everything that left the drawer, not only what was handed back: an expense paid in cash is
+    # out of the same till, and a run that forgot it would be short by the water bill (US-33).
+    expected = (1000 + before["cashBaht"]
+                - before["cashRefundedBaht"] - before["cashPaidOutBaht"])
 
     page.fill("[data-testid=opening-float]", "1000")
     # Short by exactly one of the day's cash receipts when there is one, so the run exercises

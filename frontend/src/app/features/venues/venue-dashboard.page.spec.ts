@@ -39,6 +39,7 @@ function figures(overrides: Record<string, unknown> = {}) {
       fromQueueBaht: 0,
     },
     owedHours: { hours: 0, baht: 0, packages: 0, runningOut: 0 },
+    trade: { shopBaht: 0, spentBaht: 0, leftOverBaht: 0 },
     ...overrides,
   };
 }
