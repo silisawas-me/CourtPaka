@@ -21,8 +21,8 @@ describe('the two doors into the venue side', () => {
     expect(refusal('staff', [], false)).toBe('login.door.notStaff');
   });
 
-  it('takes staff with one venue straight to its floor, and anybody else to the list', () => {
-    expect(landing('staff', [staff], false)).toBe('/venues/v2/now');
+  it('takes staff with one venue to its timeline, and anybody else to every venue', () => {
+    expect(landing('staff', [staff], false)).toBe('/venues/v2/bookings');
     expect(landing('staff', [owner, staff], false)).toBe('/venues');
     expect(landing('admin', [owner], false)).toBe('/venues');
   });

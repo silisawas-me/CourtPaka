@@ -100,49 +100,63 @@
 @defer (when venueId()) {
   @if (venueId(); as venue) {
     <app-venue-shell [venueId]="venue">
-      <a sideHead class="side-brand" routerLink="/"><app-wordmark /></a>
+      <a sideHead class="side-brand" routerLink="/venues"><app-wordmark /></a>
 
-      <!--
-        The app's own doors, in the sidebar's foot: at this width the bar above is not drawn, so
-        without them somebody at a counter could not reach their own bookings or account. The same
-        list the bar lays out, so neither copy is the one somebody forgot.
-      -->
+      <!-- Who is signed in and the way out, at the rail's foot — where the design has its demo switch. -->
       <nav
         sideFoot
         class="side-account"
         data-testid="side-nav-account"
         [attr.aria-label]="i18n.t('nav.label')"
       >
-        @for (link of links(); track link.path) {
-          <a matButton [routerLink]="link.path" [attr.data-testid]="'side-' + link.testId">
-            {{ i18n.t(link.label) }}
-          </a>
-        }
         @if (user(); as who) {
-          <!-- A LINE account may have no address at all (US-01), and an empty line is a puzzle. -->
           @if (who.email; as address) {
             <span class="side-who">{{ address }}</span>
+          }
+          <a matButton routerLink="/account" data-testid="side-nav-account-page">
+            {{ i18n.t('nav.account') }}
+          </a>
+          @if (who.isPlatformAdmin) {
+            <a matButton routerLink="/admin/venues" data-testid="side-nav-admin">
+              {{ i18n.t('nav.admin') }}
+            </a>
           }
           <button matButton type="button" data-testid="side-sign-out" (click)="signOut()">
             {{ i18n.t('nav.signOut') }}
           </button>
         }
-        <span class="languages" role="group" [attr.aria-label]="i18n.t('app.language')">
-          @for (option of languages; track option) {
-            <button
-              matButton
-              type="button"
-              class="language"
-              [class.chosen]="i18n.language() === option"
-              [attr.aria-pressed]="i18n.language() === option"
-              [attr.data-testid]="'side-language-' + option"
-              (click)="switchLanguage(option)"
-            >
-              {{ i18n.t('app.language.short.' + option) }}
-            </button>
-          }
-        </span>
       </nav>
+
+      <!-- The top bar's end, as the design has it: the language, then who you are. -->
+      <span
+        topEnd
+        class="languages segmented"
+        role="group"
+        [attr.aria-label]="i18n.t('app.language')"
+      >
+        @for (option of languages; track option) {
+          <button
+            type="button"
+            class="segment"
+            [class.chosen]="i18n.language() === option"
+            [attr.aria-pressed]="i18n.language() === option"
+            [attr.data-testid]="'top-language-' + option"
+            (click)="switchLanguage(option)"
+          >
+            {{ i18n.t('app.language.short.' + option) }}
+          </button>
+        }
+      </span>
+      @if (user(); as who) {
+        <a
+          topEnd
+          class="avatar"
+          routerLink="/account"
+          data-testid="top-avatar"
+          [attr.aria-label]="i18n.t('nav.account')"
+          >{{ (who.email ?? '?').charAt(0).toUpperCase() }}</a
+        >
+      }
     </app-venue-shell>
   }
 }

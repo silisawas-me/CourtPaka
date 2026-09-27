@@ -240,7 +240,7 @@
   "nav.menu": "เมนู",
   "nav.signIn": "เข้าสู่ระบบ",
   "nav.signOut": "ออกจากระบบ",
-  "nav.venues": "สนามของฉัน",
+  "nav.venues": "สาขา",
   "pricing.addBand": "เพิ่มช่วงราคา",
   "pricing.bahtPerHour": "บาท/ชั่วโมง",
   "pricing.day": "วัน",
@@ -888,5 +888,15 @@
   "login.createAccount": "สร้างบัญชี",
   "login.point.today": "ดูทุกคอร์ท ณ ตอนนี้ และคนที่กำลังจะมา",
   "login.point.money": "รับเงิน ตรวจสลิป และปิดยอดปลายวัน",
-  "login.point.team": "เชิญพนักงานและกำหนดว่าใครทำอะไรได้"
+  "login.point.team": "เชิญพนักงานและกำหนดว่าใครทำอะไรได้",
+  "nav.section.schedule": "ตารางคอร์ท",
+  "nav.section.pricing": "ราคา & ช่วงพีค",
+  "nav.section.revenue": "รายได้",
+  "nav.section.members": "สมาชิก",
+  "nav.sections": "เมนูหลัก",
+  "nav.other": "อื่น ๆ",
+  "nav.allVenues": "ทุกสาขา",
+  "nav.view": "มุมมอง",
+  "nav.view.timeline": "ไทม์ไลน์",
+  "nav.view.now": "ตอนนี้"
 }

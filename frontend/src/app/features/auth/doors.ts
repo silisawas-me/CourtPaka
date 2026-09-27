@@ -33,8 +33,9 @@ export function refusal(
 }
 
 /**
- * Where each door leads. Staff with one venue go straight to its floor this minute — the page a
- * shift is spent on; anybody with more has the overview of all of them to pick from.
+ * Where each door leads: the first page of the owner app (docs/plan/owner-app.md). An admin
+ * opens on every venue's schedule at once; staff with one venue on that venue's timeline, which
+ * is what the design shows a member of staff; anybody with more has the overview to pick from.
  */
 export function landing(
   door: Door,
@@ -45,5 +46,5 @@ export function landing(
     return isPlatformAdmin && venues.length === 0 ? '/admin/venues' : '/venues';
   }
 
-  return venues.length === 1 ? `/venues/${venues[0].id}/now` : '/venues';
+  return venues.length === 1 ? `/venues/${venues[0].id}/bookings` : '/venues';
 }

@@ -131,12 +131,12 @@ describe('LoginPage', () => {
       expect(textOf(fixture, 'form-error')).toBe(TRANSLATIONS.th['login.door.notAnOwner']);
     });
 
-    it('takes staff with one venue to its floor right now', async () => {
+    it('takes staff with one venue to its timeline', async () => {
       const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
 
       signIn('staff', [{ id: 'v1', role: 'Staff' }]);
 
-      expect(navigate).toHaveBeenCalledWith('/venues/v1/now');
+      expect(navigate).toHaveBeenCalledWith('/venues/v1/bookings');
     });
 
     it('offers a new account only to somebody sent here by an invitation', () => {

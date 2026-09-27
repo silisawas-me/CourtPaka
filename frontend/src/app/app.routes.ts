@@ -115,7 +115,9 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    // Every venue at once: the owner app's first page (docs/plan/owner-app.md).
     path: 'venues',
+    data: { venueShell: 'all' },
     canActivate: [authGuard],
     loadComponent: () => import('./features/venues/venues.page').then((m) => m.VenuesPage),
   },

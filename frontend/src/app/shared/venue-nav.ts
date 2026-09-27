@@ -1,77 +1,64 @@
 import { VenueAttention } from '../core/venues/venue.service';
 
+/** The shell stands on "every venue" rather than on one: the owner's overview (badPaka Owner App). */
+export const ALL_VENUES = 'all';
+
 /** One door in the venue's own navigation. */
 export interface VenueLink {
   /** Path segments under `/venues/{venueId}`, empty for the venue itself. */
   readonly to: readonly string[];
   readonly label: string;
   readonly testId: string;
-  /**
-   * The label a phone's bottom bar uses, and the mark that the door belongs there. A door
-   * without one is reached from the venue's own page, which is the last tab.
-   */
-  readonly short?: string;
+  /** A fragment on the page it opens, for a section that is a part of a longer page. */
+  readonly fragment?: string;
   /** Which count, if any, belongs beside it (PRD US-17). */
   readonly waiting?: 'slips' | 'money';
+  /** Drawn only for somebody who owns the venue: money and prices are the owner's (US-14). */
+  readonly ownerOnly?: boolean;
+  /** Also where a page further down this list is — the timeline and "now" are both the schedule. */
+  readonly alsoAt?: readonly (readonly string[])[];
 }
 
 /**
- * What a venue's own navigation holds, split the way a day is: what is happening at the counter
- * now, and what is set up behind it (PRD US-25's console, and the doors around it).
+ * The four sections of the owner app, as the design draws them (docs/plan/owner-app.md): the
+ * court schedule, prices, revenue, and members. Staff see the schedule and members — the other
+ * two are the owner's money and the owner's prices.
  *
- * One list rather than markup, so the sidebar on a desk and the bar along the bottom of a phone
- * are the same doors leading to the same places — adding one is a line here, not two places that
- * drift apart.
+ * The schedule is the one section that can stand on every venue at once; the others are always
+ * about one of them (O10).
  */
-export const VENUE_WORK: readonly VenueLink[] = [
-  // The floor this minute. No short label: a phone's five tabs are spoken for, and "today" is
-  // one press from it.
-  { to: ['now'], label: 'now.title', testId: 'nav-now' },
+export const VENUE_SECTIONS: readonly VenueLink[] = [
   {
     to: ['bookings'],
-    label: 'venueBookings.title',
-    short: 'nav.tab.today',
-    testId: 'nav-venue-bookings',
+    label: 'nav.section.schedule',
+    testId: 'nav-schedule',
+    alsoAt: [['now']],
   },
+  // Until the painted price grid lands (PR-4) the prices are the part of settings they were.
   {
-    to: ['slip-queue'],
-    label: 'slipQueue.title',
-    short: 'nav.tab.slips',
-    testId: 'nav-slip-queue',
-    waiting: 'slips',
+    to: ['settings'],
+    fragment: 'prices',
+    label: 'nav.section.pricing',
+    testId: 'nav-pricing',
+    ownerOnly: true,
   },
-  {
-    to: ['money'],
-    label: 'money.title',
-    short: 'nav.tab.money',
-    testId: 'nav-money',
-    waiting: 'money',
-  },
-];
-
-export const VENUE_BACK_OF_HOUSE: readonly VenueLink[] = [
-  {
-    to: ['dashboard'],
-    label: 'dashboard.title',
-    short: 'nav.tab.reports',
-    testId: 'nav-dashboard',
-  },
-  { to: ['series'], label: 'series.title', testId: 'nav-series' },
-  { to: ['packages'], label: 'packages.title', testId: 'nav-packages' },
-  { to: ['shop'], label: 'shop.title', testId: 'nav-shop' },
-  { to: ['settings'], label: 'settings.title', testId: 'nav-settings' },
-  { to: ['closures'], label: 'closures.title', testId: 'nav-closures' },
-  { to: [], label: 'venues.detail', short: 'nav.tab.more', testId: 'nav-venue' },
+  { to: ['dashboard'], label: 'nav.section.revenue', testId: 'nav-dashboard', ownerOnly: true },
+  { to: ['packages'], label: 'nav.section.members', testId: 'nav-packages' },
 ];
 
 /**
- * The doors a thumb can reach, in the order a shift uses them. Five, because a sixth is a row
- * nobody can hit — which is why a short label is something a door is given, not something every
- * door has.
+ * Everything else a venue has, which the design's four sections do not name. Kept, in a quieter
+ * group, because each is work somebody does (the owner's ruling, docs/plan/owner-app.md).
  */
-export const VENUE_TABS: readonly VenueLink[] = [...VENUE_WORK, ...VENUE_BACK_OF_HOUSE].filter(
-  (link) => link.short,
-);
+export const VENUE_OTHER: readonly VenueLink[] = [
+  { to: ['slip-queue'], label: 'slipQueue.title', testId: 'nav-slip-queue', waiting: 'slips' },
+  { to: ['money'], label: 'money.title', testId: 'nav-money', waiting: 'money' },
+  { to: ['series'], label: 'series.title', testId: 'nav-series' },
+  { to: ['shop'], label: 'shop.title', testId: 'nav-shop' },
+  { to: ['closures'], label: 'closures.title', testId: 'nav-closures' },
+  { to: ['settings'], label: 'settings.title', testId: 'nav-settings' },
+  { to: [], label: 'venues.detail', testId: 'nav-venue' },
+];
 
 /** The count that belongs beside a door, or null when there is nothing waiting behind it. */
 export function waitingOn(link: VenueLink, attention: VenueAttention | null): number | null {

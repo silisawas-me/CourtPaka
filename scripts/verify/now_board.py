@@ -58,8 +58,9 @@ with sync_playwright() as p:
     desk.clock.set_fixed_time(at(hour - 1, 30))
     desk.goto(f"{BASE}/venues/{venue_id}/now")
     desk.wait_for_selector(f"[data-testid=now-court-{court_id}]")
-    check("the door to the floor is in the venue's navigation",
-          desk.locator("[data-testid=nav-now]").count() == 1)
+    check("the schedule's top bar offers the timeline and right now, with now chosen",
+          desk.locator("[data-testid=view-bookings]").count() == 1
+          and "on" in (desk.locator("[data-testid=view-now]").get_attribute("class") or ""))
     check(
         "somebody starting within ninety minutes is in the queue at the desk",
         desk.locator(f"[data-testid=now-arrival-{booking_id}]").count() == 1,
