@@ -16,7 +16,7 @@ describe('App shell', () => {
     await TestBed.configureTestingModule({
       imports: [App],
       // The panel test follows a link, and a navigation with nowhere to go rejects in the background.
-      providers: pageProviders([{ path: 'book', children: [] }]),
+      providers: pageProviders([{ path: 'venues', children: [] }]),
     }).compileComponents();
 
     httpMock = TestBed.inject(HttpTestingController);
@@ -68,12 +68,13 @@ describe('App shell', () => {
     expect(elementOf(fixture, 'bar-menu')).not.toBeNull();
     expect(elementOf(fixture, 'open-menu')?.getAttribute('aria-expanded')).toBe('true');
     // Whatever the bar carries, the panel carries: one list rendered twice. The session here is
-    // signed in, so that is Book, Venues and Sign out.
+    // signed in, so that is Venues, Account and Sign out.
     const inBar = (fixture.nativeElement as HTMLElement).querySelectorAll('.bar-links > *');
     const inPanel = (fixture.nativeElement as HTMLElement).querySelectorAll('.bar-menu > *');
     expect(inPanel).toHaveLength(inBar.length);
-    expect(elementOf(fixture, 'nav-book-menu')).not.toBeNull();
     expect(elementOf(fixture, 'nav-venues-menu')).not.toBeNull();
+    // The booker's doors are gone (docs/plan/cut-booker.md).
+    expect(elementOf(fixture, 'nav-book-menu')).toBeNull();
     expect(elementOf(fixture, 'sign-out-menu')).not.toBeNull();
 
     clickOn(fixture, 'open-menu');
@@ -93,7 +94,7 @@ describe('App shell', () => {
   it('closes the panel when a link in it is followed', () => {
     clickOn(fixture, 'open-menu');
 
-    clickOn(fixture, 'nav-book-menu');
+    clickOn(fixture, 'nav-venues-menu');
 
     expect(elementOf(fixture, 'bar-menu')).toBeNull();
   });
@@ -109,7 +110,7 @@ describe("A venue's own shell", () => {
     await TestBed.configureTestingModule({
       imports: [App],
       providers: pageProviders([
-        { path: 'book', children: [] },
+        { path: 'venues', children: [] },
         // A venue's page is a venue's page because the route says so, not because its URL has an
         // id in it — `book/:venueId` is the booker's grid and carries the same parameter.
         {
@@ -119,7 +120,6 @@ describe("A venue's own shell", () => {
         },
         { path: 'venues/:venueId/money', children: [], data: { venueShell: true } },
         { path: 'venues/apply', children: [] },
-        { path: 'book/:venueId', children: [] },
       ]),
     }).compileComponents();
 
@@ -162,17 +162,12 @@ describe("A venue's own shell", () => {
     expect(elementOf(fixture, 'side-nav-account')).not.toBeNull();
   });
 
-  it("leaves the booker's pages alone", async () => {
+  it('leaves the pages outside a venue alone', async () => {
     // The class the shell hangs on is the whole answer: no venue, no second layout, and the
     // deferred sidebar is never asked for.
     const shellIsUp = () => (fixture.nativeElement as HTMLElement).classList.contains('at-a-venue');
 
-    await router.navigate(['/book']);
-    fixture.detectChanges();
-    expect(shellIsUp()).toBe(false);
-
-    // A grid has a venue in its URL and is nobody's shift.
-    await router.navigate(['/book', 'v1']);
+    await router.navigate(['/venues']);
     fixture.detectChanges();
     expect(shellIsUp()).toBe(false);
 

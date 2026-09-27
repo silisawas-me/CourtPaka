@@ -11,7 +11,6 @@ import { AuthService } from '../../core/auth/auth.service';
 import { errorKey } from '../../core/http/api-error';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { FieldError } from '../../shared/field-error';
-import { LineSignIn } from '../../shared/line-sign-in';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 
 @Component({
@@ -20,7 +19,6 @@ import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
     ReactiveFormsModule,
     RouterLink,
     FieldError,
-    LineSignIn,
     MatButtonModule,
     MatCardModule,
     MatCheckboxModule,

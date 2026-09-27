@@ -22,8 +22,8 @@ interface Door {
  * The venue's own navigation: down the side of a desk, along the bottom of a phone (PRD US-25).
  *
  * Its own component rather than part of the app shell because every page of the app pays for what
- * the root component carries, and the page PRD 8 measures is the booker's grid — which has no
- * counter, no shift and no venue.
+ * the root component carries, and the front door, sign-in and "my venues" have no counter, no
+ * shift and no venue.
  */
 @Component({
   imports: [RouterLink, RouterLinkActive],

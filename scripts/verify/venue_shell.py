@@ -27,7 +27,7 @@ with sync_playwright() as p:
     # The bar above is not drawn beside a sidebar, so the rest of the app has to travel with it.
     check(
         "the app's own doors travel in the sidebar's foot",
-        desk.locator("[data-testid=side-nav-account] [data-testid=side-nav-my-bookings]").count() == 1,
+        desk.locator("[data-testid=side-nav-account] [data-testid=side-nav-venues]").count() == 1,
     )
     check(
         "the day's door is marked as the one being read",
@@ -56,20 +56,12 @@ with sync_playwright() as p:
             landed = False
         check(f"{door} leads to {page}", landed)
 
-    desk.goto(f"{BASE}/book")
-    desk.wait_for_selector("[data-testid=venue-results]")
+    # A page outside any venue keeps the bar and is given no shift to work.
+    desk.goto(f"{BASE}/venues")
+    desk.wait_for_selector("[data-testid=venue-list], [data-testid=no-venues]")
     check(
-        "the booker's pages keep the bar and are given no shift to work",
+        "a page outside a venue keeps the bar and is given no shift to work",
         desk.locator("mat-toolbar.bar").is_visible() and desk.locator(".side").count() == 0,
-        desk,
-    )
-
-    # The public grid carries a venue id too, and is nobody's shift (US-02).
-    desk.goto(f"{BASE}/book/{venue_id}")
-    desk.wait_for_selector("[data-testid=availability-grid]")
-    check(
-        "the booker's grid is not given a counter's sidebar",
-        desk.locator(".side").count() == 0 and desk.locator("mat-toolbar.bar").is_visible(),
         desk,
     )
 

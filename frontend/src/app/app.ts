@@ -42,15 +42,8 @@ export class App {
    * added here appears in both without either copy being the one someone forgot.
    */
   protected readonly links = computed(() => [
-    { path: '/book', label: 'nav.book', testId: 'nav-book', accent: false },
     ...(this.user()
       ? [
-          {
-            path: '/bookings',
-            label: 'nav.myBookings',
-            testId: 'nav-my-bookings',
-            accent: false,
-          },
           { path: '/venues', label: 'nav.venues', testId: 'nav-venues', accent: false },
           { path: '/account', label: 'nav.account', testId: 'nav-account', accent: false },
           // Drawn only for the handful of people it is for. The endpoints behind it check
@@ -66,16 +59,13 @@ export class App {
               ]
             : []),
         ]
-      : [
-          { path: '/login', label: 'nav.signIn', testId: 'nav-sign-in', accent: false },
-          { path: '/register', label: 'nav.signUp', testId: 'nav-sign-up', accent: true },
-        ]),
+      : [{ path: '/login', label: 'nav.signIn', testId: 'nav-sign-in', accent: false }]),
   ]);
 
   /**
    * The venue whose pages are on screen, from what the route says it is rather than from the
-   * shape of the URL: `book/:venueId` is a booker's grid and carries the same parameter, so a
-   * search for the parameter alone would put a counter's sidebar on the public page.
+   * shape of the URL: `venues/apply` and any page that later carries a venue without being one
+   * of its shifts would otherwise get a counter's sidebar.
    */
   protected readonly venueId = toSignal(
     this.router.events.pipe(
@@ -123,8 +113,8 @@ export class App {
 
 /**
  * The venue whose shell the matched route asked for, or null. A route says so with
- * `data: { venueShell: true }`, which is the only thing that separates a venue's own page from
- * the booker's grid — both carry a `venueId`.
+ * `data: { venueShell: true }`: a route opts in, rather than the shell guessing from a
+ * `venueId` parameter.
  */
 function venueOf(route: ActivatedRouteSnapshot | null): string | null {
   while (route) {

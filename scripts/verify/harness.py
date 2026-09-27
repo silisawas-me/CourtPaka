@@ -253,13 +253,6 @@ def pick_date(page, date, toggle="mat-datepicker-toggle button") -> None:
     """Drives the calendar, because the field itself is read-only: Intl prints Thai dates but
     cannot read one back, so typing into it would be thrown away. `toggle` names which calendar,
     for a page carrying more than one."""
-    # The grid page does not download the calendar until somebody asks for it (PRD 8's LCP
-    # target). What stands there until then is a placeholder, and pressing it both fetches the
-    # calendar and opens it — the same one press a booker makes.
-    if page.locator(toggle).count() == 0 and page.locator("[data-testid=day-placeholder]").count():
-        page.click("[data-testid=day-placeholder]")
-        page.wait_for_selector("mat-calendar")
-
     if page.locator("mat-calendar").count() == 0:
         page.click(toggle)
         page.wait_for_selector("mat-calendar")
@@ -323,22 +316,44 @@ def thai_month_year(date) -> str:
     return f"{THAI_MONTHS[date.month - 1]} {date.year + 543}"
 
 
+# The booking each page made last, so a slip sent afterwards goes to it — the way it did when the
+# payment page was the page the booker was left on.
+_last_booking: dict[int, str] = {}
+
+
 def take_first_free_hour(page, venue_id, date, skip=0):
-    """Picks an hour off the grid and confirms it, the way a booker does. Answers the booking the
-    server made, and leaves the page wherever confirming led."""
-    page.goto(f"{BASE}/book/{venue_id}?date={date.isoformat()}")
-    page.wait_for_selector("[data-testid=availability-grid]")
+    """Holds a free hour the way a booker's app does, through the API — the booker's own pages
+    were taken out (docs/plan/cut-booker.md), and what these scripts check is the venue's side.
+    Tries the grid's free hours in order from `skip`, since an hour that has started, or is about
+    to, is on the grid but no longer sold online. Answers the server's response to the hold."""
+    day = page.request.get(
+        f"{BASE}/api/venues/{venue_id}/availability",
+        params={"date": date.isoformat(), "refresh": "true"},
+    ).json()
+    free = [
+        (court["courtId"], hour["hour"])
+        for court in day["courts"]
+        for hour in court["hours"]
+        if hour["status"] == "Free"
+    ]
 
-    cell = page.locator("td.free").nth(skip).get_attribute("data-testid")
-    page.click(f"[data-testid={cell}] button")
-    page.wait_for_selector("[data-testid=booking-summary]")
+    answer = None
+    for court_id, hour in free[skip:]:
+        answer = page.request.post(
+            f"{BASE}/api/bookings",
+            data={
+                "venueId": venue_id,
+                "slots": [{"courtId": court_id, "date": date.isoformat(), "hour": hour}],
+            },
+        )
+        if answer.status == 201:
+            _last_booking[id(page)] = answer.json()["id"]
+            return answer
 
-    with page.expect_response(lambda response: response.url.endswith("/api/bookings")) as answer:
-        page.click("[data-testid=book]")
-
-    # Confirming lands on the page that pays for the hold, and every caller was waiting for it.
-    page.wait_for_selector("[data-testid=countdown]")
-    return answer.value
+    raise RuntimeError(
+        f"No free hour could be held: {answer.status if answer else 'none free'} "
+        f"{answer.text() if answer else ''}"
+    )
 
 
 # The seeded venue is the only approved one, and only an approved venue can be edited, so every
@@ -356,11 +371,13 @@ def as_upload(name: str, content: bytes, mime: str) -> dict:
     return {"name": name, "mimeType": mime, "buffer": content}
 
 
-def send_slip(page, upload):
-    """Puts a file into the slip control and waits for the server's answer."""
-    with page.expect_response(lambda response: response.url.endswith("/slip")) as answer:
-        control(page, "send-slip").set_input_files(upload)
-    return answer.value
+def send_slip(page, upload, booking_id=None):
+    """Sends a slip for the booking this page held last (or the one named), through the API."""
+    booking_id = booking_id or _last_booking[id(page)]
+    return page.request.post(
+        f"{BASE}/api/bookings/{booking_id}/slip",
+        multipart={"file": upload},
+    )
 
 
 def real_jpeg() -> bytes:

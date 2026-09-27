@@ -12,7 +12,7 @@ description: ออกแบบและแก้หน้าจอของ bad
 
 1. **เขียน design brief สั้น ๆ ก่อนแตะโค้ด** (3–5 บรรทัด ใส่ไว้ในคำตอบ ไม่ต้องสร้างไฟล์)
    - หน้านี้ทำให้ใครทำอะไรสำเร็จ และอะไรคือสิ่งเดียวที่ต้องเด่นที่สุดบนจอ
-   - ผู้ใช้เข้ามาจากไหน บนมือถือหรือจอคอม (ฝั่งผู้จอง = มือถือก่อน · ฝั่งเจ้าของสนาม = จอคอมก่อน แต่ต้องไม่พังบนมือถือ)
+   - ผู้ใช้เข้ามาจากไหน บนมือถือหรือจอคอม (แอปเหลือแค่ฝั่งสนาม: admin = จอคอมก่อน · พนักงานหน้าเคาน์เตอร์ = จอคอมหรือแท็บเล็ต แต่ต้องไม่พังบนมือถือ)
    - ต่อยอดจากหน้าไหนที่มีอยู่ (ชื่อไฟล์) และจะ **ไม่** ให้หน้าตาเป็นแบบไหน
    - ถ้า brief เขียนไม่ได้เพราะ requirement ไม่ชัด ให้ถามก่อน (CLAUDE.md > วิธีทำงาน)
 2. **สำรวจของที่มีก่อนสร้างของใหม่** — `frontend/src/styles.scss` มี primitive ครบชุดแล้ว (`.shell` `.stack` `.row` `.columns` `.entry` `.badge` `.field` `.muted`)
@@ -73,7 +73,7 @@ npm run build                                 # budget: initial 500 kB warn, com
 
 ```bash
 docker compose --profile full up -d --build   # จาก root ของ repo
-python scripts/verify/booking_grid.py         # หรือ script ของ flow ที่แก้ (ดู scripts/verify/README.md)
+python scripts/verify/day_panel.py            # หรือ script ของ flow ที่แก้ (ดู scripts/verify/README.md)
 ```
 
 สำหรับหน้าที่ยังไม่มี script ให้ใช้ skill `webapp-testing` ขับเบราว์เซอร์เอง

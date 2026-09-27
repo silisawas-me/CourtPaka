@@ -37,15 +37,6 @@ export function signInAs(email = 'user@example.com', account: Partial<CurrentUse
     });
 }
 
-/**
- * Answers the one question the LINE button asks on every way in: does this deployment have a
- * channel (PRD US-01). Signed-out pages ask it as they render, so a spec that does not care still
- * has to answer it.
- */
-export function lineSignInAvailable(enabled = false): void {
-  TestBed.inject(HttpTestingController).expectOne('/api/auth/line').flush({ enabled });
-}
-
 export function textOf(fixture: ComponentFixture<unknown>, testId: string): string | undefined {
   const element = fixture.nativeElement as HTMLElement;
   return element.querySelector(`[data-testid="${testId}"]`)?.textContent?.trim();
