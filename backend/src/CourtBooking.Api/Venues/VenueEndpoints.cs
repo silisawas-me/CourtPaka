@@ -26,6 +26,7 @@ public static class VenueEndpoints
 
         venues.MapPost("/", CreateAsync);
         venues.MapGet("/mine", ListMineAsync);
+        venues.MapOwnerTodayEndpoints();
         venues.MapGet("/agreement", AgreementAsync);
         venues.MapPost("/invitations/accept", AcceptInvitationAsync);
 

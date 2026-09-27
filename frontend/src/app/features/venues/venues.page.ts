@@ -14,9 +14,10 @@ import { Venue, VenueService } from '../../core/venues/venue.service';
  * and a bank account: it is a form somebody fills in once, sitting down, and it has no business
  * crowding the list somebody opens every day to get to their courts.
  */
+import { AllVenuesToday } from './all-venues-today';
 @Component({
   selector: 'app-venues-page',
-  imports: [RouterLink, MatButtonModule, MatCardModule, MatProgressBarModule],
+  imports: [AllVenuesToday, RouterLink, MatButtonModule, MatCardModule, MatProgressBarModule],
   templateUrl: './venues.page.html',
 })
 export class VenuesPage implements OnInit {

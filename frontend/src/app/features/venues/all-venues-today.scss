@@ -1,0 +1,124 @@
+/* The day across every venue: the three numbers, then a line per venue. */
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.overview {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-large);
+  background: var(--mat-sys-surface);
+  /* The page it sits on is not a grid, so the space under it is carried here — only when drawn. */
+  margin-block-end: var(--stack);
+}
+
+.overview-title {
+  margin: 0;
+  font: var(--mat-sys-title-large);
+}
+
+.venues {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.venue {
+  display: grid;
+  gap: 0.4rem;
+  padding-block: 0.75rem;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+}
+
+.venue-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+}
+
+.venue-name {
+  font: var(--mat-sys-title-medium);
+  color: var(--mat-sys-on-surface);
+}
+
+.venue-figures {
+  font: var(--mat-sys-body-medium);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+/*
+ * One cell per hour the venue sells, sharing the width: a day of sixteen hours fits a phone at
+ * this size, and a heatmap that scrolled would stop being read at a glance.
+ */
+.heat {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 2px;
+}
+
+.heat-hour {
+  height: 1.25rem;
+  border-radius: var(--mat-sys-corner-extra-small);
+  /* A fifth of the green even for an empty hour, so "on sale, nobody came" is not "not on sale". */
+  background: color-mix(
+    in srgb,
+    var(--mat-sys-primary) calc(12% + var(--use) * 0.88%),
+    var(--mat-sys-surface-container-high)
+  );
+
+  &.off {
+    background: repeating-linear-gradient(
+      135deg,
+      var(--mat-sys-surface-container-highest) 0 3px,
+      var(--mat-sys-surface) 3px 6px
+    );
+  }
+}
+
+.heat-scale {
+  display: flex;
+  justify-content: space-between;
+  font: var(--mat-sys-label-small);
+  font-family: var(--font-mono);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flag {
+  padding: 0.1rem 0.6rem;
+  border-radius: var(--mat-sys-corner-extra-small);
+  font: var(--mat-sys-label-medium);
+
+  &.late {
+    background: var(--status-risk-soft);
+    color: var(--status-risk-ink);
+  }
+
+  &.due {
+    background: var(--status-waiting-soft);
+    color: var(--status-waiting-ink);
+  }
+
+  &.shut {
+    background: var(--status-done-soft);
+    color: var(--status-done-ink);
+  }
+}

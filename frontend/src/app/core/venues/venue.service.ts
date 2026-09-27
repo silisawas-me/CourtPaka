@@ -125,12 +125,51 @@ export interface VenueAttention {
   bookingsWithMoneyWaiting: number;
 }
 
+/** How one hour of today is going at one venue: court-hours on sale, and used. */
+export interface HourUse {
+  hour: number;
+  sellable: number;
+  booked: number;
+}
+
+/** Today at one venue, by the venue dashboard's own rules (badPaka 2c, PRD US-15). */
+export interface VenueToday {
+  venueId: string;
+  name: string;
+  status: VenueStatus;
+  keptBaht: number;
+  bookings: number;
+  sellableHours: number;
+  bookedHours: number;
+  /** Null when nothing was on sale today — not the same as none of it used. */
+  usedPercent: number | null;
+  hours: HourUse[];
+  /** Bookings the desk could take in right now, and those whose wait has run out (US-24). */
+  dueNow: number;
+  pastGrace: number;
+  /** Courts shut this hour for a closure (US-11). */
+  shutNow: string[];
+}
+
+export interface OwnerToday {
+  date: string;
+  keptBaht: number;
+  bookings: number;
+  dueNow: number;
+  venues: VenueToday[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class VenueService {
   private readonly http = inject(HttpClient);
 
   mine(): Observable<Venue[]> {
     return this.http.get<Venue[]>('/api/venues/mine');
+  }
+
+  /** Today at every venue this person reads the reports of (badPaka 2c). */
+  today(): Observable<OwnerToday> {
+    return this.http.get<OwnerToday>('/api/venues/mine/today');
   }
 
   /**
