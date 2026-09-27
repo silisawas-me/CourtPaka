@@ -40,4 +40,15 @@ public static class SlipValidation
     /// <summary>The file extension for a content type this module recognised.</summary>
     public static string ExtensionOf(string contentType) =>
         Shapes.Single(shape => shape.ContentType == contentType).Extension;
+
+    /// <summary>
+    /// The content type of a file the store named, read back from the extension it was given.
+    /// The store names its own files from a type this module recognised, so the extension is
+    /// this module's own word and not anything an uploader chose.
+    /// </summary>
+    public static string ContentTypeOfName(string storedName) =>
+        Shapes
+            .Where(shape => storedName.EndsWith(shape.Extension, StringComparison.OrdinalIgnoreCase))
+            .Select(shape => shape.ContentType)
+            .FirstOrDefault() ?? "application/octet-stream";
 }

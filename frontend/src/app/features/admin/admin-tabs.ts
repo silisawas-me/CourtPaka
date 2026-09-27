@@ -56,6 +56,7 @@ export class AdminTabs {
     { id: 'venues', path: '/admin/venues' },
     { id: 'dashboard', path: '/admin/dashboard' },
     { id: 'users', path: '/admin/users' },
+    { id: 'commission', path: '/admin/commission' },
     { id: 'complaints', path: '/admin/complaints' },
   ];
 }

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using CourtBooking.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CourtBooking.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260926084114_WhatThePlatformCharges")]
+    partial class WhatThePlatformCharges
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -401,9 +404,6 @@ namespace CourtBooking.Api.Data.Migrations
                     b.Property<Guid>("BookingId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateOnly>("CountsOn")
-                        .HasColumnType("date");
-
                     b.Property<int>("Method")
                         .HasColumnType("integer");
 
@@ -426,7 +426,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("ReceivedByUserId");
 
-                    b.HasIndex("VenueId", "CountsOn");
+                    b.HasIndex("VenueId", "ReceivedAt");
 
                     b.ToTable("PaymentReceipts", t =>
                         {
@@ -616,34 +616,6 @@ namespace CourtBooking.Api.Data.Migrations
                     b.ToTable("WaitlistEntries");
                 });
 
-            modelBuilder.Entity("CourtBooking.Api.Documents.DocumentSeries", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Issued")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Kind")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("SeriesCode")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.Property<int>("Year")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SeriesCode", "Kind", "Year")
-                        .IsUnique();
-
-                    b.ToTable("DocumentSeries");
-                });
-
             modelBuilder.Entity("CourtBooking.Api.Identity.AccountStatusChange", b =>
                 {
                     b.Property<Guid>("Id")
@@ -825,102 +797,6 @@ namespace CourtBooking.Api.Data.Migrations
                     b.ToTable("CancellationTiers");
                 });
 
-            modelBuilder.Entity("CourtBooking.Api.Venues.CommissionInvoice", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("AmountBaht")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)");
-
-                    b.Property<DateOnly>("DueOn")
-                        .HasColumnType("date");
-
-                    b.Property<string>("EvidenceKey")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("IssuedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateOnly>("Month")
-                        .HasColumnType("date");
-
-                    b.Property<string>("Number")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<DateTimeOffset?>("PaidAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("PaidByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("RefusedReason")
-                        .HasMaxLength(400)
-                        .HasColumnType("character varying(400)");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset?>("SubmittedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("VenueId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Number")
-                        .IsUnique();
-
-                    b.HasIndex("PaidByUserId");
-
-                    b.HasIndex("VenueId", "Month")
-                        .IsUnique();
-
-                    b.ToTable("CommissionInvoices");
-                });
-
-            modelBuilder.Entity("CourtBooking.Api.Venues.CommissionInvoiceLine", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("AmountBaht")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)");
-
-                    b.Property<Guid>("BookingId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("InvoiceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("KeptBaht")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)");
-
-                    b.Property<decimal>("Percent")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<DateOnly>("ServedOn")
-                        .HasColumnType("date");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BookingId")
-                        .IsUnique();
-
-                    b.HasIndex("InvoiceId");
-
-                    b.ToTable("CommissionInvoiceLines");
-                });
-
             modelBuilder.Entity("CourtBooking.Api.Venues.CommissionRate", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1075,14 +951,6 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.Property<int?>("PermissionsBefore")
                         .HasColumnType("integer");
-
-                    b.Property<decimal?>("RefundLimitAfter")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)");
-
-                    b.Property<decimal?>("RefundLimitBefore")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)");
 
                     b.Property<int>("Role")
                         .HasColumnType("integer");
@@ -1395,10 +1263,6 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.Property<int>("Permissions")
                         .HasColumnType("integer");
-
-                    b.Property<decimal>("RefundLimitBaht")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)");
 
                     b.Property<int>("Role")
                         .HasColumnType("integer");
@@ -1931,43 +1795,6 @@ namespace CourtBooking.Api.Data.Migrations
                     b.Navigation("Policy");
                 });
 
-            modelBuilder.Entity("CourtBooking.Api.Venues.CommissionInvoice", b =>
-                {
-                    b.HasOne("CourtBooking.Api.Identity.AppUser", "PaidBy")
-                        .WithMany()
-                        .HasForeignKey("PaidByUserId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("CourtBooking.Api.Venues.Venue", "Venue")
-                        .WithMany()
-                        .HasForeignKey("VenueId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("PaidBy");
-
-                    b.Navigation("Venue");
-                });
-
-            modelBuilder.Entity("CourtBooking.Api.Venues.CommissionInvoiceLine", b =>
-                {
-                    b.HasOne("CourtBooking.Api.Bookings.Booking", "Booking")
-                        .WithMany()
-                        .HasForeignKey("BookingId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("CourtBooking.Api.Venues.CommissionInvoice", "Invoice")
-                        .WithMany("Lines")
-                        .HasForeignKey("InvoiceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Booking");
-
-                    b.Navigation("Invoice");
-                });
-
             modelBuilder.Entity("CourtBooking.Api.Venues.CommissionRate", b =>
                 {
                     b.HasOne("CourtBooking.Api.Identity.AppUser", "SetBy")
@@ -2218,11 +2045,6 @@ namespace CourtBooking.Api.Data.Migrations
             modelBuilder.Entity("CourtBooking.Api.Venues.CancellationPolicy", b =>
                 {
                     b.Navigation("Tiers");
-                });
-
-            modelBuilder.Entity("CourtBooking.Api.Venues.CommissionInvoice", b =>
-                {
-                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("CourtBooking.Api.Venues.OpeningHoursSchedule", b =>

@@ -1,0 +1,37 @@
+/*
+ * One invoice is one line: a venue, an amount, where it stands, and when it was due. The screen
+ * is opened to find the ones somebody is waiting on, so it is a list to scan rather than a set
+ * of cards to read.
+ */
+.invoice {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.who {
+  min-width: 12rem;
+}
+
+.amount {
+  font: var(--mat-sys-title-medium);
+}
+
+/* Late, which is a state of the money and not a state of the invoice (PRD US-21). */
+.late {
+  background: var(--status-risk-soft);
+  color: var(--status-risk-ink);
+}
+
+.due {
+  white-space: nowrap;
+}
+
+/* The reason takes the width of the row it belongs to rather than sitting in the middle of it. */
+.asking {
+  flex-basis: 100%;
+}
+
+.filters .chosen {
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}

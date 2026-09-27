@@ -75,6 +75,15 @@ public sealed class AppOptions
     /// </summary>
     public string[] PlatformAdmins { get; init; } = [];
 
+    /// <summary>
+    /// Where the platform takes its commission (PRD US-21). Not required to start: a deployment
+    /// that has not said yet can do everything but be paid, and an invoice says so rather than
+    /// showing an empty line and looking broken.
+    /// </summary>
+    public string? PlatformPromptPayId { get; init; }
+
+    public string? PlatformAccountName { get; init; }
+
     /// <summary>Uploads an hour per person (PRD 8, Security).</summary>
     [Range(1, 10_000)]
     public int UploadsPerHour { get; init; } = 10;
