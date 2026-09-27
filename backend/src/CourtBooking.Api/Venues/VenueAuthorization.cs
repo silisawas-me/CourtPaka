@@ -154,6 +154,17 @@ public sealed class VenuePermissionHandler(AppDbContext database, CurrentVenue c
 {
     public const string VenueRouteValue = "venueId";
 
+    /// <summary>
+    /// The door that stays open at a suspended venue (PRD US-20): the member holds the
+    /// permission, and the venue is either trading or only suspended — suspension stops selling,
+    /// not reading what was sold. Public so a page that reads across every venue a person has
+    /// (badPaka 2c) asks the same question the route policy does, not a copy of it.
+    /// </summary>
+    public static bool ReadsEvenWhenSuspended(
+        VenueMembership membership, VenueStatus? status, VenuePermissions permission) =>
+        membership.Allows(permission)
+        && (!VenueStatusRules.IsFrozen(status) || status == VenueStatus.Suspended);
+
     protected override async Task HandleRequirementAsync(
         AuthorizationHandlerContext context,
         VenuePermissionRequirement requirement)
@@ -191,7 +202,6 @@ public sealed class VenuePermissionHandler(AppDbContext database, CurrentVenue c
         var readOnlyVenue = VenueStatusRules.IsFrozen(currentVenue.Status);
 
         var turnedAway = currentVenue.Status == VenueStatus.Rejected;
-        var suspended = currentVenue.Status == VenueStatus.Suspended;
 
         var allowed = requirement switch
         {
@@ -201,7 +211,7 @@ public sealed class VenuePermissionHandler(AppDbContext database, CurrentVenue c
             { WhateverTheVenueSStatus: true } => true,
             { Permission: VenuePermissions.None } => !readOnlyVenue,
             { EvenWhenSuspended: true } needed =>
-                membership.Allows(needed.Permission) && (!readOnlyVenue || suspended),
+                ReadsEvenWhenSuspended(membership, currentVenue.Status, needed.Permission),
             var needed => membership.Allows(needed.Permission) && !readOnlyVenue,
         };
 

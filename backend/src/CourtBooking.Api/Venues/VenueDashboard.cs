@@ -207,7 +207,7 @@ public static class VenueDashboard
         var until = PlatformRequirements.BangkokHour(last.AddDays(1), 0);
 
         var kept = await KeptByDayAsync(database, venueId, since, until, now, cancellationToken);
-        var (sellable, booked) = await HoursByDayAsync(
+        var hours = await HoursByDayAsync(
             database, venueId, first, last, since, until, cancellationToken);
 
         var days = Enumerable.Range(0, last.DayNumber - first.DayNumber + 1)
@@ -219,8 +219,8 @@ public static class VenueDashboard
                     date,
                     money.Online,
                     money.Staff,
-                    sellable.GetValueOrDefault(date),
-                    booked.GetValueOrDefault(date),
+                    hours.GetValueOrDefault(date)?.Sum(hour => hour.Sellable) ?? 0,
+                    hours.GetValueOrDefault(date)?.Sum(hour => hour.Booked) ?? 0,
                     money.Bookings,
                     money.RefundDue,
                     money.Refunded);
@@ -480,8 +480,7 @@ public static class VenueDashboard
     /// was then sold to a walk-in is one hour used, not two — and only if it was for sale, so the
     /// share can never pass 100%.
     /// </summary>
-    private static async Task<(Dictionary<DateOnly, int> Sellable, Dictionary<DateOnly, int> Booked)>
-        HoursByDayAsync(
+    private static async Task<Dictionary<DateOnly, HourUse[]>> HoursByDayAsync(
             AppDbContext database,
             Guid venueId,
             DateOnly first,
@@ -523,8 +522,7 @@ public static class VenueDashboard
             .Select(slot => (slot.CourtId, At: PlatformRequirements.BangkokDateAndHour(slot.StartsAt)))
             .ToLookup(slot => slot.At.Date, slot => (slot.CourtId, slot.At.Hour));
 
-        var sellable = new Dictionary<DateOnly, int>();
-        var booked = new Dictionary<DateOnly, int>();
+        var byDay = new Dictionary<DateOnly, HourUse[]>();
 
         for (var date = first; date <= last; date = date.AddDays(1))
         {
@@ -538,13 +536,46 @@ public static class VenueDashboard
                 taken: new HashSet<(Guid, int)>(),
                 asItWas: true);
 
-            sellable[date] = day.Courts.Sum(court => day.Hours.Count(hour => day.IsSellable(court.Id, hour)));
-            booked[date] = usedByDay[date]
-                .Distinct()
-                .Count(slot => day.IsSellable(slot.CourtId, slot.Hour));
+            var usedThatDay = usedByDay[date].Distinct().ToArray();
+            byDay[date] =
+            [
+                .. day.Hours.Select(hour => new HourUse(
+                    hour,
+                    day.Courts.Count(court => day.IsSellable(court.Id, hour)),
+                    usedThatDay.Count(slot => slot.Hour == hour && day.IsSellable(slot.CourtId, hour)))),
+            ];
         }
 
-        return (sellable, booked);
+        return byDay;
+    }
+
+    /// <summary>
+    /// One hour of one day: how many court-hours were for sale in it and how many of those were
+    /// used. The day's figures are these summed, so a day and its hours can never disagree.
+    /// </summary>
+    public readonly record struct HourUse(int Hour, int Sellable, int Booked);
+
+    /// <summary>
+    /// Today at one venue, as the owner's overview of all their venues reads it (badPaka 2c):
+    /// what was kept, how many bookings that came from, and the hours — by the same rules as the
+    /// venue's own dashboard, from the same code, so the two pages cannot show two numbers.
+    /// </summary>
+    public static async Task<(decimal KeptBaht, int Bookings, HourUse[] Hours)> TodayAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateOnly today,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var since = PlatformRequirements.BangkokHour(today, 0);
+        var until = PlatformRequirements.BangkokHour(today.AddDays(1), 0);
+
+        var kept = (await KeptByDayAsync(database, venueId, since, until, now, cancellationToken))
+            .GetValueOrDefault(today);
+        var hours = await HoursByDayAsync(
+            database, venueId, today, today, since, until, cancellationToken);
+
+        return (kept.Online + kept.Staff, kept.Bookings, hours.GetValueOrDefault(today) ?? []);
     }
 
     /// <summary>
