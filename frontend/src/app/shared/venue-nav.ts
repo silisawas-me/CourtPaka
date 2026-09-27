@@ -34,14 +34,7 @@ export const VENUE_SECTIONS: readonly VenueLink[] = [
     testId: 'nav-schedule',
     alsoAt: [['now']],
   },
-  // Until the painted price grid lands (PR-4) the prices are the part of settings they were.
-  {
-    to: ['settings'],
-    fragment: 'prices',
-    label: 'nav.section.pricing',
-    testId: 'nav-pricing',
-    ownerOnly: true,
-  },
+  { to: ['pricing'], label: 'nav.section.pricing', testId: 'nav-pricing', ownerOnly: true },
   { to: ['dashboard'], label: 'nav.section.revenue', testId: 'nav-dashboard', ownerOnly: true },
   { to: ['packages'], label: 'nav.section.members', testId: 'nav-packages' },
 ];

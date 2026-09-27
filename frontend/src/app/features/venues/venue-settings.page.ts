@@ -36,7 +36,6 @@ import { FieldError } from '../../shared/field-error';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 import { provideLocalizedDateAdapter } from '../../shared/localized-date-adapter';
 import { CancellationPolicyEditor } from './cancellation-policy';
-import { PriceBands } from './price-bands';
 
 /** What the form offers before a venue says otherwise: a common Thai badminton day. */
 const DEFAULT_OPENS_HOUR = 6;
@@ -63,7 +62,6 @@ type DayForm = FormGroup<{
     MatProgressBarModule,
     MatSlideToggleModule,
     AppDatePipe,
-    PriceBands,
     CancellationPolicyEditor,
   ],
   styleUrl: './venue-settings.page.scss',

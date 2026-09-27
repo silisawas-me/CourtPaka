@@ -1,0 +1,222 @@
+/*
+ * The design's pricing page: the tiers as three cards across, the week as a grid of hours to
+ * paint, and the save at the foot. The tiers go from the court's pale green to the rust of the
+ * busiest evening — the same rust the timeline marks peak hours with.
+ */
+:host {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+
+  --tier-0: var(--kind-app-soft);
+  --tier-1: color-mix(in srgb, var(--status-waiting) 35%, var(--mat-sys-surface));
+  --tier-2: var(--status-waiting);
+  --tier-n: var(--mat-sys-tertiary-container);
+}
+
+.lead {
+  margin: 0;
+  max-width: 70ch;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.tiers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 1rem;
+}
+
+.tier {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-extra-large);
+  background: var(--mat-sys-surface);
+  cursor: pointer;
+
+  /* The brush in hand: drawn the way the design draws it, with the ink round it. */
+  &.on {
+    border: 2px solid var(--mat-sys-on-surface);
+  }
+}
+
+.swatch {
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--mat-sys-corner-medium);
+  background: var(--tier);
+}
+
+.tier-0 {
+  --tier: var(--tier-0);
+}
+
+.tier-1 {
+  --tier: var(--tier-1);
+}
+
+.tier-2 {
+  --tier: var(--tier-2);
+}
+
+.tier-n {
+  --tier: var(--tier-n);
+}
+
+.tier-text {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tier-name {
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.tier-price {
+  font: var(--mat-sys-headline-small);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.per {
+  margin-inline-start: 0.15rem;
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.step {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-small);
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-title-medium);
+  cursor: pointer;
+
+  &.dark {
+    border-color: var(--mat-sys-on-surface);
+    background: var(--mat-sys-on-surface);
+    color: var(--mat-sys-surface);
+  }
+}
+
+.week {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  padding: 1.25rem;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-extra-large);
+  background: var(--mat-sys-surface);
+}
+
+.week-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+
+  h2 {
+    margin: 0;
+    font: var(--mat-sys-title-medium);
+  }
+}
+
+.brush-note {
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.week-scroll {
+  overflow-x: auto;
+}
+
+.week-grid {
+  display: grid;
+  grid-template-columns: 3.5rem repeat(var(--hours), minmax(2.5rem, 1fr));
+  gap: 0.3rem;
+  min-width: max-content;
+  // A drag across the grid paints; it must not also select text or scroll the page on a phone.
+  user-select: none;
+  touch-action: none;
+}
+
+.hour {
+  font: var(--mat-sys-label-small);
+  font-family: var(--font-mono);
+  color: var(--mat-sys-on-surface-variant);
+  text-align: center;
+}
+
+.day {
+  display: flex;
+  align-items: center;
+  font: var(--mat-sys-label-large);
+}
+
+.cell {
+  height: 2.25rem;
+  border: 0;
+  border-radius: var(--mat-sys-corner-small);
+  background: var(--tier);
+
+  &:not(:disabled) {
+    cursor: pointer;
+  }
+
+  &:not(:disabled):hover {
+    outline: 2px solid var(--mat-sys-on-surface);
+  }
+
+  &.shut {
+    background: repeating-linear-gradient(
+      135deg,
+      var(--mat-sys-surface-container-highest) 0 3px,
+      var(--mat-sys-surface) 3px 6px
+    );
+  }
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem;
+
+  p {
+    margin: 0;
+    margin-inline-end: auto;
+  }
+}
+
+.primary,
+.secondary {
+  min-height: 2.75rem;
+  padding: 0 1.25rem;
+  border-radius: var(--mat-sys-corner-medium);
+  font: var(--mat-sys-label-large);
+  cursor: pointer;
+}
+
+.primary {
+  border: 0;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+}
+
+.secondary {
+  border: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+}

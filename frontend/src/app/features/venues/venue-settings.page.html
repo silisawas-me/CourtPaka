@@ -39,7 +39,6 @@
         -->
         <a [routerLink]="[]" fragment="courts">{{ i18n.t('settings.courts.title') }}</a>
         <a [routerLink]="[]" fragment="hours">{{ i18n.t('settings.hours.title') }}</a>
-        <a [routerLink]="[]" fragment="prices">{{ i18n.t('pricing.title') }}</a>
         <a [routerLink]="[]" fragment="cancellation">{{ i18n.t('cancellation.title') }}</a>
         <a [routerLink]="[]" fragment="deposit">{{ i18n.t('settings.deposit') }}</a>
       </nav>
@@ -305,9 +304,10 @@
       this page, and an id inside a component that could be used twice is an id that points at
       whichever copy came first.
     -->
-    <div id="prices" class="jump-target" tabindex="-1">
-      <app-price-bands [venueId]="current.id" [canManage]="canManage()" />
-    </div>
+    <!-- Prices moved to their own section, painted as a week (owner app PR-4). -->
+    <p class="muted moved-prices" data-testid="prices-moved">
+      <a [routerLink]="['/venues', current.id, 'pricing']">{{ i18n.t('pricing.movedHere') }}</a>
+    </p>
     <div id="cancellation" class="jump-target" tabindex="-1">
       <app-cancellation-policy [venueId]="current.id" [canManage]="canManage()" />
     </div>
