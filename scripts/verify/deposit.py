@@ -59,18 +59,8 @@ with sync_playwright() as p:
     deposit = booking["depositBaht"]
     check("the hold asks for a quarter of the price", deposit * 4 == price)
 
-    booker.goto(f"{BASE}/bookings/{booking['id']}")
-    booker.wait_for_selector("[data-testid=booking-deposit]")
-    check(
-        "the page says what to transfer now",
-        str(int(deposit)) in booker.inner_text("[data-testid=booking-deposit]"),
-        booker,
-    )
-    check(
-        "and what is left to pay at the venue",
-        str(int(price - deposit)) in booker.inner_text("[data-testid=booking-at-venue]"),
-    )
-
+    # What the booker's page said is gone with the page (docs/plan/cut-booker.md); the payment
+    # the server hands out still carries both halves.
     paying = booker.request.get(f"{BASE}/api/bookings/{booking['id']}/payment").json()
     check("the amount in the code is the deposit", paying["depositBaht"] == deposit)
     check("and the rest is named as the venue's to collect", paying["payAtVenueBaht"] == price - deposit)

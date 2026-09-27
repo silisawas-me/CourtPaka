@@ -19,7 +19,7 @@ from harness import (
     take_first_free_hour,
     venue_today,
 )
-from playwright.sync_api import expect, sync_playwright
+from playwright.sync_api import sync_playwright
 
 check = Checks(__file__)
 tomorrow = venue_today() + datetime.timedelta(days=1)
@@ -58,13 +58,10 @@ with sync_playwright() as p:
     check("in the language the booker chose", f"Email to {email} [th]" in held)
     check("with the Buddhist year, as the screen shows dates", str(tomorrow.year + 543) in held)
 
-    # The link in the message is the page the booker pays on; follow it the way they would.
+    # The link still names the booking. The page it pointed at — the booker's own — was taken out
+    # (docs/plan/cut-booker.md, D17), so it is not followed here.
     link = re.search(r"(https?://\S*/bookings/[0-9a-f-]+)", held)
     check("the message carries a link to the booking", link is not None)
-    if link:
-        booker.goto(link.group(1))
-        expect(booker.get_by_test_id("booking-status")).to_be_visible()
-        check("and the link opens the booking it is about", True, booker)
 
     run_out_hold(booking["id"])
     told = mail_about(email, booking["id"], 2)

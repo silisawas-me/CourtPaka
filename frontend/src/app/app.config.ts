@@ -16,17 +16,10 @@ import {
 import { AuthService } from './core/auth/auth.service';
 import { DEFAULT_LANGUAGE } from './core/i18n/locales';
 import { TranslationService } from './core/i18n/translation.service';
-import { PublicVenueService } from './core/venues/public-venue.service';
-import { plainDate, venueToday } from './core/i18n/plain-date';
 import { apiErrorInterceptor } from './core/http/api-error';
 import { routes } from './app.routes';
 import { provideServiceWorker } from '@angular/service-worker';
 
-/**
- * The venue and day of a grid address (`/book/{venueId}?date=`), or null for any other page. The
- * day the page will ask for is the day in the address, or today at the venue — the same rule the
- * page itself uses, because a different answer here would be a wasted request.
- */
 /**
  * Whether a navigation is somebody coming in off the front page — the only one drawn as a
  * movement rather than a new screen, because the court is on both sides of it.
@@ -51,19 +44,6 @@ export function isTheWayIn(from: string | undefined, to: string | undefined): bo
   return (
     (from === front && doors.includes(to ?? '')) || (doors.includes(from ?? '') && to === front)
   );
-}
-
-export function gridInTheAddress(
-  path: string,
-  search: string,
-): { venueId: string; date: string } | null {
-  const venueId = /^\/book\/([^/?#]+)\/?$/.exec(path)?.[1];
-  if (!venueId) {
-    return null;
-  }
-
-  const date = new URLSearchParams(search).get('date');
-  return { venueId: decodeURIComponent(venueId), date: date ?? plainDate(venueToday()) };
 }
 
 export const appConfig: ApplicationConfig = {
@@ -105,14 +85,6 @@ export const appConfig: ApplicationConfig = {
       return i18n.language() === DEFAULT_LANGUAGE ? undefined : i18n.load(i18n.language());
     }),
     provideAppInitializer(() => inject(AuthService).lookForSession()),
-    // A booker who opened a grid link is waiting for one thing: that day. Asking for it here
-    // starts it beside the download of the page that draws it, rather than after it (PRD 8 LCP).
-    provideAppInitializer(() => {
-      const asked = gridInTheAddress(location.pathname, location.search);
-      if (asked) {
-        inject(PublicVenueService).prefetch(asked.venueId, asked.date);
-      }
-    }),
     provideServiceWorker('ngsw-worker.js', {
       enabled: !isDevMode(),
       registrationStrategy: 'registerWhenStable:30000',

@@ -5,16 +5,14 @@ table in it quietly grows past the window — and because the body clips the ove
 scrolling it, whatever is out there cannot be reached at all.
 """
 
-import datetime
 import sys
 
 sys.path.insert(0, "C:/repo/scripts/verify")
-from harness import BASE, OWNER, Checks, new_booker, seeded_venue_id, sign_in, venue_today
+from harness import BASE, OWNER, Checks, seeded_venue_id, sign_in
 from playwright.sync_api import sync_playwright
 
 check = Checks(__file__)
 
-tomorrow = venue_today() + datetime.timedelta(days=1)
 
 WIDER = """(width) => {
     const out = [];
@@ -49,24 +47,17 @@ with sync_playwright() as p:
     width = 390
     found = []
 
-    booker = browser.new_page(viewport={"width": width, "height": 844})
+    # Signed out: the two doors, and the sign-in behind each.
+    visitor = browser.new_page(viewport={"width": width, "height": 844})
     for name, path in (
         ("home", "/"),
-        ("login", "/login"),
+        ("admin sign-in", "/login?as=admin"),
+        ("staff sign-in", "/login?as=staff"),
     ):
-        booker.goto(BASE + path)
-        booker.wait_for_timeout(1200)
-        found += [(name, one) for one in booker.evaluate(WIDER, width)]
-
-    sign_in(booker, new_booker(booker))
-    for name, path in (
-        ("grid", f"/book/{venue_id}?date={tomorrow.isoformat()}"),
-        ("my bookings", "/bookings"),
-    ):
-        booker.goto(BASE + path)
-        booker.wait_for_timeout(1600)
-        found += [(name, one) for one in booker.evaluate(WIDER, width)]
-    booker.close()
+        visitor.goto(BASE + path)
+        visitor.wait_for_timeout(1200)
+        found += [(name, one) for one in visitor.evaluate(WIDER, width)]
+    visitor.close()
 
     staff = browser.new_page(viewport={"width": width, "height": 844})
     sign_in(staff, OWNER)

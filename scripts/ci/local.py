@@ -21,9 +21,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# The flows the workflow itself runs (ci.yml, job `flows`). The other twenty-eight exist, but
-# these five are the ones the gate has always been.
-FLOWS = ["booking_grid", "booking", "slip_queue", "counter_money", "line_login"]
+# The flows the workflow itself runs (ci.yml, job `flows`). The rest exist, but these six are the
+# gate. Since the booker's pages were taken out (docs/plan/cut-booker.md) the six are the venue's.
+FLOWS = ["doors", "slip_queue", "counter_money", "venue_bookings", "day_panel", "now_board"]
 
 
 class Check:

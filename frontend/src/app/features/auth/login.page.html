@@ -11,8 +11,12 @@
     <h1 class="auth-wordmark"><app-wordmark /></h1>
 
     <mat-card-header>
-      <h2 mat-card-title data-testid="page-title">{{ i18n.t('login.title') }}</h2>
-      <mat-card-subtitle>{{ i18n.t('login.subtitle') }}</mat-card-subtitle>
+      <h2 mat-card-title data-testid="page-title">
+        {{ i18n.t(door() ? 'login.door.' + door() + '.title' : 'login.title') }}
+      </h2>
+      <mat-card-subtitle>
+        {{ i18n.t(door() ? 'login.door.' + door() + '.subtitle' : 'login.subtitle') }}
+      </mat-card-subtitle>
     </mat-card-header>
 
     <mat-card-content>
@@ -51,7 +55,7 @@
           <mat-error [appFieldError]="form.controls.password" testId="password-error"></mat-error>
         </mat-form-field>
 
-        @if (formError() ?? lineError(); as key) {
+        @if (formError(); as key) {
           <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
         }
 
@@ -59,13 +63,25 @@
           {{ i18n.t(submitting() ? 'common.loading' : 'login.submit') }}
         </button>
       </form>
-
-      <app-line-sign-in [returnUrl]="returnUrl() ?? '/'" />
     </mat-card-content>
 
     <mat-card-actions class="auth-actions">
-      <span class="muted">{{ i18n.t('login.needAccount') }}</span>
-      <a matButton="tonal" routerLink="/register">{{ i18n.t('nav.signUp') }}</a>
+      @if (invited()) {
+        <!-- The one way a new account is made now: somebody was invited to a venue (D16). -->
+        <span class="muted">{{ i18n.t('login.invitedNoAccount') }}</span>
+        <a matButton="tonal" routerLink="/register" data-testid="register-link">
+          {{ i18n.t('login.createAccount') }}
+        </a>
+      } @else if (otherDoor(); as other) {
+        <a
+          matButton="tonal"
+          routerLink="/login"
+          [queryParams]="{ as: other }"
+          data-testid="other-door"
+        >
+          {{ i18n.t('login.door.' + other + '.switch') }}
+        </a>
+      }
       <a matButton routerLink="/resend-verification">{{ i18n.t('login.resendVerification') }}</a>
     </mat-card-actions>
     <!--
@@ -73,9 +89,9 @@
       green, and six words of body text on it are under the contrast a reader needs.
     -->
     <ul class="auth-points">
-      <li>{{ i18n.t('login.point.find') }}</li>
-      <li>{{ i18n.t('login.point.book') }}</li>
-      <li>{{ i18n.t('login.point.pay') }}</li>
+      <li>{{ i18n.t('login.point.today') }}</li>
+      <li>{{ i18n.t('login.point.money') }}</li>
+      <li>{{ i18n.t('login.point.team') }}</li>
     </ul>
   </mat-card>
 </div>

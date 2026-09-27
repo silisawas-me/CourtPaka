@@ -1,16 +1,9 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { TRANSLATIONS } from '../../testing/translations';
-import {
-  clickOn,
-  elementOf,
-  lineSignInAvailable,
-  pageProviders,
-  setInput,
-  submitForm,
-  textOf,
-} from '../../testing/dom';
+import { clickOn, elementOf, pageProviders, setInput, submitForm, textOf } from '../../testing/dom';
 import { LoginPage } from './login.page';
 
 describe('LoginPage', () => {
@@ -27,7 +20,6 @@ describe('LoginPage', () => {
     httpMock = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(LoginPage);
     fixture.detectChanges();
-    lineSignInAvailable(true);
   });
 
   afterEach(() => httpMock.verify());
@@ -87,22 +79,6 @@ describe('LoginPage', () => {
     clickOn(fixture, 'toggle-password');
     expect(password().type).toBe('password');
   });
-  it('offers LINE, carrying the page the guard interrupted', () => {
-    fixture.componentRef.setInput('returnUrl', '/bookings');
-    fixture.detectChanges();
-
-    const button = elementOf(fixture, 'line-sign-in') as HTMLAnchorElement;
-    expect(button.getAttribute('href')).toBe(
-      '/api/auth/line/start?returnUrl=' + encodeURIComponent('/bookings'),
-    );
-  });
-
-  it('says why LINE sent the booker back here', () => {
-    fixture.componentRef.setInput('line', 'auth.line_denied');
-    fixture.detectChanges();
-
-    expect(textOf(fixture, 'form-error')).toBe(TRANSLATIONS.th['error.auth.line_denied']);
-  });
 
   /* The wordmark is the page's one h1; the thing you came to do is the heading under it. */
   it('puts the form heading under the wordmark', () => {
@@ -110,5 +86,66 @@ describe('LoginPage', () => {
 
     expect(host.querySelectorAll('h1').length).toBe(1);
     expect(elementOf(fixture, 'page-title')?.tagName).toBe('H2');
+  });
+
+  /*
+   * The two doors into the venue side (docs/plan/cut-booker.md, D12–D15). Which door is theirs is
+   * read from the roles the server gave per venue; the wrong one signs them out again and says
+   * which door to use.
+   */
+  describe('the two doors', () => {
+    const me = {
+      id: '11111111-1111-1111-1111-111111111111',
+      email: 'someone@example.com',
+      emailConfirmed: true,
+      language: 'th',
+      isPlatformAdmin: false,
+    };
+
+    function signIn(door: string, venues: object[]): void {
+      fixture.componentRef.setInput('as', door);
+      fixture.detectChanges();
+      fill('someone@example.com', 'CorrectHorse1');
+      submitForm(fixture);
+      httpMock.expectOne('/api/auth/login').flush(null, { status: 204, statusText: 'No Content' });
+      httpMock.expectOne('/api/auth/me').flush(me);
+      httpMock.expectOne('/api/venues/mine').flush(venues);
+    }
+
+    it('names the door on the card', () => {
+      fixture.componentRef.setInput('as', 'staff');
+      fixture.detectChanges();
+
+      expect(textOf(fixture, 'page-title')).toBe(TRANSLATIONS.th['login.door.staff.title']);
+      // The way to the other door says which door it is, not which one this is.
+      const other = elementOf(fixture, 'other-door');
+      expect(other?.getAttribute('href')).toBe('/login?as=admin');
+      expect(other?.textContent?.trim()).toBe(TRANSLATIONS.th['login.door.admin.switch']);
+    });
+
+    it('turns staff away from the admin door, signed out, with the door that is theirs', () => {
+      signIn('admin', [{ id: 'v1', role: 'Staff' }]);
+      httpMock.expectOne('/api/auth/logout').flush(null, { status: 204, statusText: 'No Content' });
+      fixture.detectChanges();
+
+      expect(textOf(fixture, 'form-error')).toBe(TRANSLATIONS.th['login.door.notAnOwner']);
+    });
+
+    it('takes staff with one venue to its floor right now', async () => {
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+
+      signIn('staff', [{ id: 'v1', role: 'Staff' }]);
+
+      expect(navigate).toHaveBeenCalledWith('/venues/v1/now');
+    });
+
+    it('offers a new account only to somebody sent here by an invitation', () => {
+      expect(elementOf(fixture, 'register-link')).toBeNull();
+
+      fixture.componentRef.setInput('returnUrl', '/venue-invitation?token=abc');
+      fixture.detectChanges();
+
+      expect(elementOf(fixture, 'register-link')).not.toBeNull();
+    });
   });
 });

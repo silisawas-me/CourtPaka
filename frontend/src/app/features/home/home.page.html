@@ -21,65 +21,54 @@
     @if (user(); as account) {
       <!--
         Already inside. The doors would ask a question this visitor has answered, so they are
-        replaced by where they were going: their own bookings, and what stands between this
-        account and a new one — in the server's words, not a rule worked out again here.
+        replaced by where an owner goes next: the venues they run, or a new one.
       -->
       <div class="doors" data-testid="home-doors-signed-in">
-        <a class="door door-lit" routerLink="/book" data-testid="home-find">
+        <a class="door door-lit" routerLink="/venues" data-testid="home-my-venues">
           <span class="door-kicker" data-testid="signed-in-as">
             {{ i18n.t('home.signedInAs') }} {{ account.email ?? i18n.t('account.noEmail') }}
           </span>
-          <span class="door-title">{{ i18n.t('home.find') }}</span>
-          <span class="door-more">{{ i18n.t('home.browse') }}</span>
+          <span class="door-title">{{ i18n.t('nav.venues') }}</span>
+          <span class="door-more">{{ i18n.t('home.myVenuesMore') }}</span>
         </a>
 
-        <a class="door" routerLink="/bookings" data-testid="home-my-bookings">
-          <span class="door-kicker">{{ i18n.t('nav.book') }}</span>
-          <span class="door-title">{{ i18n.t('home.myBookings') }}</span>
-          <span
-            class="door-more"
-            data-testid="verification-state"
-            [class.blocked]="account.cannotBookBecause"
-          >
-            {{
-              account.cannotBookBecause
-                ? i18n.t('error.' + account.cannotBookBecause)
-                : i18n.t('home.canBook')
-            }}
-          </span>
+        <a class="door" routerLink="/venues/apply" data-testid="home-apply">
+          <span class="door-kicker">{{ i18n.t('home.forVenues') }}</span>
+          <span class="door-title">{{ i18n.t('venues.create.title') }}</span>
+          <span class="door-more">{{ i18n.t('home.forVenuesBody') }}</span>
         </a>
       </div>
 
-      <p class="aside">
-        @if (!account.emailConfirmed && account.email) {
+      @if (!account.emailConfirmed && account.email) {
+        <!-- A venue's owner needs a confirmed address: its notices and invoices go there. -->
+        <p class="aside">
           <a routerLink="/resend-verification">{{ i18n.t('login.resendVerification') }}</a>
-        }
-        @if (account.cannotBookBecause === 'auth.phone_required') {
-          <a routerLink="/account">{{ i18n.t('account.savePhone') }}</a>
-        }
-      </p>
+        </p>
+      }
     } @else {
       <div class="doors" data-testid="home-doors">
-        <a class="door" routerLink="/login" data-testid="home-sign-in">
-          <span class="door-kicker">{{ i18n.t('home.haveAccount') }}</span>
-          <span class="door-title">{{ i18n.t('nav.signIn') }}</span>
-          <span class="door-more">{{ i18n.t('home.signInMore') }}</span>
+        <a
+          class="door door-lit"
+          routerLink="/login"
+          [queryParams]="{ as: 'admin' }"
+          data-testid="home-door-admin"
+        >
+          <span class="door-kicker">{{ i18n.t('home.door.admin.kicker') }}</span>
+          <span class="door-title">{{ i18n.t('home.door.admin.title') }}</span>
+          <span class="door-more">{{ i18n.t('home.door.admin.more') }}</span>
         </a>
 
-        <a class="door door-lit" routerLink="/register" data-testid="home-sign-up">
-          <span class="door-kicker">{{ i18n.t('home.newHere') }}</span>
-          <span class="door-title">{{ i18n.t('nav.signUp') }}</span>
-          <span class="door-more">{{ i18n.t('home.signUpMore') }}</span>
+        <a
+          class="door"
+          routerLink="/login"
+          [queryParams]="{ as: 'staff' }"
+          data-testid="home-door-staff"
+        >
+          <span class="door-kicker">{{ i18n.t('home.door.staff.kicker') }}</span>
+          <span class="door-title">{{ i18n.t('home.door.staff.title') }}</span>
+          <span class="door-more">{{ i18n.t('home.door.staff.more') }}</span>
         </a>
       </div>
-
-      <!--
-        The grids are public, so somebody can see what they would be signing up for before they
-        sign up for it. Said quietly, because the two doors are the question being asked.
-      -->
-      <p class="aside">
-        <a routerLink="/book" data-testid="home-find">{{ i18n.t('home.browse') }}</a>
-      </p>
     }
   </div>
 </div>

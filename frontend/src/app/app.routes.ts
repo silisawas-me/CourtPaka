@@ -1,6 +1,5 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
-import { AvailabilityPage } from './features/booking/availability.page';
 
 export const routes: Routes = [
   {
@@ -10,11 +9,6 @@ export const routes: Routes = [
   {
     path: 'register',
     loadComponent: () => import('./features/auth/register.page').then((m) => m.RegisterPage),
-  },
-  {
-    path: 'register/line',
-    loadComponent: () =>
-      import('./features/auth/line-register.page').then((m) => m.LineRegisterPage),
   },
   {
     path: 'login',
@@ -28,11 +22,6 @@ export const routes: Routes = [
     path: 'resend-verification',
     loadComponent: () =>
       import('./features/auth/resend-verification.page').then((m) => m.ResendVerificationPage),
-  },
-  {
-    path: 'book',
-    loadComponent: () =>
-      import('./features/booking/venue-search.page').then((m) => m.VenueSearchPage),
   },
   {
     // The counter's "now" (badPaka 2b): the floor this minute, who is due, and a quick sale.
@@ -96,21 +85,6 @@ export const routes: Routes = [
     path: 'account',
     loadComponent: () => import('./features/auth/account.page').then((m) => m.AccountPage),
     canActivate: [authGuard],
-  },
-  {
-    path: 'bookings',
-    loadComponent: () =>
-      import('./features/booking/my-bookings.page').then((m) => m.MyBookingsPage),
-    canActivate: [authGuard],
-  },
-  {
-    path: 'bookings/:bookingId',
-    loadComponent: () => import('./features/booking/booking.page').then((m) => m.BookingPage),
-    canActivate: [authGuard],
-  },
-  {
-    path: 'book/:venueId',
-    component: AvailabilityPage,
   },
   {
     path: 'admin/dashboard',

@@ -195,7 +195,7 @@ jobs:
 
       - name: Run the flows
         run: |
-          for check in booking_grid booking slip_queue counter_money line_login; do
+          for check in doors slip_queue counter_money venue_bookings day_panel now_board; do
             echo "== $check"
             python scripts/verify/$check.py
           done

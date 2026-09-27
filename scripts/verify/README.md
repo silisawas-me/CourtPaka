@@ -36,26 +36,25 @@ Eight rules worth keeping.
    script is driving — it hands a waiting place an offer, lets a hold lapse, sends a booker's
    mail. A check that depends on something *not* having happened yet is a race the script loses
    on a slow machine, so arrange the state so the job cannot act (a booker who already holds
-   hours is skipped when offers go out, which is what `waitlist.py` relies on) rather than
+   hours is skipped when offers go out) rather than
    hoping to get there first.
 7. Never hard-code what the seed put there. The scripts run in sequence against one database and
    the earlier ones add courts, so ask the API how many to expect rather than writing the number.
 
 | Script | Covers |
 |---|---|
+| `doors.py` | The admin door and the staff door on the front page; old booker addresses are gone |
+| `day_panel.py` | The booking pressed on the floor, opened beside it (badPaka 2a) |
+| `now_board.py` | Every court this minute, with the browser clock pinned (badPaka 2b) |
+| `all_venues_today.py` | Today at every venue on "my venues" (badPaka 2c) |
 | `venue_ui.py` | Sign-in redirects, venue detail, members and permissions (US-14) |
 | `venue_shell.py` | The venue's own navigation: the sidebar on a desk, the tabs on a phone (US-25) |
 | `venue_settings.py` | Courts and opening hours (US-11) |
 | `venue_pricing.py` | Prices and the cancellation policy (US-11) |
-| `booking_grid.py` | Venue search and the court-by-hour grid (US-02) |
-| `booking.py` | Picking hours, the summary, and holding them (US-03) |
-| `payment.py` | The countdown, sending the slip, and who may read it (US-04) |
 | `slip_queue.py` | The venue looking at a slip and deciding (US-12) |
 | `counter_money.py` | Money taken at the desk and the day's count (US-26) |
 | `deposit.py` | A venue asking for part of the price up front (US-28) |
 | `deposit_risk.py` | The rule that asks somebody for more, and its settings (US-28) |
-| `waitlist.py` | Joining and leaving the queue for a full day (US-27) |
-| `line_login.py` | Signing in with LINE, against the stand-in LINE (US-01) |
 
 8. **Ask for the state you need; do not assume the script before you left it.**
    `venue_settings.py` edits the seeded venue's opening hours because that is what it is about,
@@ -69,13 +68,12 @@ Eight rules worth keeping.
    *without* a permission sees passes alone and fails after it. `staff_can(browser, venue_id)`
    puts the staff back to what the seed gives them, or to whatever the script needs.
 
-## The stand-in LINE
+## Online bookings without the booker's pages
 
-`line_login.py` drives the whole LINE flow. The local stack runs `App__Line__UseDevelopmentFake`,
-which serves a consent screen at `/api/dev/line/authorize` where the script says which LINE user
-to be. It is wired up only on a Development host with that flag, because it signs anybody in as
-anybody. Everything on this side of it is the real code: the state cookie, the account that is
-only made once the policy is accepted, and deleting an account that has no password.
+The booker's pages were taken out (docs/plan/cut-booker.md). Scripts that need an online booking
+to exist — a slip to check, a hold to run out — make it through the same API the grid called:
+`take_first_free_hour()` holds the first free hour from the grid's answer, and `send_slip()`
+posts the file to the booking that page held last. What they check is the venue's side.
 
 ## Service worker
 
