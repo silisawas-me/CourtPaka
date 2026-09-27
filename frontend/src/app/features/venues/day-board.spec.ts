@@ -55,6 +55,18 @@ describe('DayBoard, the clock across the floor', () => {
     expect(Number(line()!.style.getPropertyValue('--at'))).toBeCloseTo(50, 5);
   });
 
+  /*
+   * Six o'clock exactly is nought hours into the day, and nought is a real position that reads
+   * as falsy — `@if (liveAt(); as at)` dropped the clock for the first minute of every opening
+   * hour, which is the minute somebody is unlocking the door and looking at the board.
+   */
+  it('is drawn on the stroke of the hour the venue opens', () => {
+    render(new Date(2026, 8, 21, 6, 0));
+
+    expect(line()).not.toBeNull();
+    expect(Number(line()!.style.getPropertyValue('--at'))).toBeCloseTo(0, 5);
+  });
+
   it('is not drawn before the venue opens or after it shuts', () => {
     render(new Date(2026, 8, 21, 5, 59));
     expect(line()).toBeNull();

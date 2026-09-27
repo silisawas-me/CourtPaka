@@ -4,7 +4,11 @@
  * page — and every card on it — grows past the phone it is being read on.
  */
 :host {
-  display: block;
+  // A grid like every other venue screen, so the gap under the page's head is the one the rest
+  // of them have — as a block it had none, and on a phone the head's button met the card below.
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--stack);
   min-width: 0;
 }
 

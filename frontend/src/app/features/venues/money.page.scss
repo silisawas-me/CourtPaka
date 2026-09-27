@@ -52,7 +52,10 @@
   padding: 0;
 }
 
-.lead {
+// A line of the leads list. Named apart from `.lead` above, which is the one big figure of the
+// page: written under the same name, this block won on source order and the day's takings were
+// drawn as a small line with a rule under it.
+.lead-row {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;

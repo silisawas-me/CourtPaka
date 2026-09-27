@@ -194,16 +194,22 @@ with sync_playwright() as p:
         page.locator("[data-testid=today-numbers]").is_visible(),
     )
 
-    # The board's own box has to be as wide as the day it draws, not as wide as the window it is
-    # read through. They are the same on a desk with room to spare and four times apart on a
-    # phone, and everything placed by measuring the box — the clock — is wrong by that much.
-    box, rows = page.evaluate(
+    # An hour is a column the width of an hour, whatever is written in it. A booking's name is
+    # the longest thing on the floor, and a grid told to size itself to its content hands every
+    # column the widest cell's width — so one name turned a day 1,100 pixels wide into 2,700 and
+    # left the counter scrolling through empty boxes. Measured against the hour labels, which
+    # carry nothing but a time and so cannot be what widened it.
+    widest, narrowest = page.evaluate(
         """() => {
-            const board = document.querySelector('[data-testid=day-board]');
-            return [Math.round(board.getBoundingClientRect().width), board.scrollWidth];
+            const hours = [...document.querySelectorAll('.board-hour')]
+                .map(h => h.getBoundingClientRect().width);
+            return [Math.round(Math.max(...hours)), Math.round(Math.min(...hours))];
         }"""
     )
-    check("the board's box is as wide as the day, not as wide as the window", box == rows)
+    check(
+        "an hour is as wide as an hour, whatever is booked in it",
+        widest == narrowest and widest <= 160,
+    )
 
     with page.expect_response(lambda r: r.url.endswith("/confirm-arrival")) as said:
         page.click(f"[data-testid=confirm-arrival-{board_booking['id']}]")

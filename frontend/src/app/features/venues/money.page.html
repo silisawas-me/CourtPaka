@@ -172,7 +172,7 @@
             <p class="leads-title">{{ i18n.t('money.leads') }}</p>
             <ul class="lead-list" data-testid="leads">
               @for (lead of day.leads; track $index) {
-                <li class="lead" [attr.data-testid]="'lead-' + lead.kind">
+                <li class="lead-row" [attr.data-testid]="'lead-' + lead.kind">
                   <span>{{ i18n.t('money.lead.' + lead.kind) }}</span>
                   @if (lead.at) {
                     <span class="muted">{{ time(lead.at) }}</span>

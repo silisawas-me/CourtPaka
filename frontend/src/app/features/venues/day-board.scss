@@ -48,16 +48,16 @@
 .board {
   position: relative;
   /*
-   * As wide as the day, and never narrower than the window. Without `max-content` the box stays
-   * the width of the scroll port while the rows inside it overflow — the day is drawn correctly
-   * either way, but anything measured against the box is measured against the window instead of
-   * the day, which put the clock over seven in the morning on a phone. `min-width` is what lets
-   * the hour tracks share out a desk's spare width instead of sitting at their floor.
+   * As wide as the day and no wider — which is what makes the clock placeable, since the only
+   * way to say where an hour is, is as a share of the whole. Hour tracks of a fixed width rather
+   * than `1fr` is what buys it: a grid sized to its content hands an `1fr` track the widest
+   * cell's width, so one booking with a long name in it turned every hour from 60px to 160px and
+   * the day from 1,100 pixels to 2,700. The cost is that a short day draws a short board instead
+   * of stretching across the desk, which is the truer picture anyway.
    */
   width: max-content;
-  min-width: 100%;
   display: grid;
-  gap: 0.25rem;
+  gap: var(--board-gap);
 }
 
 .board-hours,
@@ -68,7 +68,7 @@
    * price but not for a person: every block on a phone said "bo…" and told the counter nothing.
    * The board scrolls anyway, so the hours are given room to carry a name instead.
    */
-  grid-template-columns: var(--court) repeat(var(--hours), minmax(var(--hour), 1fr));
+  grid-template-columns: var(--court) repeat(var(--hours), var(--hour));
   gap: var(--board-gap);
   align-items: stretch;
 }
@@ -100,8 +100,17 @@
   display: flex;
   align-items: center;
   font: var(--mat-sys-body-medium);
-  /* A fixed track, so a long name is cut rather than pushing the day along. The list under the
-     board carries every name in full. */
+  overflow: hidden;
+}
+
+/*
+ * A fixed track, so a long name is cut rather than pushing the day along, and the list under the
+ * board carries every name in full. Cut on the inner box because `text-overflow` is read off the
+ * block that holds the text — on the flex container above, the text is in an anonymous item that
+ * never saw the rule, and the name was sliced through a letter with no ellipsis to say so.
+ */
+.board-court > span {
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -200,7 +209,9 @@
 
 /*
  * The clock, drawn across the whole floor. It sits over the hour tracks only — the court names
- * are outside the day — so it starts where they end.
+ * are outside the day — so it starts where they end, and the share it is given is a share of
+ * what is left. `100%` here is the board, which is the day exactly: that is the whole reason the
+ * board is sized to its content rather than to the window it is read through.
  */
 .board-live {
   position: absolute;
