@@ -11,6 +11,7 @@ function booking(
     bookerEmail: 'player@example.com',
     bookerPhone: null,
     channel: 'Online',
+    kind: 'App',
     customerName: null,
     customerPhone: null,
     status: 'Confirmed',

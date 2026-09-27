@@ -329,6 +329,8 @@ public sealed record VenueBookingResponse(
     string? BookerPhone,
     /// <summary>Online or at the counter, so the row can say who it is for (PRD US-13).</summary>
     string Channel,
+    /// <summary>App, WalkIn, Series or Package — the colour of its block on the floor (<see cref="BookingKinds"/>).</summary>
+    string Kind,
     /// <summary>For a counter booking, the name and phone the customer gave; null otherwise.</summary>
     string? CustomerName,
     string? CustomerPhone,

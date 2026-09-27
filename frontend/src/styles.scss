@@ -211,6 +211,56 @@ html {
   --status-done-ink: #6a5c4f;
 }
 
+/**
+ * The four kinds of booking the floor tells apart (badPaka 2a, `BookingKinds` on the server):
+ * booked in the app, sold at the counter, a group's standing week, hours from a package. A second
+ * axis beside the status colours above, not a replacement: the fill says what kind of booking it
+ * is, the status colours still say what is happening to it. Each is a ground, an edge, and an ink
+ * that reads on that ground (measured, all above 6:1).
+ */
+:root {
+  --kind-app-soft: #e3f0e4;
+  --kind-app-line: #9fcaa8;
+  --kind-app-ink: #1f5a31;
+
+  --kind-walkin-soft: #f6e3d8;
+  --kind-walkin-line: #e2b49b;
+  --kind-walkin-ink: #8a3b1c;
+
+  --kind-series-soft: #e4e2f3;
+  --kind-series-line: #b4aee0;
+  --kind-series-ink: #3d3880;
+
+  --kind-package-soft: #efe8dc;
+  --kind-package-line: #d4c6b1;
+  --kind-package-ink: #2a2420;
+}
+
+/* Anything drawn in a kind's colours takes them from these, as --soft / --line / --ink. */
+.kind-App {
+  --soft: var(--kind-app-soft);
+  --line: var(--kind-app-line);
+  --ink: var(--kind-app-ink);
+}
+
+.kind-WalkIn {
+  --soft: var(--kind-walkin-soft);
+  --line: var(--kind-walkin-line);
+  --ink: var(--kind-walkin-ink);
+}
+
+.kind-Series {
+  --soft: var(--kind-series-soft);
+  --line: var(--kind-series-line);
+  --ink: var(--kind-series-ink);
+}
+
+.kind-Package {
+  --soft: var(--kind-package-soft);
+  --line: var(--kind-package-line);
+  --ink: var(--kind-package-ink);
+}
+
 :root {
   --page-gutter: 1rem;
   --page-width: 64rem;

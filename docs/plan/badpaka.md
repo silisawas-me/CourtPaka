@@ -68,13 +68,13 @@
 - [x] ปรับ CLAUDE.md หัวข้อ "UI — หน้าตาแบบ CourtFlow"
 
 ### PR-2 · 2a ไทม์ไลน์ + แผงจัดการการจอง (คอนโซลวันนี้)
-- [ ] บล็อกบนตารางใช้สีตามชนิด (C7) + จุดสนิมเมื่อยังไม่เช็กอิน
-- [ ] กดบล็อก → แผงขวา 340px ของการจองนั้น (แทนการไล่หาในรายการข้างล่าง)
-- [ ] ในแผง: เช็กอิน · ต่อ 1 ชม. · ย้ายคอร์ท (คอร์ทที่ชนเป็นสีจาง) · ขายของเข้าบิล (`ShopSale.BookingId` มีแล้ว) · ยอดที่ต้องเก็บ + วิธีจ่าย
-- [ ] **ทุกปุ่มอ่านจาก `can.*` ของ server** ไม่ตัดสินที่หน้าจอ
-- [ ] legend ชนิดการจอง · เส้นเวลาปัจจุบันสีสนิม
-- [ ] มือถือ: แผงเป็น bottom sheet
-- [ ] test + verify `venue_bookings.py` / `counter_money.py` / `booking_hours.py` / `shop.py`
+- [x] บล็อกบนตารางใช้สีตามชนิด (C7) + จุดสนิมเมื่อยังไม่เช็กอิน
+- [x] กดบล็อก → แผงขวา 340px ของการจองนั้น (แทนการไล่หาในรายการข้างล่าง)
+- [x] ในแผง: เช็กอิน · ต่อ 1 ชม. · ย้ายคอร์ท (คอร์ทที่ชนเป็นสีจาง) · ขายของเข้าบิล (`ShopSale.BookingId` มีแล้ว) · ยอดที่ต้องเก็บ + วิธีจ่าย
+- [x] **ทุกปุ่มอ่านจาก `can.*` ของ server** ไม่ตัดสินที่หน้าจอ
+- [x] legend ชนิดการจอง · เส้นเวลาปัจจุบันสีสนิม
+- [x] มือถือ: แผงเป็น bottom sheet
+- [x] test + verify `venue_bookings.py` / `counter_money.py` / `booking_hours.py` / `shop.py`
 
 ### PR-3 · 2b บอร์ด "ตอนนี้" สำหรับเคาน์เตอร์
 - [ ] route ใหม่ `/venues/{id}/now` ในเปลือกสนาม
@@ -124,3 +124,11 @@
 - 2026-09-28 · PR-1 · LCP หลังเปลี่ยน (6 คอร์ท ติดกัน): 3.36 / 3.34 วิ · FCP 1.96 · TBT 0.11–0.13 → ไม่แย่ลงจาก baseline 3.49–3.51
 - 2026-09-28 · PR-1 · pwa.py 6/6 · fits_a_phone 1/1 · `scripts/ci/local.py` 13/13 (186 วิ) · อัปเดต CLAUDE.md (UI → แบรนด์ badPaka) + design skill (ฟอนต์ 3 ตัว, token) · screenshot 1280/390 × TH/EN ที่ `scripts/verify/shots/_brand/`
 - 2026-09-28 · #96 · รวม main (แบรนด์) เข้าหน้าแรกสองประตู · conflict ที่ `.auth-wordmark` → เก็บทั้ง view-transition-name และขนาดใหม่ · หน้าแรกใช้ `<app-wordmark />` · "Paka" บนพื้นค่ำใช้เขียวอ่อน · ถอด `max-width` ของ `.entrance` ที่ทำให้เห็นขอบเป็นแถบสว่างสองข้างที่ 1280 · local.py 13/13 · fits_a_phone ผ่าน
+- 2026-09-28 · #96 · merge แล้ว · หลัง merge bundle แรกของ main = 541.97 kB (เกินเส้นเตือน 540 ตั้งแต่หน้าแรกสองประตู)
+- 2026-09-28 · PR-2 · backend: `BookingKinds.Of` + `VenueBookingResponse.Kind` (ไม่เพิ่มคอลัมน์ อ่านจาก Channel/SeriesId/PackageId) · ก๊วนที่จ่ายด้วยแพ็กเกจยังเป็น "ก๊วน" · `BookingKindsTests` 4 เคส + assertion ใน `CounterBookingTests`
+- 2026-09-28 · PR-2 · แถวของรายการย้ายเป็น `<ng-template #bookingBody>` ใช้ทั้งในรายการและในแผง · วาดที่เดียว (แผงเปิด = รายการข้ามแถวนั้น)
+- 2026-09-28 · PR-2 · `BookingPanel` แยกเป็น component เพราะ stylesheet ของหน้าเกิน 4 kB (4.63) · `SellOntoBooking` โหลดของเฉพาะตอนกด
+- 2026-09-28 · PR-2 · **บั๊กที่เจอตอนเปิดดูจริง:** แถวแบบห้าคอลัมน์ล้นแผง 340px แล้ว `scrollIntoView` เลื่อนแผงไปด้านข้าง (หัวแผงหาย ปุ่มปิดหลุดจอ) → แถวพับตามความกว้างของตัวเองด้วย container query แทน media query
+- 2026-09-28 · PR-2 · สีชนิดการจอง 4 คู่ วัด contrast แล้ว 6.21–12.57 · C3 ±30 นาที / C4 ย่อเวลา / C5 QR ไม่ทำตามที่ตัดสินไว้ (ต่อเวลา 1 ชม. + ย้ายคอร์ทใช้ประตูเดิมในแถว)
+- 2026-09-28 · PR-2 · bundle แรก 541.97 → 543.97 kB (+2.0 จาก token/คลาส `.kind-*` ใน styles.scss) · หน้า venue-bookings chunk 61.5 → 73.4 kB
+- 2026-09-28 · PR-2 · frontend 412 tests · verify: `venue_bookings` 28 · `counter_money` 25 · `booking_hours` 19 · `shop` 22 · `venue_shell` 16 · `counter_booking` 11 · `fits_a_phone` 1 · **ใหม่** `day_panel.py` 9 (บล็อก walk-in สีถูก, แผงข้างบอร์ด, ไม่ซ้ำ, ขายของเข้าบิลแล้ว server บันทึก bookingId, ปิดแล้วแถวกลับรายการ, มือถือเป็น sheet)

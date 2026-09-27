@@ -24,15 +24,22 @@
               <button
                 type="button"
                 class="board-block"
+                [class]="'kind-' + cell.kind"
                 [class.playing]="cell.reads === 'playing'"
-                [class.confirmed]="cell.reads === 'confirmed'"
                 [class.waiting]="cell.reads === 'waiting'"
+                [class.due]="cell.due"
+                [class.chosen]="cell.bookingId === chosen()"
+                [attr.aria-pressed]="cell.bookingId === chosen()"
                 [style.--span]="cell.hours"
                 [attr.data-testid]="'board-block-' + cell.bookingId"
                 (click)="opened.emit(cell.bookingId)"
               >
                 <span class="board-who">{{ cell.who }}</span>
                 <span class="board-note">{{ cell.note }}</span>
+                @if (cell.due) {
+                  <!-- Said in words for whoever is not looking at the colour. -->
+                  <span class="board-due" [attr.aria-label]="i18n.t('board.due')"></span>
+                }
               </button>
             } @else if (cell.kind === 'closed') {
               <span
@@ -73,4 +80,22 @@
       }
     </div>
   </div>
+
+  <!--
+    What the fills and marks mean, once, under the floor. A key rather than words in every block:
+    a block an hour wide has room for a name and not much else.
+  -->
+  <ul class="board-key" data-testid="board-key">
+    @for (kind of kinds; track kind) {
+      <li>
+        <span class="swatch" [class]="'swatch kind-' + kind"></span
+        >{{ i18n.t('board.kind.' + kind) }}
+      </li>
+    }
+    <li><span class="swatch closed"></span>{{ i18n.t('board.closed') }}</li>
+    <li><span class="mark due"></span>{{ i18n.t('board.due') }}</li>
+    @if (liveAt() !== null) {
+      <li><span class="mark now"></span>{{ i18n.t('board.now') }}</li>
+    }
+  </ul>
 }

@@ -22,6 +22,8 @@ function booking(overrides: Record<string, unknown> = {}) {
   return {
     bookingId: 'b1',
     bookerEmail: 'player@example.com',
+    channel: 'Online',
+    kind: 'App',
     status: 'Confirmed',
     arrival: 'Unconfirmed',
     arrivedAt: null,
@@ -594,6 +596,57 @@ describe('VenueBookingsPage', () => {
       expect(textOf(fixture, 'today-used')).toBe('40%');
       expect(textOf(fixture, 'today-taken')).toBe('400');
       expect(textOf(fixture, 'today-owed')).toBe('0');
+    });
+
+    /*
+     * badPaka 2a: pressing a block opens that booking beside the floor rather than scrolling off
+     * to it — and the list stops carrying it, because the forms under a row are the same forms
+     * and two copies would be two sets of the same controls.
+     */
+    it('opens the booking pressed on the floor in the panel, and takes it out of the list', () => {
+      render([booking({ can: { ...booking().can, checkIn: true } })], floor());
+
+      clickOn(fixture, 'board-block-b1');
+      fixture.detectChanges();
+
+      const panel = elementOf(fixture, 'booking-panel');
+      expect(panel).not.toBeNull();
+      expect(panel?.textContent).toContain(TRANSLATIONS.th['board.kind.App']);
+      // The same row, with the same door the server opened — drawn once, in the panel.
+      expect(panel?.querySelector('[data-testid="booking-b1"]')).not.toBeNull();
+      expect(fixture.nativeElement.querySelectorAll('[data-testid="booking-b1"]').length).toBe(1);
+      expect(elementOf(fixture, 'board-block-b1')?.getAttribute('aria-pressed')).toBe('true');
+
+      clickOn(fixture, 'panel-close');
+      fixture.detectChanges();
+
+      expect(elementOf(fixture, 'booking-panel')).toBeNull();
+      expect(
+        elementOf(fixture, 'day-list')?.querySelector('[data-testid="booking-b1"]'),
+      ).not.toBeNull();
+    });
+
+    it('colours a block by its kind and marks one that is due at the desk', () => {
+      render([booking({ kind: 'Series', can: { ...booking().can, checkIn: true } })], floor());
+
+      const block = elementOf(fixture, 'board-block-b1');
+      expect(block?.classList).toContain('kind-Series');
+      // The server opened check-in, so somebody is due: the rust mark, said in words too.
+      expect(block?.querySelector('.board-due')?.getAttribute('aria-label')).toBe(
+        TRANSLATIONS.th['board.due'],
+      );
+
+      // And the key under the floor says what each fill means.
+      const key = textOf(fixture, 'board-key');
+      for (const kind of ['App', 'WalkIn', 'Series', 'Package']) {
+        expect(key).toContain(TRANSLATIONS.th[`board.kind.${kind}`]);
+      }
+    });
+
+    it('does not mark a block due when the server has not opened check-in', () => {
+      render([booking()], floor());
+
+      expect(elementOf(fixture, 'board-block-b1')?.querySelector('.board-due')).toBeNull();
     });
 
     it('counts what is owed the way the server counts it, not from the price', () => {

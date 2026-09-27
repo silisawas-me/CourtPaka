@@ -23,8 +23,13 @@
   padding: 0;
 }
 
-/** A row of its own, with the line under it that .entry would have given a flex row. */
+/**
+ * A row of its own, with the line under it that .entry would have given a flex row. Measured as
+ * a container, so its line folds by the room the row has rather than by the window: the same
+ * row is drawn full width in the list and 340px wide in the panel beside the floor.
+ */
 .booking {
+  container-type: inline-size;
   padding: 0.75rem 0;
   border-bottom: 1px solid var(--mat-sys-outline-variant);
 
@@ -50,7 +55,7 @@
     'who who'
     'courts status';
 
-  @media (min-width: 60rem) {
+  @container (min-width: 44rem) {
     grid-template-columns: 10rem 7rem minmax(12rem, 1fr) auto auto;
     grid-template-areas: 'when courts who status baht';
   }
@@ -296,4 +301,31 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem 0.75rem;
+}
+
+/*
+ * The floor and the booking pressed on it, side by side where both fit (badPaka 2a). The panel
+ * draws itself — sheet or column — in `booking-panel.scss`; this only makes room for it.
+ */
+.desk {
+  display: grid;
+  gap: var(--stack);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+
+  @media (min-width: 75rem) {
+    &.open {
+      grid-template-columns: minmax(0, 1fr) 21.25rem;
+    }
+  }
+}
+
+.floor {
+  min-width: 0;
+}
+
+/* The row in the panel is the list's row, which draws a rule under itself; alone, it needs none. */
+app-booking-panel .booking {
+  padding: 0;
+  border-bottom: none;
 }
