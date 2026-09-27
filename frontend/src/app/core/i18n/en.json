@@ -908,5 +908,17 @@
   "overview.courts": "courts",
   "overview.lateAt": "has bookings past the grace:",
   "board.peak": "Peak hour",
-  "panel.hours": "hr"
+  "panel.hours": "hr",
+  "walkIn.open": "+ Walk-in",
+  "walkIn.title": "Walk-in booking",
+  "walkIn.start": "Start",
+  "walkIn.fromNow": "Now",
+  "walkIn.length": "Duration",
+  "walkIn.court": "Pick a court (free only)",
+  "walkIn.noneFree": "Every court is taken for this time. Try another start or length.",
+  "walkIn.payment": "Payment",
+  "walkIn.pickCourtFirst": "Pick a court first",
+  "walkIn.nameFirst": "Add the customer's name",
+  "walkIn.confirm": "Confirm & open court",
+  "walkIn.nothingToday": "No court is free to sell today"
 }

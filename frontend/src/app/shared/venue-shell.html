@@ -92,9 +92,26 @@
   }
 
   <span class="top-end">
+    @if (!onAll()) {
+      <!-- Selling a court to somebody at the counter, from any of the venue's pages (PR-3). -->
+      <button
+        type="button"
+        class="walk-in-button"
+        data-testid="open-walk-in"
+        (click)="walkIn.set(true)"
+      >
+        {{ i18n.t('walkIn.open') }}
+      </button>
+    }
     <ng-content select="[topEnd]" />
   </span>
 </header>
+
+@if (walkIn() && !onAll()) {
+  @defer {
+    <app-walk-in [venueId]="venueId()" (closed)="walkIn.set(false)" />
+  }
+}
 
 <!--
   The same sections along the bottom, where a thumb is — five at most, the last the venue's own

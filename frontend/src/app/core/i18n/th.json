@@ -908,5 +908,17 @@
   "overview.courts": "คอร์ท",
   "overview.lateAt": "มีการจองรอเช็กอินเกินเวลา",
   "board.peak": "ช่วงพีค",
-  "panel.hours": "ชม."
+  "panel.hours": "ชม.",
+  "walkIn.open": "+ Walk-in",
+  "walkIn.title": "จอง Walk-in",
+  "walkIn.start": "เริ่ม",
+  "walkIn.fromNow": "ตอนนี้",
+  "walkIn.length": "ระยะเวลา",
+  "walkIn.court": "เลือกคอร์ท (แสดงเฉพาะที่ว่าง)",
+  "walkIn.noneFree": "คอร์ทเต็มทุกคอร์ทในช่วงนี้ ลองเปลี่ยนเวลาเริ่มหรือระยะเวลา",
+  "walkIn.payment": "ชำระเงิน",
+  "walkIn.pickCourtFirst": "เลือกคอร์ทก่อน",
+  "walkIn.nameFirst": "ใส่ชื่อลูกค้าก่อน",
+  "walkIn.confirm": "ยืนยันและเปิดคอร์ท",
+  "walkIn.nothingToday": "วันนี้ไม่มีคอร์ทว่างให้ขายแล้ว"
 }

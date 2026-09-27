@@ -1,4 +1,4 @@
-import { Component, computed, inject, input } from '@angular/core';
+import { Component, computed, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { catchError, filter, map, merge, of, startWith, switchMap } from 'rxjs';
@@ -6,6 +6,7 @@ import { TranslationService } from '../core/i18n/translation.service';
 import { Venue, VenueService } from '../core/venues/venue.service';
 import { ALL_VENUES, VENUE_OTHER, VENUE_SECTIONS, VenueLink, waitingOn } from './venue-nav';
 
+import { WalkIn } from '../features/venues/walk-in';
 /** A door with its route already built, its count read, and whether it is the page on screen. */
 interface Door {
   readonly path: unknown[];
@@ -42,7 +43,7 @@ interface Here {
  * venue.
  */
 @Component({
-  imports: [RouterLink],
+  imports: [RouterLink, WalkIn],
   selector: 'app-venue-shell',
   styleUrl: './venue-shell.scss',
   templateUrl: './venue-shell.html',
@@ -75,6 +76,9 @@ export class VenueShell {
   );
 
   protected readonly onAll = computed(() => this.venueId() === ALL_VENUES);
+
+  /** The walk-in modal is open (owner app PR-3). */
+  protected readonly walkIn = signal(false);
 
   /** At the venue on screen, or — on the overview — at any venue they have. */
   private readonly isOwner = computed(() => {

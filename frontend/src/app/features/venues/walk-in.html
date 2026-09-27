@@ -1,0 +1,166 @@
+<!--
+  A dialog over the page: the counter is selling one court to one person, and nothing else on the
+  page is what they are doing. The backdrop closes it, as Escape does.
+-->
+<div class="backdrop" (click)="closed.emit()"></div>
+<div
+  class="sheet"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="walk-in-title"
+  data-testid="walk-in"
+>
+  <header class="head">
+    <h2 id="walk-in-title">{{ i18n.t('walkIn.title') }}</h2>
+    <button
+      type="button"
+      class="close"
+      data-testid="walk-in-close"
+      [attr.aria-label]="i18n.t('panel.close')"
+      (click)="closed.emit()"
+    >
+      <span aria-hidden="true">×</span>
+    </button>
+  </header>
+
+  @if (loadError(); as key) {
+    <p class="form-error">{{ i18n.t(key) }}</p>
+  } @else if (day() === null) {
+    <p class="muted">{{ i18n.t('common.loading') }}</p>
+  } @else if (starts().length === 0) {
+    <p class="muted" data-testid="walk-in-nothing">{{ i18n.t('walkIn.nothingToday') }}</p>
+  } @else {
+    <fieldset>
+      <legend>{{ i18n.t('walkIn.start') }}</legend>
+      <div class="choices four">
+        @for (hour of starts(); track hour) {
+          <button
+            type="button"
+            class="choice"
+            [class.on]="start() === hour"
+            [attr.aria-pressed]="start() === hour"
+            [attr.data-testid]="'walk-in-start-' + hour"
+            (click)="pickStart(hour)"
+          >
+            @if (hour === nowHour) {
+              <!-- The hour the clock is in: somebody standing here can have the rest of it. -->
+              {{ i18n.t('walkIn.fromNow') }}
+            }
+            {{ hour }}:00
+          </button>
+        }
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>{{ i18n.t('walkIn.length') }}</legend>
+      <div class="choices three">
+        @for (length of lengths; track length) {
+          <button
+            type="button"
+            class="choice"
+            [class.on]="hours() === length"
+            [attr.aria-pressed]="hours() === length"
+            [attr.data-testid]="'walk-in-hours-' + length"
+            (click)="pickHours(length)"
+          >
+            {{ length }} {{ i18n.t('panel.hours') }}
+          </button>
+        }
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>{{ i18n.t('walkIn.court') }}</legend>
+      <div class="choices courts">
+        @for (one of courts(); track one.id) {
+          <button
+            type="button"
+            class="choice"
+            [class.on]="court() === one.id"
+            [attr.aria-pressed]="court() === one.id"
+            [disabled]="!one.free"
+            [attr.data-testid]="'walk-in-court-' + one.id"
+            (click)="pickCourt(one.id)"
+          >
+            {{ one.name }}
+          </button>
+        }
+      </div>
+      @if (courts().length > 0 && !courts().some((one) => one.free)) {
+        <p class="note" data-testid="walk-in-none-free">{{ i18n.t('walkIn.noneFree') }}</p>
+      }
+    </fieldset>
+
+    <div class="who">
+      <label>
+        <span class="visually-hidden">{{ i18n.t('counter.customerName') }}</span>
+        <input
+          #nameField
+          type="text"
+          maxlength="100"
+          autocomplete="off"
+          data-testid="walk-in-name"
+          [placeholder]="i18n.t('counter.customerName')"
+          [value]="name()"
+          (input)="typed('name', $event)"
+        />
+      </label>
+      <label>
+        <span class="visually-hidden">{{ i18n.t('counter.customerPhone') }}</span>
+        <input
+          type="tel"
+          maxlength="20"
+          autocomplete="off"
+          data-testid="walk-in-phone"
+          [placeholder]="i18n.t('counter.customerPhone')"
+          [value]="phone()"
+          (input)="typed('phone', $event)"
+        />
+      </label>
+    </div>
+
+    <fieldset>
+      <legend>{{ i18n.t('walkIn.payment') }}</legend>
+      <div class="choices two">
+        @for (method of payments; track method) {
+          <button
+            type="button"
+            class="choice"
+            [class.on]="paidBy() === method"
+            [attr.aria-pressed]="paidBy() === method"
+            [attr.data-testid]="'walk-in-paid-' + method"
+            (click)="paidBy.set(method)"
+          >
+            {{ i18n.t('counter.paid.' + method) }}
+          </button>
+        }
+      </div>
+    </fieldset>
+
+    @if (error(); as key) {
+      <p class="form-error" data-testid="walk-in-error">{{ i18n.t(key) }}</p>
+    }
+
+    <button
+      type="button"
+      class="confirm"
+      data-testid="walk-in-confirm"
+      [disabled]="!ready()"
+      (click)="confirm()"
+    >
+      <span>{{
+        i18n.t(
+          court() === null
+            ? 'walkIn.pickCourtFirst'
+            : name().trim() === ''
+              ? 'walkIn.nameFirst'
+              : 'walkIn.confirm'
+        )
+      }}</span>
+      @if (total(); as baht) {
+        <span>฿{{ baht | baht: i18n.locale() }}</span>
+      }
+    </button>
+  }
+</div>

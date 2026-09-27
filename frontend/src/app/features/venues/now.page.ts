@@ -8,7 +8,9 @@ import {
   input,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButton } from '@angular/material/button';
+import { WalkInEvents } from '../../core/venues/walk-in.events';
 import { errorKey } from '../../core/http/api-error';
 import { BahtPipe } from '../../core/i18n/baht.pipe';
 import { venueNow } from '../../core/i18n/plain-date';
@@ -79,6 +81,15 @@ export class NowPage {
 
   constructor() {
     effect(() => this.read(this.venueId(), { first: true }));
+
+    // A walk-in sold from the top bar is on a court now (owner app PR-3).
+    inject(WalkInEvents)
+      .sold.pipe(takeUntilDestroyed())
+      .subscribe(({ venueId }) => {
+        if (venueId === this.venueId()) {
+          this.read(venueId, { first: false });
+        }
+      });
 
     // The clock moves the bars and the minutes; the floor is read again less often, and never
     // while nobody is looking — a hidden tab asking every thirty seconds is load for no reader.
