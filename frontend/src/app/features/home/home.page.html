@@ -1,44 +1,85 @@
-<mat-card>
-  <mat-card-header>
-    <mat-card-title>{{ i18n.t('app.name') }}</mat-card-title>
-    <mat-card-subtitle>{{ i18n.t('app.tagline') }}</mat-card-subtitle>
-  </mat-card-header>
+<!--
+  Two doors on one court. Somebody arriving is one of two people — they have been here before, or
+  they have not — and the page asks that once rather than showing a wall of buttons and letting
+  them work it out. The court runs behind both, so the choice is where to enter the hall, not
+  which of two products to use.
+-->
+<div class="hall">
+  <app-court-art />
 
-  <mat-card-content>
+  <div class="entrance">
+    <header class="crest">
+      <app-alpaca class="mascot" [label]="i18n.t('home.mascot')" [waving]="true" />
+      <h1 class="wordmark"><app-wordmark /></h1>
+      <p class="lead">{{ i18n.t('home.lead') }}</p>
+    </header>
+
     @if (deleted() && !user()) {
-      <p class="success" data-testid="account-deleted">{{ i18n.t('account.deleted') }}</p>
+      <p class="notice success" data-testid="account-deleted">{{ i18n.t('account.deleted') }}</p>
     }
-    @if (user(); as account) {
-      <p data-testid="signed-in-as">
-        {{ i18n.t('home.signedInAs') }} {{ account.email ?? i18n.t('account.noEmail') }}
-      </p>
-      <!-- What stands between this account and a booking, in the server's own words. -->
-      <p data-testid="verification-state">
-        {{
-          account.cannotBookBecause
-            ? i18n.t('error.' + account.cannotBookBecause)
-            : i18n.t('home.canBook')
-        }}
-      </p>
-    }
-  </mat-card-content>
 
-  <mat-card-actions class="row">
     @if (user(); as account) {
-      <a matButton="filled" routerLink="/venues" data-testid="home-venues">
-        {{ i18n.t('nav.venues') }}
-      </a>
-      @if (!account.emailConfirmed && account.email) {
-        <a matButton routerLink="/resend-verification">
-          {{ i18n.t('login.resendVerification') }}
+      <!--
+        Already inside. The doors would ask a question this visitor has answered, so they are
+        replaced by where they were going: their own bookings, and what stands between this
+        account and a new one — in the server's words, not a rule worked out again here.
+      -->
+      <div class="doors" data-testid="home-doors-signed-in">
+        <a class="door door-lit" routerLink="/book" data-testid="home-find">
+          <span class="door-kicker" data-testid="signed-in-as">
+            {{ i18n.t('home.signedInAs') }} {{ account.email ?? i18n.t('account.noEmail') }}
+          </span>
+          <span class="door-title">{{ i18n.t('home.find') }}</span>
+          <span class="door-more">{{ i18n.t('home.browse') }}</span>
         </a>
-      }
-      @if (account.cannotBookBecause === 'auth.phone_required') {
-        <a matButton routerLink="/account">{{ i18n.t('account.savePhone') }}</a>
-      }
+
+        <a class="door" routerLink="/bookings" data-testid="home-my-bookings">
+          <span class="door-kicker">{{ i18n.t('nav.book') }}</span>
+          <span class="door-title">{{ i18n.t('home.myBookings') }}</span>
+          <span
+            class="door-more"
+            data-testid="verification-state"
+            [class.blocked]="account.cannotBookBecause"
+          >
+            {{
+              account.cannotBookBecause
+                ? i18n.t('error.' + account.cannotBookBecause)
+                : i18n.t('home.canBook')
+            }}
+          </span>
+        </a>
+      </div>
+
+      <p class="aside">
+        @if (!account.emailConfirmed && account.email) {
+          <a routerLink="/resend-verification">{{ i18n.t('login.resendVerification') }}</a>
+        }
+        @if (account.cannotBookBecause === 'auth.phone_required') {
+          <a routerLink="/account">{{ i18n.t('account.savePhone') }}</a>
+        }
+      </p>
     } @else {
-      <a matButton="filled" routerLink="/login">{{ i18n.t('nav.signIn') }}</a>
-      <a matButton routerLink="/register">{{ i18n.t('nav.signUp') }}</a>
+      <div class="doors" data-testid="home-doors">
+        <a class="door" routerLink="/login" data-testid="home-sign-in">
+          <span class="door-kicker">{{ i18n.t('home.haveAccount') }}</span>
+          <span class="door-title">{{ i18n.t('nav.signIn') }}</span>
+          <span class="door-more">{{ i18n.t('home.signInMore') }}</span>
+        </a>
+
+        <a class="door door-lit" routerLink="/register" data-testid="home-sign-up">
+          <span class="door-kicker">{{ i18n.t('home.newHere') }}</span>
+          <span class="door-title">{{ i18n.t('nav.signUp') }}</span>
+          <span class="door-more">{{ i18n.t('home.signUpMore') }}</span>
+        </a>
+      </div>
+
+      <!--
+        The grids are public, so somebody can see what they would be signing up for before they
+        sign up for it. Said quietly, because the two doors are the question being asked.
+      -->
+      <p class="aside">
+        <a routerLink="/book" data-testid="home-find">{{ i18n.t('home.browse') }}</a>
+      </p>
     }
-  </mat-card-actions>
-</mat-card>
+  </div>
+</div>

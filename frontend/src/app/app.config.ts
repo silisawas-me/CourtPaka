@@ -6,7 +6,13 @@ import {
   provideBrowserGlobalErrorListeners,
   isDevMode,
 } from '@angular/core';
-import { provideRouter, withComponentInputBinding, withInMemoryScrolling } from '@angular/router';
+import type { ActivatedRouteSnapshot } from '@angular/router';
+import {
+  provideRouter,
+  withComponentInputBinding,
+  withInMemoryScrolling,
+  withViewTransitions,
+} from '@angular/router';
 import { AuthService } from './core/auth/auth.service';
 import { DEFAULT_LANGUAGE } from './core/i18n/locales';
 import { TranslationService } from './core/i18n/translation.service';
@@ -21,6 +27,32 @@ import { provideServiceWorker } from '@angular/service-worker';
  * day the page will ask for is the day in the address, or today at the venue — the same rule the
  * page itself uses, because a different answer here would be a wasted request.
  */
+/**
+ * Whether a navigation is somebody coming in off the front page — the only one drawn as a
+ * movement rather than a new screen, because the court is on both sides of it.
+ *
+ * Asked with the two routes' own paths rather than their addresses: the router hands this a pair
+ * of `ActivatedRouteSnapshot`, whose `url` is a list of segments and not a string, and reading it
+ * as one made every navigation look like somebody else's and skipped them all.
+ */
+export function pathOf(route: ActivatedRouteSnapshot): string | undefined {
+  // The router hands over the root of each tree, whose own `routeConfig` is null; the page is at
+  // the bottom of it.
+  let leaf = route;
+  while (leaf.firstChild) {
+    leaf = leaf.firstChild;
+  }
+  return leaf.routeConfig?.path;
+}
+
+export function isTheWayIn(from: string | undefined, to: string | undefined): boolean {
+  const doors = ['login', 'register'];
+  const front = '';
+  return (
+    (from === front && doors.includes(to ?? '')) || (doors.includes(from ?? '') && to === front)
+  );
+}
+
 export function gridInTheAddress(
   path: string,
   search: string,
@@ -44,6 +76,20 @@ export const appConfig: ApplicationConfig = {
       routes,
       withComponentInputBinding(),
       withInMemoryScrolling({ anchorScrolling: 'enabled' }),
+      // The way in is one movement, not three screens: the court on the front page is the court
+      // behind the sign-in form, so choosing a door carries it across rather than blinking to a
+      // new page. Every other navigation is told to skip — a view transition snapshots the whole
+      // document, and the court grid is the page PRD 8 measures (`grid_lcp.py`). Restricted here
+      // rather than per-page because the router is the only place that knows both ends of a
+      // navigation, and both ends are what decide whether this is that movement.
+      withViewTransitions({
+        skipInitialTransition: true,
+        onViewTransitionCreated: ({ transition, from, to }) => {
+          if (!isTheWayIn(pathOf(from), pathOf(to))) {
+            transition.skipTransition();
+          }
+        },
+      }),
     ),
     provideHttpClient(withFetch(), withInterceptors([apiErrorInterceptor])),
     // A session cookie may already exist. Its answer is asked for at boot but not waited for:

@@ -1,0 +1,316 @@
+/*
+ * The hall with two doors into it. The court runs behind both, so the choice reads as where to
+ * come in rather than which of two products to buy — and the doors sit on the floor rather than
+ * in cards, because a card around a door makes it a thing on a shelf.
+ */
+:host {
+  display: block;
+  min-width: 0;
+}
+
+/*
+ * Out of the shell's measure: this is the page, not a block on it. Two stacks above — one from
+ * the shell's padding and one from the grid gap over the outlet — or a strip of page shows
+ * between the bar and the floor.
+ */
+.hall {
+  position: relative;
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
+  margin-block: calc(var(--stack) * -2) calc(var(--shell-bottom) * -1);
+  display: grid;
+  grid-template-areas: 'hall';
+  /* This page is the way in, so on a phone it is the whole of the window. */
+  min-height: calc(100vh - var(--mat-toolbar-mobile-height, 3.5rem));
+  isolation: isolate;
+
+  /* Named once: the drawing is painted in it and the doors' ground fades into it. */
+  --floor: color-mix(in oklch, var(--mat-sys-primary) 42%, var(--mat-sys-inverse-surface));
+  /*
+   * What goes under the words. Darker than the floor rather than equal to it: most of what the
+   * drawing shows is shaded floor, so a patch of the plain floor colour laid over it reads as a
+   * pale panel — the very card this page is trying not to have.
+   */
+  --under: color-mix(in oklch, var(--floor) 46%, var(--mat-sys-inverse-surface));
+}
+
+.hall > * {
+  grid-area: hall;
+}
+
+/*
+ * The hall lit for evening, which is when people play. The drawing hands out its own colours, so
+ * these re-mix them rather than laying a scrim over the top: a scrim would grey the paint and the
+ * posts along with the floor, and the lines are the part that says "court".
+ *
+ * Framed by the shape of the box and a shift inside it, never by scaling the drawing up — it
+ * already fills its frame and crops, and scaling past that makes an element wider than the phone,
+ * which `fits_a_phone.py` is right to refuse to tell apart from a page that has quietly grown.
+ */
+app-court-art {
+  /*
+   * The same court on both sides of the way in, so the browser carries it rather than redrawing
+   * it: named here and on the sign-in screen, which is the pair this is for.
+   */
+  view-transition-name: court;
+  --court-floor: var(--floor);
+  --court-shade: color-mix(in oklch, var(--mat-sys-inverse-surface) 74%, var(--mat-sys-primary));
+  --court-shift-y: 6%;
+}
+
+.entrance {
+  z-index: 1;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 1.25rem;
+  /*
+   * The whole width of the hall, not the page's measure: the pool of floor under the words is
+   * painted on this box, and a box narrower than the window shows its own edges as a lighter band
+   * down each side. The doors keep their own measure.
+   */
+  width: 100%;
+  padding: 2.5rem var(--page-gutter) 3rem;
+  color: var(--mat-sys-inverse-on-surface);
+  /*
+   * The words stand on floor, not on court markings. Every part of the drawing has a line through
+   * it somewhere, so the floor is brought forward under them rather than hunting for a clear
+   * patch — which only moves the problem to the next screen size.
+   */
+  background: radial-gradient(
+    110% 64% at 50% 56%,
+    var(--under) 40%,
+    color-mix(in srgb, var(--under) 72%, transparent) 70%,
+    transparent
+  );
+}
+
+/*
+ * Not `.badge`: that name is taken by the status label in `styles.scss`, and borrowing it put a
+ * pale surface behind the wordmark — a card, on the one page written to not have one.
+ */
+.crest {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  text-align: center;
+}
+
+.mascot {
+  width: 4.5rem;
+}
+
+.wordmark {
+  view-transition-name: wordmark;
+  margin: 0;
+  font: var(--mat-sys-display-small);
+  /* The brand green is an ink for paper; on the evening floor "Paka" takes the light one. */
+  --wordmark-paka: var(--mat-sys-inverse-primary);
+}
+
+.lead {
+  /* Thai does not space its words, so a narrow measure breaks them in the wrong places. */
+  max-width: 32ch;
+  margin: 0;
+  font: var(--mat-sys-title-medium);
+  color: color-mix(in srgb, currentColor 84%, transparent);
+}
+
+/* Two sides of the same court: side by side once there is room, stacked before that. */
+.doors {
+  display: grid;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 46rem;
+}
+
+/*
+ * A door, not a card: edged in the ink it is written in rather than filled, so the floor shows
+ * through and the two read as ways into one place.
+ */
+.door {
+  display: grid;
+  gap: 0.15rem;
+  padding: 1.25rem 1.25rem 1.375rem;
+  border: 1px solid color-mix(in srgb, currentColor 34%, transparent);
+  border-radius: var(--mat-sys-corner-large);
+  background: color-mix(in srgb, var(--floor) 82%, transparent);
+  color: inherit;
+  text-decoration: none;
+  /*
+   * Only what the house allows to move: the tint, and the lift. Anything that changes the size of
+   * a box makes the two doors jump against each other while somebody is reading them.
+   */
+  transition:
+    background 180ms ease,
+    transform 180ms ease,
+    border-color 180ms ease;
+}
+
+.door-kicker {
+  font: var(--mat-sys-label-large);
+  color: color-mix(in srgb, currentColor 74%, transparent);
+}
+
+.door-title {
+  font: var(--mat-sys-headline-small);
+}
+
+.door-more {
+  font: var(--mat-sys-body-medium);
+  color: color-mix(in srgb, currentColor 80%, transparent);
+  /*
+   * Held back until this door is the one being considered, but never taken out of the layout:
+   * a line that appears by growing pushes the other door down mid-thought.
+   */
+  opacity: 0;
+  /* Comes up as it comes in, which is what makes it read as the door speaking rather than a
+     line switching on. It never leaves the layout, so the other door does not move. */
+  transform: translateY(0.4rem);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+/* The door this page would open if somebody pressed return: the new one, or the day's courts. */
+.door-lit {
+  border-color: color-mix(in srgb, currentColor 62%, transparent);
+  background: color-mix(in srgb, var(--mat-sys-primary) 82%, var(--floor));
+}
+
+/*
+ * Choosing. The door being considered comes forward and finishes its sentence; the other steps
+ * back, so at any moment the page is showing one choice rather than two competing ones.
+ */
+/*
+ * The door being considered comes forward: up, and a little larger. Four percent is a lift, not
+ * a distortion — and it is `transform`, so the other door does not move to make room for it.
+ */
+.door:hover,
+.door:focus-visible {
+  background: color-mix(in srgb, var(--mat-sys-primary) 88%, var(--floor));
+  border-color: currentColor;
+  transform: translateY(-0.5rem) scale(1.04);
+}
+
+.door:hover .door-more,
+.door:focus-visible .door-more {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* And the other steps back, so the page is showing one choice rather than two. */
+.doors:hover .door:not(:hover),
+.doors:focus-within .door:not(:focus-visible) {
+  background: color-mix(in srgb, var(--floor) 88%, transparent);
+  border-color: color-mix(in srgb, currentColor 18%, transparent);
+  transform: scale(0.97);
+}
+
+.door:active {
+  transform: translateY(-0.25rem) scale(1.01);
+}
+
+/* A line the page had to say to somebody in particular, under the doors rather than beside them. */
+.notice {
+  margin: 0;
+  padding: 0.625rem 1rem;
+  border-radius: var(--mat-sys-corner-small);
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-medium);
+  text-align: center;
+}
+
+.aside {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 1.25rem;
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+  text-align: center;
+
+  a {
+    color: inherit;
+  }
+}
+
+.aside:empty {
+  display: none;
+}
+
+.door-more.blocked {
+  opacity: 1;
+  color: var(--status-waiting-soft);
+}
+
+/* Said for a screen reader; the same words are on the door above. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+@media (min-width: 46rem) {
+  .doors {
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .mascot {
+    width: 5.5rem;
+  }
+
+  .wordmark {
+    font: var(--mat-sys-display-medium);
+  }
+
+  /*
+   * Tall enough to be a room and no taller. Given the whole window a wide box crops the drawing
+   * to a strip of floor with the court off the edge of it, and a hall with no court in it is a
+   * dark rectangle. The shift puts the lines around the doors rather than above them.
+   */
+  .hall {
+    min-height: min(calc(100vh - var(--mat-toolbar-mobile-height, 3.5rem)), 34rem);
+  }
+
+  app-court-art {
+    --court-shift-y: 12%;
+  }
+}
+
+/*
+ * Somebody who has asked for less movement still gets the answer, just not the journey: every
+ * state below is a change of colour, which arrives at once instead of over a sixth of a second.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .door,
+  .door-more {
+    transition: none;
+  }
+
+  .door,
+  .door:hover,
+  .door:focus-visible,
+  .door:active,
+  .doors:hover .door:not(:hover),
+  .doors:focus-within .door:not(:focus-visible) {
+    transform: none;
+  }
+
+  .door-more {
+    opacity: 0.6;
+  }
+
+  .door:hover .door-more,
+  .door:focus-visible .door-more {
+    opacity: 1;
+  }
+}

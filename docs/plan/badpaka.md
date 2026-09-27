@@ -123,3 +123,4 @@
 - 2026-09-28 · PR-1 · bundle แรก 534.4 → 538.7 kB raw (128.3 → 128.6 gzip) จาก `@font-face` · ยังใต้เส้นเตือน 540 · frontend test 396 ผ่าน
 - 2026-09-28 · PR-1 · LCP หลังเปลี่ยน (6 คอร์ท ติดกัน): 3.36 / 3.34 วิ · FCP 1.96 · TBT 0.11–0.13 → ไม่แย่ลงจาก baseline 3.49–3.51
 - 2026-09-28 · PR-1 · pwa.py 6/6 · fits_a_phone 1/1 · `scripts/ci/local.py` 13/13 (186 วิ) · อัปเดต CLAUDE.md (UI → แบรนด์ badPaka) + design skill (ฟอนต์ 3 ตัว, token) · screenshot 1280/390 × TH/EN ที่ `scripts/verify/shots/_brand/`
+- 2026-09-28 · #96 · รวม main (แบรนด์) เข้าหน้าแรกสองประตู · conflict ที่ `.auth-wordmark` → เก็บทั้ง view-transition-name และขนาดใหม่ · หน้าแรกใช้ `<app-wordmark />` · "Paka" บนพื้นค่ำใช้เขียวอ่อน · ถอด `max-width` ของ `.entrance` ที่ทำให้เห็นขอบเป็นแถบสว่างสองข้างที่ 1280 · local.py 13/13 · fits_a_phone ผ่าน
