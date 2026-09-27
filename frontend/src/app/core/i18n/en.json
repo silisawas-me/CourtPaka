@@ -733,7 +733,7 @@
   "commission.refuse": "Send back",
   "commission.refuseReason": "Why it is being sent back",
   "commission.evidence": "View proof",
-  "commission.filter.All": "All"
+  "commission.filter.All": "All",
   "series.title": "Weekly groups",
   "series.subtitle": "A group that comes at the same hour every week. Written down once; the weeks are booked as far ahead as booking is open.",
   "series.agree": "Add a weekly group",
@@ -778,6 +778,7 @@
   "packages.subtitle": "Hours sold in advance. The money is in on the day it is sold, but it is not revenue until the hours are used.",
   "packages.sell": "Sell a package",
   "packages.whichOffer": "Package",
+  "packages.whoseHours": "Whose hours",
   "packages.customerName": "Customer name",
   "packages.customerPhone": "Phone (optional)",
   "packages.paidBy": "Paid by",

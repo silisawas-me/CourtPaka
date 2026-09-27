@@ -538,6 +538,7 @@ Story ชุดนี้มาจาก prototype ที่ใช้คุยก
 | สลิปและเงิน | `slip_uploaded`, `slip_replaced`, `slip_reminder_sent` | US-04, US-17 |
 | | `refund_recorded`, `refund_voided` · `payment_taken`, `day_closed` | US-18, US-26 |
 | สนาม | `venue_applied`, `venue_approved`, `venue_rejected`, `venue_suspended`, `venue_pending` | US-10, US-20 |
+| | `commission_rate_set` | US-21 |
 | | `venue_page_viewed` · `venue_dashboard_viewed` · `platform_dashboard_viewed` | US-02, US-15, US-22 |
 | | `court_closed`, `court_reopened` | US-11 |
 | | `venue_notified`, `booker_notified` | US-17, US-06 |

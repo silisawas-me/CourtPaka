@@ -166,6 +166,8 @@ export class VenueDetailPage {
           this.members.update((all) => [...all]);
         },
       });
+  }
+
   /** What this venue owes the platform, once it has been asked for (PRD US-21). */
   protected readonly commission = signal<VenueCommission | null>(null);
   protected readonly commissionError = signal<string | null>(null);

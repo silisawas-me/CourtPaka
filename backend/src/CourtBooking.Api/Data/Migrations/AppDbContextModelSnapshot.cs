@@ -670,10 +670,9 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("ReceivedByUserId");
 
-                    b.HasIndex("VenueId", "CountsOn");
                     b.HasIndex("SaleId");
 
-                    b.HasIndex("VenueId", "ReceivedAt");
+                    b.HasIndex("VenueId", "CountsOn");
 
                     b.ToTable("PaymentReceipts", t =>
                         {

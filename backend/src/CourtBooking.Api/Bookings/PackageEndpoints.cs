@@ -282,6 +282,8 @@ public static class PackageEndpoints
         {
             PackageId = package.Id,
             VenueId = venueId,
+            CountsOn = await CounterMoneyEndpoints.CountsOnAsync(
+                database, venueId, now, cancellationToken),
             AmountBaht = package.PriceBaht,
             Method = Enum.Parse<PaymentMethod>(paidBy),
             ReceivedAt = now,

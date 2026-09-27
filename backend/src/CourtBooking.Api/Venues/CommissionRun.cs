@@ -82,6 +82,12 @@ public static class CommissionRun
                 booking.TotalBaht,
                 booking.RefundDueBaht,
                 booking.DepositBaht,
+
+                // What the hours cost, for a booking paid with them rather than with money — the
+                // board's price that day is the one the customer chose not to pay (PRD US-31).
+                // Only counter sales can be paid that way and only Online is billed, so this is
+                // null today; it is asked for anyway, because the rule should not rest on that.
+                PaidWithHours = booking.PackageId == null ? (decimal?)null : booking.PackageBaht,
                 Taken = database.PaymentReceipts
                     .Where(receipt => receipt.BookingId == booking.Id)
                     .Sum(receipt => (decimal?)receipt.AmountBaht) ?? 0m,
@@ -111,7 +117,8 @@ public static class CommissionRun
                 booking.TotalBaht,
                 booking.RefundDueBaht,
                 booking.Taken,
-                booking.DepositBaht);
+                booking.DepositBaht,
+                booking.PaidWithHours);
 
             // A booking the venue kept nothing out of is nothing to charge a share of. It is
             // left off rather than written as a nought line, so an invoice's lines are the

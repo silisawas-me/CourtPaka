@@ -348,6 +348,8 @@ describe('VenueDetailPage', () => {
 
     expect(elementOf(fixture, 'refund-limit-u1')).toBeNull();
   });
+
+  /**
    * What this venue owes the platform (PRD US-21). On the page the owner already opens: a venue
    * should not have to go looking to find out it is late.
    */

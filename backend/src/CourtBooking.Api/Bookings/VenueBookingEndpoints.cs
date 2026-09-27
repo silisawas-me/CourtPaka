@@ -825,22 +825,14 @@ public static class VenueBookingEndpoints
 
         if (package is null)
         {
-            BookingId = booking.Id,
-            VenueId = venueId,
-            CountsOn = await CounterMoneyEndpoints.CountsOnAsync(
-                database, venueId, now, cancellationToken),
-            AmountBaht = booking.TotalBaht,
-            Method = paid == CounterPayment.Cash ? PaymentMethod.Cash : PaymentMethod.PromptPay,
-            ReceivedAt = now,
-            ReceivedByUserId = membership.UserId,
-        });
-        await database.SaveChangesAsync(cancellationToken);
             // The money was in the venue's hands before the booking was written, which is why it
             // starts confirmed (PRD US-13) — so the day's count is told about it too (US-26).
             database.PaymentReceipts.Add(new PaymentReceipt
             {
                 BookingId = booking.Id,
                 VenueId = venueId,
+                CountsOn = await CounterMoneyEndpoints.CountsOnAsync(
+                    database, venueId, now, cancellationToken),
                 AmountBaht = booking.TotalBaht,
                 Method = paid == CounterPayment.Cash
                     ? PaymentMethod.Cash

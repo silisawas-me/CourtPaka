@@ -331,6 +331,8 @@ public static class ShopEndpoints
         {
             SaleId = sale.Id,
             VenueId = venueId,
+            CountsOn = await CounterMoneyEndpoints.CountsOnAsync(
+                database, venueId, now, cancellationToken),
             AmountBaht = sale.TotalBaht,
             Method = Enum.Parse<PaymentMethod>(paidBy),
             ReceivedAt = now,

@@ -220,14 +220,20 @@ public static class Takings
     /// One place, because the venue's revenue (US-15), the platform's GMV (US-22) and what the
     /// platform charges commission on (BR-08) are the same question asked by three readers.
     /// </summary>
+    /// <param name="packageBaht">
+    /// What the hours this booking was paid with cost, or null when it was not paid with hours.
+    /// Not optional: a caller that forgets it values the booking at the board price the customer
+    /// chose not to pay, and the number is revenue (PRD US-31, ⚠️ S-27).
+    /// </param>
     public static decimal KeptBy(
         PaymentState payment,
         decimal totalBaht,
         decimal refundDueBaht,
         decimal takenBaht,
-        decimal askedBaht)
+        decimal askedBaht,
+        decimal? packageBaht)
     {
-        var held = HeldUpToPrice(payment, totalBaht, takenBaht, askedBaht);
+        var held = HeldUpToPrice(payment, totalBaht, takenBaht, askedBaht, packageBaht);
         return held <= 0m ? 0m : held - refundDueBaht;
     }
 
@@ -241,8 +247,9 @@ public static class Takings
         PaymentState payment,
         decimal totalBaht,
         decimal takenBaht,
-        decimal askedBaht) =>
-        Math.Min(totalBaht, HeldFor(payment, takenBaht, askedBaht));
+        decimal askedBaht,
+        decimal? packageBaht) =>
+        Math.Min(totalBaht, HeldFor(payment, takenBaht, askedBaht, packageBaht));
 
     /// <summary>
     /// Whether money may still be taken for this booking (PRD US-26). Something has to be owed,
