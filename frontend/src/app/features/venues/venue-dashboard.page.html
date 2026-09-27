@@ -1,52 +1,44 @@
-<mat-card>
-  <mat-card-header>
-    <mat-card-title>{{ i18n.t('dashboard.title') }}</mat-card-title>
-  </mat-card-header>
+<header class="page-head">
+  <h2>{{ i18n.t('dashboard.title') }}</h2>
 
-  <mat-card-content>
-    <div class="range-row">
-      <mat-form-field class="range-field">
-        <mat-label>{{ i18n.t('dashboard.range') }}</mat-label>
-        <mat-date-range-input [formGroup]="range" [rangePicker]="picker">
-          <input
-            matStartDate
-            readonly
-            formControlName="start"
-            data-testid="range-start"
-            [attr.aria-label]="i18n.t('dashboard.rangeStart')"
-          />
-          <input
-            matEndDate
-            readonly
-            formControlName="end"
-            data-testid="range-end"
-            [attr.aria-label]="i18n.t('dashboard.rangeEnd')"
-            (dateChange)="picked()"
-          />
-        </mat-date-range-input>
-        <mat-datepicker-toggle matIconSuffix [for]="picker" />
-        <mat-date-range-picker #picker />
-      </mat-form-field>
+  <mat-form-field class="field-range">
+    <mat-label>{{ i18n.t('dashboard.range') }}</mat-label>
+    <mat-date-range-input [formGroup]="range" [rangePicker]="picker">
+      <input
+        matStartDate
+        readonly
+        formControlName="start"
+        data-testid="range-start"
+        [attr.aria-label]="i18n.t('dashboard.rangeStart')"
+      />
+      <input
+        matEndDate
+        readonly
+        formControlName="end"
+        data-testid="range-end"
+        [attr.aria-label]="i18n.t('dashboard.rangeEnd')"
+        (dateChange)="picked()"
+      />
+    </mat-date-range-input>
+    <mat-datepicker-toggle matIconSuffix [for]="picker" />
+    <mat-date-range-picker #picker />
+  </mat-form-field>
 
-      <div class="row">
-        <button matButton type="button" data-testid="this-month" (click)="thisMonth()">
-          {{ i18n.t('dashboard.thisMonth') }}
-        </button>
-        <button matButton type="button" data-testid="last-month" (click)="lastMonth()">
-          {{ i18n.t('dashboard.lastMonth') }}
-        </button>
-      </div>
-    </div>
-  </mat-card-content>
+  <div class="row">
+    <button matButton type="button" data-testid="this-month" (click)="thisMonth()">
+      {{ i18n.t('dashboard.thisMonth') }}
+    </button>
+    <button matButton type="button" data-testid="last-month" (click)="lastMonth()">
+      {{ i18n.t('dashboard.lastMonth') }}
+    </button>
 
-  <mat-card-actions>
     @if (figures()) {
       <button matButton type="button" data-testid="download-csv" (click)="download()">
         {{ i18n.t('dashboard.download') }}
       </button>
     }
-  </mat-card-actions>
-</mat-card>
+  </div>
+</header>
 
 @if (loading() && figures() === null) {
   <mat-progress-bar mode="indeterminate" />
@@ -64,8 +56,9 @@
   <mat-card>
     <mat-card-content>
       <!--
-        One number leads: what the venue kept in the range. Everything else is read after it, so
-        it is the only thing set large — the rest are a line of figures, not a wall of equal tiles.
+        One number leads: what the venue kept in the range. It is the only thing set large, and
+        the readings under it are tiles of one size — they are compared with each other, not with
+        the lead, and the edge on each says whether it is money in, money out, or money waited on.
       -->
       <p class="lead-label muted">
         {{ i18n.t('dashboard.revenue') }} · {{ f.from | appDate: i18n.locale() }} –
@@ -76,21 +69,21 @@
         <span class="unit">{{ i18n.t('dashboard.baht') }}</span>
       </p>
 
-      <dl class="figures">
-        <div>
-          <dt class="muted">{{ i18n.t('dashboard.online') }}</dt>
+      <dl class="tiles">
+        <div class="tile tile-live">
+          <dt>{{ i18n.t('dashboard.online') }}</dt>
           <dd data-testid="revenue-online">{{ f.onlineBaht | baht: i18n.locale() }}</dd>
         </div>
-        <div>
-          <dt class="muted">{{ i18n.t('dashboard.counter') }}</dt>
+        <div class="tile tile-live">
+          <dt>{{ i18n.t('dashboard.counter') }}</dt>
           <dd data-testid="revenue-counter">{{ f.staffBaht | baht: i18n.locale() }}</dd>
         </div>
-        <div>
-          <dt class="muted">{{ i18n.t('dashboard.advance') }}</dt>
+        <div class="tile tile-waiting">
+          <dt>{{ i18n.t('dashboard.advance') }}</dt>
           <dd data-testid="advance">{{ f.advanceBaht | baht: i18n.locale() }}</dd>
         </div>
-        <div>
-          <dt class="muted">{{ i18n.t('dashboard.utilization') }}</dt>
+        <div class="tile">
+          <dt>{{ i18n.t('dashboard.utilization') }}</dt>
           <dd data-testid="utilization">
             @if (f.utilizationPercent !== null) {
               {{ f.utilizationPercent | baht: i18n.locale() }}%
@@ -159,17 +152,17 @@
         <mat-card-title>{{ i18n.t('dashboard.trade') }}</mat-card-title>
       </mat-card-header>
       <mat-card-content>
-        <dl class="figures">
-          <div>
-            <dt class="muted">{{ i18n.t('dashboard.shopBaht') }}</dt>
+        <dl class="tiles">
+          <div class="tile tile-live">
+            <dt>{{ i18n.t('dashboard.shopBaht') }}</dt>
             <dd data-testid="shop-baht">{{ f.trade.shopBaht | baht: i18n.locale() }}</dd>
           </div>
-          <div>
-            <dt class="muted">{{ i18n.t('dashboard.spentBaht') }}</dt>
+          <div class="tile tile-out">
+            <dt>{{ i18n.t('dashboard.spentBaht') }}</dt>
             <dd data-testid="spent-baht">{{ f.trade.spentBaht | baht: i18n.locale() }}</dd>
           </div>
-          <div>
-            <dt class="muted">{{ i18n.t('dashboard.leftOverBaht') }}</dt>
+          <div class="tile">
+            <dt>{{ i18n.t('dashboard.leftOverBaht') }}</dt>
             <dd data-testid="left-over-baht">{{ f.trade.leftOverBaht | baht: i18n.locale() }}</dd>
           </div>
         </dl>
@@ -188,9 +181,9 @@
         <mat-card-title>{{ i18n.t('dashboard.owedHours') }}</mat-card-title>
       </mat-card-header>
       <mat-card-content>
-        <dl class="figures">
-          <div>
-            <dt class="muted">{{ i18n.t('packages.hoursOwed') }}</dt>
+        <dl class="tiles">
+          <div class="tile tile-waiting">
+            <dt>{{ i18n.t('packages.hoursOwed') }}</dt>
             <dd data-testid="owed-hours">
               {{ f.owedHours.hours }}
               <span class="muted small">
@@ -199,8 +192,8 @@
             </dd>
           </div>
           @if (f.owedHours.runningOut > 0) {
-            <div>
-              <dt class="muted">{{ i18n.t('packages.runningOutCount') }}</dt>
+            <div class="tile tile-waiting">
+              <dt>{{ i18n.t('packages.runningOutCount') }}</dt>
               <dd data-testid="owed-running-out">{{ f.owedHours.runningOut }}</dd>
             </div>
           }
@@ -220,13 +213,13 @@
         <mat-card-title>{{ i18n.t('dashboard.recovery') }}</mat-card-title>
       </mat-card-header>
       <mat-card-content>
-        <dl class="figures">
-          <div>
-            <dt class="muted">{{ i18n.t('dashboard.hoursLost') }}</dt>
+        <dl class="tiles">
+          <div class="tile tile-out">
+            <dt>{{ i18n.t('dashboard.hoursLost') }}</dt>
             <dd data-testid="hours-lost">{{ f.recovery.hoursLost }}</dd>
           </div>
-          <div>
-            <dt class="muted">{{ i18n.t('dashboard.hoursRefilled') }}</dt>
+          <div class="tile tile-live">
+            <dt>{{ i18n.t('dashboard.hoursRefilled') }}</dt>
             <dd data-testid="hours-refilled">
               {{ f.recovery.hoursRefilled }}
               <span class="muted small">
@@ -235,8 +228,8 @@
               </span>
             </dd>
           </div>
-          <div>
-            <dt class="muted">{{ i18n.t('dashboard.fromQueue') }}</dt>
+          <div class="tile tile-live">
+            <dt>{{ i18n.t('dashboard.fromQueue') }}</dt>
             <dd data-testid="from-queue">
               {{ f.recovery.hoursFromQueue }}
               <span class="muted small">

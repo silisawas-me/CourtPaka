@@ -6,19 +6,6 @@
   gap: var(--stack);
 }
 
-// The range and the two shortcuts share a line on a desk and stack on a phone, where the range
-// field needs the whole width to show two Thai dates with their Buddhist years.
-.range-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 1rem;
-}
-
-.range-field {
-  flex: 1 1 20rem;
-}
-
 .lead-label {
   margin: 0;
   font: var(--mat-sys-body-medium);
@@ -34,24 +21,6 @@
   .unit {
     font: var(--mat-sys-title-medium);
     color: var(--mat-sys-on-surface-variant);
-  }
-}
-
-// A line of figures that wraps, each label over its number. Not equal tiles: four readings of
-// different things, sized by what they say.
-.figures {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem 2rem;
-  margin: 0 0 0.75rem;
-
-  dt {
-    font: var(--mat-sys-label-large);
-  }
-
-  dd {
-    margin: 0.25rem 0 0;
-    font: var(--mat-sys-title-large);
   }
 }
 

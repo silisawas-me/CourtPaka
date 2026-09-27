@@ -127,9 +127,26 @@
 // The venue's own pages get a second layout: the shell's doors down the side on a desk, along
 // the bottom on a phone. `app-venue-shell` lays out nothing of its own, so the sidebar and the
 // tab bar are items of this grid.
+// The desk is read differently from the booker's pages, and so is set differently: a booker meets
+// one card at a time and has time, while a counter is holding a card machine and wants the whole
+// day at once. So the venue's panels sit closer together and title themselves quietly — the
+// heading is a label on a panel, not the thing being read.
+//
+// Said as custom properties, because those are the only thing that crosses into the routed page:
+// this component's own styles are scoped to its own template, so a rule here naming `mat-card`
+// matches nothing, the cards being in the pages the router put inside `.shell` (PRD US-25).
 :host.at-a-venue {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  --stack: 0.75rem;
+  // The booker's column is capped because prose has a comfortable line length. Nothing on the
+  // desk is prose — it is a board of hours, rows of tiles and a money table — so the cap here is
+  // only a stop for a very large monitor, and it is set where a whole day of sixteen hours fits
+  // beside the rail rather than at a width somebody picked for reading.
+  --page-width: 108rem;
+  --mat-card-title-text-size: var(--mat-sys-title-medium-size);
+  --mat-card-title-text-line-height: var(--mat-sys-title-medium-line-height);
+  --mat-card-title-text-weight: var(--mat-sys-title-medium-weight);
 }
 
 // A grid item with `margin-inline: auto` has its stretch cancelled by the auto margins, and
@@ -156,7 +173,6 @@
   :host.at-a-venue .shell {
     grid-column: 2;
     grid-row: 1;
-    max-width: 68rem;
     margin-inline: 0;
     padding-inline: 1.5rem;
   }

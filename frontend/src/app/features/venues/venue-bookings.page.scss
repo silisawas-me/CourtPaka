@@ -4,7 +4,11 @@
  * page — and every card on it — grows past the phone it is being read on.
  */
 :host {
-  display: block;
+  // A grid like every other venue screen, so the gap under the page's head is the one the rest
+  // of them have — as a block it had none, and on a phone the head's button met the card below.
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--stack);
   min-width: 0;
 }
 
@@ -215,44 +219,6 @@
   dd:last-of-type {
     font: var(--mat-sys-title-medium);
     color: var(--mat-sys-on-surface);
-  }
-}
-
-/*
- * The day in four numbers, read from across a counter — so each one is a tile with the number
- * carrying the weight, not a label with a value after it. They wrap rather than scroll: on a
- * phone two rows of two is still four numbers, and a row that scrolls sideways hides one.
- */
-.today {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
-  gap: 0.5rem;
-  margin: 0;
-}
-
-.tile {
-  padding: 0.5rem 0.75rem;
-  border-radius: var(--mat-sys-corner-medium);
-  background: var(--mat-sys-surface-container-high);
-
-  dt {
-    font: var(--mat-sys-label-medium);
-    color: var(--mat-sys-on-surface-variant);
-  }
-
-  dd {
-    margin: 0.125rem 0 0;
-    font: var(--mat-sys-headline-small);
-  }
-}
-
-/* Money that has not arrived, when there is any. Nothing owed is an ordinary tile. */
-.tile-waiting {
-  background: var(--status-waiting-soft);
-
-  dt,
-  dd {
-    color: var(--status-waiting-ink);
   }
 }
 

@@ -15,7 +15,9 @@
 
       @for (row of rows(); track row.courtId) {
         <div class="board-row" [style.--hours]="hours().length">
-          <span class="board-court">{{ row.name }}</span>
+          <span class="board-court"
+            ><span>{{ row.name }}</span></span
+          >
 
           @for (cell of row.cells; track $index) {
             @if (isBlock(cell)) {
@@ -55,9 +57,19 @@
         </div>
       }
 
-      @if (liveAt(); as at) {
-        <!-- Where the clock is, so the counter reads the floor without doing the arithmetic. -->
-        <span class="board-live" data-testid="board-live" [style.--at.%]="at"></span>
+      <!--
+        Where the clock is, so the counter reads the floor without doing the arithmetic. Asked
+        against null rather than bound with `as`, because a share of nought — the first minute of
+        the hour the venue opens — is a real position and a falsy one, and `as` would drop the
+        clock for that minute every morning.
+
+        The share is bound unitless because the rule multiplies a length by it: with a unit it
+        would be a percentage, multiplying a length by a percentage is not arithmetic CSS does,
+        and the whole calc falls back to its initial value — which stood the clock against the
+        left edge of the floor at every hour of the day.
+      -->
+      @if (liveAt() !== null) {
+        <span class="board-live" data-testid="board-live" [style.--at]="liveAt()"></span>
       }
     </div>
   </div>
