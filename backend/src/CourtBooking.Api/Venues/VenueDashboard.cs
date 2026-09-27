@@ -20,7 +20,18 @@ public sealed record DashboardDayResponse(
     /// <summary>What those bookings left the venue owing back (PRD 6.2).</summary>
     decimal RefundDueBaht,
     /// <summary>What the venue has written down as sent back so far (PRD US-18).</summary>
-    decimal RefundedBaht);
+    decimal RefundedBaht,
+    /// <summary>
+    /// The counter's shop that day: rung up less handed back, each on the day the money moved —
+    /// the same rule as <see cref="DashboardTradeResponse.ShopBaht"/>, split by day (owner app).
+    /// </summary>
+    decimal ShopBaht = 0m);
+
+/// <summary>Money that came in over the range by the form it came in (owner app, PRD US-26).</summary>
+public sealed record DashboardMethodResponse(string Method, decimal Baht);
+
+/// <summary>A thing the counter sold over the range: how many, and for how much (US-32).</summary>
+public sealed record DashboardItemResponse(Guid ItemId, string Name, int Quantity, decimal Baht);
 
 /// <summary>One calendar month, from the days of it that fall inside the range asked for.</summary>
 public sealed record DashboardMonthResponse(
@@ -109,7 +120,19 @@ public sealed record DashboardResponse(
     /// <summary>Hours sold and not yet given (PRD US-31). Never part of the money above.</summary>
     DashboardOwedHoursResponse OwedHours,
     /// <summary>The counter's other trade, and the money that went out (PRD US-32, US-33).</summary>
-    DashboardTradeResponse Trade);
+    DashboardTradeResponse Trade,
+    /// <summary>
+    /// Every receipt counted in the range, by how it was paid — court, package and shop money
+    /// alike, because that is what went into the till or the account (owner app PR-5).
+    /// </summary>
+    DashboardMethodResponse[] ByMethod,
+    /// <summary>The shop's best sellers over the range, most money first (owner app PR-5).</summary>
+    DashboardItemResponse[] TopItems,
+    /// <summary>
+    /// Court money plus shop money over the same number of days just before the range, so the
+    /// page can say how this period compares — by the same rules as the range itself.
+    /// </summary>
+    decimal PriorBaht);
 
 public static class DashboardErrorCodes
 {
@@ -209,6 +232,7 @@ public static class VenueDashboard
         var kept = await KeptByDayAsync(database, venueId, since, until, now, cancellationToken);
         var hours = await HoursByDayAsync(
             database, venueId, first, last, since, until, cancellationToken);
+        var shopByDay = await ShopByDayAsync(database, venueId, since, until, cancellationToken);
 
         var days = Enumerable.Range(0, last.DayNumber - first.DayNumber + 1)
             .Select(offset => first.AddDays(offset))
@@ -223,7 +247,8 @@ public static class VenueDashboard
                     hours.GetValueOrDefault(date)?.Sum(hour => hour.Booked) ?? 0,
                     money.Bookings,
                     money.RefundDue,
-                    money.Refunded);
+                    money.Refunded,
+                    shopByDay.GetValueOrDefault(date));
             })
             .ToArray();
 
@@ -262,7 +287,133 @@ public static class VenueDashboard
             await OwedHoursAsync(database, venueId, now, cancellationToken),
             await TradeAsync(
                 database, venueId, first, last, since, until, onlineBaht + staffBaht,
-                cancellationToken));
+                cancellationToken),
+            await ByMethodAsync(database, venueId, first, last, cancellationToken),
+            await TopItemsAsync(database, venueId, since, until, cancellationToken),
+            await PriorAsync(database, venueId, first, last, now, cancellationToken));
+    }
+
+    /// <summary>How many of the shop's best sellers the page is given.</summary>
+    public const int TopItemsShown = 5;
+
+    /// <summary>
+    /// The shop's money per venue day, by the rule the range total uses: a sale on the day it was
+    /// rung up, a hand-back on the day it was handed back (PRD US-32).
+    /// </summary>
+    private static async Task<Dictionary<DateOnly, decimal>> ShopByDayAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateTimeOffset since,
+        DateTimeOffset until,
+        CancellationToken cancellationToken)
+    {
+        var sales = await database.ShopSales
+            .AsNoTracking()
+            .Where(sale =>
+                sale.VenueId == venueId
+                && ((sale.SoldAt >= since && sale.SoldAt < until)
+                    || (sale.CancelledAt >= since && sale.CancelledAt < until)))
+            .Select(sale => new { sale.SoldAt, sale.CancelledAt, sale.TotalBaht })
+            .ToListAsync(cancellationToken);
+
+        var byDay = new Dictionary<DateOnly, decimal>();
+        foreach (var sale in sales)
+        {
+            if (sale.SoldAt >= since && sale.SoldAt < until)
+            {
+                var day = PlatformRequirements.BangkokDateAndHour(sale.SoldAt).Date;
+                byDay[day] = byDay.GetValueOrDefault(day) + sale.TotalBaht;
+            }
+
+            if (sale.CancelledAt is { } back && back >= since && back < until)
+            {
+                var day = PlatformRequirements.BangkokDateAndHour(back).Date;
+                byDay[day] = byDay.GetValueOrDefault(day) - sale.TotalBaht;
+            }
+        }
+
+        return byDay;
+    }
+
+    /// <summary>
+    /// Receipts counted on the days in the range, by method. Counted by the till's day
+    /// (<see cref="PaymentReceipt.CountsOn"/>), which is the day the money page counts them on.
+    /// </summary>
+    private static async Task<DashboardMethodResponse[]> ByMethodAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateOnly first,
+        DateOnly last,
+        CancellationToken cancellationToken)
+    {
+        var sums = await database.PaymentReceipts
+            .AsNoTracking()
+            .Where(receipt =>
+                receipt.VenueId == venueId && receipt.CountsOn >= first && receipt.CountsOn <= last)
+            .GroupBy(receipt => receipt.Method)
+            .Select(group => new { Method = group.Key, Baht = group.Sum(receipt => receipt.AmountBaht) })
+            .ToListAsync(cancellationToken);
+
+        return
+        [
+            .. sums
+                .OrderByDescending(one => one.Baht)
+                .Select(one => new DashboardMethodResponse(one.Method.ToString(), one.Baht)),
+        ];
+    }
+
+    /// <summary>What the counter sold most of, in money, among the sales still standing.</summary>
+    private static async Task<DashboardItemResponse[]> TopItemsAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateTimeOffset since,
+        DateTimeOffset until,
+        CancellationToken cancellationToken)
+    {
+        var lines = await database.ShopSaleLines
+            .AsNoTracking()
+            .Where(line =>
+                line.Sale!.VenueId == venueId
+                && line.Sale.CancelledAt == null
+                && line.Sale.SoldAt >= since
+                && line.Sale.SoldAt < until)
+            .Select(line => new { line.ItemId, line.Name, line.Quantity, line.EachBaht, line.Sale!.SoldAt })
+            .ToListAsync(cancellationToken);
+
+        return
+        [
+            .. lines
+                .GroupBy(line => line.ItemId)
+                .Select(item => new DashboardItemResponse(
+                    item.Key,
+                    // The name it was last sold under, which is the one the counter knows it by.
+                    item.OrderByDescending(line => line.SoldAt).First().Name,
+                    item.Sum(line => line.Quantity),
+                    item.Sum(line => line.EachBaht * line.Quantity)))
+                .OrderByDescending(item => item.Baht)
+                .ThenBy(item => item.Name, StringComparer.Ordinal)
+                .Take(TopItemsShown),
+        ];
+    }
+
+    /// <summary>Court money kept plus shop money, over the days just before the range.</summary>
+    private static async Task<decimal> PriorAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateOnly first,
+        DateOnly last,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var length = last.DayNumber - first.DayNumber + 1;
+        var priorFirst = first.AddDays(-length);
+        var since = PlatformRequirements.BangkokHour(priorFirst, 0);
+        var until = PlatformRequirements.BangkokHour(first, 0);
+
+        var kept = await KeptByDayAsync(database, venueId, since, until, now, cancellationToken);
+        var shop = await ShopByDayAsync(database, venueId, since, until, cancellationToken);
+
+        return kept.Values.Sum(day => day.Online + day.Staff) + shop.Values.Sum();
     }
 
     /// <summary>

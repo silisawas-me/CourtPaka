@@ -1,0 +1,110 @@
+<section class="revenue" data-testid="revenue-panel">
+  <div class="kpis">
+    <div class="kpi">
+      <span class="kpi-label">{{ i18n.t('revenue.total') }}</span>
+      <span class="kpi-value" data-testid="revenue-kpi-total"
+        >฿{{ total() | baht: i18n.locale() }}</span
+      >
+      @if (change(); as percent) {
+        <span class="kpi-note" [class.up]="percent > 0" data-testid="revenue-change">
+          {{ percent > 0 ? '+' : '' }}{{ percent }}% {{ i18n.t('revenue.vsBefore') }}
+        </span>
+      } @else {
+        <span class="kpi-note">{{ i18n.t('revenue.nothingBefore') }}</span>
+      }
+    </div>
+    <div class="kpi">
+      <span class="kpi-label">{{ i18n.t('revenue.courtFees') }}</span>
+      <span class="kpi-value" data-testid="revenue-kpi-court"
+        >฿{{ court() | baht: i18n.locale() }}</span
+      >
+      @if (courtShare(); as share) {
+        <span class="kpi-note">{{ share }}%</span>
+      }
+    </div>
+    <div class="kpi">
+      <span class="kpi-label">{{ i18n.t('revenue.shop') }}</span>
+      <span class="kpi-value" data-testid="revenue-kpi-shop"
+        >฿{{ shop() | baht: i18n.locale() }}</span
+      >
+      @if (figures().topItems[0]; as best) {
+        <span class="kpi-note">{{ i18n.t('revenue.bestSeller') }} {{ best.name }}</span>
+      }
+    </div>
+  </div>
+
+  <div class="split">
+    <div class="card chart-card">
+      <div class="card-head">
+        <h3>{{ i18n.t('revenue.byDay') }}</h3>
+        <span class="key">
+          <span class="dot court" aria-hidden="true"></span>{{ i18n.t('revenue.courtFees') }}
+          <span class="dot shop" aria-hidden="true"></span>{{ i18n.t('revenue.shop') }}
+        </span>
+      </div>
+
+      <!--
+        A bar a day on one scale, court money under shop money. Each bar says its numbers to
+        whoever cannot see the heights.
+      -->
+      <div class="chart" data-testid="revenue-chart" [style.--days]="bars().length">
+        @for (bar of bars(); track bar.date) {
+          <div
+            class="bar"
+            role="img"
+            [attr.aria-label]="
+              bar.date +
+              ' ' +
+              i18n.t('revenue.courtFees') +
+              ' ' +
+              bar.court +
+              ' · ' +
+              i18n.t('revenue.shop') +
+              ' ' +
+              bar.shop
+            "
+          >
+            <span class="stack">
+              <span class="part shop" [style.height.%]="bar.shopShare"></span>
+              <span class="part court" [style.height.%]="bar.courtShare"></span>
+            </span>
+            <span class="day">{{ bar.label }}</span>
+          </div>
+        }
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="card">
+        <h3>{{ i18n.t('revenue.byMethod') }}</h3>
+        @for (one of methods(); track one.method) {
+          <div class="method" [attr.data-testid]="'revenue-method-' + one.method">
+            <span class="method-line">
+              <span>{{ i18n.t('money.method.' + one.method) }}</span>
+              <span class="num">{{ one.share }}%</span>
+            </span>
+            <span class="track"
+              ><span class="fill" [class]="'fill ' + one.method" [style.width.%]="one.share"></span
+            ></span>
+          </div>
+        } @empty {
+          <p class="muted">{{ i18n.t('revenue.noMoney') }}</p>
+        }
+      </div>
+
+      <div class="card">
+        <h3>{{ i18n.t('revenue.topItems') }}</h3>
+        @for (item of figures().topItems; track item.itemId) {
+          <div class="item" [attr.data-testid]="'revenue-item-' + item.itemId">
+            <span>{{ item.name }}</span>
+            <span class="num"
+              >{{ item.quantity }}× · <strong>฿{{ item.baht | baht: i18n.locale() }}</strong></span
+            >
+          </div>
+        } @empty {
+          <p class="muted">{{ i18n.t('revenue.nothingSold') }}</p>
+        }
+      </div>
+    </div>
+  </div>
+</section>

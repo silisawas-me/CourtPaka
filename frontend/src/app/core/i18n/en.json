@@ -937,5 +937,17 @@
   "pricing.applyAll": "Apply to all branches",
   "pricing.save": "Save prices",
   "pricing.saved": "Saved",
-  "pricing.movedHere": "Prices moved to \"Pricing & peak\""
+  "pricing.movedHere": "Prices moved to \"Pricing & peak\"",
+  "dashboard.lastFourteen": "Last 14 days",
+  "revenue.total": "Revenue in range",
+  "revenue.vsBefore": "vs the period before",
+  "revenue.nothingBefore": "Nothing in the period before",
+  "revenue.courtFees": "Court fees",
+  "revenue.shop": "Shop",
+  "revenue.bestSeller": "Top seller:",
+  "revenue.byDay": "Revenue by day",
+  "revenue.byMethod": "Payment methods",
+  "revenue.topItems": "Top items",
+  "revenue.noMoney": "No money in this range yet",
+  "revenue.nothingSold": "Nothing sold in this range"
 }

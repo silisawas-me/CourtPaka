@@ -9,6 +9,8 @@ export interface DashboardDay {
   staffBaht: number;
   sellableHours: number;
   bookedHours: number;
+  /** The counter's shop that day, rung up less handed back (owner app PR-5). */
+  shopBaht: number;
 }
 
 export interface DashboardMonth {
@@ -65,12 +67,30 @@ export interface Dashboard {
   owedHours: OwedHours;
   /** The counter's other trade, and the money that went out (PRD US-32, US-33). */
   trade: Trade;
+  /** Every receipt counted in the range, by how it was paid (owner app PR-5). */
+  byMethod: DashboardMethod[];
+  /** The shop's best sellers over the range, most money first. */
+  topItems: DashboardItem[];
+  /** Court plus shop money over the same number of days just before the range. */
+  priorBaht: number;
 }
 
 /**
  * What the counter sold besides court time and what the venue paid out (PRD US-32, US-33). Kept
  * apart from the court money because it is a different business with a different margin.
  */
+export interface DashboardMethod {
+  method: 'Cash' | 'PromptPay' | 'Card';
+  baht: number;
+}
+
+export interface DashboardItem {
+  itemId: string;
+  name: string;
+  quantity: number;
+  baht: number;
+}
+
 export interface Trade {
   shopBaht: number;
   spentBaht: number;
