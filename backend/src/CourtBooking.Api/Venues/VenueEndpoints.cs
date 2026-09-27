@@ -64,6 +64,13 @@ public static class VenueEndpoints
         venue.MapPricingEndpoints();
         venue.MapVerifySlipEndpoints();
         venue.MapVenueBookingEndpoints();
+
+        // The groups that come every week (PRD US-30). Its own group rather than part of the day's
+        // bookings: an arrangement is not a booking, and the weeks it makes are read with the day.
+        venue.MapBookingSeriesEndpoints();
+
+        // Hours sold in advance (PRD US-31).
+        venue.MapPackageEndpoints();
         venue.MapVenueWaitlistEndpoints();
         // What the day took, and the count at the end of it (PRD US-26).
         venue.MapDayMoneyEndpoints();

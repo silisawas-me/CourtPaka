@@ -321,3 +321,13 @@
   font-weight: 400;
   opacity: 0.8;
 }
+
+/** Whose hours to take them off: one press each, wrapping rather than shrinking. */
+.package-choices {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+}

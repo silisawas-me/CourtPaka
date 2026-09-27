@@ -28,6 +28,8 @@ export interface VenueBookingActions {
   playedAfterAll: boolean;
   /** Taking money for it at the desk, in any form (PRD US-26). */
   takeMoney: boolean;
+  /** Settling it with hours somebody bought earlier instead (PRD US-31). */
+  payWithPackage: boolean;
   /** Selling them the hour they would run on into (PRD US-29). */
   extend: boolean;
   /** Putting the hours they have not played on another court (PRD US-29). */
@@ -54,7 +56,9 @@ export interface CounterBookingRequest {
   slots: { courtId: string; date: string; hour: number }[];
   customerName: string;
   customerPhone: string | null;
-  paidBy: CounterPayment;
+  paidBy: CounterPayment | null;
+  /** Hours the customer bought earlier, instead of money (PRD US-31). */
+  packageId?: string | null;
 }
 
 /** One of the venue's bookings for a day, as its counter reads it (PRD US-13). */

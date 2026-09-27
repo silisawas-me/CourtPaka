@@ -35,6 +35,7 @@ function booking(
       settlePayment: false,
       playedAfterAll: false,
       takeMoney: false,
+      payWithPackage: false,
       extend: false,
       moveCourt: false,
       cancelChoices: [],

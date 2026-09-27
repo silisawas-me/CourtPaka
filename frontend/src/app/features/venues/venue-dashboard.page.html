@@ -150,6 +150,38 @@
   </mat-card>
 
   <!--
+    Hours somebody has already paid for (PRD US-31). Drawn only when the venue owes some: a
+    venue that sells no packages has nothing to read here, and a zero would only say so.
+  -->
+  @if (f.owedHours.hours > 0) {
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>{{ i18n.t('dashboard.owedHours') }}</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <dl class="figures">
+          <div>
+            <dt class="muted">{{ i18n.t('packages.hoursOwed') }}</dt>
+            <dd data-testid="owed-hours">
+              {{ f.owedHours.hours }}
+              <span class="muted small">
+                {{ f.owedHours.baht | baht: i18n.locale() }} {{ i18n.t('dashboard.baht') }}
+              </span>
+            </dd>
+          </div>
+          @if (f.owedHours.runningOut > 0) {
+            <div>
+              <dt class="muted">{{ i18n.t('packages.runningOutCount') }}</dt>
+              <dd data-testid="owed-running-out">{{ f.owedHours.runningOut }}</dd>
+            </div>
+          }
+        </dl>
+        <p class="muted small">{{ i18n.t('dashboard.owedHoursHint') }}</p>
+      </mat-card-content>
+    </mat-card>
+  }
+
+  <!--
     What the venue lost and what came back (PRD US-27). Drawn only when something was lost —
     a run of zeroes says nothing except that the card was written.
   -->

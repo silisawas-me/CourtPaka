@@ -13,7 +13,10 @@ public sealed record TakePaymentRequest(decimal AmountBaht, string Method, strin
 /// <summary>One amount the venue took, as the counter reads it back (PRD US-26).</summary>
 public sealed record PaymentReceiptResponse(
     Guid Id,
-    Guid BookingId,
+    /// <summary>The booking it was for, or null where it was a package being sold (US-31).</summary>
+    Guid? BookingId,
+    /// <summary>The package that was sold, where that is what it was.</summary>
+    Guid? PackageId,
     decimal AmountBaht,
     string Method,
     DateTimeOffset ReceivedAt,
@@ -320,8 +323,7 @@ public static class CounterMoneyEndpoints
         CancellationToken cancellationToken)
     {
         var day = date ?? PlatformRequirements.BangkokToday(timeProvider);
-        var from = PlatformRequirements.BangkokHour(day, 0);
-        var until = PlatformRequirements.BangkokHour(day.AddDays(1), 0);
+        var (from, until) = await TillDayAsync(database, venueId, day, cancellationToken);
 
         var receipts = await database.PaymentReceipts
             .AsNoTracking()
@@ -331,6 +333,7 @@ public static class CounterMoneyEndpoints
             {
                 receipt.Id,
                 receipt.BookingId,
+                receipt.PackageId,
                 receipt.AmountBaht,
                 receipt.Method,
                 receipt.ReceivedAt,
@@ -379,6 +382,7 @@ public static class CounterMoneyEndpoints
                 .Select(receipt => new PaymentReceiptResponse(
                     receipt.Id,
                     receipt.BookingId,
+                    receipt.PackageId,
                     receipt.AmountBaht,
                     receipt.Method.ToString(),
                     receipt.ReceivedAt,
@@ -491,8 +495,7 @@ public static class CounterMoneyEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, MoneyErrorCodes.InvalidFloat);
         }
 
-        var from = PlatformRequirements.BangkokHour(day, 0);
-        var until = PlatformRequirements.BangkokHour(day.AddDays(1), 0);
+        var (from, until) = await TillDayAsync(database, venueId, day, cancellationToken);
 
         await using var transaction =
             await database.Database.BeginTransactionAsync(cancellationToken);
@@ -560,6 +563,31 @@ public static class CounterMoneyEndpoints
             closing.DifferenceBaht,
             closing.Note,
             closing.ClosedAt));
+    }
+
+    /// <summary>
+    /// When this venue's day starts and stops taking money (PRD US-26), read from the counts
+    /// either side of it. Asked here rather than worked out by each reader, because the page that
+    /// shows the day and the count that closes it have to be looking at the same money.
+    /// </summary>
+    private static async Task<(DateTimeOffset From, DateTimeOffset Until)> TillDayAsync(
+        AppDbContext database,
+        Guid venueId,
+        DateOnly day,
+        CancellationToken cancellationToken)
+    {
+        var counts = await database.DailyClosings
+            .AsNoTracking()
+            .Where(closing =>
+                closing.VenueId == venueId
+                && (closing.Date == day || closing.Date == day.AddDays(-1)))
+            .Select(closing => new { closing.Date, closing.ClosedAt })
+            .ToListAsync(cancellationToken);
+
+        return Takings.TillDay(
+            day,
+            counts.SingleOrDefault(one => one.Date == day.AddDays(-1))?.ClosedAt,
+            counts.SingleOrDefault(one => one.Date == day)?.ClosedAt);
     }
 
     /// <summary>What has been taken for one booking so far.</summary>
@@ -649,6 +677,7 @@ public static class CounterMoneyEndpoints
             .Select(receipt => new PaymentReceiptResponse(
                 receipt.Id,
                 receipt.BookingId,
+                receipt.PackageId,
                 receipt.AmountBaht,
                 receipt.Method.ToString(),
                 receipt.ReceivedAt,
@@ -681,8 +710,13 @@ public static class CounterMoneyEndpoints
             .Where(booking =>
                 booking.VenueId == venueId
                 && booking.Slots.Any(slot => slot.StartsAt >= from && slot.StartsAt < until)
-                // The same bookings the counter is offered a door on, from the same list.
-                && Takings.StillOwing.Contains(booking.Status))
+                // The same bookings the counter is offered a door on, and on the same terms
+                // (Takings.CanTake): one the venue already says it has the money for owes
+                // nothing, whatever its receipts add up to. A booking paid for with hours has no
+                // receipts at all and would otherwise be offered as the explanation for a till
+                // that came out over — sending somebody to look for cash nobody ever owed.
+                && Takings.StillOwing.Contains(booking.Status)
+                && booking.PaymentState != PaymentState.Received)
             .Select(booking => new
             {
                 booking.Id,

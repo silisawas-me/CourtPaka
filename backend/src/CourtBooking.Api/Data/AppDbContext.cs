@@ -28,6 +28,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<WaitlistEntry> WaitlistEntries => Set<WaitlistEntry>();
 
+    public DbSet<BookingSeries> BookingSeries => Set<BookingSeries>();
+
+    public DbSet<SeriesMiss> SeriesMisses => Set<SeriesMiss>();
+
+    public DbSet<PackageType> PackageTypes => Set<PackageType>();
+
+    public DbSet<HourPackage> HourPackages => Set<HourPackage>();
+
+    public DbSet<PackageEntry> PackageEntries => Set<PackageEntry>();
+
     public DbSet<CourtStatusChange> CourtStatusChanges => Set<CourtStatusChange>();
 
     public DbSet<OpeningHoursSchedule> OpeningHoursSchedules => Set<OpeningHoursSchedule>();
@@ -265,7 +275,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 "CK_Bookings_BookerOrCustomer",
                 "(\"Channel\" = 1 AND \"BookerUserId\" IS NOT NULL AND \"CustomerName\" IS NULL)"
                 + " OR (\"Channel\" = 2 AND \"BookerUserId\" IS NULL"
-                + " AND \"CustomerName\" IS NOT NULL AND \"PaidAtCounter\" IS NOT NULL)"));
+                + " AND \"CustomerName\" IS NOT NULL"
+                // How they paid, or the reason it is theirs without money changing hands
+                // today: a standing group's week is confirmed before anybody has paid for it
+                // and the desk takes the money when they turn up (PRD US-30), and a booking
+                // on a package was paid for when the package was sold (PRD US-31).
+                + " AND (\"PaidAtCounter\" IS NOT NULL OR \"SeriesId\" IS NOT NULL"
+                + " OR \"PackageId\" IS NOT NULL))"));
             // The booker's own history (US-05), and the check that they hold only one (PRD S-22).
             booking.HasIndex(b => new { b.BookerUserId, b.Status });
             booking.HasIndex(b => new { b.VenueId, b.CreatedAt });
@@ -283,6 +299,94 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .WithMany()
                 .HasForeignKey(b => b.CancellationPolicyId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            booking.Property(b => b.PackageBaht).HasPrecision(10, 2);
+
+            // Paid with hours or paid with money, never partly both (PRD US-31): a booking with
+            // hours on it owes nothing, so hours and an amount of money would be two answers to
+            // the same question.
+            booking.ToTable(table => table.HasCheckConstraint(
+                "CK_Bookings_PackagePaysForItWhole",
+                "(\"PackageId\" IS NULL AND \"PackageHours\" = 0 AND \"PackageBaht\" = 0)"
+                // Nothing, once it has been cancelled and every hour has gone back: what it kept
+                // is what it earned, and it kept none of it (PRD US-31).
+                + " OR (\"PackageId\" IS NOT NULL AND \"PackageHours\" > 0"
+                + " AND \"PackageBaht\" >= 0)"));
+
+            booking.HasIndex(b => b.PackageId);
+            booking.HasOne(b => b.Package)
+                .WithMany()
+                .HasForeignKey(b => b.PackageId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Which weeks an arrangement has already made (PRD US-30). The job asks this of every
+            // running arrangement on every sweep, so it is the index that answers it.
+            booking.HasIndex(b => b.SeriesId);
+            booking.HasOne(b => b.Series)
+                .WithMany()
+                .HasForeignKey(b => b.SeriesId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<BookingSeries>(series =>
+        {
+            series.Property(one => one.CustomerName).HasMaxLength(Booking.CustomerNameMaxLength);
+            series.Property(one => one.CustomerPhone).HasMaxLength(Booking.CustomerPhoneMaxLength);
+            series.Property(one => one.EndReason).HasMaxLength(BookingStatusChange.ReasonMaxLength);
+
+            // The hours are a window, and the same one every week — guarded here as well as in the
+            // rules, because a backwards window would ask the floor for hours that do not exist.
+            series.ToTable(table => table.HasCheckConstraint(
+                "CK_BookingSeries_HoursAreAWindow",
+                "\"FromHour\" >= 0 AND \"UntilHour\" <= 24 AND \"FromHour\" < \"UntilHour\""));
+
+            // Every read is "what does this venue have standing", newest first.
+            series.HasIndex(one => new { one.VenueId, one.State, one.CreatedAt });
+
+            // One group per court, per day, per pair of hours, at the database rather than only
+            // in the handler: a second one could never have a single week of it, and every week
+            // it missed would be written off for good.
+            series.HasIndex(one => new
+                {
+                    one.VenueId,
+                    one.CourtId,
+                    one.Day,
+                    one.FromHour,
+                    one.UntilHour,
+                })
+                .IsUnique()
+                .HasFilter($"\"State\" = {(int)SeriesState.Running}");
+
+            series.HasOne(one => one.Venue)
+                .WithMany()
+                .HasForeignKey(one => one.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            series.HasOne(one => one.Court)
+                .WithMany()
+                .HasForeignKey(one => one.CourtId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // The arrangement this one took over from. Restrict: the thread between them is the
+            // only thing that says the group did not simply appear one week under new terms.
+            series.HasOne(one => one.Replaced)
+                .WithMany()
+                .HasForeignKey(one => one.ReplacedSeriesId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<SeriesMiss>(miss =>
+        {
+            miss.Property(one => one.Refusal).HasMaxLength(Series.RefusalMaxLength);
+
+            // One row per week, at the database: a week noticed twice would be told to the venue
+            // twice, and the job leans on this to know which weeks it has already given up on.
+            miss.HasIndex(one => new { one.SeriesId, one.Date }).IsUnique();
+
+            miss.HasOne(one => one.Series)
+                .WithMany()
+                .HasForeignKey(one => one.SeriesId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<BookingSlot>(slot =>
@@ -538,9 +642,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             // — which is its own day unless that one had already been counted (PRD US-26).
             receipt.HasIndex(r => new { r.VenueId, r.CountsOn });
             receipt.HasIndex(r => r.BookingId);
+            receipt.HasIndex(r => r.PackageId);
             receipt.HasOne(r => r.Booking)
                 .WithMany()
                 .HasForeignKey(r => r.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            receipt.HasOne(r => r.Package)
+                .WithMany()
+                .HasForeignKey(r => r.PackageId)
                 .OnDelete(DeleteBehavior.Cascade);
             receipt.HasOne(r => r.Venue)
                 .WithMany()
@@ -553,6 +662,88 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             // Money that came in is money that came in: nothing below zero, nothing free.
             receipt.ToTable(table => table.HasCheckConstraint(
                 "CK_PaymentReceipts_AmountIsMoney", "\"AmountBaht\" > 0"));
+
+            // And it came in for exactly one thing: a booking, or a package being sold (US-31).
+            // Money that names neither is money nobody can account for afterwards, and money that
+            // names both would be counted twice by whichever reader asked second.
+            receipt.ToTable(table => table.HasCheckConstraint(
+                "CK_PaymentReceipts_ForOneThing",
+                "(\"BookingId\" IS NULL) <> (\"PackageId\" IS NULL)"));
+        });
+
+        builder.Entity<PackageType>(type =>
+        {
+            type.Property(one => one.Name).HasMaxLength(PackageType.NameMaxLength);
+            type.Property(one => one.PriceBaht).HasPrecision(10, 2);
+
+            // What is on the board now, which is every read this table has.
+            type.HasIndex(one => new { one.VenueId, one.WithdrawnAt, one.CreatedAt });
+
+            // The same bounds the rules keep, kept again where they cannot be got round: hours
+            // that are worth nothing, or a price of nothing, would divide by nothing later.
+            type.ToTable(table => table.HasCheckConstraint(
+                "CK_PackageTypes_IsAnOffer",
+                $"\"Hours\" > 0 AND \"Hours\" <= {Packages.MostHours}"
+                + " AND \"PriceBaht\" > 0"
+                + $" AND \"ValidForDays\" > 0 AND \"ValidForDays\" <= {Packages.MostDays}"));
+
+            type.HasOne(one => one.Venue)
+                .WithMany()
+                .HasForeignKey(one => one.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<HourPackage>(package =>
+        {
+            package.Property(one => one.CustomerName).HasMaxLength(Booking.CustomerNameMaxLength);
+            package.Property(one => one.CustomerPhone).HasMaxLength(Booking.CustomerPhoneMaxLength);
+            package.Property(one => one.PriceBaht).HasPrecision(10, 2);
+
+            // "What has this venue sold, newest first" and "whose hours run out soon" are the two
+            // questions asked of this table.
+            package.HasIndex(one => new { one.VenueId, one.SoldAt });
+            package.HasIndex(one => new { one.VenueId, one.ExpiresOn, one.ExpiredAt });
+
+            package.ToTable(table => table.HasCheckConstraint(
+                "CK_HourPackages_WasSold",
+                "\"HoursSold\" > 0 AND \"PriceBaht\" > 0"));
+
+            package.HasOne(one => one.Venue)
+                .WithMany()
+                .HasForeignKey(one => one.VenueId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // The offer it was sold from stays readable for as long as the package does, the same
+            // way a booking keeps the cancellation terms it was made under (BR-05).
+            package.HasOne(one => one.Type)
+                .WithMany()
+                .HasForeignKey(one => one.PackageTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<PackageEntry>(entry =>
+        {
+            // Reading a package is reading its movements in order; the balance is their sum.
+            entry.HasIndex(one => new { one.PackageId, one.At });
+
+            // Nothing moves by nothing: a row of zero hours is a row that says nothing happened.
+            entry.ToTable(table => table.HasCheckConstraint(
+                "CK_PackageEntries_HoursMoved", "\"Hours\" <> 0"));
+
+            entry.HasOne(one => one.Package)
+                .WithMany(one => one.Entries)
+                .HasForeignKey(one => one.PackageId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entry.HasOne(one => one.Booking)
+                .WithMany()
+                .HasForeignKey(one => one.BookingId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entry.HasOne(one => one.By)
+                .WithMany()
+                .HasForeignKey(one => one.ByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<DailyClosing>(closing =>

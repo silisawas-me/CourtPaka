@@ -43,14 +43,21 @@ public static class Refunds
     /// arrived and no receipt says how much — bookings reached that answer before receipts
     /// existed, and for every one of them it is the whole price (the migration says so).
     /// </param>
+    /// <param name="packageBaht">
+    /// What a package's hours paid for this booking (PRD US-31), or null where no package did.
+    /// Where there is one, nothing is owed back in money: what came in was hours, and hours are
+    /// what go back (<see cref="Packages.HoursBack"/>). Handing money back for them would be
+    /// paying twice for something the customer has already been given the use of.
+    /// </param>
     public static decimal DueFor(
         BookingStatus status,
         PaymentState payment,
         decimal totalBaht,
         int refundPercent,
         decimal takenBaht,
-        decimal askedBaht) =>
-        Endings.Contains(status)
+        decimal askedBaht,
+        decimal? packageBaht = null) =>
+        Endings.Contains(status) && packageBaht is null
             ? Owed(Takings.HeldFor(payment, takenBaht, askedBaht), Kept(totalBaht, refundPercent))
             : 0m;
 

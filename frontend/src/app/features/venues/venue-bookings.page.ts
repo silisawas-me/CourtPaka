@@ -25,6 +25,7 @@ import {
 } from '../../core/venues/venue-bookings.service';
 import { FieldError } from '../../shared/field-error';
 import { bookingTone, StatusChip, StatusTone } from '../../shared/status-chip';
+import { HourPackage, PackagesService } from '../../core/venues/packages.service';
 import { Availability, PublicVenueService } from '../../core/venues/public-venue.service';
 import { CounterBooking } from './counter-booking';
 import { ChoreKind, needsDoing } from './needs-doing';
@@ -36,7 +37,7 @@ import { provideLocalizedDateAdapter } from '../../shared/localized-date-adapter
 const NOTE_MAX_LENGTH = 400;
 
 /** Which question a row is being asked. One row at a time: these decide money. */
-type Asking = 'cancel' | 'noShow' | 'settle' | 'played' | 'refund' | 'take' | 'hours';
+type Asking = 'cancel' | 'noShow' | 'settle' | 'played' | 'refund' | 'take' | 'hours' | 'package';
 
 /** The two ways a venue gets money back to somebody (PRD US-18). */
 const REFUND_METHODS: RefundMethod[] = ['Transfer', 'Cash'];
@@ -117,12 +118,19 @@ export class VenueBookingsPage {
    * because the moment it is worth reading is the moment a booking on this day is cancelled.
    */
   private readonly waitlist = inject(WaitlistService);
+  private readonly packages = inject(PackagesService);
   protected readonly waiting = signal<VenueWaitlistEntry[]>([]);
   protected readonly loading = signal(true);
   protected readonly pageError = signal<string | null>(null);
 
   /** Which booking is being asked about, and which question. */
   protected readonly asking = signal<{ bookingId: string; door: Asking } | null>(null);
+
+  /**
+   * The packages this venue has sold that still have hours on them (PRD US-31). Read with the
+   * day, because "are they on a package?" is asked with the customer standing there.
+   */
+  protected readonly packagesWithHours = signal<HourPackage[]>([]);
 
   /**
    * What the server says could still be done with the open booking's hours (PRD US-29). Read when
@@ -545,6 +553,25 @@ export class VenueBookingsPage {
    * reloading the day: the counter may be halfway through reading it. A refusal is the one case
    * the day is read again for — it usually means somebody else decided first.
    */
+  /** Settles a booking with a package's hours (PRD US-31). The same door every decision uses. */
+  protected payWithPackage(booking: VenueBooking, packageId: string): void {
+    this.decide(this.packages.spend(this.venueId(), booking.bookingId, packageId));
+
+    // The package has fewer hours on it now, so the next row is offered an honest list.
+    this.loadPackages(this.venueId());
+  }
+
+  /**
+   * The packages with hours left, as the server counts them. It fails quietly: a day's list is
+   * readable and every other door still works without it.
+   */
+  private loadPackages(venueId: string): void {
+    this.packages.sold(venueId).subscribe({
+      next: (sold) => this.packagesWithHours.set(sold.filter((one) => one.live)),
+      error: () => this.packagesWithHours.set([]),
+    });
+  }
+
   private decide(decision: Observable<VenueBooking>): void {
     if (this.deciding()) {
       return;
@@ -665,6 +692,9 @@ export class VenueBookingsPage {
         next: (queue) => this.waiting.set(queue),
         error: () => this.waiting.set([]),
       });
+
+      // What a customer already paid for, asked for with the day for the same reason (US-31).
+      this.loadPackages(venueId);
     }
 
     this.bookings.day(venueId, day).subscribe({

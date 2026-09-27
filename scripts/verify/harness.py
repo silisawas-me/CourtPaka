@@ -463,7 +463,38 @@ def ensure_bookable(browser, venue_id) -> None:
     if counting.status != 204:
         raise RuntimeError(f"Could not reset the risk rule: {counting.status} {counting.text()}")
 
+    # And with no group coming every week. series.py writes one down because that is what it is
+    # about (PRD US-30), and one left standing keeps booking an hour of every week from now on —
+    # which reads to every other script as a floor that has gone wrong rather than as a group
+    # somebody agreed.
+    stop_every_series(page, venue_id)
+
+    # And with nothing on the package board. packages.py puts offers on it because that is what
+    # it is about (PRD US-31), and one left there is a row every other script's screenshots and
+    # counts have to step around.
+    clear_package_board(page, venue_id)
+
     page.close()
+
+
+def clear_package_board(page, venue_id) -> None:
+    """Takes every offer off the venue's board. Through the API rather than the screen: it is the
+    setup, not the subject."""
+    for offer in page.request.get(f"{BASE}/api/venues/{venue_id}/packages/types").json():
+        if offer["withdrawnAt"] is None:
+            page.request.post(
+                f"{BASE}/api/venues/{venue_id}/packages/types/{offer['typeId']}/withdraw")
+
+
+def stop_every_series(page, venue_id) -> None:
+    """Leaves the venue with no standing arrangement running, and the weeks they had booked given
+    back. Through the API rather than the screen: it is the setup, not the subject."""
+    for one in page.request.get(f"{BASE}/api/venues/{venue_id}/series").json():
+        if one["state"] == "Running":
+            page.request.post(
+                f"{BASE}/api/venues/{venue_id}/series/{one['seriesId']}/stop",
+                data={"note": None},
+            )
 
 
 def clear_waiting(page, venue_id, date) -> None:
