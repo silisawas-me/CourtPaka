@@ -920,5 +920,22 @@
   "walkIn.pickCourtFirst": "Pick a court first",
   "walkIn.nameFirst": "Add the customer's name",
   "walkIn.confirm": "Confirm & open court",
-  "walkIn.nothingToday": "No court is free to sell today"
+  "walkIn.nothingToday": "No court is free to sell today",
+  "pricing.tier.0": "Off-peak",
+  "pricing.tier.1": "Peak",
+  "pricing.tier.2": "Super peak",
+  "pricing.tier.n": "Price",
+  "pricing.tiers": "Price tiers",
+  "pricing.perHour": "/hr",
+  "pricing.cheaper": "Cheaper",
+  "pricing.dearer": "Dearer",
+  "pricing.week": "Weekly price grid",
+  "pricing.painting": "Painting:",
+  "pricing.shut": "closed",
+  "pricing.paintLead": "Pick a tier above, then tap or drag across the grid to paint the hours. Customers see these prices as soon as you save.",
+  "pricing.readLead": "What an hour costs across the week",
+  "pricing.applyAll": "Apply to all branches",
+  "pricing.save": "Save prices",
+  "pricing.saved": "Saved",
+  "pricing.movedHere": "Prices moved to \"Pricing & peak\""
 }

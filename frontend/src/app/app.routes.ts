@@ -31,6 +31,13 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    // Pricing & peak, painted (owner app PR-4).
+    path: 'venues/:venueId/pricing',
+    data: { venueShell: true },
+    loadComponent: () => import('./features/venues/pricing.page').then((m) => m.PricingPage),
+    canActivate: [authGuard],
+  },
+  {
     path: 'venues/:venueId/bookings',
     data: { venueShell: true },
     loadComponent: () =>

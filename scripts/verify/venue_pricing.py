@@ -55,47 +55,43 @@ with sync_playwright() as p:
     )
     check("and the one-step policy it starts from", policy.status == 200)
 
-    page.goto(BASE + venue_url + "/settings")
-    page.wait_for_selector("[data-testid=price-list]")
+    # Prices are their own page now, painted as a week (owner app PR-4).
+    page.goto(BASE + venue_url + "/pricing")
+    page.wait_for_selector("[data-testid=price-week]")
 
-    # 1. The venue prices its evenings higher, and the page says so.
-    monday = page.locator("[data-testid=price-Monday]").inner_text()
-    check("a day shows each of its bands", "6:00–18:00" in monday and "18:00–22:00" in monday, page)
-    check("and what each one costs", "200" in monday and "300" in monday)
+    # 1. The prices read as tiers, and the evening is painted in the dearer one.
+    check("the prices read as tiers, cheapest first",
+          "200" in page.inner_text("[data-testid=tier-price-0]")
+          and "300" in page.inner_text("[data-testid=tier-price-1]"), page)
+    check("an evening hour is painted in the evening's tier",
+          "tier-1" in (page.get_attribute("[data-testid=cell-Monday-18]", "class") or "")
+          and "tier-0" in (page.get_attribute("[data-testid=cell-Monday-17]", "class") or ""))
 
-    # 2. Publishing sends the whole list and the page shows what came back. The rows come back in
-    # the server's order (Sunday first), so find Monday's rather than assuming where it sits.
-    monday_rows = [
-        index
-        for index in range(page.locator('[data-testid^="band-"]').count())
-        # [ngValue] makes the option value an Angular key, so match on what the option reads.
-        if page.locator(f'[data-testid="band-{index}"] option:checked').first.inner_text() == "จันทร์"
-    ]
-    page.locator(f'[data-testid="band-{monday_rows[0]}"] input[type=number]').fill("250")
-    with page.expect_response(lambda response: response.url.endswith("/prices")) as saved:
-        page.locator("[data-testid=save-prices]").click()
-    check("the server took the new prices", saved.value.status == 200)
+    # 2. Painting Saturday night into the top tier, raised by a step, is what the server keeps.
+    page.click("[data-testid=tier-2]")
+    page.dispatch_event("[data-testid=cell-Saturday-20]", "pointerdown")
+    page.dispatch_event("[data-testid=cell-Saturday-21]", "pointerenter")
+    page.dispatch_event("body", "pointerup")
+    page.click("[data-testid=tier-more-2]")
+    with page.expect_response(lambda response: response.url.endswith("/prices")
+                              and response.request.method == "PUT") as saved:
+        page.click("[data-testid=pricing-save]")
+    check("the server took the painted week", saved.value.status == 200)
+    saturday = [band for band in saved.value.json()["bands"] if band["day"] == "Saturday"]
+    check("as a band of its own for the two hours painted",
+          {"day": "Saturday", "fromHour": 20, "toHour": 22, "bahtPerHour": 370} in saturday)
     page.reload()
-    page.wait_for_selector("[data-testid=price-list]")
-    check(
-        "the new price survives a reload",
-        "250" in page.locator("[data-testid=price-Monday]").inner_text(),
-        page,
-    )
+    page.wait_for_selector("[data-testid=price-week]")
+    check("the painted hours survive a reload",
+          "tier-2" in (page.get_attribute("[data-testid=cell-Saturday-20]", "class") or ""), page)
 
-    # 3. A gap in the day is refused, and the page says which rule was broken.
-    page.locator(f'[data-testid="remove-band-{monday_rows[0]}"]').click()
-    with page.expect_response(lambda response: response.url.endswith("/prices")):
-        page.locator("[data-testid=save-prices]").click()
-    page.wait_for_selector("[data-testid=price-error]")
-    check(
-        "an unpriced open hour is refused in Thai",
-        "ยังไม่มีราคา" in page.locator("[data-testid=price-error]").inner_text(),
-        page,
-    )
+    # A gap cannot be painted — every open hour always carries a tier — so the refusal the old
+    # editor could provoke is no longer a thing a venue can do from this page.
+
+    # The policy stayed on settings.
+    page.goto(BASE + venue_url + "/settings")
 
     # 4. The cancellation policy starts at the default and takes a second step.
-    page.reload()
     page.wait_for_selector("[data-testid=policy-list]")
     check("the default policy is shown", page.locator("[data-testid=tier-24]").count() == 1)
 
@@ -119,15 +115,19 @@ with sync_playwright() as p:
         page,
     )
 
-    # 6. Staff read both cards and can change neither.
+    # 6. Staff read the prices and the policy and can change neither.
     page.goto(f"{BASE}/")
     page.click("[data-testid=sign-out]")
-    page.goto(BASE + venue_url + "/settings")
+    page.goto(BASE + venue_url + "/pricing")
     page.wait_for_url("**/login?returnUrl=*")
     login(page, STAFF)
-    page.wait_for_selector("[data-testid=price-list]")
-    check("staff read the prices", page.locator("[data-testid=price-day]").count() > 0)
-    check("staff get no price editor", page.locator("[data-testid=add-band]").count() == 0)
+    page.wait_for_selector("[data-testid=price-week]")
+    check("staff read the prices", page.locator("[data-testid^=cell-]").count() > 0)
+    check("staff cannot paint them",
+          page.locator("[data-testid=cell-Monday-18]").is_disabled()
+          and page.locator("[data-testid=pricing-save]").count() == 0, page)
+    page.goto(BASE + venue_url + "/settings")
+    page.wait_for_selector("[data-testid=policy-list]")
     check("staff read the policy", page.locator("[data-testid=policy-list]").count() == 1)
     check("staff get no policy editor", page.locator("[data-testid=add-tier]").count() == 0, page)
 

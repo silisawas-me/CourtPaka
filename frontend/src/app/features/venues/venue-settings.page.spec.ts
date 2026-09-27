@@ -85,11 +85,11 @@ describe('VenueSettingsPage', () => {
     settleChildren('v1');
   }
 
-  /** The prices and policy cards load themselves; their own specs cover what they then do. */
+  /**
+   * The policy card loads itself; its own spec covers what it then does. Prices moved to their
+   * own page (owner app PR-4), so settings no longer asks for them.
+   */
   function settleChildren(venueId: string): void {
-    httpMock
-      .expectOne(`/api/venues/${venueId}/prices`)
-      .flush(null, { status: 204, statusText: 'No Content' });
     httpMock.expectOne(`/api/venues/${venueId}/cancellation-policy`).flush({
       id: 'c0',
       createdAt: '2026-09-19T00:00:00Z',
@@ -541,7 +541,8 @@ describe('VenueSettingsPage', () => {
       ...elementOf<HTMLElement>(fixture, 'settings-sections')!.querySelectorAll('a'),
     ].map((link) => link.getAttribute('href')!);
 
-    expect(links.length).toBe(5);
+    // Prices moved to their own page (owner app PR-4), so four sections remain.
+    expect(links.length).toBe(4);
     for (const href of links) {
       // The router writes the whole URL; the part after the hash is the section it points at,
       // which is also the selector the browser looks for.

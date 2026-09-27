@@ -920,5 +920,22 @@
   "walkIn.pickCourtFirst": "เลือกคอร์ทก่อน",
   "walkIn.nameFirst": "ใส่ชื่อลูกค้าก่อน",
   "walkIn.confirm": "ยืนยันและเปิดคอร์ท",
-  "walkIn.nothingToday": "วันนี้ไม่มีคอร์ทว่างให้ขายแล้ว"
+  "walkIn.nothingToday": "วันนี้ไม่มีคอร์ทว่างให้ขายแล้ว",
+  "pricing.tier.0": "นอกช่วงพีค",
+  "pricing.tier.1": "ช่วงพีค",
+  "pricing.tier.2": "พีคสุด",
+  "pricing.tier.n": "ราคา",
+  "pricing.tiers": "ระดับราคา",
+  "pricing.perHour": "/ชม.",
+  "pricing.cheaper": "ลดราคา",
+  "pricing.dearer": "เพิ่มราคา",
+  "pricing.week": "ตารางราคาประจำสัปดาห์",
+  "pricing.painting": "กำลังระบาย:",
+  "pricing.shut": "ปิด",
+  "pricing.paintLead": "เลือกระดับราคาด้านบน แล้วแตะหรือลากบนตารางเพื่อระบายช่วงเวลา ลูกค้าเห็นราคาตามนี้ทันทีหลังบันทึก",
+  "pricing.readLead": "ราคาต่อชั่วโมงของแต่ละช่วงในสัปดาห์",
+  "pricing.applyAll": "ใช้กับทุกสาขา",
+  "pricing.save": "บันทึกราคา",
+  "pricing.saved": "บันทึกแล้ว",
+  "pricing.movedHere": "ราคาย้ายไปอยู่ที่ \"ราคา & ช่วงพีค\""
 }
