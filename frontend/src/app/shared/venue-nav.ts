@@ -24,6 +24,9 @@ export interface VenueLink {
  * drift apart.
  */
 export const VENUE_WORK: readonly VenueLink[] = [
+  // The floor this minute. No short label: a phone's five tabs are spoken for, and "today" is
+  // one press from it.
+  { to: ['now'], label: 'now.title', testId: 'nav-now' },
   {
     to: ['bookings'],
     label: 'venueBookings.title',

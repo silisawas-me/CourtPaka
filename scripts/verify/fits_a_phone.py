@@ -72,6 +72,7 @@ with sync_playwright() as p:
     sign_in(staff, OWNER)
     for name, path in (
         ("venue", f"/venues/{venue_id}"),
+        ("now", f"/venues/{venue_id}/now"),
         ("today", f"/venues/{venue_id}/bookings"),
         ("slip queue", f"/venues/{venue_id}/slip-queue"),
         ("money", f"/venues/{venue_id}/money"),
