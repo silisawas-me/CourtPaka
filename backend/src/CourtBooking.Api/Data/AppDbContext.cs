@@ -1,4 +1,5 @@
 using CourtBooking.Api.Bookings;
+using CourtBooking.Api.Documents;
 using CourtBooking.Api.Identity;
 using CourtBooking.Api.Venues;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -66,6 +67,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<SlipViewing> SlipViewings => Set<SlipViewing>();
 
     public DbSet<MembershipChange> MembershipChanges => Set<MembershipChange>();
+
+    public DbSet<DocumentSeries> DocumentSeries => Set<DocumentSeries>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -446,6 +449,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .WithMany()
                 .HasForeignKey(c => c.ChangedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<DocumentSeries>(series =>
+        {
+            series.Property(s => s.SeriesCode).HasMaxLength(Documents.DocumentSeries.SeriesCodeMaxLength);
+
+            // One count per series, and the index is what makes taking a number from it safe:
+            // two writers creating the same series at once meet here, and the loser reads the
+            // winner's row instead of writing a second count (PRD 7.4).
+            series.HasIndex(s => new { s.SeriesCode, s.Kind, s.Year }).IsUnique();
         });
 
         builder.Entity<PaymentReceipt>(receipt =>

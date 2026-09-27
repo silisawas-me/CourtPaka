@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using CourtBooking.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CourtBooking.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260926083411_DocumentNumbersThatDoNotSkip")]
+    partial class DocumentNumbersThatDoNotSkip
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -401,9 +404,6 @@ namespace CourtBooking.Api.Data.Migrations
                     b.Property<Guid>("BookingId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateOnly>("CountsOn")
-                        .HasColumnType("date");
-
                     b.Property<int>("Method")
                         .HasColumnType("integer");
 
@@ -426,7 +426,7 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.HasIndex("ReceivedByUserId");
 
-                    b.HasIndex("VenueId", "CountsOn");
+                    b.HasIndex("VenueId", "ReceivedAt");
 
                     b.ToTable("PaymentReceipts", t =>
                         {
@@ -945,14 +945,6 @@ namespace CourtBooking.Api.Data.Migrations
                     b.Property<int?>("PermissionsBefore")
                         .HasColumnType("integer");
 
-                    b.Property<decimal?>("RefundLimitAfter")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)");
-
-                    b.Property<decimal?>("RefundLimitBefore")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)");
-
                     b.Property<int>("Role")
                         .HasColumnType("integer");
 
@@ -1264,10 +1256,6 @@ namespace CourtBooking.Api.Data.Migrations
 
                     b.Property<int>("Permissions")
                         .HasColumnType("integer");
-
-                    b.Property<decimal>("RefundLimitBaht")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)");
 
                     b.Property<int>("Role")
                         .HasColumnType("integer");
