@@ -34,6 +34,17 @@ public sealed class PaymentReceipt
 
     public required DateTimeOffset ReceivedAt { get; init; }
 
+    /// <summary>
+    /// The venue's day this is counted in (PRD US-26, BR-10). Its own day, except where that day
+    /// had already been counted when it was written — a till that has been closed cannot take
+    /// money into it afterwards, so the money belongs to the next one.
+    ///
+    /// Decided when the receipt is written and never again, like everything else on this row: a
+    /// day that was counted stays counted, and a number somebody has signed off must not move
+    /// because of something that happened later.
+    /// </summary>
+    public required DateOnly CountsOn { get; init; }
+
     /// <summary>Whose hands. Null for the money a booker sent before anybody was at the desk.</summary>
     public Guid? ReceivedByUserId { get; init; }
 
@@ -164,6 +175,17 @@ public static class Takings
     /// </summary>
     public static bool PayingInFullConfirms(BookingStatus status) =>
         BookingTransitions.CanMove(status, BookingStatus.Confirmed);
+
+    /// <summary>
+    /// Which of the venue's days a receipt is counted in (PRD US-26). Its own, unless that day
+    /// has already been counted: the till is shut, the money is in tomorrow's drawer, and the
+    /// day that was signed off keeps the number it was signed off with.
+    ///
+    /// The next day can never itself be closed, because a day in the future cannot be counted —
+    /// so this needs no loop and always lands somewhere.
+    /// </summary>
+    public static DateOnly CountsOn(DateOnly receivedOn, bool alreadyCounted) =>
+        alreadyCounted ? receivedOn.AddDays(1) : receivedOn;
 
     /// <summary>
     /// What the till should hold at the end of the day: what it started with, plus the cash that

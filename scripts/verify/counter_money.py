@@ -21,6 +21,13 @@ from harness import (
 from playwright.sync_api import expect, sync_playwright
 
 check = Checks(__file__)
+
+
+def new_page_for_a_booker(browser):
+    """A booker with a page of their own, signed in and ready to take an hour."""
+    page = browser.new_page(viewport={"width": 390, "height": 844})
+    sign_in(page, new_booker(page))
+    return page
 tomorrow = venue_today() + datetime.timedelta(days=1)
 
 
@@ -211,6 +218,46 @@ with sync_playwright() as p:
     )
     check("a day is counted once", again.status == 409)
     check("and the second person is told why", again.json().get("code") == "money.already_closed")
+
+    # 6. Money still arrives after the till is shut, and it belongs to the next drawer (US-26).
+    today = venue_today()
+    was_counted = page.request.get(
+        f"{BASE}/api/venues/{venue_id}/money?date={today.isoformat()}").json()
+    if was_counted["closed"] is None:
+        page.request.post(
+            f"{BASE}/api/venues/{venue_id}/money/closing?date={today.isoformat()}",
+            data={"openingFloatBaht": 0, "countedCashBaht": was_counted["cashBaht"]},
+        )
+        was_counted = page.request.get(
+            f"{BASE}/api/venues/{venue_id}/money?date={today.isoformat()}").json()
+
+    # A hold is not something the desk may take money for — PRD 6.1 gives a hold two ways out,
+    # a slip or the clock — so the booker sends one and the booking is waiting to be checked.
+    booker = new_page_for_a_booker(browser)
+    late = take_first_free_hour(booker, venue_id, tomorrow).json()
+    sent = send_slip(booker, as_upload("slip.jpg", real_jpeg(), "image/jpeg"))
+    check("the hour is waiting to be checked", sent.status == 200)
+
+    paid = page.request.post(
+        f"{BASE}/api/venues/{venue_id}/bookings/{late['id']}/payments",
+        data={"amountBaht": 50, "method": "Cash", "note": None},
+    )
+    check("money can still be taken after the till is counted", paid.status == 200)
+
+    after = page.request.get(
+        f"{BASE}/api/venues/{venue_id}/money?date={today.isoformat()}").json()
+    check(
+        "and the day that was counted keeps the number it was signed off with",
+        after["cashBaht"] == was_counted["cashBaht"],
+    )
+
+    next_day = (today + datetime.timedelta(days=1)).isoformat()
+    drawer = page.request.get(
+        f"{BASE}/api/venues/{venue_id}/money?date={next_day}").json()
+    check(
+        "while the money itself is in the next day's drawer",
+        any(receipt["amountBaht"] == 50 for receipt in drawer["cashReceipts"]),
+    )
 
     browser.close()
 

@@ -449,8 +449,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             receipt.Property(r => r.AmountBaht).HasPrecision(10, 2);
             receipt.Property(r => r.Note).HasMaxLength(PaymentReceipt.NoteMaxLength);
-            // Counting a venue's day is one query over its own money, in the order it came in.
-            receipt.HasIndex(r => new { r.VenueId, r.ReceivedAt });
+            // Counting a venue's day is one query over its own money, by the day it counts in
+            // — which is its own day unless that one had already been counted (PRD US-26).
+            receipt.HasIndex(r => new { r.VenueId, r.CountsOn });
             receipt.HasIndex(r => r.BookingId);
             receipt.HasOne(r => r.Booking)
                 .WithMany()
