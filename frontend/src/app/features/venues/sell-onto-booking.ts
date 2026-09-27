@@ -12,6 +12,8 @@ import { PAYMENT_METHODS } from '../../core/venues/venue-bookings.service';
  * and only carries the booking so the venue can see later whose game it went to; it does not
  * change what the booking owes, because it is not part of the court's price.
  *
+ * Without a booking it is the desk's quick sale (badPaka 2b): the same board, the same till.
+ *
  * The board is not fetched until somebody asks for it: most bookings opened here are opened to
  * check somebody in, and that should not cost the shop's list on every press.
  */
@@ -27,7 +29,8 @@ export class SellOntoBooking {
   protected readonly i18n = inject(TranslationService);
 
   readonly venueId = input.required<string>();
-  readonly bookingId = input.required<string>();
+  /** The booking it goes to, or null for a quick sale at the desk with nobody's game attached. */
+  readonly bookingId = input<string | null>(null);
 
   protected readonly methods = PAYMENT_METHODS;
 

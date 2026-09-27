@@ -35,6 +35,13 @@ export const routes: Routes = [
       import('./features/booking/venue-search.page').then((m) => m.VenueSearchPage),
   },
   {
+    // The counter's "now" (badPaka 2b): the floor this minute, who is due, and a quick sale.
+    path: 'venues/:venueId/now',
+    data: { venueShell: true },
+    loadComponent: () => import('./features/venues/now.page').then((m) => m.NowPage),
+    canActivate: [authGuard],
+  },
+  {
     path: 'venues/:venueId/bookings',
     data: { venueShell: true },
     loadComponent: () =>

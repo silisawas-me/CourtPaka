@@ -310,6 +310,12 @@ body {
   padding: var(--stack) var(--page-gutter) var(--shell-bottom);
   display: grid;
   gap: var(--stack);
+  /*
+   * Rows as tall as what is in them. Where the shell is stretched to the window (a venue page,
+   * beside its sidebar) a page shorter than the window otherwise had the spare height shared out
+   * among the rows — including the empty one before the outlet — and stood halfway down.
+   */
+  align-content: start;
 }
 
 /** Sections that sit side by side on a desktop and stack on a phone. */

@@ -1,0 +1,225 @@
+/*
+ * The counter's "now": the floor on the left where the eye goes first, and on the right the two
+ * things the desk does between glances — take somebody in, sell something. One column on a
+ * phone, floor first.
+ */
+:host {
+  display: grid;
+  gap: var(--stack);
+  min-width: 0;
+
+  /*
+   * The one dark surface: the ink itself, and a card a shade lifted off it. Mixed from the theme
+   * rather than written as new colours, so the board changes with the palette.
+   */
+  --board: var(--mat-sys-inverse-surface);
+  --board-card: color-mix(in srgb, var(--mat-sys-inverse-on-surface) 9%, var(--board));
+  --board-ink: var(--mat-sys-inverse-on-surface);
+  --board-muted: color-mix(in srgb, var(--board-ink) 68%, var(--board));
+  --board-live: var(--mat-sys-inverse-primary);
+  /* The rust, lifted until it reads as text on the dark card (4.5:1 measured, not eyed). */
+  --board-due: color-mix(in srgb, var(--status-waiting) 50%, var(--board-ink));
+}
+
+.now-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 1rem;
+
+  h1 {
+    margin: 0;
+    font: var(--mat-sys-headline-small);
+  }
+}
+
+.now-clock {
+  font: var(--mat-sys-display-small);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.now {
+  display: grid;
+  gap: var(--stack);
+  align-items: start;
+
+  @media (min-width: 75rem) {
+    grid-template-columns: minmax(0, 1fr) 21.25rem;
+  }
+}
+
+.floor {
+  min-width: 0;
+  padding: 1rem;
+  border-radius: var(--mat-sys-corner-extra-large);
+  background: var(--board);
+  color: var(--board-ink);
+}
+
+.courts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.court {
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+  padding: 0.85rem 1rem;
+  border-radius: var(--mat-sys-corner-large);
+  background: var(--board-card);
+  /* What state it is in, as a stripe down the leading edge: read before any word on the card. */
+  box-shadow: inset 4px 0 0 var(--stripe, transparent);
+
+  p {
+    margin: 0;
+  }
+
+  /* A card with a game on it holds a name, a bar and a door; an empty one is only a price. */
+  &.playing,
+  &.due {
+    min-height: 9rem;
+  }
+
+  &.playing {
+    --stripe: var(--board-live);
+  }
+
+  &.due {
+    --stripe: var(--board-due);
+  }
+
+  &.closed,
+  &.shut {
+    opacity: 0.6;
+  }
+}
+
+.court-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.court-name {
+  font: var(--mat-sys-title-medium);
+}
+
+.court-state {
+  font: var(--mat-sys-label-medium);
+  color: var(--board-muted);
+
+  .playing & {
+    color: var(--board-live);
+  }
+
+  .due & {
+    color: var(--board-due);
+  }
+}
+
+.court-who {
+  font: var(--mat-sys-title-large);
+  overflow-wrap: anywhere;
+}
+
+.court-hours,
+.court-left,
+.court-price,
+.court-next {
+  font: var(--mat-sys-body-medium);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.court-hours,
+.court-next {
+  font: var(--mat-sys-label-medium);
+  font-family: var(--font-mono);
+  color: var(--board-muted);
+}
+
+.court-price {
+  color: var(--board-live);
+}
+
+.court-bar {
+  height: 0.35rem;
+  border-radius: var(--mat-sys-corner-full);
+  background: color-mix(in srgb, var(--board-ink) 18%, transparent);
+  overflow: hidden;
+
+  span {
+    display: block;
+    height: 100%;
+    background: var(--stripe);
+  }
+}
+
+.check-in {
+  justify-self: start;
+}
+
+.side {
+  display: grid;
+  gap: var(--stack);
+  min-width: 0;
+}
+
+.arriving,
+.quick-sale {
+  padding: 1rem;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-large);
+  background: var(--mat-sys-surface);
+}
+
+.arriving {
+  display: grid;
+  gap: 0.5rem;
+
+  h2 {
+    margin: 0;
+    font: var(--mat-sys-title-medium);
+  }
+}
+
+.arrival {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'when who in'
+    'when door door';
+  align-items: center;
+  gap: 0.15rem 0.75rem;
+  padding-block: 0.5rem;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+
+  button {
+    grid-area: door;
+    justify-self: start;
+  }
+}
+
+.arrival-when {
+  grid-area: when;
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+.arrival-who {
+  grid-area: who;
+  overflow-wrap: anywhere;
+}
+
+.arrival-in {
+  grid-area: in;
+  font: var(--mat-sys-label-medium);
+}

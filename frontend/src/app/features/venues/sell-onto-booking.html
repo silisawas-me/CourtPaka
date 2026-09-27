@@ -1,5 +1,5 @@
 <section class="sell" data-testid="sell-onto-booking">
-  <h3 class="sell-title">{{ i18n.t('panel.shop') }}</h3>
+  <h3 class="sell-title">{{ i18n.t(bookingId() ? 'panel.shop' : 'now.shop') }}</h3>
 
   @if (sold(); as sale) {
     <p class="sell-done" data-testid="sell-done" role="status">
