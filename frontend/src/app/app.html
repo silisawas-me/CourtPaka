@@ -1,5 +1,5 @@
 <mat-toolbar class="bar">
-  <a class="brand" routerLink="/">{{ i18n.t('app.name') }}</a>
+  <a class="brand" routerLink="/"><app-wordmark /></a>
 
   <span class="spacer"></span>
 
@@ -100,7 +100,7 @@
 @defer (when venueId()) {
   @if (venueId(); as venue) {
     <app-venue-shell [venueId]="venue">
-      <a sideHead class="side-brand" routerLink="/">{{ i18n.t('app.name') }}</a>
+      <a sideHead class="side-brand" routerLink="/"><app-wordmark /></a>
 
       <!--
         The app's own doors, in the sidebar's foot: at this width the bar above is not drawn, so

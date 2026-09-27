@@ -4,7 +4,7 @@
 
 ## สี — `var(--mat-sys-…)`
 
-ธีมสร้างจากเขียว `#1d7a4c` ด้วย `ng generate @angular/material:theme-color` (ผลลัพธ์อยู่ใน `frontend/src/_theme-colors.scss` ห้ามแก้มือ)
+ธีมสร้างจากเขียวเดิม `#1d7a4c` ด้วย `ng generate @angular/material:theme-color` (ผลลัพธ์อยู่ใน `frontend/src/_theme-colors.scss` ห้ามแก้มือ) แล้ว **block เดียวใน `styles.scss` เขียนทับทุก token ด้วย palette ของ badPaka** — ค่าจริงอ่านจาก block นั้น ไม่ใช่จาก schematic
 
 | ใช้กับ | token | คู่ข้อความ |
 |---|---|---|
@@ -16,6 +16,8 @@
 | การ์ด/แผงที่ลอยขึ้นมา | `--mat-sys-surface-container` → `…-high` → `…-highest` | `--mat-sys-on-surface` |
 | ข้อความรอง คำอธิบาย | — | `--mat-sys-on-surface-variant` |
 | เส้นคั่น ขอบ | `--mat-sys-outline-variant` (จาง) · `--mat-sys-outline` (ชัด) | — |
+
+ฟอนต์ที่ Material ไม่มีช่องให้: `--font-display` (Bricolage — หัวข้อ ตัวเลขใหญ่) · `--font-mono` (Plex Mono — เวลา ราคาที่เรียงคอลัมน์)
 
 ความลึกใช้ `--mat-sys-level0`…`level5` (ปกติ `level1`–`level2` พอ) มุมใช้ `--mat-sys-corner-small/medium/large/extra-large/full`
 ต้องการเฉดกลาง ๆ ให้ผสมจาก token: `color-mix(in srgb, var(--mat-sys-primary) 12%, transparent)`

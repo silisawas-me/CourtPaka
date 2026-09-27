@@ -56,16 +56,16 @@
 แบรนด์ต้องมาก่อน เพราะทั้งสามหน้าถูกวาดด้วย token ของมัน
 
 ### PR-1 · แบรนด์ badPaka ทั้งแอป
-- [ ] token: เขียนทับ block CourtFlow ใน `styles.scss` ด้วยค่าจากตารางข้างบน (block เดียว ลบคือกลับของเดิม)
-- [ ] ฟอนต์: ดาวน์โหลด woff2 เสิร์ฟเองใน `public/fonts/` · `@font-face` · preload เฉพาะ Plex Thai 400
-- [ ] ชื่อ: `app.name` ใน i18n ไทย/อังกฤษ · `manifest.webmanifest` · `index.html` `<title>` · wordmark "bad**Paka**"
-- [ ] อีเมล: ชื่อผู้ส่งใน `AccountLetters` / `VenueLetters` / `BookerLetters`
-- [ ] LINE login: ชื่อที่แสดงใน `LineLoginEndpoints` / `DevelopmentLineLogin`
-- [ ] icon PWA: วาดใหม่จาก `scripts/gen_app_icons.py` ด้วยสีใหม่
-- [ ] **contrast ตรวจด้วยสคริปต์ทุกคู่** (กฎของโปรเจกต์) — โดยเฉพาะหมึกรอง `#8a7a68` บนพื้นครีม
-- [ ] วัด bundle แรก + LCP หน้า grid ก่อน-หลัง (งบ 540/600 kB)
-- [ ] `pwa.py` · `fits_a_phone.py` · `local.py`
-- [ ] ปรับ CLAUDE.md หัวข้อ "UI — หน้าตาแบบ CourtFlow"
+- [x] token: เขียนทับ block CourtFlow ใน `styles.scss` ด้วยค่าจากตารางข้างบน (block เดียว ลบคือกลับของเดิม)
+- [x] ฟอนต์: ดาวน์โหลด woff2 เสิร์ฟเองใน `public/fonts/` · `@font-face` · preload เฉพาะ Plex Thai 400
+- [x] ชื่อ: `app.name` ใน i18n ไทย/อังกฤษ · `manifest.webmanifest` · `index.html` `<title>` · wordmark "bad**Paka**"
+- [x] อีเมล: ชื่อผู้ส่งใน `AccountLetters` / `VenueLetters` / `BookerLetters` (`BookerLetters` ไม่มีชื่อแบรนด์อยู่แล้ว)
+- [x] LINE login: ~~ชื่อที่แสดง~~ — ที่เจอเป็น purpose ของ Data Protection ไม่ใช่ข้อความที่คนเห็น **คงไว้โดยตั้งใจ** (ดูบันทึก)
+- [x] icon PWA: วาดใหม่จาก `scripts/gen_app_icons.py` ด้วยสีใหม่
+- [x] **contrast ตรวจด้วยสคริปต์ทุกคู่** (กฎของโปรเจกต์) — โดยเฉพาะหมึกรอง `#8a7a68` บนพื้นครีม
+- [x] วัด bundle แรก + LCP หน้า grid ก่อน-หลัง (งบ 540/600 kB)
+- [x] `pwa.py` · `fits_a_phone.py` · `local.py`
+- [x] ปรับ CLAUDE.md หัวข้อ "UI — หน้าตาแบบ CourtFlow"
 
 ### PR-2 · 2a ไทม์ไลน์ + แผงจัดการการจอง (คอนโซลวันนี้)
 - [ ] บล็อกบนตารางใช้สีตามชนิด (C7) + จุดสนิมเมื่อยังไม่เช็กอิน
@@ -110,3 +110,16 @@
 - 2026-09-28 · — · เขียนแผนนี้ · ตัดสิน C1–C12
 - 2026-09-28 · — · อัปเดต memory: CI ฟรีแล้ว (repo public) · ทิศทางแบรนด์เปลี่ยนจาก CourtFlow เป็น badPaka · เพิ่มความชอบ 'ทำงานตามแผนที่เขียนไว้ + บันทึกทุกขั้น'
 - 2026-09-28 · — · เปิด PR ของแผนนี้ ก่อนเริ่ม PR-1
+- 2026-09-28 · — · merge PR #97 (แผน) · rebase `feat/badpaka-brand` บน main
+- 2026-09-28 · PR-1 · ติดตั้ง `@fontsource/{ibm-plex-sans-thai,bricolage-grotesque,ibm-plex-mono}` 5.3.0 (dev) แล้วคัด woff2 9 ไฟล์ลง `public/fonts/` · Plex Sans Thai ไม่มี subset latin ตัวเลข/อังกฤษจึงมาจาก Bricolage
+- 2026-09-28 · PR-1 · preload ใหม่ (Plex Thai thai-400 + Bricolage latin-400) = 33.3 kB เทียบของเดิม 18.9 kB → ต้องวัด LCP ก่อน/หลังติดกัน
+- 2026-09-28 · PR-1 · baseline ก่อนเปลี่ยนฟอนต์ (6 คอร์ท): LCP 3.51 / 3.49 วิ · FCP 1.96 · TBT 0.12–0.13
+- 2026-09-28 · PR-1 · **แก้ข้อมูลเดิม:** Plex Sans Thai *มี* subset latin (fontsource ใส่ไว้) → เนื้อหาอังกฤษใช้ Plex ด้วย · Bricolage ใช้เฉพาะหัวข้อ/wordmark · preload = Plex thai-400 + latin-400 (11.8 + 17.7 kB = 29.5 kB เทียบ Noto 18.9 kB) · ลบไฟล์ Noto ทั้ง 4
+- 2026-09-28 · PR-1 · `styles.scss`: `@font-face` 12 อันผ่าน mixin (Plex 400/500/600 · Bricolage 400/500/600/800 · Mono 400/500) · `plain-family` = Plex · `brand-family` = Bricolage → Plex · token ใหม่ `--font-display` `--font-mono`
+- 2026-09-28 · PR-1 · palette เขียนทับ block เดิมทั้งก้อน · **contrast วัดด้วยสคริปต์:** หมึกรองของ mock `#8a7a68` ได้ 3.5–4.15 ตกทุกพื้น → ใช้ `#74665a` (≥ 4.66) · เขียว `#2f7a45` ได้ 4.43 บน container เข้มสุด → `#2d7643` (4.67) · สถานะ 5 คู่ ≥ 5.3 · เขียวอ่อนบนแถบเข้ม 8.25
+- 2026-09-28 · PR-1 · สถานะ: waiting = สนิมของ mock `#b5562f` · risk = แดงเลือดหมู `#a8283a` (แยกจากสนิมได้บนบอร์ด) · confirmed ยังน้ำเงิน (กฎ US-25) · tertiary = indigo ของชนิด "game"
+- 2026-09-28 · PR-1 · ชื่อ → badPaka: i18n 7 คีย์ · อีเมล (`AccountLetters`, `VenueLetters`) · manifest · title · boot bar · README · agent `next` · `restore-check.sh` · **ไม่เปลี่ยน** `SetApplicationName("CourtPaka")` และ purpose ของ Data Protection 2 ตัว — เปลี่ยนแล้ว cookie ทุกใบกับ state ของ LINE ที่ค้างอยู่ถอดไม่ออก = ทุกคนหลุด login
+- 2026-09-28 · PR-1 · `Wordmark` component (bad + **Paka** เขียว, Bricolage 800) ใช้ที่บาร์ แถบข้าง (Paka เป็นเขียวอ่อน) และหน้า login · icon PWA วาดใหม่ด้วยเขียวใหม่ · **favicon ยังเป็นของ Angular (ม่วง) มาตั้งแต่ M1** → ให้ `gen_app_icons.py` วาดด้วย
+- 2026-09-28 · PR-1 · bundle แรก 534.4 → 538.7 kB raw (128.3 → 128.6 gzip) จาก `@font-face` · ยังใต้เส้นเตือน 540 · frontend test 396 ผ่าน
+- 2026-09-28 · PR-1 · LCP หลังเปลี่ยน (6 คอร์ท ติดกัน): 3.36 / 3.34 วิ · FCP 1.96 · TBT 0.11–0.13 → ไม่แย่ลงจาก baseline 3.49–3.51
+- 2026-09-28 · PR-1 · pwa.py 6/6 · fits_a_phone 1/1 · `scripts/ci/local.py` 13/13 (186 วิ) · อัปเดต CLAUDE.md (UI → แบรนด์ badPaka) + design skill (ฟอนต์ 3 ตัว, token) · screenshot 1280/390 × TH/EN ที่ `scripts/verify/shots/_brand/`

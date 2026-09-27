@@ -17,8 +17,8 @@ with sync_playwright() as p:
 
     served = page.request.get(f"{BASE}/manifest.webmanifest").json()
     check("the manifest is the app's, in Thai, with the brand colour",
-          served["name"] == "CourtPaka" and served["lang"] == "th"
-          and served["theme_color"] == "#1d7a4c")
+          served["name"] == "badPaka" and served["lang"] == "th"
+          and served["theme_color"] == "#2d7643")
     sizes = {icon["sizes"] for icon in served["icons"]}
     check("with the icon sizes installing needs", {"192x192", "512x512"} <= sizes)
     for icon in served["icons"]:

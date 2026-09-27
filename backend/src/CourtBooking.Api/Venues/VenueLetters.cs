@@ -127,7 +127,7 @@ public static class VenueLetters
 
             (_, VenueStatus.Approved) => (
                 $"{venueName} ได้รับการอนุมัติแล้ว",
-                "สนามนี้อยู่บน CourtPaka แล้ว ผู้จองค้นหาและจองได้ "
+                "สนามนี้อยู่บน badPaka แล้ว ผู้จองค้นหาและจองได้ "
                 + "กรุณาตรวจคอร์ท เวลาเปิด-ปิด และราคา ก่อนการจองแรกจะเข้ามา"),
 
             (_, VenueStatus.Rejected) => (
