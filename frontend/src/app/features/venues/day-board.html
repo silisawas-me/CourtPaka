@@ -1,4 +1,9 @@
 @if (rows().length > 0) {
+  <!--
+    What the fills and marks mean, once, under the floor. A key rather than words in every block:
+    a block an hour wide has room for a name and not much else.
+  -->
+  <app-board-key [kinds]="kinds" [live]="liveAt() !== null" />
   <div class="board-scroll">
     <div class="board" data-testid="day-board">
       <!--
@@ -9,7 +14,13 @@
       <div class="board-hours" [style.--hours]="hours().length">
         <span class="board-corner"></span>
         @for (hour of hours(); track hour) {
-          <span class="board-hour">{{ hour }}:00</span>
+          <span class="board-hour"
+            >{{ hour }}:00
+            @if (peak().has(hour)) {
+              <!-- A peak hour, priced above the day's cheapest (the design's rust dot). -->
+              <span class="board-peak" [attr.aria-label]="i18n.t('board.peak')"></span>
+            }
+          </span>
         }
       </div>
 
@@ -29,13 +40,15 @@
                 [class.waiting]="cell.reads === 'waiting'"
                 [class.due]="cell.due"
                 [class.chosen]="cell.bookingId === chosen()"
+                [class.done]="cell.done"
+                [attr.title]="cell.note"
                 [attr.aria-pressed]="cell.bookingId === chosen()"
                 [style.--span]="cell.hours"
                 [attr.data-testid]="'board-block-' + cell.bookingId"
                 (click)="opened.emit(cell.bookingId)"
               >
                 <span class="board-who">{{ cell.who }}</span>
-                <span class="board-note">{{ cell.note }}</span>
+                <span class="board-time">{{ cell.time }}</span>
                 @if (cell.due) {
                   <!-- Said in words for whoever is not looking at the colour. -->
                   <span class="board-due" [attr.aria-label]="i18n.t('board.due')"></span>
@@ -76,26 +89,10 @@
         left edge of the floor at every hour of the day.
       -->
       @if (liveAt() !== null) {
-        <span class="board-live" data-testid="board-live" [style.--at]="liveAt()"></span>
+        <span class="board-live" data-testid="board-live" [style.--at]="liveAt()">
+          <span class="board-clock">{{ clock() }}</span>
+        </span>
       }
     </div>
   </div>
-
-  <!--
-    What the fills and marks mean, once, under the floor. A key rather than words in every block:
-    a block an hour wide has room for a name and not much else.
-  -->
-  <ul class="board-key" data-testid="board-key">
-    @for (kind of kinds; track kind) {
-      <li>
-        <span class="swatch" [class]="'swatch kind-' + kind"></span
-        >{{ i18n.t('board.kind.' + kind) }}
-      </li>
-    }
-    <li><span class="swatch closed"></span>{{ i18n.t('board.closed') }}</li>
-    <li><span class="mark due"></span>{{ i18n.t('board.due') }}</li>
-    @if (liveAt() !== null) {
-      <li><span class="mark now"></span>{{ i18n.t('board.now') }}</li>
-    }
-  </ul>
 }

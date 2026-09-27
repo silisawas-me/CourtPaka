@@ -1,15 +1,15 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { errorKey } from '../../core/http/api-error';
 import { BahtPipe } from '../../core/i18n/baht.pipe';
 import { TranslationService } from '../../core/i18n/translation.service';
-import { HourUse, OwnerToday, VenueService } from '../../core/venues/venue.service';
+import { OwnerToday, VenueService, VenueToday } from '../../core/venues/venue.service';
 
 /**
- * Today at every venue this person reads the reports of, at a glance (badPaka 2c): what each
- * kept, how full each hour was, and what wants somebody now. Every number is the one the venue's
- * own dashboard would give — the server reads each with the dashboard's code — so this is a
- * window onto those pages, not a second set of books.
+ * Today at every venue this person reads the reports of — the owner app's first page, "the
+ * schedule of every branch" (docs/plan/owner-app.md). Every number is the one the venue's own
+ * dashboard would give, because the server reads each with the dashboard's code; this page is a
+ * window onto those, not a second set of books.
  *
  * Drawn only when there is a venue whose reports this person may read: staff who take bookings
  * but do not read the money see nothing here, the same as on the dashboard (PRD US-14).
@@ -28,6 +28,46 @@ export class AllVenuesToday {
   protected readonly today = signal<OwnerToday | null>(null);
   protected readonly error = signal<string | null>(null);
 
+  /** Every hour any venue sells today, earliest opening to latest close, one column each. */
+  protected readonly hours = computed(() => {
+    const all = (this.today()?.venues ?? []).flatMap((venue) => venue.hours.map((h) => h.hour));
+    if (all.length === 0) {
+      return [];
+    }
+    const first = Math.min(...all);
+    return Array.from({ length: Math.max(...all) - first + 1 }, (_, index) => first + index);
+  });
+
+  /** Bookings past the venue's grace, across every venue — the note under "waiting now". */
+  protected readonly late = computed(() =>
+    (this.today()?.venues ?? []).reduce((sum, venue) => sum + venue.pastGrace, 0),
+  );
+
+  /**
+   * What wants somebody, in a line under the grid as the design has it: courts shut for repair,
+   * and bookings past the grace. Said per venue, because the owner acts on a venue, not a total.
+   */
+  protected readonly alerts = computed(() =>
+    (this.today()?.venues ?? []).flatMap((venue) => [
+      ...(venue.shutNow.length > 0
+        ? [
+            {
+              testId: `overview-shut-${venue.venueId}`,
+              text: `${venue.name} ${venue.shutNow.join(', ')} ${this.i18n.t('overview.shut')}`,
+            },
+          ]
+        : []),
+      ...(venue.pastGrace > 0
+        ? [
+            {
+              testId: `overview-late-${venue.venueId}`,
+              text: `${venue.name} ${this.i18n.t('overview.lateAt')} ${venue.pastGrace} ${this.i18n.t('overview.items')}`,
+            },
+          ]
+        : []),
+    ]),
+  );
+
   constructor() {
     this.venues.today().subscribe({
       next: (today) => this.today.set(today),
@@ -35,15 +75,16 @@ export class AllVenuesToday {
     });
   }
 
-  /** How full an hour was, 0–100, or null when nothing was on sale in it. */
-  protected use(hour: HourUse): number | null {
-    return hour.sellable === 0 ? null : Math.round((100 * hour.booked) / hour.sellable);
+  /** How full an hour was at a venue, or null when that venue did not sell it. */
+  protected cell(venue: VenueToday, hour: number): { percent: number } | null {
+    const found = venue.hours.find((one) => one.hour === hour);
+    return !found || found.sellable === 0
+      ? null
+      : { percent: Math.round((100 * found.booked) / found.sellable) };
   }
 
-  protected hourLabel(hour: HourUse): string {
-    const use = this.use(hour);
-    return use === null
-      ? `${hour.hour}:00 ${this.i18n.t('overview.notOnSale')}`
-      : `${hour.hour}:00 ${use}% (${hour.booked}/${hour.sellable})`;
+  /** The courts a venue had on sale today — the most in any one hour. */
+  protected courtsOf(venue: VenueToday): number {
+    return Math.max(0, ...venue.hours.map((hour) => hour.sellable));
   }
 }

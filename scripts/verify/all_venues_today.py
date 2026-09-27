@@ -32,13 +32,14 @@ with sync_playwright() as p:
     check("the overview is drawn above the list of venues",
           owner.locator(f"[data-testid=overview-venue-{venue_id}]").is_visible(), owner)
     check(
-        "every hour the venue sells has a cell",
+        "the venue has a cell for every hour of the shared grid",
         row is not None
-        and owner.locator(f"[data-testid=overview-venue-{venue_id}] .heat-hour").count() == len(row["hours"]),
+        and owner.locator(f"[data-testid=overview-venue-{venue_id}] .heat-hour-cell").count()
+        == len(owner.locator("[data-testid=all-venues-today] .heat-hours .heat-hour").all()),
     )
     owner.locator(f"[data-testid=overview-venue-{venue_id}] .venue-name").click()
-    owner.wait_for_url(f"**/venues/{venue_id}/now")
-    check("a venue's name leads to its floor right now", True)
+    owner.wait_for_url(f"**/venues/{venue_id}/bookings")
+    check("a venue's row opens its timeline", True)
 
     # Staff who may read the reports see the venue; the door is the dashboard's.
     staff = browser.new_page()

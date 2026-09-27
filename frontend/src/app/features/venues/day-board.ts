@@ -18,6 +18,10 @@ interface Block {
   reads: 'playing' | 'confirmed' | 'waiting';
   /** What kind of booking it is, which is what its fill says. */
   kind: BookingKind;
+  /** From and to, as the design writes under the name: `18:00–20:00`. */
+  time: string;
+  /** Played out already, on the day being shown: drawn faded, as the design does. */
+  done: boolean;
   /** The server has opened check-in and nobody has come in yet: somebody is due at the desk. */
   due: boolean;
 }
@@ -45,9 +49,10 @@ interface Row {
  * and the bookings on it — rather than a third of its own. The blocks are the bookings, so what
  * the board shows and what the list below it says can never disagree.
  */
+import { BoardKey } from './board-key';
 @Component({
   selector: 'app-day-board',
-  imports: [BahtPipe],
+  imports: [BahtPipe, BoardKey],
   templateUrl: './day-board.html',
   styleUrl: './day-board.scss',
 })
@@ -120,6 +125,30 @@ export class DayBoard {
     });
   });
 
+  /** The hour the clock is in on the day shown, or null on any other day. */
+  private readonly hourNow = computed(() => this.now()?.getHours() ?? null);
+
+  /** `18:45`, on the label the line carries at the top of the floor. */
+  protected readonly clock = computed(() => {
+    const now = this.now();
+    return now ? `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}` : '';
+  });
+
+  /**
+   * Hours sold above the day's cheapest price, marked in the header with the design's rust dot:
+   * the peak, read from the prices the day already carries rather than from a clock hour.
+   */
+  protected readonly peak = computed(() => {
+    const prices = (this.day()?.courts ?? []).flatMap((court) =>
+      court.hours.flatMap((hour) => (hour.bahtPerHour === null ? [] : [hour])),
+    );
+    if (prices.length === 0) {
+      return new Set<number>();
+    }
+    const cheapest = Math.min(...prices.map((one) => one.bahtPerHour!));
+    return new Set(prices.filter((one) => one.bahtPerHour! > cheapest).map((one) => one.hour));
+  });
+
   /** Where the live line sits, as a share of the day, or null when it is not on this day. */
   protected readonly liveAt = computed(() => {
     const now = this.now();
@@ -182,6 +211,8 @@ export class DayBoard {
             note: this.noteFor(booking),
             reads: this.readsAs(booking),
             kind: booking.kind,
+            time: `${run[0]}:00–${run[run.length - 1] + 1}:00`,
+            done: this.hourNow() !== null && run[run.length - 1] + 1 <= this.hourNow()!,
             due: booking.can.checkIn,
           });
           byCourt.set(courtId, blocks);

@@ -23,6 +23,11 @@ import { BookingKind } from '../../core/venues/venue-bookings.service';
         {{ i18n.t('panel.close') }}
       </button>
     </header>
+    <!-- Who and where, large, as the design opens the panel. -->
+    <div class="panel-who">
+      <h2 data-testid="panel-name">{{ name() }}</h2>
+      <p>{{ where() }}</p>
+    </div>
     <ng-content />
   `,
   styleUrl: './booking-panel.scss',
@@ -37,6 +42,10 @@ export class BookingPanel {
   protected readonly i18n = inject(TranslationService);
 
   readonly kind = input.required<BookingKind>();
+
+  /** Who the booking is for, and on which courts at which hours. */
+  readonly name = input.required<string>();
+  readonly where = input.required<string>();
 
   readonly closed = output<void>();
 }

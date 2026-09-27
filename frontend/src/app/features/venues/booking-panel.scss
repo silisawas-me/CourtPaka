@@ -17,6 +17,27 @@
   gap: 0.5rem;
 }
 
+.panel-who {
+  display: grid;
+  gap: 0.2rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+
+  h2 {
+    margin: 0;
+    font: var(--mat-sys-title-large);
+    font-family: var(--font-display);
+    font-weight: 800;
+    overflow-wrap: anywhere;
+  }
+
+  p {
+    margin: 0;
+    font: var(--mat-sys-body-medium);
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
 .panel-kind {
   padding: 0.15rem 0.6rem;
   border-radius: var(--mat-sys-corner-extra-small);
