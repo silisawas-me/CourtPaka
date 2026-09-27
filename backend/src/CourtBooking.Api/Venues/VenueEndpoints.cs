@@ -715,6 +715,11 @@ public static class VenueEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, VenueErrorCodes.InvalidPermissions);
         }
 
+        if (request.RefundLimitBaht is { } asked && !RefundLimits.IsALimit(asked))
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, VenueErrorCodes.InvalidRefundLimit);
+        }
+
         var membership = await database.VenueMemberships
             .SingleOrDefaultAsync(member => member.VenueId == venueId && member.UserId == userId, cancellationToken);
 
@@ -729,8 +734,14 @@ public static class VenueEndpoints
             return ApiProblem.Of(StatusCodes.Status409Conflict, VenueErrorCodes.OwnerCannotBeChanged);
         }
 
+        // Left out means left alone: a caller that only meant to change permissions must not
+        // silently set somebody's limit back to nothing (PRD US-18).
+        var limit = request.RefundLimitBaht ?? membership.RefundLimitBaht;
+
         // Written down with the change, in the same save, only when something changed (PRD 8).
-        if (membership.Permissions != permissions)
+        // A limit is as much a permission as a flag is — it decides what somebody may do with
+        // the venue's money — so it goes in the same history and by the same rule.
+        if (membership.Permissions != permissions || membership.RefundLimitBaht != limit)
         {
             database.MembershipChanges.Add(new MembershipChange
             {
@@ -740,10 +751,13 @@ public static class VenueEndpoints
                 Role = membership.Role,
                 PermissionsBefore = membership.Permissions,
                 PermissionsAfter = permissions,
+                RefundLimitBefore = membership.RefundLimitBaht,
+                RefundLimitAfter = limit,
                 ChangedByUserId = currentVenue.Require().UserId,
                 ChangedAt = timeProvider.GetUtcNow(),
             });
             membership.Permissions = permissions;
+            membership.RefundLimitBaht = limit;
         }
 
         await database.SaveChangesAsync(cancellationToken);
@@ -820,7 +834,8 @@ public static class VenueEndpoints
                 venue.Risk.HalfAt,
                 venue.Risk.FullAt,
                 venue.Risk.PeakFromHour,
-                venue.Risk.PeakUntilHour));
+                venue.Risk.PeakUntilHour),
+            membership.RefundCeiling);
 
     private static VenueMemberResponse ToResponse(VenueMembership membership) =>
         new(
@@ -828,6 +843,7 @@ public static class VenueEndpoints
             membership.User?.Email ?? string.Empty,
             membership.Role.ToString(),
             VenuePermissionSet.Describe(
-                membership.Role == VenueRole.Owner ? VenuePermissions.All : membership.Permissions));
+                membership.Role == VenueRole.Owner ? VenuePermissions.All : membership.Permissions),
+            membership.RefundCeiling);
 
 }

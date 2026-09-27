@@ -117,12 +117,29 @@ public sealed class VenueMembership
     /// </summary>
     public bool WantsSlipEmails { get; set; } = true;
 
+    /// <summary>
+    /// The most this person may write down as sent back in one record, in baht (PRD US-18).
+    /// Nothing by default: holding the permission means doing the work, not being trusted with
+    /// any amount of the venue's money, and an owner who has not said a number has not said yes.
+    ///
+    /// It is per record rather than per day because that is what the person at the desk decides
+    /// about: one booker, one transfer, one number they can see. An owner is not bound by it —
+    /// there is nobody above them to raise it.
+    /// </summary>
+    public decimal RefundLimitBaht { get; set; }
+
     public Venue? Venue { get; init; }
 
     public AppUser? User { get; init; }
 
     public bool Allows(VenuePermissions permission) =>
         Role == VenueRole.Owner || Permissions.HasFlag(permission);
+
+    /// <summary>
+    /// What this person may send back in one record. An owner has no ceiling; everybody else has
+    /// the one the owner set them, which starts at nothing (PRD US-18).
+    /// </summary>
+    public decimal? RefundCeiling => Role == VenueRole.Owner ? null : RefundLimitBaht;
 }
 
 /// <summary>

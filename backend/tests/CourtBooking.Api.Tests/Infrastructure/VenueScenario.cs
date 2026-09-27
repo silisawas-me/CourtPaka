@@ -472,6 +472,19 @@ public sealed class VenueScenario(ApiTestFixture api)
             CancellationToken.None);
     }
 
+    /// <summary>One person's seat history at one venue, oldest first (PRD 8, US-18).</summary>
+    public async Task<MembershipChange[]> MembershipHistoryAsync(Guid venueId, Guid userId)
+    {
+        using var scope = api.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await database.MembershipChanges
+            .AsNoTracking()
+            .Where(change => change.VenueId == venueId && change.UserId == userId)
+            .OrderBy(change => change.ChangedAt)
+            .ThenBy(change => change.Id)
+            .ToArrayAsync();
+    }
+
     public async Task<VenueMemberResponse[]> GetMembersAsync(HttpClient client, Guid venueId) =>
         await ReadAsync<VenueMemberResponse[]>(await client.GetAsync($"/api/venues/{venueId}/members"));
 

@@ -127,6 +127,25 @@
                 }
               </span>
 
+              <!--
+                What they may send back in one go (PRD US-18). On the row rather than behind a
+                dialog: it is one number and it belongs beside the permissions it qualifies —
+                the one that lets somebody record a refund is ticked two inches to the left.
+              -->
+              <mat-form-field class="limit" subscriptSizing="dynamic">
+                <mat-label>{{ i18n.t('venues.members.refundLimit') }}</mat-label>
+                <input
+                  matInput
+                  type="number"
+                  min="0"
+                  inputmode="numeric"
+                  [disabled]="!canManage() || savingMember() !== null"
+                  [value]="row.member.refundLimitBaht ?? 0"
+                  [attr.data-testid]="'refund-limit-' + row.member.userId"
+                  (change)="setRefundLimit(row.member, $event)"
+                />
+              </mat-form-field>
+
               @if (canManage()) {
                 <button
                   matButton

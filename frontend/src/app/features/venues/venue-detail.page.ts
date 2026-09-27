@@ -43,6 +43,7 @@ import { VenueAddressPipe } from '../../shared/venue-address.pipe';
   ],
   providers: [FORM_FIELD_DEFAULTS],
   templateUrl: './venue-detail.page.html',
+  styleUrl: './venue-detail.page.scss',
 })
 export class VenueDetailPage {
   private readonly venues = inject(VenueService);
@@ -125,6 +126,42 @@ export class VenueDetailPage {
         this.inviteError.set(errorKey(error));
       },
     });
+  }
+
+  /**
+   * What this person may send back in one record (PRD US-18). Sent on change rather than on
+   * every keystroke: it is a number somebody types in full, and a request per digit would write
+   * a history row per digit as well.
+   */
+  protected setRefundLimit(member: VenueMember, event: Event): void {
+    const typed = Number((event.target as HTMLInputElement).value);
+    const current = this.members().find((item) => item.userId === member.userId);
+
+    if (!current || this.savingMember() !== null || !Number.isFinite(typed) || typed < 0) {
+      return;
+    }
+
+    this.savingMember.set(member.userId);
+    this.memberError.set(null);
+
+    this.venues
+      .changePermissions(this.venueId(), member.userId, current.permissions, typed)
+      .subscribe({
+        next: () => {
+          this.savingMember.set(null);
+          this.members.update((all) =>
+            all.map((item) =>
+              item.userId === member.userId ? { ...item, refundLimitBaht: typed } : item,
+            ),
+          );
+        },
+        error: (error: unknown) => {
+          this.savingMember.set(null);
+          this.memberError.set(errorKey(error));
+          // Put back what the server still holds, so the box never shows a number nobody has.
+          this.members.update((all) => [...all]);
+        },
+      });
   }
 
   protected togglePermission(

@@ -445,7 +445,13 @@ public sealed record RefundsResponse(
     decimal RefundDueBaht,
     decimal SentBackBaht,
     decimal OutstandingBaht,
-    RefundRecordResponse[] Records);
+    RefundRecordResponse[] Records,
+    /// <summary>
+    /// The most the person reading may write down in one record (PRD US-18), or null where they
+    /// have no ceiling. It travels with the refunds rather than being asked for separately: the
+    /// screen that shows what is owed is the screen that needs to say what this reader may send.
+    /// </summary>
+    decimal? YourLimitBaht);
 
 public static class RefundErrorCodes
 {
@@ -456,6 +462,13 @@ public static class RefundErrorCodes
 
     /// <summary>A day in the future is not a transfer that has happened.</summary>
     public const string NotYetSent = "refund.not_yet_sent";
+
+    /// <summary>
+    /// More than this person may send back in one record (PRD US-18). The refusal carries the
+    /// amount they may, because the answer is to hand the booker to somebody who can — and
+    /// nobody can do that without being told the number.
+    /// </summary>
+    public const string OverTheLimit = "refund.over_the_limit";
 
     public const string MethodNotAllowed = "refund.method_not_allowed";
     public const string NoteTooLong = "refund.note_too_long";

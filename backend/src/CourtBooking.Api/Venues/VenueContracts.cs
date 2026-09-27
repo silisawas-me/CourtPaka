@@ -61,7 +61,12 @@ public sealed record InviteMemberRequest(string Email, string[]? Permissions);
 
 public sealed record AcceptInvitationRequest(Guid InvitationId, string Token);
 
-public sealed record ChangePermissionsRequest(string[] Permissions);
+/// <summary>
+/// What a member may do, and how much of the venue's money they may say has gone back in one
+/// record (PRD US-14, US-18). The limit is left out where it is not being changed, so a caller
+/// that only means to change permissions cannot silently reset it to nothing.
+/// </summary>
+public sealed record ChangePermissionsRequest(string[] Permissions, decimal? RefundLimitBaht = null);
 
 /// <summary>How long this venue waits before a booking counts as a no-show (PRD US-24).</summary>
 public sealed record GraceRequest(int Minutes);
@@ -108,7 +113,13 @@ public sealed record VenueResponse(
     /// </summary>
     int DepositPercent,
     /// <summary>When this venue asks for more than that share, and of whom (PRD US-28).</summary>
-    RiskRuleResponse Risk);
+    RiskRuleResponse Risk,
+    /// <summary>
+    /// The most the person reading may write down as sent back in one record, or null where
+    /// they have no ceiling (PRD US-18). Like the permissions beside it, it belongs to the
+    /// reader rather than to the venue — it is what lets the page say so before they type.
+    /// </summary>
+    decimal? RefundLimitBaht);
 
 /// <summary>What a venue counts as too often, and which hours it will not lose (PRD US-28).</summary>
 public sealed record RiskRuleResponse(
@@ -119,7 +130,16 @@ public sealed record RiskRuleResponse(
     int? PeakFromHour,
     int? PeakUntilHour);
 
-public sealed record VenueMemberResponse(Guid UserId, string Email, string Role, string[] Permissions);
+public sealed record VenueMemberResponse(
+    Guid UserId,
+    string Email,
+    string Role,
+    string[] Permissions,
+    /// <summary>
+    /// The most they may write down as sent back in one record (PRD US-18). Null for the owner,
+    /// who has no ceiling — there is nobody above them to raise one.
+    /// </summary>
+    decimal? RefundLimitBaht);
 
 /// <summary>
 /// What is waiting at this venue for the person asking (PRD US-17). Each number is counted only
@@ -153,6 +173,9 @@ public static class VenueErrorCodes
     public const string OwnerNeedsEmail = "venue.owner_needs_email";
     public const string AlreadyMember = "venue.already_member";
     public const string OwnerCannotBeChanged = "venue.owner_cannot_be_changed";
+    /// <summary>A number that could not be a refund limit at all (PRD US-18).</summary>
+    public const string InvalidRefundLimit = "venue.invalid_refund_limit";
+
     public const string InvalidPermissions = "venue.invalid_permissions";
     public const string InvitationInvalid = "venue.invitation_invalid";
     public const string InvitationForAnotherAddress = "venue.invitation_for_another_address";
