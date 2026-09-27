@@ -31,6 +31,7 @@ public sealed class CounterBookingTests(ApiTestFixture api) : IClassFixture<ApiT
         Assert.Equal(nameof(BookingStatus.Confirmed), taken.Status);
         Assert.Equal(nameof(PaymentState.Received), taken.PaymentState);
         Assert.Equal(nameof(BookingChannel.Staff), taken.Channel);
+        Assert.Equal(BookingKinds.WalkIn, taken.Kind);
         Assert.Equal("คุณสมชาย", taken.CustomerName);
         Assert.Equal("081-234-5678", taken.CustomerPhone);
 

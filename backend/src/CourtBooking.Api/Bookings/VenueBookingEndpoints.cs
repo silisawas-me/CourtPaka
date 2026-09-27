@@ -975,6 +975,7 @@ public static class VenueBookingEndpoints
             bookerEmail,
             bookerEmail is null ? bookerPhone : null,
             booking.Channel.ToString(),
+            BookingKinds.Of(booking),
             booking.CustomerName,
             booking.CustomerPhone,
             status.ToString(),

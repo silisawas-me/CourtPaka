@@ -1,4 +1,16 @@
-import { Component, computed, DestroyRef, effect, inject, input, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import {
+  afterNextRender,
+  Component,
+  computed,
+  DestroyRef,
+  effect,
+  inject,
+  Injector,
+  input,
+  signal,
+  untracked,
+} from '@angular/core';
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -8,6 +20,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Observable } from 'rxjs';
 import { courtsOf, hoursOf } from '../../core/bookings/hours';
+import { BookingPanel } from './booking-panel';
+import { SellOntoBooking } from './sell-onto-booking';
 import { VenueWaitlistEntry, WaitlistService } from '../../core/bookings/waitlist.service';
 import { AppDatePipe, AppDateTimePipe } from '../../core/i18n/app-date.pipe';
 import { BahtPipe } from '../../core/i18n/baht.pipe';
@@ -61,7 +75,10 @@ const ChoresShown = 5;
   imports: [
     BahtPipe,
     CounterBooking,
+    BookingPanel,
     DayBoard,
+    NgTemplateOutlet,
+    SellOntoBooking,
     StatusChip,
     ReactiveFormsModule,
     FieldError,
@@ -101,7 +118,20 @@ export class VenueBookingsPage {
   protected readonly day = signal(plainDate(venueToday()));
 
   /** Whether the counter is selling hours right now (PRD US-13). */
+  private readonly injector = inject(Injector);
+
   protected readonly selling = signal(false);
+
+  /**
+   * The booking pressed on the floor, open in the panel beside it (badPaka 2a). An id rather than
+   * the booking itself, so a door pressed in the panel — which replaces the row — is shown in the
+   * panel straight away without anybody having to open it again.
+   */
+  protected readonly chosen = signal<string | null>(null);
+
+  protected readonly chosenBooking = computed(
+    () => this.bookings$().find((one) => one.bookingId === this.chosen()) ?? null,
+  );
   protected readonly dayField = new FormControl(venueToday());
 
   protected readonly bookings$ = signal<VenueBooking[]>([]);
@@ -290,6 +320,12 @@ export class VenueBookingsPage {
     // The day and the venue both come from outside, and the venue only after the first pass, so
     // reading them here is what waits for both.
     effect(() => this.load(this.venueId(), this.day()));
+
+    // Another day is another floor: the booking in the panel is not on it.
+    effect(() => {
+      this.day();
+      untracked(() => this.chosen.set(null));
+    });
 
     // The live line and the counts move with the clock rather than with a reload. A minute is
     // as fine as the board is drawn: an hour is a column, so a second-by-second line would move
@@ -620,9 +656,35 @@ export class VenueBookingsPage {
 
   /** A block on the board or a line above was pressed: put that row where the counter is looking. */
   protected reveal(bookingId: string): void {
-    const row = document.querySelector<HTMLElement>(`[data-testid="booking-${bookingId}"]`);
-    row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    // Opened beside the floor rather than scrolled to: the counter keeps the floor in view while
+    // it answers the one booking, and the list below no longer carries a second copy of it.
+    this.chosen.set(bookingId);
+    this.close();
+    afterNextRender(
+      () => {
+        const row = document.querySelector<HTMLElement>(`[data-testid="booking-${bookingId}"]`);
+        row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        this.focusRow(row);
+      },
+      { injector: this.injector },
+    );
+  }
 
+  protected closePanel(): void {
+    const was = this.chosen();
+    this.chosen.set(null);
+    this.close();
+    // Back to the block it was opened from, so a keyboard is not left on a panel that has gone.
+    afterNextRender(
+      () =>
+        document
+          .querySelector<HTMLElement>(`[data-testid="board-block-${was}"]`)
+          ?.focus({ preventScroll: true }),
+      { injector: this.injector },
+    );
+  }
+
+  private focusRow(row: HTMLElement | null): void {
     // And the reader with it. Scrolling moves the window; somebody on a keyboard or a screen
     // reader is still where they were, and a control that moves nothing they can tell is a
     // control that did nothing. The row takes focus without joining the tab order.

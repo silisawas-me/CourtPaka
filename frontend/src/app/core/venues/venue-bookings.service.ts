@@ -62,6 +62,12 @@ export interface CounterBookingRequest {
 }
 
 /** One of the venue's bookings for a day, as its counter reads it (PRD US-13). */
+/** Booked in the app, sold at the counter, a group's standing week, or hours from a package. */
+export type BookingKind = 'App' | 'WalkIn' | 'Series' | 'Package';
+
+/** In the order the floor's legend reads them. */
+export const BOOKING_KINDS: readonly BookingKind[] = ['App', 'WalkIn', 'Series', 'Package'];
+
 export interface VenueBooking {
   bookingId: string;
   bookerEmail: string | null;
@@ -69,6 +75,8 @@ export interface VenueBooking {
   bookerPhone: string | null;
   /** Online, or taken at the counter — which decides who the row is for. */
   channel: 'Online' | 'Staff';
+  /** Which of the four the floor colours it as — worked out by the server (`BookingKinds`). */
+  kind: BookingKind;
   customerName: string | null;
   customerPhone: string | null;
   status: BookingStatus;

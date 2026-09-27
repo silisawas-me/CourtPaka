@@ -2,7 +2,7 @@ import { Component, computed, inject, input, output } from '@angular/core';
 import { BahtPipe, formatBaht } from '../../core/i18n/baht.pipe';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { Availability } from '../../core/venues/public-venue.service';
-import { VenueBooking } from '../../core/venues/venue-bookings.service';
+import { BOOKING_KINDS, BookingKind, VenueBooking } from '../../core/venues/venue-bookings.service';
 
 /** One booking as it sits on the board: which court, which hours, and how it reads. */
 interface Block {
@@ -14,8 +14,12 @@ interface Block {
   who: string;
   /** What the block says under the name: the money, or that nobody has said they are coming. */
   note: string;
-  /** playing | confirmed | waiting — which of the three the colour comes from. */
+  /** playing | confirmed | waiting — what is happening to it, drawn on its edge. */
   reads: 'playing' | 'confirmed' | 'waiting';
+  /** What kind of booking it is, which is what its fill says. */
+  kind: BookingKind;
+  /** The server has opened check-in and nobody has come in yet: somebody is due at the desk. */
+  due: boolean;
 }
 
 /** An hour nobody has taken, and what it costs — which is what the phone is asking. */
@@ -58,8 +62,13 @@ export class DayBoard {
   /** Now, when the board is showing today; null on any other day, and then there is no line. */
   readonly now = input<Date | null>(null);
 
+  /** The booking open in the panel beside the floor, drawn as the one being looked at. */
+  readonly chosen = input<string | null>(null);
+
   /** A block was pressed: the counter wants that booking. */
   readonly opened = output<string>();
+
+  protected readonly kinds = BOOKING_KINDS;
 
   /** An empty hour was pressed: the counter wants to sell it. */
   readonly picked = output<{ courtId: string; hour: number }>();
@@ -172,6 +181,8 @@ export class DayBoard {
             who: this.whoFor(booking),
             note: this.noteFor(booking),
             reads: this.readsAs(booking),
+            kind: booking.kind,
+            due: booking.can.checkIn,
           });
           byCourt.set(courtId, blocks);
         }

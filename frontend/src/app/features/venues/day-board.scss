@@ -39,9 +39,9 @@
       no-repeat local,
     linear-gradient(to left, var(--mat-sys-surface), transparent) right center / 2.5rem 100%
       no-repeat local,
-    linear-gradient(to right, rgba(20, 32, 43, 0.14), transparent) left center / 1rem 100% no-repeat
+    linear-gradient(to right, rgba(42, 36, 32, 0.14), transparent) left center / 1rem 100% no-repeat
       scroll,
-    linear-gradient(to left, rgba(20, 32, 43, 0.14), transparent) right center / 1rem 100% no-repeat
+    linear-gradient(to left, rgba(42, 36, 32, 0.14), transparent) right center / 1rem 100% no-repeat
       scroll;
 }
 
@@ -174,25 +174,52 @@
 }
 
 /*
- * The three readings, in the colours the whole app now uses for them. The one being played is
- * solid rather than tinted: it is the only thing on the floor that is happening, and on a board
- * of tints a solid block is what the eye lands on first.
+ * The fill is what kind of booking it is — the app, the counter, a group's week, a package — and
+ * the edge is what is happening to it. Two questions a counter asks of the floor, answered by two
+ * different parts of the block so neither has to be decoded out of the other.
  */
+.board-block {
+  position: relative;
+  background: var(--soft);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+/* The four kinds hand out --soft/--line/--ink from styles.scss (`.kind-*`). */
+
+/* On the court now: a solid edge down the leading side, the only one on the floor that is happening. */
 .board-block.playing {
-  background: var(--status-playing);
-  color: var(--mat-sys-on-primary);
+  box-shadow:
+    inset 4px 0 0 var(--status-playing),
+    inset 0 0 0 1px var(--line);
 }
 
-/* Somebody is expected: paid for, not here yet. */
-.board-block.confirmed {
-  background: var(--status-confirmed-soft);
-  color: var(--status-confirmed-ink);
-}
-
-/* Still waiting on something — a slip to be looked at, a person to say they are coming. */
+/* Still waiting on money or a slip: the edge is broken, because the booking is not settled yet. */
 .board-block.waiting {
-  background: var(--status-waiting-soft);
-  color: var(--status-waiting-ink);
+  box-shadow: none;
+  outline: 1px dashed var(--status-waiting);
+  outline-offset: -1px;
+}
+
+/* The one open in the panel beside the floor. Ink, not a colour, so it never reads as a status. */
+.board-block.chosen {
+  outline: 2px solid var(--mat-sys-on-surface);
+  outline-offset: -2px;
+}
+
+/* Check-in is open and nobody has come in: the design's rust dot, in the corner the eye reaches last. */
+.board-due,
+.board-key .due {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--status-waiting);
+}
+
+.board-due {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
 }
 
 .board-who {
@@ -221,6 +248,47 @@
     var(--court) + var(--board-gap) + (100% - var(--court) - var(--board-gap)) * var(--at) / 100
   );
   width: 2px;
-  background: var(--mat-sys-error);
+  /* Rust, not red: the clock is the thing that makes a booking late, not a fault. */
+  background: var(--status-waiting);
   pointer-events: none;
+}
+
+.board-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+
+  li {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .swatch {
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: var(--mat-sys-corner-extra-small);
+    background: var(--soft);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+
+  .swatch.closed {
+    background: repeating-linear-gradient(
+      135deg,
+      var(--status-risk-soft) 0 3px,
+      var(--mat-sys-surface) 3px 6px
+    );
+    box-shadow: inset 0 0 0 1px var(--mat-sys-outline-variant);
+  }
+
+  .now {
+    width: 2px;
+    height: 0.9rem;
+    background: var(--status-waiting);
+  }
 }

@@ -1,0 +1,92 @@
+<section class="sell" data-testid="sell-onto-booking">
+  <h3 class="sell-title">{{ i18n.t('panel.shop') }}</h3>
+
+  @if (sold(); as sale) {
+    <p class="sell-done" data-testid="sell-done" role="status">
+      {{ i18n.t('panel.shopSold') }} {{ sale.totalBaht | baht: i18n.locale() }}
+      {{ i18n.t('money.baht') }}
+    </p>
+  }
+
+  @if (items(); as onSale) {
+    @if (onSale.length === 0) {
+      <p class="muted">{{ i18n.t('panel.shopEmpty') }}</p>
+    } @else {
+      <ul class="sell-items">
+        @for (item of onSale; track item.itemId) {
+          <li [attr.data-testid]="'sell-item-' + item.itemId">
+            <span class="sell-name">{{ item.name }}</span>
+            <span class="sell-price">{{ item.priceBaht | baht: i18n.locale() }}</span>
+            <span class="sell-stepper">
+              <button
+                type="button"
+                class="step"
+                [attr.aria-label]="i18n.t('panel.less') + ' ' + item.name"
+                [disabled]="countOf(item) === 0"
+                (click)="add(item, -1)"
+              >
+                −
+              </button>
+              <span class="sell-count" [attr.data-testid]="'sell-count-' + item.itemId">{{
+                countOf(item)
+              }}</span>
+              <button
+                type="button"
+                class="step"
+                [attr.aria-label]="i18n.t('panel.more') + ' ' + item.name"
+                [attr.data-testid]="'sell-more-' + item.itemId"
+                (click)="add(item, 1)"
+              >
+                +
+              </button>
+            </span>
+          </li>
+        }
+      </ul>
+
+      @if (total() > 0) {
+        <fieldset class="sell-methods">
+          <legend>{{ i18n.t('shop.paidBy') }}</legend>
+          @for (method of methods; track method) {
+            <label>
+              <input
+                type="radio"
+                name="sell-paid-by"
+                [value]="method"
+                [checked]="paidBy() === method"
+                [attr.data-testid]="'sell-paid-' + method"
+                (change)="paidBy.set(method)"
+              />
+              <span>{{ i18n.t('money.method.' + method) }}</span>
+            </label>
+          }
+        </fieldset>
+
+        <button
+          matButton="filled"
+          type="button"
+          data-testid="sell-confirm"
+          [disabled]="busy()"
+          (click)="sell()"
+        >
+          {{ i18n.t('panel.shopSell') }} {{ total() | baht: i18n.locale() }}
+          {{ i18n.t('money.baht') }}
+        </button>
+      }
+    }
+  } @else {
+    <button
+      matButton="outlined"
+      type="button"
+      data-testid="sell-open"
+      [disabled]="busy()"
+      (click)="open()"
+    >
+      {{ i18n.t('panel.shopOpen') }}
+    </button>
+  }
+
+  @if (error(); as key) {
+    <p class="form-error" data-testid="sell-error">{{ i18n.t(key) }}</p>
+  }
+</section>
