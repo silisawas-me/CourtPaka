@@ -16,8 +16,22 @@ function figures(overrides: Record<string, unknown> = {}) {
     bookedHours: 8,
     utilizationPercent: 12.5,
     days: [
-      { date: '2026-09-01', onlineBaht: 1200, staffBaht: 0, sellableHours: 32, bookedHours: 6 },
-      { date: '2026-09-02', onlineBaht: 0, staffBaht: 400, sellableHours: 32, bookedHours: 2 },
+      {
+        date: '2026-09-01',
+        onlineBaht: 1200,
+        staffBaht: 0,
+        sellableHours: 32,
+        bookedHours: 6,
+        shopBaht: 0,
+      },
+      {
+        date: '2026-09-02',
+        onlineBaht: 0,
+        staffBaht: 400,
+        sellableHours: 32,
+        bookedHours: 2,
+        shopBaht: 0,
+      },
     ],
     months: [
       {
@@ -40,6 +54,9 @@ function figures(overrides: Record<string, unknown> = {}) {
     },
     owedHours: { hours: 0, baht: 0, packages: 0, runningOut: 0 },
     trade: { shopBaht: 0, spentBaht: 0, leftOverBaht: 0 },
+    byMethod: [],
+    topItems: [],
+    priorBaht: 0,
     ...overrides,
   };
 }

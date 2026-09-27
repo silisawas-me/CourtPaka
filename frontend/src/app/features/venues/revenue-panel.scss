@@ -1,0 +1,197 @@
+/* The design's revenue page: three cards, then the days on the left and how it came in on the right. */
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.revenue {
+  display: grid;
+  gap: 1rem;
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 1rem;
+}
+
+.kpi,
+.card {
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-extra-large);
+  background: var(--mat-sys-surface);
+}
+
+.kpi {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1.1rem 1.25rem;
+}
+
+.kpi-label {
+  font: var(--mat-sys-label-large);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.kpi-value {
+  font: var(--mat-sys-headline-medium);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-note {
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+
+  &.up {
+    color: var(--status-playing-ink);
+  }
+}
+
+.split {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+
+  @media (min-width: 64rem) {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+}
+
+.card {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 1.25rem;
+
+  h3 {
+    margin: 0;
+    font: var(--mat-sys-title-medium);
+  }
+}
+
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: var(--mat-sys-corner-extra-small);
+
+  &.court {
+    background: var(--mat-sys-primary);
+  }
+
+  &.shop {
+    margin-inline-start: 0.5rem;
+    background: var(--kind-walkin-line);
+  }
+}
+
+/* One column a day, the bar standing on a shared floor; a long range thins the bars, not the page. */
+.chart {
+  display: grid;
+  grid-template-columns: repeat(var(--days), minmax(0.4rem, 1fr));
+  gap: 0.4rem;
+  height: 18rem;
+  overflow-x: auto;
+}
+
+.bar {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 0;
+}
+
+.part {
+  display: block;
+  width: 100%;
+
+  &.court {
+    background: var(--mat-sys-primary);
+    border-radius: 0 0 var(--mat-sys-corner-extra-small) var(--mat-sys-corner-extra-small);
+  }
+
+  &.shop {
+    background: var(--kind-walkin-line);
+    border-radius: var(--mat-sys-corner-extra-small) var(--mat-sys-corner-extra-small) 0 0;
+  }
+}
+
+.day {
+  font: var(--mat-sys-label-small);
+  font-family: var(--font-mono);
+  color: var(--mat-sys-on-surface-variant);
+  text-align: center;
+}
+
+.side {
+  display: grid;
+  gap: 1rem;
+}
+
+.method {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.method-line,
+.item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font: var(--mat-sys-body-medium);
+}
+
+.item {
+  padding-block: 0.5rem;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.track {
+  height: 0.4rem;
+  border-radius: var(--mat-sys-corner-full);
+  background: var(--mat-sys-surface-container-highest);
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  background: var(--mat-sys-primary);
+
+  &.Cash {
+    background: var(--mat-sys-on-surface-variant);
+  }
+
+  &.Card {
+    background: var(--kind-walkin-line);
+  }
+}

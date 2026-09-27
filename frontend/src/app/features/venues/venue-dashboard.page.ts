@@ -27,9 +27,11 @@ import { provideLocalizedDateAdapter } from '../../shared/localized-date-adapter
  * link to last month's figures is a link to last month's figures. With neither, the server
  * answers for this month.
  */
+import { RevenuePanel } from './revenue-panel';
 @Component({
   selector: 'app-venue-dashboard-page',
   imports: [
+    RevenuePanel,
     ReactiveFormsModule,
     RouterLink,
     MatButtonModule,
@@ -155,6 +157,15 @@ export class VenueDashboardPage {
     if (start && end) {
       this.show(plainDate(start), plainDate(end));
     }
+  }
+
+  /** The fortnight to today, which is what the owner app's revenue view opens on. */
+  protected lastFourteen(): void {
+    const today = venueToday();
+    this.show(
+      plainDate(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 13)),
+      plainDate(today),
+    );
   }
 
   protected thisMonth(): void {

@@ -937,5 +937,17 @@
   "pricing.applyAll": "ใช้กับทุกสาขา",
   "pricing.save": "บันทึกราคา",
   "pricing.saved": "บันทึกแล้ว",
-  "pricing.movedHere": "ราคาย้ายไปอยู่ที่ \"ราคา & ช่วงพีค\""
+  "pricing.movedHere": "ราคาย้ายไปอยู่ที่ \"ราคา & ช่วงพีค\"",
+  "dashboard.lastFourteen": "14 วันล่าสุด",
+  "revenue.total": "รายได้ช่วงนี้",
+  "revenue.vsBefore": "จากช่วงก่อน",
+  "revenue.nothingBefore": "ช่วงก่อนหน้ายังไม่มีรายได้",
+  "revenue.courtFees": "ค่าคอร์ท",
+  "revenue.shop": "ร้านค้า",
+  "revenue.bestSeller": "ขายดีสุด:",
+  "revenue.byDay": "รายได้รายวัน",
+  "revenue.byMethod": "ช่องทางชำระเงิน",
+  "revenue.topItems": "สินค้าขายดี",
+  "revenue.noMoney": "ยังไม่มีเงินเข้าในช่วงนี้",
+  "revenue.nothingSold": "ยังไม่มีการขายในช่วงนี้"
 }
