@@ -1,27 +1,23 @@
-<mat-card>
-  <mat-card-header>
-    <mat-card-title>{{ i18n.t('money.title') }}</mat-card-title>
-  </mat-card-header>
+<header class="page-head">
+  <h2>{{ i18n.t('money.title') }}</h2>
 
-  <mat-card-content>
-    <mat-form-field class="field">
-      <mat-label>{{ i18n.t('money.day') }}</mat-label>
-      <input
-        id="day"
-        matInput
-        readonly
-        data-testid="day"
-        [formControl]="dayField"
-        [matDatepicker]="picker"
-        [max]="today"
-        (dateChange)="pick($event.value)"
-        (click)="picker.open()"
-      />
-      <mat-datepicker-toggle matIconSuffix [for]="picker" />
-      <mat-datepicker #picker />
-    </mat-form-field>
-  </mat-card-content>
-</mat-card>
+  <mat-form-field class="field-date">
+    <mat-label>{{ i18n.t('money.day') }}</mat-label>
+    <input
+      id="day"
+      matInput
+      readonly
+      data-testid="day"
+      [formControl]="dayField"
+      [matDatepicker]="picker"
+      [max]="today"
+      (dateChange)="pick($event.value)"
+      (click)="picker.open()"
+    />
+    <mat-datepicker-toggle matIconSuffix [for]="picker" />
+    <mat-datepicker #picker />
+  </mat-form-field>
+</header>
 
 @if (loading()) {
   <mat-progress-bar mode="indeterminate" />
@@ -48,29 +44,29 @@
         <span class="unit">{{ i18n.t('money.baht') }}</span>
       </p>
 
-      <dl class="figures">
-        <div>
-          <dt class="muted">{{ i18n.t('money.method.Cash') }}</dt>
+      <dl class="tiles">
+        <div class="tile tile-live">
+          <dt>{{ i18n.t('money.method.Cash') }}</dt>
           <dd data-testid="cash">{{ day.cashBaht | baht: i18n.locale() }}</dd>
         </div>
-        <div>
-          <dt class="muted">{{ i18n.t('money.method.PromptPay') }}</dt>
+        <div class="tile tile-live">
+          <dt>{{ i18n.t('money.method.PromptPay') }}</dt>
           <dd data-testid="promptpay">{{ day.promptPayBaht | baht: i18n.locale() }}</dd>
         </div>
-        <div>
-          <dt class="muted">{{ i18n.t('money.method.Card') }}</dt>
+        <div class="tile tile-live">
+          <dt>{{ i18n.t('money.method.Card') }}</dt>
           <dd data-testid="card">{{ day.cardBaht | baht: i18n.locale() }}</dd>
         </div>
-        <div>
-          <dt class="muted">{{ i18n.t('money.cashRefunded') }}</dt>
+        <div class="tile tile-out">
+          <dt>{{ i18n.t('money.cashRefunded') }}</dt>
           <dd data-testid="cash-refunded">{{ day.cashRefundedBaht | baht: i18n.locale() }}</dd>
         </div>
-        <div>
-          <dt class="muted">{{ i18n.t('money.cashPaidOut') }}</dt>
+        <div class="tile tile-out">
+          <dt>{{ i18n.t('money.cashPaidOut') }}</dt>
           <dd data-testid="cash-paid-out">{{ day.cashPaidOutBaht | baht: i18n.locale() }}</dd>
         </div>
-        <div>
-          <dt class="muted">{{ i18n.t('money.outstanding') }}</dt>
+        <div class="tile tile-waiting">
+          <dt>{{ i18n.t('money.outstanding') }}</dt>
           <dd data-testid="outstanding">{{ day.outstandingBaht | baht: i18n.locale() }}</dd>
         </div>
       </dl>
@@ -124,23 +120,28 @@
           A day that has been counted shows its count and nothing to press: the difference is
           what the till was short or over, and it stays that way.
         -->
-        <dl class="figures">
-          <div>
-            <dt class="muted">{{ i18n.t('money.float') }}</dt>
+        <dl class="tiles">
+          <div class="tile">
+            <dt>{{ i18n.t('money.float') }}</dt>
             <dd data-testid="closed-float">{{ closed.openingFloatBaht | baht: i18n.locale() }}</dd>
           </div>
-          <div>
-            <dt class="muted">{{ i18n.t('money.expected') }}</dt>
+          <div class="tile">
+            <dt>{{ i18n.t('money.expected') }}</dt>
             <dd data-testid="closed-expected">
               {{ closed.expectedCashBaht | baht: i18n.locale() }}
             </dd>
           </div>
-          <div>
-            <dt class="muted">{{ i18n.t('money.counted') }}</dt>
+          <div class="tile tile-live">
+            <dt>{{ i18n.t('money.counted') }}</dt>
             <dd data-testid="closed-counted">{{ closed.countedCashBaht | baht: i18n.locale() }}</dd>
           </div>
-          <div>
-            <dt class="muted">{{ i18n.t('money.difference') }}</dt>
+          <!--
+            A till that balanced is an ordinary tile; one that did not is the thing on the page,
+            and it takes the edge that means money gone rather than money waited on. The tint of
+            `tile-owed` would also outrank `.off`, and leave the short amount written in amber.
+          -->
+          <div class="tile" [class.tile-out]="closed.differenceBaht !== 0">
+            <dt>{{ i18n.t('money.difference') }}</dt>
             <dd data-testid="closed-difference" [class.off]="closed.differenceBaht !== 0">
               @if (closed.differenceBaht === 0) {
                 {{ i18n.t('money.exact') }}

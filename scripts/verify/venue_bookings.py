@@ -194,6 +194,17 @@ with sync_playwright() as p:
         page.locator("[data-testid=today-numbers]").is_visible(),
     )
 
+    # The board's own box has to be as wide as the day it draws, not as wide as the window it is
+    # read through. They are the same on a desk with room to spare and four times apart on a
+    # phone, and everything placed by measuring the box — the clock — is wrong by that much.
+    box, rows = page.evaluate(
+        """() => {
+            const board = document.querySelector('[data-testid=day-board]');
+            return [Math.round(board.getBoundingClientRect().width), board.scrollWidth];
+        }"""
+    )
+    check("the board's box is as wide as the day, not as wide as the window", box == rows)
+
     with page.expect_response(lambda r: r.url.endswith("/confirm-arrival")) as said:
         page.click(f"[data-testid=confirm-arrival-{board_booking['id']}]")
     check("the counter writes down that they are coming", said.value.status == 200)
@@ -212,6 +223,46 @@ with sync_playwright() as p:
         "and the refusal says which rule it is",
         too_early.json().get("code") == "booking.arrival_not_allowed",
     )
+
+    # The clock across today's floor stands where the hour is. It is placed by arithmetic over
+    # the board's tracks, and the arithmetic has two ways to come out wrong without looking
+    # wrong — a unit on the share, which makes the whole sum invalid and pins the line to the
+    # left edge, and a box measured against the window. Read the hour under it instead of the
+    # number in it, which is the thing somebody at the counter is actually reading.
+    #
+    # Only while the venue is open, since there is no clock on the floor otherwise — and the hour
+    # is asked here rather than after loading the page, because the page has to be sent back to
+    # today (the checks above left it on tomorrow) and that navigation is not worth paying for on
+    # a run that cannot assert anything.
+    hour_now = datetime.datetime.now().hour
+    if 6 <= hour_now < 22:
+        page.goto(f"{BASE}/venues/{venue_id}/bookings")
+        page.wait_for_selector("[data-testid=board-live]")
+        now_hour = f"{hour_now}:00"
+        off_by = page.evaluate(
+            """(hour) => {
+                const at = document.querySelector('[data-testid=board-live]')
+                    .getBoundingClientRect();
+                // The hour labels, one per hour and never spanning — unlike the cells in a
+                // court's row, where a booking of three hours is a single box.
+                const label = [...document.querySelectorAll('.board-hour')]
+                    .find(h => h.textContent.trim() === hour);
+                if (!label) {
+                    return null;
+                }
+                const box = label.getBoundingClientRect();
+                // Negative before the hour starts, zero inside it, positive past its end. On the
+                // stroke of the hour the line sits in the quarter-rem gap between two hours, so
+                // a few pixels either side of the box is still the right hour.
+                return Math.round(Math.max(box.left - at.left, at.left - box.right, 0));
+            }""",
+            now_hour,
+        )
+        check(
+            f"the clock stands on the hour it is ({now_hour})",
+            off_by is not None and off_by <= 6,
+            page,
+        )
 
     # 6. Someone with the permission to look but not to touch sees no doors.
     looker = browser.new_page()

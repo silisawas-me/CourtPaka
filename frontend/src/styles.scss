@@ -275,8 +275,112 @@ body {
 }
 
 /** Form fields fill the card they are in; a phone has no room for anything else. */
-.field {
+.field,
+.field-date,
+.field-range {
   width: 100%;
+}
+
+/*
+ * A day, and a pair of days. A date is a dozen characters; a field stretched across a desk-wide
+ * panel asks the eye to cross an empty box to reach them, and the box reads as the important
+ * thing on the panel because it is the biggest. Named here rather than set on each page because
+ * five of the venue's screens are a day and the things that happened in it.
+ */
+.field-date {
+  max-width: 15rem;
+}
+
+.field-range {
+  max-width: 24rem;
+}
+
+/*
+ * A row of numbers read from across a counter: each is a tile with the number carrying the
+ * weight, not a label with a value after it. They wrap rather than scroll — on a phone two rows
+ * of two is still four numbers, and a row that scrolls sideways hides one (PRD US-25, US-26).
+ */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+}
+
+/* One reading is not a row of them: a lone tile stretched across a desk is a banner. */
+.tiles:has(> :only-child) {
+  grid-template-columns: minmax(7rem, 18rem);
+}
+
+.tile {
+  /* Room for the edge, drawn as a border so the number never sits on top of it. */
+  padding: 0.5rem 0.75rem;
+  border-inline-start: 3px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-small);
+  background: var(--mat-sys-surface-container-high);
+
+  dt {
+    font: var(--mat-sys-label-medium);
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  dd {
+    margin: 0.125rem 0 0;
+    font: var(--mat-sys-headline-small);
+    /* Numbers in a row that are compared to each other, so the digits have to line up. */
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/*
+ * The edge says what kind of number this is, in the colours the rest of the app already reads:
+ * green is an hour being played or money that arrived, amber is money still waited on, red is
+ * money going back out. A plain count is none of those and keeps the plain edge — a colour per
+ * tile would be decoration, and this palette is spent on meaning.
+ */
+.tile-live {
+  border-inline-start-color: var(--status-playing);
+}
+
+.tile-waiting,
+.tile-owed {
+  border-inline-start-color: var(--status-waiting);
+}
+
+.tile-out {
+  border-inline-start-color: var(--status-risk);
+}
+
+/* Money that has not arrived, when there is any. Nothing owed is an ordinary tile. */
+.tile-owed {
+  background: var(--status-waiting-soft);
+
+  dt,
+  dd {
+    color: var(--status-waiting-ink);
+  }
+}
+
+/*
+ * A screen's title and the controls that choose what it is showing, on one line. Written as a
+ * row rather than a title over a field over a button because on a desk those three stacked are
+ * a third of the screen spent before the screen starts — and what the counter came to read is
+ * under them. It wraps on a phone, where stacking is what there is room for anyway.
+ *
+ * Not a panel, so not inside one: a card around a heading and a date is an empty white box that
+ * the eye reads as the first thing on the screen, and putting it there means fighting Material's
+ * card layout and the baseline its form fields sit on.
+ */
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.page-head h2 {
+  margin: 0;
+  font: var(--mat-sys-title-medium);
 }
 
 h3 {
@@ -425,8 +529,12 @@ a {
   flex-wrap: wrap;
   gap: 0 1rem;
 
+  /* Takes the rest of the line, but a line can be a desk wide now, and a note is not. Past
+     about this the box stops reading as a field for a few words and starts reading as the
+     panel's main event. */
   .field {
     flex: 1 1 14rem;
+    max-width: 32rem;
   }
 
   .number {

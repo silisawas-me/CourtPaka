@@ -10,16 +10,10 @@
   background: var(--mat-sys-surface-container-high);
 }
 
+/* The shared title-and-controls row, with the button pushed to the far end of it. */
 .counter-head {
-  display: flex;
-  align-items: baseline;
   justify-content: space-between;
-  gap: 1rem;
-
-  h2 {
-    margin: 0 0 0.5rem;
-    font: var(--mat-sys-title-medium);
-  }
+  margin-bottom: 0.5rem;
 }
 
 /** A long day scrolls in its own box rather than pushing the page sideways. */

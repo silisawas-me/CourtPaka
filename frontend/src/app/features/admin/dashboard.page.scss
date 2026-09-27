@@ -6,17 +6,6 @@
   gap: var(--stack);
 }
 
-.range-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 1rem;
-}
-
-.range-field {
-  flex: 1 1 20rem;
-}
-
 .lead-label {
   margin: 0;
   font: var(--mat-sys-body-medium);
@@ -30,22 +19,6 @@
   .unit {
     font: var(--mat-sys-title-medium);
     color: var(--mat-sys-on-surface-variant);
-  }
-}
-
-.figures {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem 2rem;
-  margin: 0 0 0.75rem;
-
-  dt {
-    font: var(--mat-sys-label-large);
-  }
-
-  dd {
-    margin: 0.25rem 0 0;
-    font: var(--mat-sys-title-large);
   }
 }
 

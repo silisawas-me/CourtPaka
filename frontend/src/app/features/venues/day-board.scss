@@ -8,11 +8,23 @@
   /* A grid item is as wide as its content unless it is told otherwise, and this one's content is
      a day of hours — without this the board pushes the whole page wider than the phone. */
   min-width: 0;
+
+  /*
+   * The board's tracks, named once because the clock is placed by arithmetic over them: written
+   * as literals they were restated in three places, and the court column being `max-content`
+   * meant a long name widened track one and walked the clock left by the difference.
+   */
+  --court: 7rem;
+  --board-gap: 0.25rem;
+  --hour: 5.5rem;
 }
 
 /* A day of sixteen hours does not fit a phone, and squeezing it would make the blocks unreadable. */
 .board-scroll {
   min-width: 0;
+  /* What the hour tracks are measured against. Safe from a cycle: the thing being sized is the
+     board inside it, which takes its width from its own content, not from this box. */
+  container-type: inline-size;
   overflow-x: auto;
   margin-inline: -0.5rem;
   padding-inline: 0.5rem;
@@ -35,6 +47,14 @@
 
 .board {
   position: relative;
+  /*
+   * As wide as the day, and never narrower than the window. Without `max-content` the box stays
+   * the width of the scroll port while the rows inside it overflow — the day is drawn correctly
+   * either way, but anything measured against the box is measured against the window instead of
+   * the day, which put the clock over seven in the morning on a phone. `min-width` is what lets
+   * the hour tracks share out a desk's spare width instead of sitting at their floor.
+   */
+  width: max-content;
   min-width: 100%;
   display: grid;
   gap: 0.25rem;
@@ -48,9 +68,26 @@
    * price but not for a person: every block on a phone said "bo…" and told the counter nothing.
    * The board scrolls anyway, so the hours are given room to carry a name instead.
    */
-  grid-template-columns: minmax(7rem, max-content) repeat(var(--hours), minmax(5.5rem, 1fr));
-  gap: 0.25rem;
+  grid-template-columns: var(--court) repeat(var(--hours), minmax(var(--hour), 1fr));
+  gap: var(--board-gap);
   align-items: stretch;
+}
+
+/*
+ * That floor is the phone's, where the board scrolls and the minimum is the only thing setting
+ * the width of a block. A desk is the other case: there is room for most of a day at once, and a
+ * counter looking at the floor wants to see the evening without dragging it into view. So the
+ * minimum is lowered until the tracks can share out the width they have, and the name a narrow
+ * block cannot hold is one the list under the board is holding anyway.
+ *
+ * Asked of the box the board is read through, not of the window. The two part company at exactly
+ * the width this would otherwise be keyed to: 60rem is where the venue's rail appears, so the
+ * window growing past it is the moment the board's own room *shrinks* by fourteen of them.
+ */
+@container (min-width: 46rem) {
+  .board {
+    --hour: 3.5rem;
+  }
 }
 
 .board-hour {
@@ -63,7 +100,11 @@
   display: flex;
   align-items: center;
   font: var(--mat-sys-body-medium);
+  /* A fixed track, so a long name is cut rather than pushing the day along. The list under the
+     board carries every name in full. */
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .board-cell,
@@ -165,7 +206,9 @@
   position: absolute;
   top: 1.25rem;
   bottom: 0;
-  left: calc(7rem + 0.25rem + (100% - 7.25rem) * var(--at) / 100);
+  left: calc(
+    var(--court) + var(--board-gap) + (100% - var(--court) - var(--board-gap)) * var(--at) / 100
+  );
   width: 2px;
   background: var(--mat-sys-error);
   pointer-events: none;

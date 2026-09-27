@@ -24,24 +24,6 @@
   }
 }
 
-// A line of readings that wraps, each label over its number — not equal tiles, since they are
-// different things and are read in the order they are written.
-.figures {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem 2rem;
-  margin: 0 0 0.75rem;
-
-  dt {
-    font: var(--mat-sys-label-large);
-  }
-
-  dd {
-    margin: 0.25rem 0 0;
-    font: var(--mat-sys-title-large);
-  }
-}
-
 /*
  * Where the difference might have come from: set apart from the count itself, because the count
  * is a fact and this is a list of coincidences worth walking over to check.

@@ -56,8 +56,14 @@
       }
 
       @if (liveAt(); as at) {
-        <!-- Where the clock is, so the counter reads the floor without doing the arithmetic. -->
-        <span class="board-live" data-testid="board-live" [style.--at.%]="at"></span>
+        <!--
+          Where the clock is, so the counter reads the floor without doing the arithmetic. The
+          share is bound unitless because the rule multiplies a length by it: with a unit it
+          would be a percentage, multiplying a length by a percentage is not arithmetic CSS
+          does, and the whole calc falls back to `auto` — which stands the clock against the
+          left edge of the floor at every hour of the day.
+        -->
+        <span class="board-live" data-testid="board-live" [style.--at]="at"></span>
       }
     </div>
   </div>
