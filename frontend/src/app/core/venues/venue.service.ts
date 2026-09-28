@@ -138,7 +138,12 @@ export interface VenueToday {
   name: string;
   status: VenueStatus;
   keptBaht: number;
+  /** The same weekday last week, as it stood at this minute. */
+  lastWeekKeptBaht: number;
   bookings: number;
+  /** Every booking on today's floor still standing, played or to come — and by kind. */
+  todayBookings: number;
+  byKind: KindCount[];
   sellableHours: number;
   bookedHours: number;
   /** Null when nothing was on sale today — not the same as none of it used. */
@@ -151,10 +156,19 @@ export interface VenueToday {
   shutNow: string[];
 }
 
+/** How many of today's bookings are of one kind (App / WalkIn / Series / Package). */
+export interface KindCount {
+  kind: string;
+  count: number;
+}
+
 export interface OwnerToday {
   date: string;
   keptBaht: number;
+  lastWeekKeptBaht: number;
   bookings: number;
+  todayBookings: number;
+  byKind: KindCount[];
   dueNow: number;
   venues: VenueToday[];
 }

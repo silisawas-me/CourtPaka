@@ -8,12 +8,17 @@
           <span class="kpi-value" data-testid="overview-kept"
             >฿{{ day.keptBaht | baht: i18n.locale() }}</span
           >
-          <span class="kpi-note">{{ day.venues.length }} {{ i18n.t('overview.branches') }}</span>
+          @if (change(); as percent) {
+            <!-- Against the same weekday last week, at this same minute of it. -->
+            <span class="kpi-note" [class.up]="percent > 0" data-testid="overview-change"
+              >{{ percent > 0 ? '+' : '' }}{{ percent }}% {{ lastWeek() }}</span
+            >
+          }
         </div>
         <div class="kpi">
           <span class="kpi-label">{{ i18n.t('overview.bookings') }}</span>
-          <span class="kpi-value" data-testid="overview-bookings">{{ day.bookings }}</span>
-          <span class="kpi-note">{{ i18n.t('overview.bookingsNote') }}</span>
+          <span class="kpi-value" data-testid="overview-bookings">{{ day.todayBookings }}</span>
+          <span class="kpi-note" data-testid="overview-kinds">{{ kinds() }}</span>
         </div>
         <div class="kpi">
           <span class="kpi-label">{{ i18n.t('overview.dueNow') }}</span>
@@ -46,7 +51,7 @@
             <span class="heat-rev-head" role="columnheader">{{ i18n.t('overview.revenue') }}</span>
           </div>
 
-          @for (venue of day.venues; track venue.venueId) {
+          @for (venue of rows(); track venue.venueId) {
             <a
               class="heat-row venue"
               role="row"
@@ -95,6 +100,9 @@
         }
       </div>
     </section>
+  } @else {
+    <!-- Nobody's reports to read here (staff at several venues): the branches are on the bar. -->
+    <p class="muted pick" data-testid="overview-pick">{{ i18n.t('overview.pickBranch') }}</p>
   }
 } @else if (error(); as key) {
   <p class="form-error" data-testid="overview-error">{{ i18n.t(key) }}</p>

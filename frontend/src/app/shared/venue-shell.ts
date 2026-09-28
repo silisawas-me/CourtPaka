@@ -2,6 +2,7 @@ import { Component, computed, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { catchError, filter, map, merge, of, startWith, switchMap } from 'rxjs';
+import { venueToday } from '../core/i18n/plain-date';
 import { TranslationService } from '../core/i18n/translation.service';
 import { Venue, VenueService } from '../core/venues/venue.service';
 import { ALL_VENUES, VENUE_OTHER, VENUE_SECTIONS, VenueLink, waitingOn } from './venue-nav';
@@ -76,6 +77,16 @@ export class VenueShell {
   );
 
   protected readonly onAll = computed(() => this.venueId() === ALL_VENUES);
+
+  /**
+   * The day beside the branches on the overview, as the design writes it ("พุธ 30 ก.ย."): the
+   * overview is always today, so the day is said rather than picked.
+   */
+  protected readonly todayLabel = computed(() => {
+    const day = venueToday();
+    const date = new Intl.DateTimeFormat(this.i18n.locale(), { day: 'numeric', month: 'short' });
+    return `${this.i18n.t(`overview.weekday.${day.getDay()}`)} ${date.format(day)}`;
+  });
 
   /** The walk-in modal is open (owner app PR-3). */
   protected readonly walkIn = signal(false);

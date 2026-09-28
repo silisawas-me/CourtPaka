@@ -44,6 +44,12 @@ public sealed class AppOptions
     public bool SeedDevelopmentData { get; init; }
 
     /// <summary>
+    /// Four made-up branches with a fortnight of trade (DevelopmentMockData), so the owner app
+    /// has something to look like locally. Development only, and only on top of the seed above.
+    /// </summary>
+    public bool SeedMockData { get; init; }
+
+    /// <summary>
     /// Where the data protection key ring lives. Without it every restart signs users out,
     /// because the keys that encrypt the auth cookie are regenerated in memory.
     /// </summary>

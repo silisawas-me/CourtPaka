@@ -76,6 +76,10 @@
     <span class="pill pill-only" data-testid="venue-name">{{ venue.name }}</span>
   }
 
+  @if (onAll()) {
+    <span class="top-date" data-testid="top-date">{{ todayLabel() }}</span>
+  }
+
   @if (views().length > 0) {
     <nav class="pills views" data-testid="schedule-views" [attr.aria-label]="i18n.t('nav.view')">
       @for (view of views(); track view.testId) {

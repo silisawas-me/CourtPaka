@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using CourtBooking.Api.Bookings;
 using CourtBooking.Api.Data;
+using CourtBooking.Api.Localization;
 using CourtBooking.Api.Tests.Infrastructure;
 using CourtBooking.Api.Venues;
 using Microsoft.EntityFrameworkCore;
@@ -98,6 +99,55 @@ public sealed class OwnerTodayTests(ApiTestFixture api) : IClassFixture<ApiTestF
         // And the hours add up to the day, which is how the day is counted.
         Assert.Equal(overview.SellableHours, overview.Hours.Sum(hour => hour.Sellable));
         Assert.Equal(overview.BookedHours, overview.Hours.Sum(hour => hour.Booked));
+    }
+
+    /// <summary>
+    /// The number under today's money is the same weekday last week, asked as it stood at this
+    /// minute — a morning is not measured against a whole finished day (owner app overview).
+    /// </summary>
+    [Fact]
+    public async Task Last_week_is_asked_the_same_question_at_the_same_time()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, played) = await scenario.ConfirmedBookingAsync(owner, venue.Id, courts[0], 18);
+        // Played from midnight to one, a week ago today.
+        var lastWeek = PlatformRequirements.BangkokHour(VenueScenario.Today.AddDays(-7), 0);
+        await scenario.StartsInAsync(played.Id, lastWeek - DateTimeOffset.UtcNow);
+
+        var only = Assert.Single((await TodayAsync(owner)).Venues);
+
+        // Before one in the morning, that game was still on at this minute last week: not yet kept.
+        var overByNow = lastWeek.AddHours(1) <= DateTimeOffset.UtcNow.AddDays(-7);
+        Assert.Equal(overByNow ? played.TotalBaht : 0m, only.LastWeekKeptBaht);
+        Assert.Equal(0m, only.KeptBaht);
+    }
+
+    /// <summary>
+    /// Today's bookings are the ones still standing, by kind — the note under the count reads
+    /// "walk-in 38 · group 21". A booking the venue called off is not one of them.
+    /// </summary>
+    [Fact]
+    public async Task Todays_bookings_are_the_standing_ones_by_kind()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync(courts: 2);
+        var (_, kept) = await scenario.ConfirmedBookingAsync(owner, venue.Id, courts[0], 18);
+        var (_, called) = await scenario.ConfirmedBookingAsync(owner, venue.Id, courts[1], 18);
+        (await owner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/bookings/{called.Id}/cancel",
+                new { reason = "VenueInitiated", note = "rain" }))
+            .EnsureSuccessStatusCode();
+        // Both onto today's noon, whenever the test runs: an hour from now is tomorrow at 23:30.
+        var noon = PlatformRequirements.BangkokHour(VenueScenario.Today, 12) - DateTimeOffset.UtcNow;
+        await scenario.StartsInAsync(kept.Id, noon);
+        await scenario.StartsInAsync(called.Id, noon);
+
+        var overview = await TodayAsync(owner);
+        var only = Assert.Single(overview.Venues);
+
+        Assert.Equal(1, only.TodayBookings);
+        Assert.Equal([new KindCountResponse(BookingKinds.App, 1)], only.ByKind);
+        Assert.Equal(1, overview.TodayBookings);
+        Assert.Equal(only.ByKind, overview.ByKind);
     }
 
     /// <summary>

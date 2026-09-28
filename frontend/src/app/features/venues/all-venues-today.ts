@@ -28,6 +28,18 @@ export class AllVenuesToday {
   protected readonly today = signal<OwnerToday | null>(null);
   protected readonly error = signal<string | null>(null);
 
+  /**
+   * The rows of the grid: every branch that trades, and a branch not yet trading only when it has
+   * hours on sale. A venue still applying has nothing to compare, and a row per application would
+   * push the branches that do trade off the screen.
+   */
+  protected readonly rows = computed(() =>
+    (this.today()?.venues ?? []).filter(
+      (venue) =>
+        venue.status === 'Approved' || venue.status === 'Suspended' || venue.sellableHours > 0,
+    ),
+  );
+
   /** Every hour any venue sells today, earliest opening to latest close, one column each. */
   protected readonly hours = computed(() => {
     const all = (this.today()?.venues ?? []).flatMap((venue) => venue.hours.map((h) => h.hour));
@@ -36,6 +48,31 @@ export class AllVenuesToday {
     }
     const first = Math.min(...all);
     return Array.from({ length: Math.max(...all) - first + 1 }, (_, index) => first + index);
+  });
+
+  /** Up or down on the same weekday last week, whole percent; null when that day had nothing. */
+  protected readonly change = computed(() => {
+    const day = this.today();
+    return day && day.lastWeekKeptBaht > 0
+      ? Math.round(((day.keptBaht - day.lastWeekKeptBaht) / day.lastWeekKeptBaht) * 100)
+      : null;
+  });
+
+  /** "from Wednesday last week", named from the day the server says today is. */
+  protected readonly lastWeek = computed(() => {
+    const date = this.today()?.date;
+    const weekday = date ? new Date(`${date}T00:00:00Z`).getUTCDay() : 0;
+    return this.i18n
+      .t('overview.vsLastWeek')
+      .replace('{day}', this.i18n.t(`overview.weekday.${weekday}`));
+  });
+
+  /** Today's bookings by kind, as the design's note has them: "Walk-in 38 · ก๊วน 21". */
+  protected readonly kinds = computed(() => {
+    const all = this.today()?.byKind ?? [];
+    return all.length === 0
+      ? this.i18n.t('overview.noBookings')
+      : all.map((one) => `${this.i18n.t('overview.kind.' + one.kind)} ${one.count}`).join(' · ');
   });
 
   /** Bookings past the venue's grace, across every venue — the note under "waiting now". */
