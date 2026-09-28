@@ -974,5 +974,7 @@
   "overview.weekday.3": "Wednesday",
   "overview.weekday.4": "Thursday",
   "overview.weekday.5": "Friday",
-  "overview.weekday.6": "Saturday"
+  "overview.weekday.6": "Saturday",
+  "overview.earlier": "Earlier hours",
+  "overview.later": "Later hours"
 }

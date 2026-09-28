@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { errorKey } from '../../core/http/api-error';
+import { venueNow } from '../../core/i18n/plain-date';
 import { BahtPipe } from '../../core/i18n/baht.pipe';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { OwnerToday, VenueService, VenueToday } from '../../core/venues/venue.service';
@@ -14,6 +15,9 @@ import { OwnerToday, VenueService, VenueToday } from '../../core/venues/venue.se
  * Drawn only when there is a venue whose reports this person may read: staff who take bookings
  * but do not read the money see nothing here, the same as on the dashboard (PRD US-14).
  */
+/** As many hours as the design draws across the card. */
+const HOURS_SHOWN = 9;
+
 @Component({
   selector: 'app-all-venues-today',
   imports: [BahtPipe, RouterLink],
@@ -40,8 +44,8 @@ export class AllVenuesToday {
     ),
   );
 
-  /** Every hour any venue sells today, earliest opening to latest close, one column each. */
-  protected readonly hours = computed(() => {
+  /** Every hour any venue sells today, earliest opening to latest close. */
+  private readonly allHours = computed(() => {
     const all = (this.today()?.venues ?? []).flatMap((venue) => venue.hours.map((h) => h.hour));
     if (all.length === 0) {
       return [];
@@ -49,6 +53,45 @@ export class AllVenuesToday {
     const first = Math.min(...all);
     return Array.from({ length: Math.max(...all) - first + 1 }, (_, index) => first + index);
   });
+
+  /** Where the window starts, once somebody has moved it; until then it follows the clock. */
+  private readonly start = signal<number | null>(null);
+
+  /**
+   * The hours drawn: a window of nine, as the design has it, so a cell is wide enough to read at
+   * a glance — starting two hours before now, so what just happened and the evening ahead are
+   * both in it. ‹ and › walk it along the day.
+   */
+  protected readonly hours = computed(() => {
+    const all = this.allHours();
+    if (all.length <= HOURS_SHOWN) {
+      return all;
+    }
+    return all.slice(this.from(), this.from() + HOURS_SHOWN);
+  });
+
+  protected readonly canGoEarlier = computed(() => this.from() > 0);
+  protected readonly canGoLater = computed(
+    () => this.from() + HOURS_SHOWN < this.allHours().length,
+  );
+
+  private readonly from = computed(() => {
+    const all = this.allHours();
+    const last = Math.max(0, all.length - HOURS_SHOWN);
+    const chosen = this.start() ?? all.indexOf(venueNow().hour - 2);
+    return Math.min(
+      last,
+      Math.max(0, chosen === -1 ? (venueNow().hour < all[0] ? 0 : last) : chosen),
+    );
+  });
+
+  protected earlier(): void {
+    this.start.set(Math.max(0, this.from() - 3));
+  }
+
+  protected later(): void {
+    this.start.set(Math.min(this.allHours().length - HOURS_SHOWN, this.from() + 3));
+  }
 
   /** Up or down on the same weekday last week, whole percent; null when that day had nothing. */
   protected readonly change = computed(() => {

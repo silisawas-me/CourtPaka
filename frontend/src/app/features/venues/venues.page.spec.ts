@@ -118,6 +118,56 @@ describe('VenuesPage', () => {
     expect(hours[1].classList).toContain('off');
   });
 
+  /*
+   * Nine hours across the card, as the design draws them, starting two before now — and ‹ › walk
+   * the window along the day.
+   */
+  it('draws nine hours around now, and walks them along the day', () => {
+    // 19:00 in Bangkok.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-30T12:00:00Z'));
+    try {
+      const allDay = Array.from({ length: 18 }, (_, index) => ({
+        hour: 6 + index,
+        sellable: 4,
+        booked: 1,
+      }));
+      httpMock
+        .expectOne('/api/venues/mine/today')
+        .flush({ ...today, venues: [{ ...venue, hours: allDay }] });
+      fixture.detectChanges();
+
+      const heads = () =>
+        [...fixture.nativeElement.querySelectorAll('.heat-hour')].map((one: Element) =>
+          one.textContent?.trim(),
+        );
+      // Two before now would be 17:00, but the day ends at midnight: the last nine, 15:00 on.
+      expect(heads()).toEqual([
+        '15:00',
+        '16:00',
+        '17:00',
+        '18:00',
+        '19:00',
+        '20:00',
+        '21:00',
+        '22:00',
+        '23:00',
+      ]);
+
+      elementOf<HTMLButtonElement>(fixture, 'heat-earlier')!.click();
+      fixture.detectChanges();
+      expect(heads()[0]).toBe('12:00');
+      expect(heads()).toHaveLength(9);
+      // The last hours are already in view: there is nothing later to walk to.
+      elementOf<HTMLButtonElement>(fixture, 'heat-later')!.click();
+      fixture.detectChanges();
+      expect(heads()[0]).toBe('15:00');
+      expect(elementOf<HTMLButtonElement>(fixture, 'heat-later')!.disabled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('leaves out a venue still applying, which has nothing on sale to compare', () => {
     const applying: VenueToday = {
       ...venue,

@@ -198,7 +198,7 @@ public static class DevelopmentSeeder
             venueId, CancellationPolicy.Default, ownerId, time.GetUtcNow()));
     }
 
-    private static async Task<AppUser> EnsureUserAsync(UserManager<AppUser> users, string email)
+    internal static async Task<AppUser> EnsureUserAsync(UserManager<AppUser> users, string email)
     {
         var existing = await users.FindByEmailAsync(email);
         if (existing is not null)
