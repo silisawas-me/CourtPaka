@@ -7,7 +7,10 @@ describe('the two doors into the venue side', () => {
   it('lets an owner in at the admin door, and staff not', () => {
     expect(refusal('admin', [owner], false)).toBeNull();
     expect(refusal('admin', [staff], false)).toBe('login.door.notAnOwner');
-    expect(refusal('admin', [], false)).toBe('login.door.notAnOwner');
+    // Somebody with no venue at all came in on the platform's invitation (owner-complete 3a):
+    // the owner's door takes them to applying for one.
+    expect(refusal('admin', [], false)).toBeNull();
+    expect(landing('admin', [], false)).toBe('/venues/apply');
   });
 
   it("lets the platform's own people in at the admin door without a venue", () => {

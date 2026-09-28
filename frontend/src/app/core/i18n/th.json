@@ -1061,5 +1061,16 @@
   "hours.minutes": "นาที",
   "hours.graceLess": "ลด 5 นาที",
   "hours.graceMore": "เพิ่ม 5 นาที",
-  "hours.graceSave": "บันทึก"
+  "hours.graceSave": "บันทึก",
+  "error.auth.invitation_required": "ตอนนี้สมัครได้เฉพาะอีเมลที่ได้รับคำเชิญ ติดต่อทีมงาน badPaka หรือเจ้าของสนาม",
+  "error.auth.already_has_account": "อีเมลนี้มีบัญชีอยู่แล้ว เจ้าของเข้าสู่ระบบแล้วสมัครสนามได้เลย",
+  "inviteOwner.title": "เชิญเจ้าของสนามใหม่",
+  "inviteOwner.lead": "สมัครได้เฉพาะคนที่ได้รับคำเชิญ ส่งลิงก์สร้างบัญชีให้เจ้าของสนาม แล้วเขาจะกรอกข้อมูลสนามให้ตรวจ",
+  "inviteOwner.email": "อีเมลเจ้าของสนาม",
+  "inviteOwner.language": "ภาษาของอีเมล",
+  "inviteOwner.send": "ส่งคำเชิญ",
+  "inviteOwner.done": "ส่งคำเชิญแล้ว:",
+  "inviteOwner.state.waiting": "รอสมัคร",
+  "inviteOwner.state.accepted": "สมัครแล้ว",
+  "inviteOwner.state.expired": "หมดอายุ"
 }

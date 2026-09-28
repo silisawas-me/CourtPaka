@@ -1061,5 +1061,16 @@
   "hours.minutes": "min",
   "hours.graceLess": "5 minutes less",
   "hours.graceMore": "5 minutes more",
-  "hours.graceSave": "Save"
+  "hours.graceSave": "Save",
+  "error.auth.invitation_required": "Sign-up is by invitation only. Ask the badPaka team or the venue's owner.",
+  "error.auth.already_has_account": "This address has an account already; they can sign in and apply for a venue.",
+  "inviteOwner.title": "Invite a new venue owner",
+  "inviteOwner.lead": "Sign-up is by invitation. Send an owner the link to make an account; they then fill in their venue for review.",
+  "inviteOwner.email": "Owner's email",
+  "inviteOwner.language": "Email language",
+  "inviteOwner.send": "Send invitation",
+  "inviteOwner.done": "Invitation sent:",
+  "inviteOwner.state.waiting": "Waiting",
+  "inviteOwner.state.accepted": "Signed up",
+  "inviteOwner.state.expired": "Expired"
 }

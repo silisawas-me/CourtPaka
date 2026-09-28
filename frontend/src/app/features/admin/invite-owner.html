@@ -1,0 +1,64 @@
+<mat-card data-testid="invite-owner">
+  <mat-card-header>
+    <mat-card-title>{{ i18n.t('inviteOwner.title') }}</mat-card-title>
+    <mat-card-subtitle>{{ i18n.t('inviteOwner.lead') }}</mat-card-subtitle>
+  </mat-card-header>
+  <mat-card-content>
+    <form class="row" (submit)="$event.preventDefault(); invite()">
+      <label class="field">
+        <span>{{ i18n.t('inviteOwner.email') }}</span>
+        <input
+          type="email"
+          data-testid="invite-owner-email"
+          autocomplete="off"
+          [value]="email()"
+          (input)="email.set($any($event.target).value)"
+        />
+      </label>
+      <div class="langs" role="group" [attr.aria-label]="i18n.t('inviteOwner.language')">
+        @for (one of languages; track one) {
+          <button
+            type="button"
+            [class.on]="language() === one"
+            [attr.aria-pressed]="language() === one"
+            [attr.data-testid]="'invite-owner-lang-' + one"
+            (click)="language.set(one)"
+          >
+            {{ i18n.t('app.language.short.' + one) }}
+          </button>
+        }
+      </div>
+      <button
+        matButton="filled"
+        type="submit"
+        data-testid="invite-owner-send"
+        [disabled]="busy() || email().trim() === ''"
+      >
+        {{ i18n.t('inviteOwner.send') }}
+      </button>
+    </form>
+
+    @if (error(); as key) {
+      <p class="form-error" data-testid="invite-owner-error">{{ i18n.t(key) }}</p>
+    }
+    @if (done(); as to) {
+      <p class="success" data-testid="invite-owner-done" role="status">
+        {{ i18n.t('inviteOwner.done') }} {{ to }}
+      </p>
+    }
+
+    @if (sent().length > 0) {
+      <ul class="sent" data-testid="invite-owner-list">
+        @for (one of sent(); track one.id) {
+          <li [attr.data-testid]="'owner-invitation-' + one.email">
+            <span class="who">{{ one.email }}</span>
+            <span class="muted">{{ one.createdAt | appDateTime: i18n.locale() }}</span>
+            <span class="chip" [class]="'chip ' + standing(one)">{{
+              i18n.t('inviteOwner.state.' + standing(one))
+            }}</span>
+          </li>
+        }
+      </ul>
+    }
+  </mat-card-content>
+</mat-card>

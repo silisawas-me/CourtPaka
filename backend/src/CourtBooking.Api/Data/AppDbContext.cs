@@ -22,6 +22,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<VenueInvitation> VenueInvitations => Set<VenueInvitation>();
 
+    public DbSet<OwnerInvitation> OwnerInvitations => Set<OwnerInvitation>();
+
     public DbSet<Court> Courts => Set<Court>();
 
     public DbSet<CourtClosure> CourtClosures => Set<CourtClosure>();
@@ -215,6 +217,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
                 .WithMany()
                 .HasForeignKey(m => m.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<OwnerInvitation>(invitation =>
+        {
+            invitation.Property(i => i.Email).HasMaxLength(OwnerInvitation.EmailMaxLength);
+            invitation.Property(i => i.NormalizedEmail).HasMaxLength(OwnerInvitation.EmailMaxLength);
+            invitation.Property(i => i.Language).HasMaxLength(8);
+            // One live invitation per address, held by the database as a venue's is.
+            invitation.HasIndex(i => i.NormalizedEmail).IsUnique().HasFilter("\"AcceptedAt\" IS NULL");
         });
 
         builder.Entity<VenueInvitation>(invitation =>

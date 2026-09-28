@@ -67,6 +67,16 @@ public static class AuthEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.InvalidEmail);
         }
 
+        // Sign-up is closed (owner-complete 3a): only an address somebody invited may become an
+        // account. Answered the same whether or not the address has an account already, so it
+        // tells nobody who is a member.
+        if (!options.Value.OpenSignUp
+            && !await OwnerInvitations.InvitedAsync(
+                database, userManager.NormalizeEmail(request.Email), timeProvider.GetUtcNow(), cancellationToken))
+        {
+            return ApiProblem.Of(StatusCodes.Status403Forbidden, AuthErrorCodes.InvitationRequired);
+        }
+
         string? phone = null;
         if (!string.IsNullOrWhiteSpace(request.PhoneNumber)
             && (phone = PhoneNumbers.Normalize(request.PhoneNumber)) is null)
@@ -100,6 +110,8 @@ public static class AuthEndpoints
                     AcceptedAt = timeProvider.GetUtcNow(),
                 });
                 await database.SaveChangesAsync(cancellationToken);
+                await OwnerInvitations.SpendAsync(
+                    database, user.NormalizedEmail!, timeProvider.GetUtcNow(), cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
 
                 await SendVerificationEmailAsync(user, userManager, emailSender, options.Value, CancellationToken.None);

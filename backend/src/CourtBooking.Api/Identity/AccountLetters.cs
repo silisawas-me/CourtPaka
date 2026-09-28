@@ -14,6 +14,7 @@ public static class AccountLetters
     public const string AccountExistsTemplate = "auth.account_exists";
     public const string LockedTemplate = "auth.locked";
     public const string InvitationTemplate = "venue.invitation";
+    public const string OwnerInvitationTemplate = "auth.owner_invitation";
 
     public static (string Subject, string Body) Verify(string language, string link) =>
         Thai(language)
@@ -53,6 +54,18 @@ public static class AccountLetters
             : ($"badPaka: you were invited to {venueName}",
                 $"{venueName} has invited you to join its staff. Accept within 7 days:\n\n"
                 + $"{link}\n\nSign in with this address before accepting.");
+
+    /// <summary>The platform inviting somebody to bring their venue on (owner-complete 3a).</summary>
+    public static (string Subject, string Body) OwnerInvitation(string language, string link) =>
+        Thai(language)
+            ? ("badPaka: เชิญคุณเปิดสนามบน badPaka",
+                "badPaka เชิญคุณเปิดสนามของคุณบนระบบ กดลิงก์นี้เพื่อสร้างบัญชีด้วยอีเมลนี้ภายใน 14 วัน "
+                + "แล้วกรอกข้อมูลสนามให้ทีมงานตรวจ\n\n"
+                + $"{link}\n\nถ้าคุณไม่รู้จัก badPaka ไม่ต้องทำอะไร")
+            : ("badPaka: you are invited to bring your venue to badPaka",
+                "badPaka has invited you to run your venue on it. Create an account with this address "
+                + "within 14 days, then fill in your venue for us to review:\n\n"
+                + $"{link}\n\nIf you do not know badPaka, you can ignore this.");
 
     private static bool Thai(string language) => language != SupportedLanguages.English;
 

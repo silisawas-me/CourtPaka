@@ -62,6 +62,8 @@ public sealed class ApiFactory(string connectionString) : WebApplicationFactory<
         builder.UseSetting("App:RunCaretaker", "false");
         // The booker mail tests are about what it says; the switch is tested on its own.
         builder.UseSetting("App:TellBookers", "true");
+        // Scenarios make bookers freely; closed sign-up is tested on its own (OwnerInvitationTests).
+        builder.UseSetting("App:OpenSignUp", "true");
 
         // The suite registers a user per test; at the production hashing cost that alone would take
         // longer than everything else it does. Nothing here tests the hash itself.

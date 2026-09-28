@@ -7,7 +7,14 @@
       <p>{{ i18n.t('register.done.body') }}</p>
     </mat-card-content>
     <mat-card-actions>
-      <a matButton="filled" routerLink="/login">{{ i18n.t('login.title') }}</a>
+      <!-- An owner the platform invited signs in at the owner's door, which leads to applying. -->
+      <a
+        matButton="filled"
+        routerLink="/login"
+        [queryParams]="invitedAs() === 'owner' ? { as: 'admin' } : {}"
+        data-testid="register-to-login"
+        >{{ i18n.t('login.title') }}</a
+      >
     </mat-card-actions>
   </mat-card>
 } @else {

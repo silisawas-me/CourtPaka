@@ -122,6 +122,13 @@ public sealed class AppOptions
     /// </summary>
     public bool TellBookers { get; init; }
 
+    /// <summary>
+    /// Anybody may sign up (email or LINE). Off in every deployment (owner-complete 3a): only an
+    /// address somebody invited — a venue its staff, the platform an owner — may become an
+    /// account. Local stacks and tests turn it on, because their scripts make bookers freely.
+    /// </summary>
+    public bool OpenSignUp { get; init; }
+
     /// <summary>Signing in with LINE (PRD US-01); off until a channel is configured.</summary>
     public LineOptions Line { get; init; } = new();
 }

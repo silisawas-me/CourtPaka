@@ -273,6 +273,12 @@ public static class LineLoginEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.UnsupportedLanguage);
         }
 
+        // LINE signs up bookers only, and nobody signs up by themselves any more (owner-complete 3a).
+        if (!options.Value.OpenSignUp)
+        {
+            return ApiProblem.Of(StatusCodes.Status403Forbidden, AuthErrorCodes.InvitationRequired);
+        }
+
         if (request.PrivacyPolicyVersion != options.Value.PrivacyPolicyVersion)
         {
             return ApiProblem.Of(StatusCodes.Status409Conflict, AuthErrorCodes.PrivacyPolicyOutdated);

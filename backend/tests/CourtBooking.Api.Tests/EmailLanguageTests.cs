@@ -23,6 +23,7 @@ public sealed class EmailLanguageTests
                  {
                      AccountLetters.Verify(language, Link),
                      AccountLetters.Invitation(language, "Test Court", Link),
+                     AccountLetters.OwnerInvitation(language, Link),
                  })
         {
             Assert.Contains(Link, body);

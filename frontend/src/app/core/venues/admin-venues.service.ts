@@ -92,9 +92,26 @@ export interface CommissionRates {
   rates: CommissionRate[];
 }
 
+/** The platform's invitation to somebody to bring their venue on (owner-complete 3a). */
+export interface OwnerInvitation {
+  id: string;
+  email: string;
+  createdAt: string;
+  expiresAt: string;
+  acceptedAt: string | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AdminVenuesService {
   private readonly http = inject(HttpClient);
+
+  ownerInvitations(): Observable<OwnerInvitation[]> {
+    return this.http.get<OwnerInvitation[]>('/api/admin/owner-invitations');
+  }
+
+  inviteOwner(email: string, language: string): Observable<OwnerInvitation> {
+    return this.http.post<OwnerInvitation>('/api/admin/owner-invitations', { email, language });
+  }
 
   list(status?: VenueStatus): Observable<AdminVenue[]> {
     return this.http.get<AdminVenue[]>('/api/admin/venues', {

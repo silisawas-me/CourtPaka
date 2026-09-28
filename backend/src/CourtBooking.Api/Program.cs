@@ -282,6 +282,7 @@ api.MapAuthEndpoints();
 api.MapVenueEndpoints();
 api.MapAdminVenueEndpoints();
 api.MapAdminUserEndpoints();
+api.MapOwnerInvitationEndpoints();
 api.MapPlatformDashboardEndpoints();
 api.MapComplaintEndpoints();
 // Looking is public; booking is not (PRD US-02).
