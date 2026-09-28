@@ -47,6 +47,8 @@ services:
       App__SeedMockData: "${SEED_MOCK_DATA:-true}"
       # "1" / "1" signs in as the owner of the mock branches (Development only).
       App__DevQuickLogin: "true"
+      # Booker emails/LINE link to pages that were taken out; off until a booker app (TELL_BOOKERS=true).
+      App__TellBookers: "${TELL_BOOKERS:-false}"
       # Keeps auth cookies valid across restarts.
       App__DataProtectionKeysPath: "/keys"
       # End-to-end runs come from one IP; the deployed default of 10/minute is for real users.

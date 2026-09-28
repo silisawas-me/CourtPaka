@@ -115,6 +115,13 @@ public sealed class AppOptions
     /// </summary>
     public bool RunCaretaker { get; init; } = true;
 
+    /// <summary>
+    /// Emailing and messaging bookers about their bookings (PRD US-06, US-34). Off: the booker's
+    /// pages were taken out of the app (docs/plan/cut-booker.md), so every message would link to
+    /// a page that does not exist. On again when there is a booker-side app.
+    /// </summary>
+    public bool TellBookers { get; init; }
+
     /// <summary>Signing in with LINE (PRD US-01); off until a channel is configured.</summary>
     public LineOptions Line { get; init; } = new();
 }
