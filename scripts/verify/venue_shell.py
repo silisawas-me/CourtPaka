@@ -1,6 +1,7 @@
 """The venue's own shell: a sidebar on a desk, a bar under a thumb on a phone (US-25)."""
 
 from harness import (
+    open_more,
     BASE,
     OWNER,
     Checks,
@@ -22,6 +23,11 @@ with sync_playwright() as p:
     sign_in(desk, OWNER)
 
     desk.goto(f"{BASE}/venues/{venue_id}/timeline")
+    desk.wait_for_selector("[data-testid=nav-more]")
+    check("the rail shows the design's four sections, the rest folded under one line",
+          desk.locator(".side-link.section").count() == 4
+          and not desk.locator("[data-testid=nav-slip-queue]").is_visible(), desk)
+    open_more(desk)
     desk.wait_for_selector("[data-testid=nav-slip-queue]")
     check("the venue's doors stand down the side on a desk", desk.locator(".side").is_visible(), desk)
     # The bar above is not drawn beside a sidebar, so the rest of the app has to travel with it.
@@ -47,6 +53,8 @@ with sync_playwright() as p:
         "nav-closures": "closures",
     }
     for door, page in doors.items():
+        if door != "nav-dashboard":
+            open_more(desk)
         desk.click(f"[data-testid={door}]")
         wanted = f"{BASE}/venues/{venue_id}/{page}"
         try:

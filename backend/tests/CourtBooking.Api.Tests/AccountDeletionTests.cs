@@ -124,16 +124,39 @@ public sealed class AccountDeletionTests(ApiTestFixture api) : IClassFixture<Api
         await owner.PostAsync($"/api/venues/{venue.Id}/slip-queue/{booking.Id}/confirm", null);
         await scenario.PlayOutAsync(booking.Id);
 
+        // The name they gave the app is what the counter calls them — until they are forgotten.
+        var bookerId = (await scenario.StoredBookingAsync(booking.Id)).BookerUserId!.Value;
+        using (var scope = api.CreateScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await database.Users
+                .Where(user => user.Id == bookerId)
+                .ExecuteUpdateAsync(set => set.SetProperty(user => user.DisplayName, "คุณแพร"));
+        }
+
+        var played = await ServiceDateAsync(booking.Id);
+        async Task<VenueBookingResponse> RowAsync() => Assert.Single(
+            await VenueScenario.ReadAsync<VenueBookingResponse[]>(
+                await owner.GetAsync($"/api/venues/{venue.Id}/bookings?date={played:yyyy-MM-dd}")),
+            one => one.BookingId == booking.Id);
+        Assert.Equal("คุณแพร", (await RowAsync()).BookerName);
+
         Assert.Equal(HttpStatusCode.NoContent, (await DeleteAsync(booker, VenueScenario.Password)).StatusCode);
 
         var stored = await scenario.StoredBookingAsync(booking.Id);
         Assert.Equal(BookingStatus.Confirmed, stored.Status);
 
-        var played = await ServiceDateAsync(booking.Id);
-        var day = await VenueScenario.ReadAsync<VenueBookingResponse[]>(
-            await owner.GetAsync($"/api/venues/{venue.Id}/bookings?date={played:yyyy-MM-dd}"));
-        var row = Assert.Single(day, one => one.BookingId == booking.Id);
+        var row = await RowAsync();
         Assert.Null(row.BookerEmail);
+        Assert.Null(row.BookerName);
+        using (var scope = api.CreateScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Null(await database.Users
+                .Where(user => user.Id == bookerId)
+                .Select(user => user.DisplayName)
+                .SingleAsync());
+        }
     }
 
     /// <summary>A member of staff leaves the venue's member list when they leave (PRD US-14).</summary>

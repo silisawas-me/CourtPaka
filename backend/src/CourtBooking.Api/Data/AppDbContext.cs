@@ -100,6 +100,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     {
         base.OnModelCreating(builder);
 
+        builder.Entity<AppUser>()
+            .Property(user => user.DisplayName)
+            .HasMaxLength(AppUser.DisplayNameMaxLength);
+
         builder.Entity<AppUser>(user =>
         {
             user.Property(u => u.Language).HasMaxLength(8);

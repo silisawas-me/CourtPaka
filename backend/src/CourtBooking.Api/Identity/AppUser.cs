@@ -23,6 +23,14 @@ public sealed class AppUser : IdentityUser<Guid>
     /// </summary>
     public DateTimeOffset? DeletedAt { get; set; }
 
+    /// <summary>
+    /// What the counter calls this person ("คุณแพร"), or null when they never said — then the
+    /// venue sees their address, as before. Personal data: cleared when the account is deleted.
+    /// </summary>
+    public string? DisplayName { get; set; }
+
+    public const int DisplayNameMaxLength = 100;
+
     public ICollection<UserConsent> Consents { get; } = [];
 }
 

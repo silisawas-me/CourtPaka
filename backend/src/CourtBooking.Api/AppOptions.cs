@@ -50,6 +50,13 @@ public sealed class AppOptions
     public bool SeedMockData { get; init; }
 
     /// <summary>
+    /// Signing in with "1" / "1" as the owner of the mock branches, so a local stack opens in two
+    /// key presses. Development only, and only with this flag — the same two locks as the seed:
+    /// the account behind it has a published password, and no deployed environment sets either.
+    /// </summary>
+    public bool DevQuickLogin { get; init; }
+
+    /// <summary>
     /// Where the data protection key ring lives. Without it every restart signs users out,
     /// because the keys that encrypt the auth cookie are regenerated in memory.
     /// </summary>

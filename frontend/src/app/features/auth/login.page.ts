@@ -44,7 +44,7 @@ export class LoginPage {
   protected readonly i18n = inject(TranslationService);
 
   protected readonly form = inject(FormBuilder).nonNullable.group({
-    email: ['', [Validators.required, Validators.email]],
+    email: ['', Validators.required],
     password: ['', Validators.required],
   });
 

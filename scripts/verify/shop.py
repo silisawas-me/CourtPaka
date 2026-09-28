@@ -9,6 +9,7 @@ as something the venue bought, and a shelf counted by hand when the ledger turns
 import datetime
 
 from harness import (
+    open_more,
     BASE,
     OWNER,
     STAFF,
@@ -77,6 +78,7 @@ with sync_playwright() as p:
     sign_in(page, OWNER)
 
     page.goto(f"{BASE}{open_seeded_venue(page)}")
+    open_more(page)
     page.click("[data-testid=nav-shop]")
     page.wait_for_selector("[data-testid=open-board], [data-testid=add-item]")
     check("the venue has a door for what it sells besides court time", True, page)

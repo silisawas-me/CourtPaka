@@ -3,6 +3,7 @@
 import datetime
 
 from harness import (
+    open_more,
     BASE,
     OWNER,
     Checks,
@@ -41,6 +42,7 @@ with sync_playwright() as p:
     sign_in(page, OWNER)
     page.goto(f"{BASE}{open_seeded_venue(page)}")
     # The numbers live beside the doors in the venue's own shell, on every page of it.
+    open_more(page)
     page.wait_for_selector("[data-testid=nav-slip-queue]")
     check(
         "a venue with nothing waiting shows no number",
@@ -55,12 +57,14 @@ with sync_playwright() as p:
     send_slip(booker, as_upload("slip.jpg", real_jpeg(), "image/jpeg"))
 
     page.reload()
+    open_more(page)
     expect(page.locator("[data-testid=nav-slip-queue-waiting]")).to_be_visible()
     check("a slip that has arrived puts a number on the door", True, page)
 
     # 2. So does money nobody has answered for.
     booker.request.post(f"{BASE}/api/bookings/{booking['id']}/cancel")
     page.reload()
+    open_more(page)
     expect(page.locator("[data-testid=nav-money-waiting]")).to_be_visible()
     check("money left unanswered puts one on the other door", True, page)
 
@@ -70,6 +74,7 @@ with sync_playwright() as p:
     check("turning slip mail off is accepted", chosen.value.status == 204)
 
     page.reload()
+    open_more(page)
     expect(control(page, "slip-emails")).to_have_attribute("aria-checked", "false")
     check("and the switch still says so after a reload", True, page)
 

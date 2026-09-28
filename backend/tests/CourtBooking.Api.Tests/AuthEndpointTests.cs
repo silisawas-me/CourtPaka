@@ -14,6 +14,23 @@ namespace CourtBooking.Api.Tests;
 [Collection(ApiCollection.Name)]
 public sealed class AuthEndpointTests(ApiTestFixture api)
 {
+    /// <summary>
+    /// "1" / "1" is a local stack's shortcut to the mock owner, and it has two locks: the flag and
+    /// a development host. The flag alone, anywhere else, opens nothing.
+    /// </summary>
+    [Fact]
+    public async Task The_quick_login_is_shut_outside_development_even_with_its_flag_on()
+    {
+        using var flagged = _api.Api.WithWebHostBuilder(
+            builder => builder.UseSetting("App:DevQuickLogin", "true"));
+        var client = flagged.CreateClient();
+
+        var answer = await client.PostAsJsonAsync(
+            "/api/auth/login", new LoginRequest(AuthEndpoints.QuickLoginWord, AuthEndpoints.QuickLoginWord));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, answer.StatusCode);
+    }
+
     private const string DefaultPassword = "CorrectHorse1";
 
     private readonly ApiTestFixture _api = api;

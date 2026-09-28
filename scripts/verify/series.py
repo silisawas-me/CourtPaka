@@ -11,6 +11,7 @@ import datetime
 import time
 
 from harness import (
+    open_more,
     BASE,
     OWNER,
     Checks,
@@ -80,6 +81,7 @@ with sync_playwright() as p:
     stop_every_series(page, venue_id)
 
     page.goto(f"{BASE}{open_seeded_venue(page)}")
+    open_more(page)
     page.click("[data-testid=nav-series]")
     page.wait_for_selector("[data-testid=save-series]")
     check("the venue has a door for the groups that come every week", True, page)

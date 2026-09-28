@@ -168,6 +168,14 @@ export class VenueShell {
     );
   });
 
+  /** One of the folded pages is on screen, so the fold stands open. */
+  protected readonly otherOn = computed(() => this.others().some((door) => door.on));
+
+  /** What is waiting behind the folded pages, added up, so a closed fold still says so. */
+  protected readonly otherWaiting = computed(() =>
+    this.others().reduce((sum, door) => sum + (door.waiting ?? 0), 0),
+  );
+
   /** The phone's tabs: the sections, then the venue's own page for everything else. */
   protected readonly tabs = computed<Door[]>(() => {
     const venue = this.others().find((door) => door.testId === 'nav-venue');

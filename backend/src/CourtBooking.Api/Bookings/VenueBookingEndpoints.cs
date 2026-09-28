@@ -896,6 +896,7 @@ public static class VenueBookingEndpoints
                 // A LINE booker may have no address at all; the number they gave is how the
                 // venue reaches them then (PRD US-01).
                 Phone = booking.Booker.DeletedAt == null ? booking.Booker.PhoneNumber : null,
+                Name = booking.Booker.DeletedAt == null ? booking.Booker.DisplayName : null,
             })
             .ToListAsync(cancellationToken);
 
@@ -946,6 +947,7 @@ public static class VenueBookingEndpoints
                     row.Booking,
                     row.Email,
                     row.Phone,
+                    row.Name,
                     courtNames,
                     byOwner,
                     sentBack.GetValueOrDefault(row.Booking.Id),
@@ -959,6 +961,7 @@ public static class VenueBookingEndpoints
         Booking booking,
         string? bookerEmail,
         string? bookerPhone,
+        string? bookerName,
         IReadOnlyDictionary<Guid, string> courtNames,
         bool byOwner,
         decimal sentBackBaht,
@@ -974,6 +977,7 @@ public static class VenueBookingEndpoints
             booking.Id,
             bookerEmail,
             bookerEmail is null ? bookerPhone : null,
+            bookerName,
             booking.Channel.ToString(),
             BookingKinds.Of(booking),
             booking.CustomerName,
