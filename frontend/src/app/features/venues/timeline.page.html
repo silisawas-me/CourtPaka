@@ -95,33 +95,121 @@
 
   <aside class="panel" data-testid="booking-panel">
     @if (selected(); as booking) {
-      <div class="panel-head">
-        <span class="tag" [class]="'tag kind-' + booking.kind">{{
-          i18n.t('board.kind.' + booking.kind)
-        }}</span>
-        <h2 class="panel-name" data-testid="panel-name">{{ who(booking) }}</h2>
-        <span class="panel-where" data-testid="panel-where">{{ where() }}</span>
-      </div>
-
-      <div class="panel-body">
-        @if (booking.arrival === 'Arrived') {
-          <div class="check-in done" data-testid="checked-in">
-            {{ i18n.t('timeline.checkedIn') }}
-          </div>
-        } @else {
+      @if (cancelling()) {
+        <!-- Cancelling, as artboard b2 draws it: who called it off, and what that gives back. -->
+        <div class="panel-head">
           <button
             type="button"
-            class="check-in"
-            data-testid="check-in"
-            [disabled]="!booking.can.checkIn || busy()"
-            (click)="checkIn()"
+            class="back"
+            data-testid="cancel-back"
+            (click)="cancelling.set(false)"
           >
-            {{ i18n.t('timeline.checkIn') }}
+            ‹ {{ i18n.t('timeline.back') }}
           </button>
-        }
+          <h2 class="panel-name">{{ i18n.t('timeline.cancelTitle') }}</h2>
+          <span class="panel-where"
+            >{{ who(booking) }} · {{ where() }} · ฿{{
+              booking.totalBaht | baht: i18n.locale()
+            }}</span
+          >
+        </div>
 
-        <div class="group">
-          <span class="label">{{ i18n.t('timeline.timeAndCourt') }}</span>
+        <div class="panel-body">
+          @if (booking.can.cancelChoices.length > 0) {
+            <span class="label">{{ i18n.t('timeline.whoCancels') }}</span>
+            @for (choice of booking.can.cancelChoices; track choice.reason) {
+              <button
+                type="button"
+                class="reason"
+                [class.on]="reason() === choice.reason"
+                [attr.aria-pressed]="reason() === choice.reason"
+                [attr.data-testid]="'cancel-reason-' + choice.reason"
+                (click)="reason.set(choice.reason)"
+              >
+                <span>{{ i18n.t('venueBookings.reason.' + choice.reason) }}</span>
+                <span class="reason-money"
+                  >{{ i18n.t('timeline.refund') }} ฿{{
+                    choice.refundBaht | baht: i18n.locale()
+                  }}</span
+                >
+              </button>
+            }
+          } @else {
+            <!-- A slip still being checked: the money decides, not a reason (PRD US-13). -->
+            <span class="label">{{ i18n.t('timeline.paidQuestion') }}</span>
+            @for (answer of [true, false]; track answer) {
+              <button
+                type="button"
+                class="reason"
+                [class.on]="paymentReceived() === answer"
+                [attr.aria-pressed]="paymentReceived() === answer"
+                [attr.data-testid]="'cancel-paid-' + answer"
+                (click)="paymentReceived.set(answer)"
+              >
+                <span>{{ i18n.t(answer ? 'timeline.paidYes' : 'timeline.paidNo') }}</span>
+              </button>
+            }
+          }
+
+          <label class="note-field">
+            <span class="label">{{ i18n.t('timeline.note') }}</span>
+            <input
+              data-testid="cancel-note"
+              maxlength="400"
+              [value]="cancelNote()"
+              (input)="cancelNote.set($any($event.target).value)"
+            />
+          </label>
+          <p class="freed">{{ i18n.t('timeline.freed') }}</p>
+
+          @if (panelError(); as key) {
+            <p class="form-error" data-testid="panel-error">{{ i18n.t(key) }}</p>
+          }
+        </div>
+
+        <div class="panel-foot">
+          <div class="foot-due">
+            <span>{{ i18n.t('timeline.refundDue') }}</span>
+            <span class="due" data-testid="refund-due"
+              >฿{{ refundDue() | baht: i18n.locale() }}</span
+            >
+          </div>
+          <button
+            type="button"
+            class="danger"
+            data-testid="confirm-cancel"
+            [disabled]="!cancelReady() || busy()"
+            (click)="cancel()"
+          >
+            {{ i18n.t('timeline.confirmCancel') }}
+          </button>
+        </div>
+      } @else {
+        <div class="panel-head">
+          <span class="tag" [class]="'tag kind-' + booking.kind">{{
+            i18n.t('board.kind.' + booking.kind)
+          }}</span>
+          <h2 class="panel-name" data-testid="panel-name">{{ who(booking) }}</h2>
+          <span class="panel-where" data-testid="panel-where">{{ where() }}</span>
+        </div>
+
+        <div class="panel-body">
+          @if (booking.arrival === 'Arrived') {
+            <div class="check-in done" data-testid="checked-in">
+              {{ i18n.t('timeline.checkedIn') }}
+            </div>
+          } @else {
+            <button
+              type="button"
+              class="check-in"
+              data-testid="check-in"
+              [disabled]="!booking.can.checkIn || busy()"
+              (click)="checkIn()"
+            >
+              {{ i18n.t('timeline.checkIn') }}
+            </button>
+          }
+
           <div class="two">
             <button
               type="button"
@@ -132,98 +220,166 @@
             >
               {{ i18n.t('timeline.oneMore') }}
             </button>
-            <a
+            <button
+              type="button"
               class="soft"
+              data-testid="move-open"
+              [attr.aria-expanded]="movesOpen()"
+              [disabled]="moves().length === 0"
+              (click)="movesOpen.set(!movesOpen())"
+            >
+              {{ i18n.t('timeline.moveOpen') }} {{ movesOpen() ? '▴' : '▾' }}
+            </button>
+          </div>
+          @if (movesOpen()) {
+            <div class="chips">
+              @for (court of moves(); track court.courtId) {
+                <button
+                  type="button"
+                  class="chip"
+                  [class.free]="court.free"
+                  [disabled]="!court.free || busy()"
+                  [attr.data-testid]="'move-' + court.courtId"
+                  (click)="move(court.courtId)"
+                >
+                  {{ court.name }}
+                </button>
+              }
+            </div>
+          }
+
+          @if (booking.can.takeMoney) {
+            <!-- Money for the court, whole or in part (artboard b1): the rest stays owed. -->
+            <div class="money" data-testid="take-money">
+              <span class="label"
+                >{{ i18n.t('timeline.takeMoney') }} ฿{{ courtOwed() | baht: i18n.locale() }}</span
+              >
+              <div class="money-row">
+                <label class="amount">
+                  <span aria-hidden="true">฿</span>
+                  <input
+                    inputmode="decimal"
+                    data-testid="take-amount"
+                    [attr.aria-label]="i18n.t('timeline.amount')"
+                    [value]="takingText()"
+                    (input)="taking.set($any($event.target).value)"
+                  />
+                </label>
+                <button
+                  type="button"
+                  class="soft small"
+                  data-testid="take-full"
+                  (click)="taking.set(null)"
+                >
+                  {{ i18n.t('timeline.full') }}
+                </button>
+              </div>
+              <span class="hint">{{ i18n.t('timeline.partialNote') }}</span>
+            </div>
+          }
+
+          <div class="group">
+            <span class="label">{{ i18n.t('timeline.manage') }}</span>
+            <div class="two">
+              <button
+                type="button"
+                class="soft doors"
+                data-testid="no-show"
+                [disabled]="!booking.can.noShow || busy()"
+                (click)="noShow()"
+              >
+                {{ i18n.t('timeline.noShow') }}
+                @if (!booking.can.noShow && noShowAfter(); as time) {
+                  <span class="doors-hint">{{ i18n.t('timeline.noShowAfter') }} {{ time }}</span>
+                }
+              </button>
+              <button
+                type="button"
+                class="soft doors warn"
+                data-testid="cancel-open"
+                [disabled]="!booking.can.cancel || busy()"
+                (click)="openCancel()"
+              >
+                {{ i18n.t('timeline.cancel') }}
+              </button>
+            </div>
+            <a
+              class="more"
               [routerLink]="['/venues', venueId(), 'bookings']"
               data-testid="more-doors"
               >{{ i18n.t('timeline.moreDoors') }}</a
             >
           </div>
-          <span class="label">{{ i18n.t('timeline.moveTo') }}</span>
-          <div class="chips">
-            @for (court of moves(); track court.courtId) {
+
+          @if (items().length > 0) {
+            <div class="group">
+              <span class="label">{{ i18n.t('timeline.shop') }}</span>
+              @for (item of items(); track item.itemId) {
+                <div class="item">
+                  <span class="item-name"
+                    >{{ item.name
+                    }}<span class="item-price"
+                      >฿{{ item.priceBaht | baht: i18n.locale() }}</span
+                    ></span
+                  >
+                  <button
+                    type="button"
+                    class="step"
+                    [attr.aria-label]="'−1 ' + item.name"
+                    [attr.data-testid]="'less-' + item.itemId"
+                    (click)="more(item, -1)"
+                  >
+                    −
+                  </button>
+                  <span class="qty">{{ quantities()[item.itemId] ?? 0 }}</span>
+                  <button
+                    type="button"
+                    class="step dark"
+                    [attr.aria-label]="'+1 ' + item.name"
+                    [attr.data-testid]="'more-' + item.itemId"
+                    (click)="more(item, 1)"
+                  >
+                    +
+                  </button>
+                </div>
+              }
+            </div>
+          }
+
+          @if (panelError(); as key) {
+            <p class="form-error" data-testid="panel-error">{{ i18n.t(key) }}</p>
+          }
+        </div>
+
+        <div class="panel-foot">
+          <div class="foot-line">
+            <span
+              >{{ i18n.t('timeline.court') }} {{ booking.slots.length }}
+              {{ i18n.t('timeline.hr') }} · ฿{{ booking.totalBaht | baht: i18n.locale() }}</span
+            >
+            <span>{{
+              courtOwed() > 0 ? i18n.t('timeline.payAtVenue') : i18n.t('timeline.paid')
+            }}</span>
+          </div>
+          <div class="foot-due">
+            <span>{{ i18n.t('timeline.thisTime') }}</span>
+            <span class="due" data-testid="due">฿{{ due() | baht: i18n.locale() }}</span>
+          </div>
+          <div class="pay">
+            @for (method of payWith; track method; let first = $first) {
               <button
                 type="button"
-                class="chip"
-                [class.free]="court.free"
-                [disabled]="!court.free || busy()"
-                [attr.data-testid]="'move-' + court.courtId"
-                (click)="move(court.courtId)"
+                [class.main]="first"
+                [attr.data-testid]="'pay-' + method"
+                [disabled]="due() <= 0 || busy()"
+                (click)="pay(method)"
               >
-                {{ court.name }}
+                {{ i18n.t('money.method.' + method) }}
               </button>
             }
           </div>
         </div>
-
-        @if (items().length > 0) {
-          <div class="group">
-            <span class="label">{{ i18n.t('timeline.shop') }}</span>
-            @for (item of items(); track item.itemId) {
-              <div class="item">
-                <span class="item-name"
-                  >{{ item.name
-                  }}<span class="item-price"
-                    >฿{{ item.priceBaht | baht: i18n.locale() }}</span
-                  ></span
-                >
-                <button
-                  type="button"
-                  class="step"
-                  [attr.aria-label]="'−1 ' + item.name"
-                  [attr.data-testid]="'less-' + item.itemId"
-                  (click)="more(item, -1)"
-                >
-                  −
-                </button>
-                <span class="qty">{{ quantities()[item.itemId] ?? 0 }}</span>
-                <button
-                  type="button"
-                  class="step dark"
-                  [attr.aria-label]="'+1 ' + item.name"
-                  [attr.data-testid]="'more-' + item.itemId"
-                  (click)="more(item, 1)"
-                >
-                  +
-                </button>
-              </div>
-            }
-          </div>
-        }
-
-        @if (panelError(); as key) {
-          <p class="form-error" data-testid="panel-error">{{ i18n.t(key) }}</p>
-        }
-      </div>
-
-      <div class="panel-foot">
-        <div class="foot-line">
-          <span
-            >{{ i18n.t('timeline.court') }} {{ booking.slots.length }} {{ i18n.t('timeline.hr') }} ·
-            ฿{{ booking.totalBaht | baht: i18n.locale() }}</span
-          >
-          <span>{{
-            courtOwed() > 0 ? i18n.t('timeline.payAtVenue') : i18n.t('timeline.paid')
-          }}</span>
-        </div>
-        <div class="foot-due">
-          <span>{{ i18n.t('timeline.due') }}</span>
-          <span class="due" data-testid="due">฿{{ due() | baht: i18n.locale() }}</span>
-        </div>
-        <div class="pay">
-          @for (method of payWith; track method; let first = $first) {
-            <button
-              type="button"
-              [class.main]="first"
-              [attr.data-testid]="'pay-' + method"
-              [disabled]="due() <= 0 || busy()"
-              (click)="pay(method)"
-            >
-              {{ i18n.t('money.method.' + method) }}
-            </button>
-          }
-        </div>
-      </div>
+      }
     } @else {
       <p class="panel-empty" data-testid="panel-empty">{{ i18n.t('timeline.nothingToday') }}</p>
     }
