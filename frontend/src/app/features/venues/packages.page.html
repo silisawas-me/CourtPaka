@@ -1,9 +1,5 @@
-<mat-card>
-  <mat-card-header>
-    <mat-card-title>{{ i18n.t('packages.title') }}</mat-card-title>
-    <mat-card-subtitle>{{ i18n.t('packages.subtitle') }}</mat-card-subtitle>
-  </mat-card-header>
-</mat-card>
+<!-- The page's name is on the top bar (owner app); what a member is, in one line. -->
+<p class="lead">{{ i18n.t('packages.subtitle') }}</p>
 
 @if (loading()) {
   <mat-progress-bar mode="indeterminate" />
@@ -14,7 +10,127 @@
     </mat-card-content>
   </mat-card>
 } @else {
-  <mat-card>
+  <!--
+    Members, as the owner app lists them (PR-6): everybody holding hours, one package a row —
+    who, which package, how much of it is used, until when, and how it stands. "Members" are the
+    people who bought hours (O9); the design's skill level has nothing behind it and is not drawn
+    (O8). Found by name or phone, narrowed to the live or the running-out.
+  -->
+  <div class="members-bar">
+    <label class="search">
+      <span class="visually-hidden">{{ i18n.t('members.search') }}</span>
+      <input
+        type="search"
+        data-testid="members-search"
+        [placeholder]="i18n.t('members.search')"
+        [value]="query()"
+        (input)="query.set($any($event.target).value)"
+      />
+    </label>
+    <div class="filters" role="group" [attr.aria-label]="i18n.t('members.filter')">
+      @for (one of filters; track one) {
+        <button
+          type="button"
+          class="filter"
+          [class.on]="filter() === one"
+          [attr.aria-pressed]="filter() === one"
+          [attr.data-testid]="'members-filter-' + one"
+          (click)="filter.set(one)"
+        >
+          {{ i18n.t('members.filter.' + one) }}
+        </button>
+      }
+    </div>
+    <button type="button" class="add" data-testid="members-add" (click)="toSell()">
+      {{ i18n.t('members.add') }}
+    </button>
+  </div>
+
+  <p class="owed muted" data-testid="hours-owed">
+    {{ i18n.t('packages.hoursOwed') }}: {{ hoursOwed() }}
+    @if (runningOut() > 0) {
+      · {{ i18n.t('packages.runningOutCount') }}: {{ runningOut() }}
+    }
+  </p>
+
+  <section class="members" data-testid="sold-list">
+    <div class="members-head" aria-hidden="true">
+      <span>{{ i18n.t('members.name') }}</span>
+      <span>{{ i18n.t('members.plan') }}</span>
+      <span>{{ i18n.t('members.used') }}</span>
+      <span>{{ i18n.t('members.expires') }}</span>
+      <span>{{ i18n.t('members.status') }}</span>
+    </div>
+
+    @if (nothingSold()) {
+      <p class="muted empty" data-testid="nothing-sold">{{ i18n.t('packages.nothingSold') }}</p>
+    }
+
+    @for (one of shown(); track one.packageId) {
+      <div
+        class="member"
+        [class.spent]="!one.live"
+        [class.running-out]="one.runningOut"
+        [attr.data-testid]="'package-' + one.packageId"
+      >
+        <span class="person">
+          <span class="initial" aria-hidden="true">{{ one.customerName.charAt(0) }}</span>
+          <span class="person-text">
+            <span class="person-name">{{ one.customerName }}</span>
+            @if (one.customerPhone) {
+              <span class="person-phone">{{ one.customerPhone }}</span>
+            }
+          </span>
+        </span>
+        <span class="plan">{{ one.typeName }}</span>
+        <span class="used" [attr.data-testid]="'left-' + one.packageId">
+          <span class="used-num"
+            >{{ one.hoursSold - one.hoursLeft }} / {{ one.hoursSold }}
+            {{ i18n.t('packages.hours') }}</span
+          >
+          <span class="track"
+            ><span
+              class="fill"
+              [style.width.%]="
+                one.hoursSold > 0 ? ((one.hoursSold - one.hoursLeft) / one.hoursSold) * 100 : 0
+              "
+            ></span
+          ></span>
+          <span class="visually-hidden"
+            >{{ i18n.t('packages.left') }} {{ one.hoursLeft }} / {{ one.hoursSold }}</span
+          >
+        </span>
+        <span class="expires">{{ one.expiresOn | appDate: i18n.locale() }}</span>
+        <span class="status">
+          <span
+            class="chip"
+            [class]="'chip ' + standing(one)"
+            [attr.data-testid]="(one.expiredAt ? 'expired-' : 'standing-') + one.packageId"
+            >{{ i18n.t('members.standing.' + standing(one)) }}</span
+          >
+        </span>
+
+        <!--
+          What happened to the hours, in order: the whole answer to "where did my hours go",
+          which is the question a package gets asked (PRD US-31). Folded, one press away.
+        -->
+        <details class="history">
+          <summary>{{ i18n.t('members.history') }}</summary>
+          <ul class="moves" [attr.data-testid]="'moves-' + one.packageId">
+            @for (move of one.moves; track $index) {
+              <li class="move">
+                <span class="move-hours">{{ move.hours > 0 ? '+' : '' }}{{ move.hours }}</span>
+                <span>{{ i18n.t('packages.move.' + move.move) }}</span>
+                <span class="muted">{{ move.at | appDate: i18n.locale() }}</span>
+              </li>
+            }
+          </ul>
+        </details>
+      </div>
+    }
+  </section>
+
+  <mat-card id="sell-package-card">
     <mat-card-header>
       <mat-card-title>{{ i18n.t('packages.sell') }}</mat-card-title>
     </mat-card-header>
@@ -101,77 +217,6 @@
 
       @if (saveError(); as key) {
         <p class="form-error" data-testid="save-error">{{ i18n.t(key) }}</p>
-      }
-    </mat-card-content>
-  </mat-card>
-
-  <mat-card>
-    <mat-card-header>
-      <mat-card-title>{{ i18n.t('packages.soldTitle') }}</mat-card-title>
-      <mat-card-subtitle data-testid="hours-owed">
-        {{ i18n.t('packages.hoursOwed') }}: {{ hoursOwed() }}
-        @if (runningOut() > 0) {
-          · {{ i18n.t('packages.runningOutCount') }}: {{ runningOut() }}
-        }
-      </mat-card-subtitle>
-    </mat-card-header>
-
-    <mat-card-content>
-      @if (nothingSold()) {
-        <p class="muted" data-testid="nothing-sold">{{ i18n.t('packages.nothingSold') }}</p>
-      } @else {
-        <ul class="sold-list" data-testid="sold-list">
-          @for (one of rows(); track one.packageId) {
-            <li
-              class="sold"
-              [class.running-out]="one.runningOut"
-              [class.spent]="one.hoursLeft <= 0"
-              [attr.data-testid]="'package-' + one.packageId"
-            >
-              <div class="sold-head">
-                <span class="sold-who">{{ one.customerName }}</span>
-                <span class="muted">{{ one.typeName }}</span>
-                @if (one.customerPhone) {
-                  <span class="muted">{{ one.customerPhone }}</span>
-                }
-                <span class="sold-left" [attr.data-testid]="'left-' + one.packageId">
-                  {{ one.hoursLeft }} / {{ one.hoursSold }} {{ i18n.t('packages.hours') }}
-                </span>
-              </div>
-
-              <div class="sold-facts muted">
-                <span>
-                  {{ i18n.t('packages.goodUntil') }}
-                  {{ one.expiresOn | appDate: i18n.locale() }}
-                </span>
-                <span>
-                  {{ i18n.t('packages.perHour') }}: {{ one.bahtPerHour | baht: i18n.locale() }}
-                </span>
-                @if (one.expiredAt) {
-                  <span [attr.data-testid]="'expired-' + one.packageId">
-                    {{ i18n.t('packages.ranOut') }}
-                  </span>
-                }
-              </div>
-
-              <!--
-                What happened to the hours, in order. It is the whole answer to "where did my
-                hours go", which is the question a package gets asked (PRD US-31).
-              -->
-              <ul class="moves" [attr.data-testid]="'moves-' + one.packageId">
-                @for (move of one.moves; track $index) {
-                  <li class="move">
-                    <span class="move-hours">
-                      {{ move.hours > 0 ? '+' : '' }}{{ move.hours }}
-                    </span>
-                    <span>{{ i18n.t('packages.move.' + move.move) }}</span>
-                    <span class="muted">{{ move.at | appDate: i18n.locale() }}</span>
-                  </li>
-                }
-              </ul>
-            </li>
-          }
-        </ul>
       }
     </mat-card-content>
   </mat-card>

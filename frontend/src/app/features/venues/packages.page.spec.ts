@@ -140,6 +140,41 @@ describe('PackagesPage', () => {
     expect(textOf(fixture, 'hours-owed')).toContain(TRANSLATIONS.th['packages.runningOutCount']);
   });
 
+  /*
+   * Members, as the owner app lists them (PR-6): found by name or phone, narrowed to the ones
+   * running out, each saying how it stands.
+   */
+  it('finds a member by name or phone, and narrows to the ones running out', () => {
+    render(
+      [offer()],
+      [
+        sold(),
+        sold({
+          packageId: 'p2',
+          customerName: 'คุณโอ๊ต',
+          customerPhone: '0621189034',
+          runningOut: true,
+        }),
+      ],
+    );
+
+    const search = elementOf<HTMLInputElement>(fixture, 'members-search')!;
+    search.value = '0621';
+    search.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    let rows = fixture.nativeElement.querySelectorAll('[data-testid^="package-"]');
+    expect(rows.length).toBe(1);
+    expect(rows[0].getAttribute('data-testid')).toBe('package-p2');
+
+    search.value = '';
+    search.dispatchEvent(new Event('input'));
+    elementOf<HTMLElement>(fixture, 'members-filter-runningOut')!.click();
+    fixture.detectChanges();
+    rows = fixture.nativeElement.querySelectorAll('[data-testid^="package-"]');
+    expect(rows.length).toBe(1);
+    expect(textOf(fixture, 'standing-p2')).toBe(TRANSLATIONS.th['members.standing.runningOut']);
+  });
+
   /** An offer is replaced, never edited: a package sold from one keeps the terms it was sold on. */
   it('puts an offer on the board and takes one off', () => {
     render([], []);

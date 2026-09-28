@@ -82,6 +82,38 @@ export class PackagesPage {
     [...this.sold()].sort((one, other) => Number(other.runningOut) - Number(one.runningOut)),
   );
 
+  /** The members table's search and filter (owner app PR-6). */
+  protected readonly query = signal('');
+  protected readonly filters = ['all', 'live', 'runningOut'] as const;
+  protected readonly filter = signal<'all' | 'live' | 'runningOut'>('all');
+
+  /** The rows the table shows: found by name or phone, narrowed by how they stand. */
+  protected readonly shown = computed(() => {
+    const query = this.query().trim().toLowerCase();
+    const filter = this.filter();
+    return this.rows().filter(
+      (one) =>
+        (query === '' ||
+          one.customerName.toLowerCase().includes(query) ||
+          (one.customerPhone ?? '').includes(query)) &&
+        (filter === 'all' ||
+          (filter === 'live' && one.live) ||
+          (filter === 'runningOut' && one.live && one.runningOut)),
+    );
+  });
+
+  /** How a package stands, in the words the design uses — from the server's own flags. */
+  protected standing(one: HourPackage): 'live' | 'runningOut' | 'done' {
+    return !one.live ? 'done' : one.runningOut ? 'runningOut' : 'live';
+  }
+
+  /** "Add a member" is selling somebody a package: the form below, brought to hand. */
+  protected toSell(): void {
+    const card = document.getElementById('sell-package-card');
+    card?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    card?.querySelector<HTMLElement>('[data-testid=customer-name]')?.focus({ preventScroll: true });
+  }
+
   protected readonly runningOut = computed(
     () => this.sold().filter((one) => one.runningOut).length,
   );

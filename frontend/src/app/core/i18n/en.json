@@ -949,5 +949,21 @@
   "revenue.byMethod": "Payment methods",
   "revenue.topItems": "Top items",
   "revenue.noMoney": "No money in this range yet",
-  "revenue.nothingSold": "Nothing sold in this range"
+  "revenue.nothingSold": "Nothing sold in this range",
+  "members.search": "Search name or phone",
+  "members.filter": "Filter members",
+  "members.filter.all": "All",
+  "members.filter.live": "Active",
+  "members.filter.runningOut": "Expiring",
+  "members.add": "+ Add member",
+  "members.name": "Name",
+  "members.plan": "Package",
+  "members.used": "Hours used",
+  "members.expires": "Expires",
+  "members.status": "Status",
+  "members.standing.live": "Active",
+  "members.standing.runningOut": "Expiring soon",
+  "members.standing.done": "Finished",
+  "members.history": "Hour history",
+  "packages.left": "Left"
 }

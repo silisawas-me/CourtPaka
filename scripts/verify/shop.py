@@ -225,7 +225,7 @@ with sync_playwright() as p:
     check("desk, English", True, page)
 
     # 9. The counter is run by somebody who does not read reports (PRD US-33).
-    page.click("[data-testid=side-language-th]")
+    page.click("[data-testid=top-language-th]")
     expect(page.locator("html")).to_have_attribute("lang", "th")
 
     staff_can(browser, venue_id)  # What the seed gives: no ViewReports.

@@ -239,7 +239,7 @@ with sync_playwright() as p:
     # the account is remembered on. On a desk a venue page hides the bar above, so the switch is
     # the one the sidebar carries (PRD US-25).
     stop_every_series(page, venue_id)
-    page.click("[data-testid=side-language-th]")
+    page.click("[data-testid=top-language-th]")
     expect(page.locator("html")).to_have_attribute("lang", "th")
 
     page.close()
