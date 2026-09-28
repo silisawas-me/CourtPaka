@@ -41,6 +41,9 @@
         </button>
       }
     </div>
+    <button type="button" class="add" data-testid="members-add" (click)="selling.set(true)">
+      {{ i18n.t('members.add') }}
+    </button>
   </div>
 
   <p class="owed muted" data-testid="hours-owed">
@@ -257,4 +260,14 @@
       }
     </mat-card-content>
   </mat-card>
+}
+
+@if (selling()) {
+  <app-sell-package
+    [venueId]="venueId()"
+    [offers]="onSale()"
+    (sold)="added($event)"
+    (closed)="selling.set(false)"
+    (wantsBoard)="toBoard()"
+  />
 }

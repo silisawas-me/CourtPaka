@@ -1006,5 +1006,18 @@
   "now.nextAt": "ถัดไป {t}",
   "now.freeToClose": "ว่างถึงปิด",
   "now.nobody": "ไม่มีใครมาใน 90 นาทีนี้",
-  "top.scan": "สแกน QR"
+  "top.scan": "สแกน QR",
+  "sellPackage.title": "เพิ่มสมาชิก · ขายแพ็กเกจ",
+  "sellPackage.package": "แพ็กเกจ",
+  "sellPackage.days": "วัน",
+  "sellPackage.newOffer": "ยังไม่มีแพ็กเกจที่ต้องการ? ตั้งแพ็กเกจใหม่",
+  "sellPackage.name": "ชื่อสมาชิก",
+  "sellPackage.phone": "เบอร์โทร (ไม่บังคับ)",
+  "sellPackage.pay": "ชำระเงิน",
+  "sellPackage.until": "ใช้ได้ถึง",
+  "sellPackage.revenueNote": "เงินเข้าลิ้นชักวันนี้ แต่นับเป็นรายได้เมื่อใช้ชั่วโมง",
+  "sellPackage.confirm": "ขายและเพิ่มสมาชิก",
+  "sellPackage.nameNeeded": "ใส่ชื่อสมาชิก",
+  "sellPackage.nothing": "ยังไม่มีแพ็กเกจให้ขาย ตั้งแพ็กเกจก่อน",
+  "sellPackage.setUp": "ตั้งแพ็กเกจ"
 }

@@ -86,17 +86,18 @@ with sync_playwright() as p:
     till = till_day(page, venue_id)
     before = money(page, venue_id, till)
     already = page.locator("[data-testid^=package-]").count()
-    # The members page no longer sells (the owner took the form off for now): the sale goes
-    # through the same API the counter would, and the page shows the member it made.
-    bought = page.request.post(
-        f"{BASE}/api/venues/{venue_id}/packages",
-        data={"packageTypeId": offer["typeId"], "customerName": "ก๊วนซื้อชั่วโมง",
-              "customerPhone": "0800000000", "paidBy": "Cash"},
-    )
-    check("a package is sold through the API", bought.ok)
-    check("and the members page has no way to sell one",
-          page.locator("[data-testid=sell-package], [data-testid=members-add]").count() == 0, page)
-    page.reload()
+    # Adding a member is selling them a package, in the design's dialog (owner-complete 2a).
+    page.click("[data-testid=members-add]")
+    page.wait_for_selector("[data-testid=sell-package-dialog]")
+    page.click(f"[data-testid=offer-pick-{offer['typeId']}]")
+    page.fill("[data-testid=customer-name]", "ก๊วนซื้อชั่วโมง")
+    page.fill("[data-testid=customer-phone]", "0800000000")
+    page.click("[data-testid=paid-Cash]")
+    check("the dialog says the day it runs out and the price",
+          page.locator("[data-testid=sell-package-until]").count() == 1
+          and "1,800" in page.locator("[data-testid=sell-package]").inner_text(), page)
+    page.click("[data-testid=sell-package]")
+    page.locator("[data-testid=sell-package-dialog]").wait_for(state="detached")
 
     # A row more than there was. Waiting for "a row" would pass on the rows an earlier run left,
     # before this sale had even been answered.

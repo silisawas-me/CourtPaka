@@ -13,6 +13,7 @@ import { TranslationService } from '../../core/i18n/translation.service';
 import { HourPackage, PackagesService, PackageType } from '../../core/venues/packages.service';
 import { FieldError } from '../../shared/field-error';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
+import { SellPackage } from './sell-package';
 
 /** As long as an offer's name on the board may be. The customer's own is Booking's, and longer. */
 const OFFER_NAME_MAX_LENGTH = 100;
@@ -40,6 +41,7 @@ const OFFER_NAME_MAX_LENGTH = 100;
     MatProgressBarModule,
     AppDatePipe,
     BahtPipe,
+    SellPackage,
   ],
   providers: [FORM_FIELD_DEFAULTS],
   templateUrl: './packages.page.html',
@@ -61,6 +63,24 @@ export class PackagesPage {
 
   protected readonly saving = signal(false);
   protected readonly saveError = signal<string | null>(null);
+
+  /** The sell-package dialog is open ("+ เพิ่มสมาชิก", artboard a). */
+  protected readonly selling = signal(false);
+
+  /** A package sold in the dialog is a member at the top of the table. */
+  protected added(bought: HourPackage): void {
+    this.sold.update((all) => [bought, ...all]);
+    this.selling.set(false);
+  }
+
+  /** Nothing to sell yet: close the dialog and open the board to put an offer on it. */
+  protected toBoard(): void {
+    this.selling.set(false);
+    this.editingBoard.set(true);
+    requestAnimationFrame(() =>
+      document.querySelector('[data-testid=offer-name]')?.scrollIntoView({ block: 'center' }),
+    );
+  }
 
   /** Whether the board is open for editing. Shut by default: it is a setting, not a shift. */
   protected readonly editingBoard = signal(false);

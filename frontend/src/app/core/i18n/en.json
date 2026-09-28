@@ -1006,5 +1006,18 @@
   "now.nextAt": "Next {t}",
   "now.freeToClose": "Free till close",
   "now.nobody": "Nobody due in the next 90 minutes",
-  "top.scan": "Scan QR"
+  "top.scan": "Scan QR",
+  "sellPackage.title": "Add a member · sell a package",
+  "sellPackage.package": "Package",
+  "sellPackage.days": "days",
+  "sellPackage.newOffer": "Not the one you need? Set up a new package",
+  "sellPackage.name": "Member's name",
+  "sellPackage.phone": "Phone (optional)",
+  "sellPackage.pay": "Payment",
+  "sellPackage.until": "Valid until",
+  "sellPackage.revenueNote": "The money is in today's till; it counts as revenue as the hours are used",
+  "sellPackage.confirm": "Sell and add member",
+  "sellPackage.nameNeeded": "Enter the member's name",
+  "sellPackage.nothing": "No packages on sale yet. Set one up first.",
+  "sellPackage.setUp": "Set up a package"
 }
