@@ -19,6 +19,7 @@ import { Availability, PublicVenueService } from '../../core/venues/public-venue
 import { ShopItem, ShopService } from '../../core/venues/shop.service';
 import {
   BookingHours,
+  CancellationReason,
   PaymentMethod,
   VenueBooking,
   VenueBookingsService,
@@ -53,7 +54,7 @@ const PAY_WITH: readonly PaymentMethod[] = ['PromptPay', 'Card', 'Cash'];
   selector: 'app-timeline-page',
   imports: [BahtPipe, RouterLink],
   templateUrl: './timeline.page.html',
-  styleUrl: './timeline.page.scss',
+  styleUrls: ['./timeline.page.scss', './timeline-panel.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TimelinePage {
@@ -185,7 +186,62 @@ export class TimelinePage {
     return booking?.can.takeMoney ? booking.toPayBaht : 0;
   });
 
-  protected readonly due = computed(() => this.courtOwed() + this.itemsBaht());
+  /**
+   * What the court is paid now: what somebody typed, or all of it until they do (artboard b1) —
+   * never more than is owed, never less than nothing. The rest stays owed.
+   */
+  protected readonly taking = signal<string | null>(null);
+  protected readonly takingNow = computed(() => {
+    const typed = this.taking();
+    if (typed === null) {
+      return this.courtOwed();
+    }
+    const amount = Number(typed.replace(/,/g, ''));
+    return Number.isFinite(amount) ? Math.max(0, Math.min(this.courtOwed(), amount)) : 0;
+  });
+  protected readonly takingText = computed(() => this.taking() ?? String(this.courtOwed()));
+
+  protected readonly due = computed(() => this.takingNow() + this.itemsBaht());
+
+  /** Other courts, folded under their button until somebody asks (artboard b1). */
+  protected readonly movesOpen = signal(false);
+
+  /** Cancelling: the panel turns into artboard b2. */
+  protected readonly cancelling = signal(false);
+  protected readonly reason = signal<CancellationReason | null>(null);
+  protected readonly paymentReceived = signal<boolean | null>(null);
+  protected readonly cancelNote = signal('');
+
+  /** What the chosen answer gives back, as the server priced it. */
+  protected readonly refundDue = computed(() => {
+    const booking = this.selected();
+    const reason = this.reason();
+    return booking?.can.cancelChoices.find((one) => one.reason === reason)?.refundBaht ?? 0;
+  });
+
+  protected readonly cancelReady = computed(() => {
+    const booking = this.selected();
+    return booking
+      ? booking.can.cancelChoices.length > 0
+        ? this.reason() !== null
+        : this.paymentReceived() !== null
+      : false;
+  });
+
+  /** When the no-show door opens: the venue's grace after the first hour, on the Bangkok clock. */
+  protected readonly noShowAfter = computed(() => {
+    const at = this.selected()?.graceEndsAt;
+    // Only while it is still ahead: past it, a shut door has another reason than the clock.
+    if (!at || new Date(at).getTime() <= Date.now()) {
+      return null;
+    }
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Bangkok',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).format(new Date(at));
+  });
 
   protected readonly who = whoIs;
 
@@ -232,7 +288,41 @@ export class TimelinePage {
     if (block.booking) {
       this.chosen.set(block.booking.bookingId);
       this.quantities.set({});
+      this.taking.set(null);
+      this.movesOpen.set(false);
+      this.cancelling.set(false);
       this.panelError.set(null);
+    }
+  }
+
+  protected openCancel(): void {
+    this.reason.set(null);
+    this.paymentReceived.set(null);
+    this.cancelNote.set('');
+    this.panelError.set(null);
+    this.cancelling.set(true);
+  }
+
+  protected cancel(): void {
+    const booking = this.selected();
+    if (!booking || !this.cancelReady()) {
+      return;
+    }
+    const note = this.cancelNote().trim();
+    this.run(
+      this.bookings.cancel(this.venueId(), booking.bookingId, {
+        reason: this.reason() ?? undefined,
+        paymentReceived: this.paymentReceived() ?? undefined,
+        note: note === '' ? undefined : note,
+      }),
+      () => this.cancelling.set(false),
+    );
+  }
+
+  protected noShow(): void {
+    const booking = this.selected();
+    if (booking?.can.noShow) {
+      this.run(this.bookings.noShow(this.venueId(), booking.bookingId));
     }
   }
 
@@ -284,9 +374,9 @@ export class TimelinePage {
       .filter((line) => line.quantity > 0);
 
     const steps: Observable<unknown>[] = [];
-    if (this.courtOwed() > 0) {
+    if (this.takingNow() > 0) {
       steps.push(
-        this.bookings.takePayment(this.venueId(), booking.bookingId, this.courtOwed(), method),
+        this.bookings.takePayment(this.venueId(), booking.bookingId, this.takingNow(), method),
       );
     }
     if (lines.length > 0) {
@@ -300,6 +390,7 @@ export class TimelinePage {
     (steps.length ? concat(...steps).pipe(toArray()) : EMPTY).subscribe({
       next: () => {
         this.quantities.set({});
+        this.taking.set(null);
         this.busy.set(false);
         this.read(this.venueId(), { first: false });
       },
@@ -311,11 +402,12 @@ export class TimelinePage {
     });
   }
 
-  private run(door: Observable<VenueBooking>): void {
+  private run(door: Observable<VenueBooking>, after?: () => void): void {
     this.busy.set(true);
     this.panelError.set(null);
     door.subscribe({
       next: (changed) => {
+        after?.();
         this.day.update((day) =>
           (day ?? []).map((one) => (one.bookingId === changed.bookingId ? changed : one)),
         );

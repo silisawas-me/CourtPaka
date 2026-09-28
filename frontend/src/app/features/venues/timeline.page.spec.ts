@@ -1,6 +1,6 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { clickOn, elementOf, pageProviders, textOf } from '../../testing/dom';
+import { clickOn, elementOf, pageProviders, setInput, textOf } from '../../testing/dom';
 import { TimelinePage } from './timeline.page';
 
 describe('TimelinePage', () => {
@@ -67,29 +67,31 @@ describe('TimelinePage', () => {
     vi.useRealTimers();
   });
 
-  function render(day: object[]): void {
-    fixture = TestBed.createComponent(TimelinePage);
-    fixture.componentRef.setInput('venueId', 'v1');
-    fixture.detectChanges();
-
+  function grid() {
     const hours = Array.from({ length: 16 }, (_, index) => ({
       hour: 8 + index,
       status: 'Free',
       bahtPerHour: 8 + index >= 17 ? 320 : 220,
     }));
-    httpMock
-      .expectOne((request) => request.url === '/api/venues/v1/availability')
-      .flush({
-        venue: { id: 'v1', name: 'Ari' },
-        date,
-        lastBookableDate: date,
-        opensHour: 8,
-        closesHour: 24,
-        courts: [
-          { courtId: 'c1', name: 'Court 1', hours },
-          { courtId: 'c2', name: 'Court 2', hours },
-        ],
-      });
+    return {
+      venue: { id: 'v1', name: 'Ari' },
+      date,
+      lastBookableDate: date,
+      opensHour: 8,
+      closesHour: 24,
+      courts: [
+        { courtId: 'c1', name: 'Court 1', hours },
+        { courtId: 'c2', name: 'Court 2', hours },
+      ],
+    };
+  }
+
+  function render(day: object[]): void {
+    fixture = TestBed.createComponent(TimelinePage);
+    fixture.componentRef.setInput('venueId', 'v1');
+    fixture.detectChanges();
+
+    httpMock.expectOne((request) => request.url === '/api/venues/v1/availability').flush(grid());
     httpMock.expectOne((request) => request.url === '/api/venues/v1/bookings').flush(day);
     httpMock.expectOne('/api/venues/v1/shop/items').flush([water]);
     fixture.detectChanges();
@@ -153,5 +155,81 @@ describe('TimelinePage', () => {
       .flush([booking('b1', 'c1', [19], { toPayBaht: 0, can: { takeMoney: false } })]);
     fixture.detectChanges();
     expect(textOf(fixture, 'due')).toBe('฿0');
+  });
+
+  // Artboard b1: part of the money now, the rest stays owed.
+  it('takes part of what the court owes', () => {
+    render([booking('b1', 'c1', [19])]);
+
+    setInput(fixture, '[data-testid="take-amount"]', '100');
+    expect(textOf(fixture, 'due')).toBe('฿100');
+
+    clickOn(fixture, 'pay-PromptPay');
+    const court = httpMock.expectOne('/api/venues/v1/bookings/b1/payments');
+    expect(court.request.body).toEqual({ amountBaht: 100, method: 'PromptPay', note: undefined });
+    court.flush(booking('b1', 'c1', [19], { toPayBaht: 200 }));
+    httpMock
+      .expectOne((request) => request.url === '/api/venues/v1/bookings')
+      .flush([booking('b1', 'c1', [19], { toPayBaht: 200 })]);
+    fixture.detectChanges();
+
+    // What is typed never runs past what is owed.
+    setInput(fixture, '[data-testid="take-amount"]', '999');
+    expect(textOf(fixture, 'due')).toBe('฿200');
+  });
+
+  // Artboard b2: who called it off, and what that gives back — the server's own numbers.
+  it('cancels with the reason chosen, showing what it gives back', () => {
+    const can = {
+      checkIn: false,
+      takeMoney: false,
+      extend: false,
+      moveCourt: false,
+      noShow: false,
+      cancel: true,
+      cancelChoices: [
+        { reason: 'CustomerRequest', refundBaht: 0 },
+        { reason: 'VenueInitiated', refundBaht: 300 },
+      ],
+    };
+    render([booking('b1', 'c1', [19], { toPayBaht: 0, can })]);
+
+    clickOn(fixture, 'cancel-open');
+    fixture.detectChanges();
+    expect(elementOf<HTMLButtonElement>(fixture, 'confirm-cancel')!.disabled).toBe(true);
+
+    clickOn(fixture, 'cancel-reason-VenueInitiated');
+    fixture.detectChanges();
+    expect(textOf(fixture, 'refund-due')).toBe('฿300');
+    setInput(fixture, '[data-testid="cancel-note"]', 'น้ำรั่ว');
+    clickOn(fixture, 'confirm-cancel');
+
+    const cancel = httpMock.expectOne('/api/venues/v1/bookings/b1/cancel');
+    expect(cancel.request.body).toEqual({
+      reason: 'VenueInitiated',
+      paymentReceived: null,
+      note: 'น้ำรั่ว',
+    });
+    cancel.flush(
+      booking('b1', 'c1', [19], { status: 'Cancelled', can: { ...can, cancel: false } }),
+    );
+    httpMock.expectOne((request) => request.url === '/api/venues/v1/availability').flush(grid());
+    httpMock.expectOne((request) => request.url === '/api/venues/v1/bookings').flush([]);
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, 'confirm-cancel')).toBeNull();
+  });
+
+  it('marks a no-show through its door, and says when a shut one opens', () => {
+    render([
+      booking('b1', 'c1', [19], {
+        graceEndsAt: '2026-09-30T12:15:00Z',
+        can: { checkIn: true, takeMoney: false, noShow: false, cancel: true, cancelChoices: [] },
+      }),
+    ]);
+
+    // 18:45 now; the grace runs out at 19:15.
+    expect(elementOf<HTMLButtonElement>(fixture, 'no-show')!.disabled).toBe(true);
+    expect(textOf(fixture, 'no-show')).toContain('19:15');
   });
 });

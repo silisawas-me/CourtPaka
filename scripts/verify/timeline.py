@@ -83,8 +83,10 @@ with sync_playwright() as p:
     check("pressing the block opens it in the panel", True, desk)
     check("the panel says where and when", f"{hour}:00" in panel.locator("[data-testid=panel-where]").inner_text())
 
-    # Another court, through the move door — only a court the server says is free is offered.
-    free = panel.locator("[data-testid^=move-]:not([disabled])")
+    # Another court, through the move door — folded under its button, only a court the server
+    # says is free is offered.
+    panel.locator("[data-testid=move-open]").click()
+    free = panel.locator("[data-testid^=move-]:not([disabled]):not([data-testid=move-open])")
     free.first.wait_for()
     target = free.first.get_attribute("data-testid").removeprefix("move-")
     with desk.expect_response(lambda r: r.url.endswith(f"/bookings/{booking_id}/move")) as moved:
@@ -111,13 +113,29 @@ with sync_playwright() as p:
     check("the day's list is in the quieter group",
           desk.locator("[data-testid=nav-bookings]").count() == 1)
 
-    # Tidy up what this made.
+    # The doors that end a booking (artboard b1): no-show is shut until the grace runs out.
+    check("no-show waits for the grace to run out",
+          panel.locator("[data-testid=no-show]").is_disabled(), desk)
+
+    # Cancelling, as artboard b2 draws it: who called it off, what it gives back, then confirm.
     desk.request.post(f"{api}/shop/sales/{sale.value.json()['saleId']}/cancel", data={"reason": "verify"})
+    panel.locator("[data-testid=cancel-open]").click()
+    check("cancelling waits for who called it off",
+          panel.locator("[data-testid=confirm-cancel]").is_disabled(), desk)
+    panel.locator("[data-testid=cancel-reason-VenueInitiated]").click()
+    check("and says what that gives back",
+          panel.locator("[data-testid=refund-due]").inner_text().startswith("฿"), desk)
+    panel.locator("[data-testid=cancel-note]").fill("verify")
+    with desk.expect_response(lambda r: r.url.endswith(f"/bookings/{booking_id}/cancel")) as cancelled:
+        panel.locator("[data-testid=confirm-cancel]").click()
+    check("cancelling from the panel is accepted",
+          cancelled.value.status == 200 and cancelled.value.json()["status"] == "Cancelled")
+    check("and its block leaves the track",
+          desk.locator(f"[data-testid=board-block-{booking_id}]").count() == 0
+          or desk.wait_for_selector(f"[data-testid=board-block-{booking_id}]", state="detached") is None, desk)
+
+    # Tidy up what this made.
     desk.request.post(f"{api}/shop/items/{item['itemId']}/withdraw")
-    desk.request.post(
-        f"{api}/bookings/{booking_id}/cancel",
-        data={"reason": "VenueInitiated", "note": "verify"},
-    )
     browser.close()
 
 check.summarise()
