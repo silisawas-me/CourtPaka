@@ -1,0 +1,172 @@
+<!-- Artboard c: the week by day on the left, the wait for latecomers on the right. -->
+@if (loadError(); as key) {
+  <p class="form-error" data-testid="hours-error">{{ i18n.t(key) }}</p>
+} @else if (week(); as days) {
+  <div class="hours-layout">
+    <section class="card" [attr.aria-label]="i18n.t('hours.title')" data-testid="opening-hours">
+      <div class="card-head">
+        <h2>{{ i18n.t('hours.title') }}</h2>
+        <label class="from">
+          {{ i18n.t('hours.from') }}
+          <input
+            type="date"
+            data-testid="hours-from"
+            [min]="today"
+            [value]="from()"
+            [disabled]="!canManage()"
+            (change)="from.set($any($event.target).value)"
+          />
+        </label>
+      </div>
+
+      <div class="row head" aria-hidden="true">
+        <span>{{ i18n.t('hours.day') }}</span>
+        <span>{{ i18n.t('hours.opens') }}</span>
+        <span>{{ i18n.t('hours.closes') }}</span>
+        <span>{{ i18n.t('hours.allDay') }}</span>
+      </div>
+      @for (day of days; track day.day) {
+        <div
+          class="row"
+          [class.shut]="day.opensHour === null"
+          [attr.data-testid]="'hours-' + day.day"
+        >
+          <span class="day">{{ dayName(day.day) }}</span>
+          <select
+            [attr.aria-label]="dayName(day.day) + ' ' + i18n.t('hours.opens')"
+            [attr.data-testid]="'opens-' + day.day"
+            [disabled]="!canManage() || day.opensHour === null"
+            (change)="setOpens(day.day, $any($event.target).value)"
+          >
+            @if (day.opensHour === null) {
+              <option selected>—</option>
+            }
+            @for (hour of openHours; track hour) {
+              <option [value]="hour" [selected]="hour === day.opensHour">
+                {{ hourLabel(hour) }}
+              </option>
+            }
+          </select>
+          <select
+            [attr.aria-label]="dayName(day.day) + ' ' + i18n.t('hours.closes')"
+            [attr.data-testid]="'closes-' + day.day"
+            [disabled]="!canManage() || day.opensHour === null"
+            (change)="setCloses(day.day, $any($event.target).value)"
+          >
+            @if (day.closesHour === null) {
+              <option selected>—</option>
+            }
+            @for (hour of closeHours; track hour) {
+              <option [value]="hour" [selected]="hour === day.closesHour">
+                {{ hourLabel(hour) }}
+              </option>
+            }
+          </select>
+          <button
+            type="button"
+            class="state"
+            [class.open]="day.opensHour !== null"
+            [attr.aria-pressed]="day.opensHour !== null"
+            [attr.data-testid]="'toggle-' + day.day"
+            [disabled]="!canManage()"
+            (click)="toggle(day)"
+          >
+            {{ i18n.t(day.opensHour === null ? 'hours.shut' : 'hours.open') }}
+          </button>
+        </div>
+      }
+
+      <p class="note">{{ i18n.t('hours.note') }}</p>
+      @if (!weekValid()) {
+        <p class="form-error" data-testid="hours-invalid">{{ i18n.t('hours.invalid') }}</p>
+      }
+      @for (line of result(); track $index) {
+        <p [class]="line.error ? 'form-error' : 'success'" data-testid="hours-result" role="status">
+          {{ line.text }}
+        </p>
+      }
+
+      @if (canManage()) {
+        <div class="actions">
+          @if (others().length > 0) {
+            <button
+              type="button"
+              class="secondary"
+              data-testid="hours-save-all"
+              [disabled]="busy() || !weekValid()"
+              (click)="saveEverywhere()"
+            >
+              {{ i18n.t('pricing.applyAll') }}
+            </button>
+          }
+          <button
+            type="button"
+            class="primary"
+            data-testid="hours-save"
+            [disabled]="busy() || !weekValid()"
+            (click)="save()"
+          >
+            {{ i18n.t('hours.save') }}
+          </button>
+        </div>
+      }
+    </section>
+
+    <section class="card grace" [attr.aria-label]="i18n.t('hours.graceTitle')" data-testid="grace">
+      <h2>{{ i18n.t('hours.graceTitle') }}</h2>
+      <p class="muted">{{ i18n.t('hours.graceLead') }}</p>
+      <div class="stepper">
+        <button
+          type="button"
+          class="step"
+          data-testid="grace-less"
+          [attr.aria-label]="i18n.t('hours.graceLess')"
+          [disabled]="!canManage() || grace() === 0"
+          (click)="nudgeGrace(-1)"
+        >
+          −
+        </button>
+        <span class="minutes" data-testid="grace-minutes"
+          >{{ grace() }}<small> {{ i18n.t('hours.minutes') }}</small></span
+        >
+        <button
+          type="button"
+          class="step dark"
+          data-testid="grace-more"
+          [attr.aria-label]="i18n.t('hours.graceMore')"
+          [disabled]="!canManage() || grace() === 60"
+          (click)="nudgeGrace(1)"
+        >
+          +
+        </button>
+      </div>
+      <div class="presets">
+        @for (minutes of presets; track minutes) {
+          <button
+            type="button"
+            [class.on]="grace() === minutes"
+            [attr.aria-pressed]="grace() === minutes"
+            [attr.data-testid]="'grace-' + minutes"
+            [disabled]="!canManage()"
+            (click)="pickGrace(minutes)"
+          >
+            {{ minutes }}
+          </button>
+        }
+      </div>
+      @if (graceError(); as key) {
+        <p class="form-error" data-testid="grace-error">{{ i18n.t(key) }}</p>
+      }
+      @if (graceSaved()) {
+        <p class="success" data-testid="grace-saved" role="status">{{ i18n.t('hours.saved') }}</p>
+      }
+      @if (canManage()) {
+        <button type="button" class="primary" data-testid="grace-save" (click)="saveGrace()">
+          {{ i18n.t('hours.graceSave') }}
+        </button>
+      }
+    </section>
+  </div>
+} @else {
+  <p class="muted">{{ i18n.t('common.loading') }}</p>
+}

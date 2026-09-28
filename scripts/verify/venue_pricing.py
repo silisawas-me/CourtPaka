@@ -2,7 +2,7 @@
 
 import datetime
 
-from harness import BASE, OWNER, STAFF, Checks, login, open_seeded_venue, staff_can
+from harness import BASE, OWNER, STAFF, Checks, ensure_bookable, login, open_seeded_venue, staff_can
 from playwright.sync_api import sync_playwright
 
 check = Checks(__file__)
@@ -114,6 +114,29 @@ with sync_playwright() as p:
         "ไม่น้อยกว่า" in page.locator("[data-testid=policy-error]").inner_text(),
         page,
     )
+
+    # 5b. Opening hours and the grace for latecomers, on the section's second tab (artboard c).
+    page.goto(BASE + venue_url + "/pricing")
+    page.click("[data-testid=pricing-tab-hours]")
+    page.wait_for_selector("[data-testid=opening-hours]")
+    api = f"{BASE}/api{venue_url}"
+    page.select_option("[data-testid=opens-Sunday]", "5")
+    with page.expect_response(lambda r: r.url.endswith("/opening-hours") and r.request.method == "PUT") as week:
+        page.click("[data-testid=hours-save]")
+    check("a week that opens an hour earlier is saved", week.value.status == 200, page)
+    bands = page.request.get(f"{api}/prices").json()["bands"]
+    check("and the hour it opens was priced first, from its neighbour",
+          any(b["day"] == "Sunday" and b["fromHour"] == 5 for b in bands))
+    page.wait_for_selector("[data-testid=hours-result]")
+    check("the page says so", page.locator("[data-testid=hours-result]").count() == 1, page)
+
+    page.click("[data-testid=grace-30]")
+    with page.expect_response(lambda r: r.url.endswith("/grace")) as grace:
+        page.click("[data-testid=grace-save]")
+    mine = [v for v in page.request.get(f"{BASE}/api/venues/mine").json() if f"/venues/{v['id']}" == venue_url][0]
+    check("the grace for latecomers is saved", grace.value.status == 204 and mine["graceMinutes"] == 30, page)
+    page.request.put(f"{api}/grace", data={"minutes": 15})
+    ensure_bookable(browser, venue_url.rsplit("/", 1)[-1])
 
     # 6. Staff read the prices and the policy and can change neither.
     page.goto(f"{BASE}/")

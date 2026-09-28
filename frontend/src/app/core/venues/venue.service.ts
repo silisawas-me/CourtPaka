@@ -64,6 +64,8 @@ export interface Venue extends VenueAddress {
   depositPercent: number;
   /** When this venue asks for more than that share, and of whom (PRD US-28). */
   risk: VenueRiskRule;
+  /** How long it waits after the hour starts before nobody having come counts (US-24). */
+  graceMinutes?: number;
   /**
    * The most the person reading may write down as sent back in one record (PRD US-18), or null
    * where they have no ceiling. Beside the permissions because it is one of them.
@@ -305,6 +307,11 @@ export class VenueService {
   /** How much of a booking's price has to arrive before the hours are held (PRD US-28). */
   setDeposit(venueId: string, percent: number): Observable<void> {
     return this.http.put<void>(`/api/venues/${encodeURIComponent(venueId)}/deposit`, { percent });
+  }
+
+  /** How long the venue waits for somebody after their hour starts (PRD US-24). */
+  setGrace(venueId: string, minutes: number): Observable<void> {
+    return this.http.put<void>(`/api/venues/${encodeURIComponent(venueId)}/grace`, { minutes });
   }
 
   /** When this venue asks somebody for more than that, and of whom (PRD US-28). */

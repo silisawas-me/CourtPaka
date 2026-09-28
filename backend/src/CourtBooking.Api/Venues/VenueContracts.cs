@@ -114,6 +114,8 @@ public sealed record VenueResponse(
     int DepositPercent,
     /// <summary>When this venue asks for more than that share, and of whom (PRD US-28).</summary>
     RiskRuleResponse Risk,
+    /// <summary>How long it waits after the hour starts before nobody having come counts (US-24).</summary>
+    int GraceMinutes,
     /// <summary>
     /// The most the person reading may write down as sent back in one record, or null where
     /// they have no ceiling (PRD US-18). Like the permissions beside it, it belongs to the

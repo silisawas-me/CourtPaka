@@ -1,0 +1,224 @@
+/* Artboard c: the week on a white card, the wait for latecomers beside it. */
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.hours-layout {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+
+  @media (min-width: 64rem) {
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid #eee6d9;
+  border-radius: 18px;
+  background: var(--mat-sys-surface);
+
+  h2 {
+    margin: 0;
+    font: var(--mat-sys-title-medium);
+    font-weight: 600;
+  }
+}
+
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.from {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+
+  input {
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--mat-sys-outline-variant);
+    border-radius: 10px;
+    font: 500 13px var(--font-mono);
+    color: var(--mat-sys-on-surface);
+  }
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(4.75rem, 1fr) minmax(4.75rem, 1fr) auto;
+  gap: 0.4rem;
+
+  @media (min-width: 40rem) {
+    grid-template-columns: 5.5rem minmax(0, 1fr) minmax(0, 1fr) 6.5rem;
+    gap: 0.6rem;
+  }
+  align-items: center;
+  padding: 0.35rem 0.25rem;
+  border-top: 1px solid #f3eee6;
+
+  &.head {
+    border-top: 0;
+    font: var(--mat-sys-label-small);
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  select {
+    min-width: 0;
+    min-height: 2.5rem;
+    padding: 0 0.4rem;
+    border: 1px solid var(--mat-sys-outline-variant);
+    border-radius: 10px;
+    background: var(--mat-sys-surface);
+    color: var(--mat-sys-on-surface);
+    font: 500 14px var(--font-mono);
+  }
+
+  &.shut select {
+    background: var(--mat-sys-surface-container-high);
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+.day {
+  font-weight: 600;
+}
+
+.state {
+  justify-self: start;
+  padding: 0.35rem 0.7rem;
+  border: 0;
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-label-medium);
+  cursor: pointer;
+
+  &.open {
+    background: var(--kind-app-soft);
+    color: var(--kind-app-ink);
+  }
+}
+
+.note {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  background: #efe8dc;
+  font: var(--mat-sys-body-small);
+  color: #574a3f;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.primary,
+.secondary {
+  min-height: 2.75rem;
+  padding: 0 1.25rem;
+  border-radius: var(--mat-sys-corner-medium);
+  font: var(--mat-sys-label-large);
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+}
+
+.primary {
+  border: 0;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+}
+
+.secondary {
+  border: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+}
+
+.success,
+.form-error {
+  margin: 0;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.step {
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 12px;
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font-size: 1.25rem;
+  cursor: pointer;
+
+  &.dark {
+    border-color: var(--mat-sys-inverse-surface);
+    background: var(--mat-sys-inverse-surface);
+    color: #fff;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
+.minutes {
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 2.5rem;
+  font-weight: 800;
+
+  small {
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+.presets {
+  display: flex;
+  gap: 0.4rem;
+
+  button {
+    flex: 1;
+    min-height: 2.5rem;
+    border: 1px solid var(--mat-sys-outline-variant);
+    border-radius: 10px;
+    background: var(--mat-sys-surface);
+    color: var(--mat-sys-on-surface);
+    font: 500 13px var(--font-mono);
+    cursor: pointer;
+
+    &.on {
+      border-color: var(--mat-sys-inverse-surface);
+      background: var(--mat-sys-inverse-surface);
+      color: #fff;
+    }
+  }
+}

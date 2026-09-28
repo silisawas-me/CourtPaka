@@ -15,6 +15,7 @@ import { CourtService, Weekday, WEEKDAYS } from '../../core/venues/court.service
 import { PricingService } from '../../core/venues/pricing.service';
 import { Venue, VenueService } from '../../core/venues/venue.service';
 import { bandsOf, gridOf, openHours, paint, PriceGrid } from './price-grid';
+import { VenueHours } from './venue-hours';
 
 /** How far one press of − or + moves a tier's price. */
 const PRICE_STEP = 10;
@@ -29,7 +30,7 @@ const PRICE_STEP = 10;
  */
 @Component({
   selector: 'app-pricing-page',
-  imports: [BahtPipe],
+  imports: [BahtPipe, VenueHours],
   templateUrl: './pricing.page.html',
   styleUrl: './pricing.page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -55,7 +56,15 @@ export class PricingPage {
   /** Venues the prices were copied to, and any that refused them (with why). */
   protected readonly copied = signal<{ name: string; error: string | null }[]>([]);
 
-  private readonly venue = computed(
+  /** The section's two tabs, as artboard c has them: prices, and the hours they apply to. */
+  protected readonly tab = signal<'prices' | 'hours'>('prices');
+
+  /** A week saved on the hours tab opens or shuts hours, so the grid is read again. */
+  protected reload(): void {
+    this.load(this.venueId());
+  }
+
+  protected readonly venue = computed(
     () => this.mine().find((one) => one.id === this.venueId()) ?? null,
   );
 
