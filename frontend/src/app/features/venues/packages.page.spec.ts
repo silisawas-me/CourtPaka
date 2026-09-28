@@ -76,13 +76,63 @@ describe('PackagesPage', () => {
   });
 
   // Selling a package is off this page for now (the owner's call): members and the board only.
-  it('lists the members without a way to sell a package here', () => {
-    render([offer()], [sold({ hoursLeft: 10, moves: [] })]);
+  // "+ เพิ่มสมาชิก" opens the design's dialog (artboard a): adding a member is selling a package.
+  it('adds a member by selling them a package in the dialog', () => {
+    render([offer(), offer({ typeId: 't2', name: 'ชุด 20 ชั่วโมง', priceBaht: 3400 })], []);
+    expect(elementOf(fixture, 'sell-package-dialog')).toBeNull();
 
+    clickOn(fixture, 'members-add');
+    fixture.detectChanges();
+    // The first offer is chosen until another is pressed, and the button says its price.
+    expect(textOf(fixture, 'sell-package')).toContain('1,800');
+    clickOn(fixture, 'offer-pick-t2');
+    fixture.detectChanges();
+    expect(textOf(fixture, 'sell-package')).toContain('3,400');
+
+    setInput(fixture, '[data-testid="customer-name"]', ' ก๊วนเหมา ');
+    setInput(fixture, '[data-testid="customer-phone"]', '0812345678');
+    clickOn(fixture, 'paid-Cash');
+    fixture.detectChanges();
+    clickOn(fixture, 'sell-package');
+
+    const request = httpMock.expectOne('/api/venues/v1/packages');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      packageTypeId: 't2',
+      customerName: 'ก๊วนเหมา',
+      customerPhone: '0812345678',
+      paidBy: 'Cash',
+    });
+    request.flush(sold({ hoursLeft: 20, moves: [] }));
+    fixture.detectChanges();
+
+    // The new member is on the table, and the dialog has gone.
     expect(elementOf(fixture, 'package-p1')).not.toBeNull();
-    expect(elementOf(fixture, 'sell-package')).toBeNull();
-    expect(elementOf(fixture, 'members-add')).toBeNull();
-    expect(elementOf(fixture, 'customer-name')).toBeNull();
+    expect(elementOf(fixture, 'sell-package-dialog')).toBeNull();
+  });
+
+  it('will not sell to nobody', () => {
+    render([offer()], []);
+    clickOn(fixture, 'members-add');
+    fixture.detectChanges();
+
+    clickOn(fixture, 'sell-package');
+    fixture.detectChanges();
+
+    httpMock.expectNone('/api/venues/v1/packages');
+    expect(textOf(fixture, 'customer-name-error')).toBe(TRANSLATIONS.th['sellPackage.nameNeeded']);
+  });
+
+  it('sends somebody with nothing on the board to the board', () => {
+    render([], []);
+    clickOn(fixture, 'members-add');
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, 'sell-package-nothing')).not.toBeNull();
+    clickOn(fixture, 'sell-package-to-board');
+    fixture.detectChanges();
+    expect(elementOf(fixture, 'sell-package-dialog')).toBeNull();
+    expect(elementOf(fixture, 'offer-name')).not.toBeNull();
   });
 
   /**

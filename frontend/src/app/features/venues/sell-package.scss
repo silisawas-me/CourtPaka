@@ -1,0 +1,64 @@
+/* What the sell-package dialog adds to the walk-in's (walk-in.scss): offers as cards. */
+.offers {
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+}
+
+.offer {
+  display: grid;
+  gap: 0.1rem;
+  justify-items: start;
+  padding: 0.75rem;
+  border-radius: var(--mat-sys-corner-large);
+  font-family: inherit;
+  text-align: start;
+
+  &.on {
+    border: 2px solid var(--mat-sys-on-surface);
+    background: var(--mat-sys-surface);
+    color: var(--mat-sys-on-surface);
+  }
+}
+
+.offer-name {
+  font: var(--mat-sys-label-large);
+  font-weight: 600;
+}
+
+.offer-price {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.offer-note {
+  font: var(--mat-sys-label-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.link {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--mat-sys-primary);
+  font: var(--mat-sys-label-medium);
+  cursor: pointer;
+}
+
+.who label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.field-label {
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.summary {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--mat-sys-corner-medium);
+  background: var(--mat-sys-surface-container-highest);
+  font: var(--mat-sys-body-small);
+}

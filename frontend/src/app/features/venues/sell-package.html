@@ -1,0 +1,138 @@
+<!--
+  A dialog over the members table, as the design's walk-in is: adding a member is selling them a
+  package, and nothing else on the page is what the desk is doing. The backdrop closes it, as
+  Escape does.
+-->
+<div class="backdrop" (click)="closed.emit()"></div>
+<div
+  class="sheet"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="sell-package-title"
+  data-testid="sell-package-dialog"
+>
+  <header class="head">
+    <h2 id="sell-package-title">{{ i18n.t('sellPackage.title') }}</h2>
+    <button
+      type="button"
+      class="close"
+      data-testid="sell-package-close"
+      [attr.aria-label]="i18n.t('panel.close')"
+      (click)="closed.emit()"
+    >
+      <span aria-hidden="true">×</span>
+    </button>
+  </header>
+
+  @if (offers().length === 0) {
+    <p class="muted" data-testid="sell-package-nothing">{{ i18n.t('sellPackage.nothing') }}</p>
+    <button
+      type="button"
+      class="confirm"
+      data-testid="sell-package-to-board"
+      (click)="wantsBoard.emit()"
+    >
+      <span>{{ i18n.t('sellPackage.setUp') }}</span>
+    </button>
+  } @else {
+    <fieldset>
+      <legend>{{ i18n.t('sellPackage.package') }}</legend>
+      <div class="choices offers">
+        @for (one of offers(); track one.typeId) {
+          <button
+            type="button"
+            class="choice offer"
+            [class.on]="offer()?.typeId === one.typeId"
+            [attr.aria-pressed]="offer()?.typeId === one.typeId"
+            [attr.data-testid]="'offer-pick-' + one.typeId"
+            (click)="pick(one)"
+          >
+            <span class="offer-name">{{ one.name }}</span>
+            <span class="offer-price">฿{{ one.priceBaht | baht: i18n.locale() }}</span>
+            <span class="offer-note"
+              >฿{{ one.bahtPerHour | baht: i18n.locale() }}/{{ i18n.t('timeline.hr') }} ·
+              {{ one.validForDays }} {{ i18n.t('sellPackage.days') }}</span
+            >
+          </button>
+        }
+      </div>
+      <button
+        type="button"
+        class="link"
+        data-testid="sell-package-new-offer"
+        (click)="wantsBoard.emit()"
+      >
+        {{ i18n.t('sellPackage.newOffer') }}
+      </button>
+    </fieldset>
+
+    <div class="who">
+      <label>
+        <span class="field-label">{{ i18n.t('sellPackage.name') }}</span>
+        <input
+          data-testid="customer-name"
+          [maxLength]="nameMaxLength"
+          [value]="name()"
+          (input)="name.set($any($event.target).value)"
+        />
+        @if (tried() && nameMissing()) {
+          <span class="note" data-testid="customer-name-error">{{
+            i18n.t('sellPackage.nameNeeded')
+          }}</span>
+        }
+      </label>
+      <label>
+        <span class="field-label">{{ i18n.t('sellPackage.phone') }}</span>
+        <input
+          data-testid="customer-phone"
+          inputmode="tel"
+          [maxLength]="phoneMaxLength"
+          [value]="phone()"
+          (input)="phone.set($any($event.target).value)"
+        />
+      </label>
+    </div>
+
+    <fieldset>
+      <legend>{{ i18n.t('sellPackage.pay') }}</legend>
+      <div class="choices three">
+        @for (method of payWith; track method) {
+          <button
+            type="button"
+            class="choice"
+            [class.on]="paidBy() === method"
+            [attr.aria-pressed]="paidBy() === method"
+            [attr.data-testid]="'paid-' + method"
+            (click)="paidBy.set(method)"
+          >
+            {{ i18n.t('money.method.' + method) }}
+          </button>
+        }
+      </div>
+    </fieldset>
+
+    @if (until(); as day) {
+      <p class="summary" data-testid="sell-package-until">
+        {{ i18n.t('sellPackage.until') }} <b>{{ day | appDate: i18n.locale() }}</b> ·
+        {{ i18n.t('sellPackage.revenueNote') }}
+      </p>
+    }
+
+    @if (error(); as key) {
+      <p class="form-error" data-testid="sell-package-error">{{ i18n.t(key) }}</p>
+    }
+
+    <button
+      type="button"
+      class="confirm"
+      data-testid="sell-package"
+      [disabled]="busy()"
+      (click)="sell()"
+    >
+      <span>{{ i18n.t('sellPackage.confirm') }}</span>
+      @if (offer(); as chosen) {
+        <span>฿{{ chosen.priceBaht | baht: i18n.locale() }}</span>
+      }
+    </button>
+  }
+</div>
