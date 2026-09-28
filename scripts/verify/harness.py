@@ -28,7 +28,9 @@ class Checks:
         (self.passed if condition else self.failed).append(name)
         print(("PASS  " if condition else "FAIL  ") + name)
         if page is not None:
-            safe = name.replace(" ", "_").replace("/", "-")
+            # Only characters every filesystem (and actions/upload-artifact) accepts: a check
+            # named "(16:00)" otherwise takes the screenshots of a failed run down with it.
+            safe = re.sub(r'[\\/:*?"<>|\r\n]', "-", name.replace(" ", "_"))
             page.screenshot(path=str(self.shots / f"{safe}.png"), full_page=True)
 
     def summarise(self) -> None:

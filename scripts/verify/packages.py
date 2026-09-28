@@ -230,7 +230,7 @@ with sync_playwright() as p:
 
     # And the venue is left the way the other scripts expect to find it.
     clear_package_board(page, venue_id)
-    page.click("[data-testid=side-language-th]")
+    page.click("[data-testid=top-language-th]")
     expect(page.locator("html")).to_have_attribute("lang", "th")
 
     page.close()

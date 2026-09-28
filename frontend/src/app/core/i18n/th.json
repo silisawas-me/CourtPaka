@@ -949,5 +949,21 @@
   "revenue.byMethod": "ช่องทางชำระเงิน",
   "revenue.topItems": "สินค้าขายดี",
   "revenue.noMoney": "ยังไม่มีเงินเข้าในช่วงนี้",
-  "revenue.nothingSold": "ยังไม่มีการขายในช่วงนี้"
+  "revenue.nothingSold": "ยังไม่มีการขายในช่วงนี้",
+  "members.search": "ค้นหาชื่อหรือเบอร์โทร",
+  "members.filter": "กรองสมาชิก",
+  "members.filter.all": "ทั้งหมด",
+  "members.filter.live": "ใช้งานอยู่",
+  "members.filter.runningOut": "ใกล้หมดอายุ",
+  "members.add": "+ เพิ่มสมาชิก",
+  "members.name": "ชื่อ",
+  "members.plan": "แพ็กเกจ",
+  "members.used": "ชั่วโมงที่ใช้",
+  "members.expires": "หมดอายุ",
+  "members.status": "สถานะ",
+  "members.standing.live": "ใช้งานอยู่",
+  "members.standing.runningOut": "ใกล้หมดอายุ",
+  "members.standing.done": "หมดแล้ว",
+  "members.history": "ประวัติชั่วโมง",
+  "packages.left": "เหลือ"
 }

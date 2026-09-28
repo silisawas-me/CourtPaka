@@ -1,6 +1,6 @@
 /**
- * Three things stacked in the order a shift uses them: selling one, what has been sold, and the
- * board they are sold from — which is a setting and is folded away until somebody asks for it.
+ * The owner app's members (PR-6): who holds hours, as a table, then selling a package to a new
+ * one, then the board packages are sold from — a setting, folded away until somebody asks.
  */
 
 /** The page is a grid item of the shell, so it has to be told it may be narrower than its rows. */
@@ -23,64 +23,11 @@
   }
 }
 
-.sold-list,
 .board,
 .moves {
   list-style: none;
   margin: 0;
   padding: 0;
-}
-
-.sold {
-  padding: 0.85rem 0;
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
-
-  &:last-child {
-    border-bottom: none;
-  }
-}
-
-.sold-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.25rem 0.75rem;
-}
-
-.sold-who {
-  font: var(--mat-sys-title-small);
-}
-
-/**
- * What is left is the number somebody came to this page for, so it is the one that reads first
- * and the one that lines up down the list.
- */
-.sold-left {
-  margin-left: auto;
-  font: var(--mat-sys-title-medium);
-  font-variant-numeric: tabular-nums;
-}
-
-.sold-facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.15rem 1rem;
-  margin-top: 0.2rem;
-  font: var(--mat-sys-body-medium);
-}
-
-/** Hours about to run out are a phone call, which is what this colour means (PRD US-25). */
-.sold.running-out {
-  .sold-left {
-    background: var(--status-waiting-soft);
-    color: var(--status-waiting-ink);
-    border-radius: var(--mat-sys-corner-small);
-    padding: 0.05rem 0.5rem;
-  }
-}
-
-.sold.spent {
-  color: var(--mat-sys-on-surface-variant);
 }
 
 .moves {
@@ -144,4 +91,204 @@
     margin: 0 0 0.25rem;
     font: var(--mat-sys-title-medium);
   }
+}
+
+.lead {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.members-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-block: 1rem 0.5rem;
+}
+
+.search input {
+  width: min(22rem, 100%);
+  min-height: 2.75rem;
+  padding: 0 0.9rem;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-medium);
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-medium);
+}
+
+.filters {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.filter,
+.add {
+  min-height: 2.5rem;
+  padding: 0 1rem;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-full);
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-label-large);
+  cursor: pointer;
+}
+
+.filter.on,
+.add {
+  border-color: var(--mat-sys-on-surface);
+  background: var(--mat-sys-on-surface);
+  color: var(--mat-sys-surface);
+}
+
+.add {
+  margin-inline-start: auto;
+  border-radius: var(--mat-sys-corner-medium);
+}
+
+.owed {
+  margin: 0 0 0.75rem;
+  font: var(--mat-sys-body-small);
+}
+
+/* A table as the design draws one: a card, a quiet header, a row per package. */
+.members {
+  margin-bottom: var(--stack);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-extra-large);
+  background: var(--mat-sys-surface);
+  overflow: hidden;
+}
+
+.members-head,
+.member {
+  display: grid;
+  grid-template-columns: minmax(12rem, 2fr) minmax(8rem, 1.3fr) minmax(9rem, 1.4fr) 7rem 8rem;
+  align-items: center;
+  gap: 0.25rem 1rem;
+  padding: 0.85rem 1.25rem;
+}
+
+.members-head {
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.member {
+  border-top: 1px solid var(--mat-sys-outline-variant);
+
+  &.spent {
+    opacity: 0.65;
+  }
+}
+
+/* On a phone the columns fold under the name: who first, then the rest as a line each. */
+@media (max-width: 47.99rem) {
+  .members-head {
+    display: none;
+  }
+
+  .members-head,
+  .member {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.initial {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--mat-sys-corner-full);
+  background: var(--kind-package-soft);
+  font: var(--mat-sys-title-small);
+}
+
+.person-text {
+  display: grid;
+  min-width: 0;
+}
+
+.person-name {
+  font: var(--mat-sys-title-small);
+  overflow-wrap: anywhere;
+}
+
+.person-phone,
+.expires,
+.used-num {
+  font: var(--mat-sys-label-medium);
+  font-family: var(--font-mono);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.used {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.track {
+  height: 0.35rem;
+  border-radius: var(--mat-sys-corner-full);
+  background: var(--mat-sys-surface-container-highest);
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  background: var(--mat-sys-primary);
+}
+
+.chip {
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--mat-sys-corner-extra-small);
+  font: var(--mat-sys-label-medium);
+
+  &.live {
+    background: var(--status-playing-soft);
+    color: var(--status-playing-ink);
+  }
+
+  &.runningOut {
+    background: var(--status-waiting-soft);
+    color: var(--status-waiting-ink);
+  }
+
+  &.done {
+    background: var(--status-done-soft);
+    color: var(--status-done-ink);
+  }
+}
+
+.history {
+  grid-column: 1 / -1;
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+
+  summary {
+    cursor: pointer;
+  }
+}
+
+.empty {
+  padding: 1rem 1.25rem;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
