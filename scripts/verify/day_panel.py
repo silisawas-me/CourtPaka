@@ -1,10 +1,13 @@
 """The booking pressed on the floor opens beside it, and sells onto the bill (badPaka 2a)."""
 
+import datetime
+
 from harness import (
     BASE,
     OWNER,
     Checks,
     ensure_bookable,
+    pick_date,
     seeded_venue_id,
     sign_in,
     venue_today,
@@ -17,7 +20,10 @@ with sync_playwright() as p:
     browser = p.chromium.launch()
     venue_id = seeded_venue_id(browser.new_page())
     ensure_bookable(browser, venue_id)
-    today = venue_today().isoformat()
+    # The day the walk-in is sold on: today while the venue still has an hour that has not ended,
+    # otherwise tomorrow — run after closing, every free hour today is over and the counter refuses
+    # it (booking.hour_already_over), which is the rule, not a failure of this page.
+    bangkok_now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7)))
 
     desk = browser.new_page(viewport={"width": 1280, "height": 900})
     sign_in(desk, OWNER)
@@ -29,17 +35,26 @@ with sync_playwright() as p:
         data={"name": "Panel shuttles", "priceBaht": 90, "unit": "tube", "counted": False,
               "tellMeAt": None},
     ).json()
-    day = desk.request.get(f"{api}/availability", params={"date": today}).json()
-    free = next(
-        (court["courtId"], hour["hour"])
-        for court in day["courts"]
-        for hour in reversed(court["hours"])
-        if hour["status"] == "Free"
-    )
+    free = None
+    for ahead in (0, 1):
+        date = venue_today() + datetime.timedelta(days=ahead)
+        day = desk.request.get(f"{api}/availability", params={"date": date.isoformat()}).json()
+        free = next(
+            (
+                (court["courtId"], hour["hour"])
+                for court in day["courts"]
+                for hour in reversed(court["hours"])
+                if hour["status"] == "Free" and (ahead > 0 or hour["hour"] + 1 > bangkok_now.hour)
+            ),
+            None,
+        )
+        if free:
+            break
+    assert free, "no free hour today or tomorrow"
     sold = desk.request.post(
         f"{api}/bookings",
         data={
-            "slots": [{"courtId": free[0], "date": today, "hour": free[1]}],
+            "slots": [{"courtId": free[0], "date": date.isoformat(), "hour": free[1]}],
             "customerName": "Panel walk-in",
             "customerPhone": None,
             "paidBy": "Cash",
@@ -48,7 +63,10 @@ with sync_playwright() as p:
     check("the walk-in is sold at the counter", sold.status == 201)
     booking_id = sold.json()["bookingId"]
 
-    desk.goto(f"{BASE}/venues/{venue_id}/bookings?date={today}")
+    desk.goto(f"{BASE}/venues/{venue_id}/bookings")
+    desk.wait_for_selector("[data-testid=day]")
+    if date != venue_today():
+        pick_date(desk, date)
     block = desk.locator(f"[data-testid=board-block-{booking_id}]")
     block.wait_for()
     check("a walk-in is drawn in the walk-in's colours", "kind-WalkIn" in (block.get_attribute("class") or ""))
@@ -90,7 +108,10 @@ with sync_playwright() as p:
     # A phone has no room beside the floor: the panel rises from the foot instead.
     phone = browser.new_page(viewport={"width": 390, "height": 844})
     sign_in(phone, OWNER)
-    phone.goto(f"{BASE}/venues/{venue_id}/bookings?date={today}")
+    phone.goto(f"{BASE}/venues/{venue_id}/bookings")
+    phone.wait_for_selector("[data-testid=day]")
+    if date != venue_today():
+        pick_date(phone, date)
     phone.locator(f"[data-testid=board-block-{booking_id}]").click()
     sheet = phone.locator("[data-testid=booking-panel]")
     sheet.wait_for()
