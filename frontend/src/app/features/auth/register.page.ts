@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, input, OnInit, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -40,11 +40,20 @@ export class RegisterPage implements OnInit {
     acceptPolicy: [false, Validators.requiredTrue],
   });
 
+  /** The address an invitation was sent to (`/register?email=…`), filled in for them. */
+  readonly email = input<string>();
+  /** `owner` when the platform invited them to bring a venue: they sign in at the owner's door. */
+  readonly invitedAs = input<string | undefined>(undefined, { alias: 'as' });
+
   protected readonly submitting = signal(false);
   protected readonly errorKey = signal<string | null>(null);
   protected readonly done = signal(false);
 
   ngOnInit(): void {
+    const invited = this.email();
+    if (invited) {
+      this.form.controls.email.setValue(invited);
+    }
     // Fetch the policy version while the form is being filled in, so submitting costs one request.
     this.auth.privacyPolicyVersion().subscribe({ error: () => undefined });
   }

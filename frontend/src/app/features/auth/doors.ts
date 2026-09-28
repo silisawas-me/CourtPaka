@@ -24,7 +24,9 @@ export function refusal(
   isPlatformAdmin: boolean,
 ): string | null {
   if (door === 'admin') {
-    return isPlatformAdmin || venues.some((venue) => venue.role === 'Owner')
+    // Nobody signs up any more unless invited (owner-complete 3a), so somebody with no venue at
+    // all came in on the platform's invitation to bring one: the owner's door leads to applying.
+    return isPlatformAdmin || venues.length === 0 || venues.some((venue) => venue.role === 'Owner')
       ? null
       : 'login.door.notAnOwner';
   }
@@ -43,7 +45,10 @@ export function landing(
   isPlatformAdmin: boolean,
 ): string {
   if (door === 'admin') {
-    return isPlatformAdmin && venues.length === 0 ? '/admin/venues' : '/venues';
+    if (venues.length === 0) {
+      return isPlatformAdmin ? '/admin/venues' : '/venues/apply';
+    }
+    return '/venues';
   }
 
   return venues.length === 1 ? `/venues/${venues[0].id}/timeline` : '/venues';

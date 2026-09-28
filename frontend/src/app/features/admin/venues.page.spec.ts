@@ -53,6 +53,8 @@ describe('AdminVenuesPage', () => {
     fixture.detectChanges();
 
     httpMock.expectOne((request) => request.url === '/api/admin/venues').flush(venues);
+    // The owner invitations beside the list (owner-complete 3a) are their own spec's.
+    httpMock.expectOne('/api/admin/owner-invitations').flush([]);
     fixture.detectChanges();
   }
 

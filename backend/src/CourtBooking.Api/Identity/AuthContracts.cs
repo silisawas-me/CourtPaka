@@ -51,6 +51,12 @@ public static class AuthErrorCodes
     public const string PrivacyPolicyOutdated = "auth.privacy_policy_outdated";
     public const string RegistrationFailed = "auth.registration_failed";
 
+    /// <summary>Sign-up is closed and nobody invited this address (docs/plan/owner-complete.md 3a).</summary>
+    public const string InvitationRequired = "auth.invitation_required";
+
+    /// <summary>An owner invitation for an address that already has an account.</summary>
+    public const string AlreadyHasAccount = "auth.already_has_account";
+
     /// <summary>Signing in is allowed unverified; booking is not (PRD US-01).</summary>
     public const string EmailNotVerified = "auth.email_not_verified";
 

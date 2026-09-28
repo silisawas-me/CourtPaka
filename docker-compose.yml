@@ -49,6 +49,8 @@ services:
       App__DevQuickLogin: "true"
       # Booker emails/LINE link to pages that were taken out; off until a booker app (TELL_BOOKERS=true).
       App__TellBookers: "${TELL_BOOKERS:-false}"
+      # The verify scripts make bookers through sign-up; deployments keep it closed (invite only).
+      App__OpenSignUp: "${OPEN_SIGNUP:-true}"
       # Keeps auth cookies valid across restarts.
       App__DataProtectionKeysPath: "/keys"
       # End-to-end runs come from one IP; the deployed default of 10/minute is for real users.
