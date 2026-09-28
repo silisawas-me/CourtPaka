@@ -60,6 +60,8 @@ public sealed class ApiFactory(string connectionString) : WebApplicationFactory<
         // The caretaker's chores are driven straight from the tests, so nothing runs on a clock
         // underneath them and changes what they are looking at.
         builder.UseSetting("App:RunCaretaker", "false");
+        // The booker mail tests are about what it says; the switch is tested on its own.
+        builder.UseSetting("App:TellBookers", "true");
 
         // The suite registers a user per test; at the production hashing cost that alone would take
         // longer than everything else it does. Nothing here tests the hash itself.

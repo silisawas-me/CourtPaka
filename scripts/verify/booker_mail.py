@@ -1,11 +1,12 @@
-"""What the booker is told by email: a hold to pay for, and a hold that ran out (PRD US-06).
+"""Bookers are told nothing while App:TellBookers is off (docs/plan/owner-complete.md 3b).
 
-The caretaker sends booker mail on its own rounds, so like caretaker.py this waits on a clock. The
-Development sender logs every message, which is where the check reads them from.
+The booker's pages were taken out, so every message would link to a page that does not exist;
+telling bookers is off on every stack until there is a booker-side app again. What the messages
+say is covered by BookerMailTests, which switch it on. This waits through several caretaker rounds
+and reads the Development sender's log, where a message would have been written.
 """
 
 import datetime
-import re
 import time
 
 from harness import (
@@ -24,22 +25,6 @@ from playwright.sync_api import sync_playwright
 check = Checks(__file__)
 tomorrow = venue_today() + datetime.timedelta(days=1)
 
-# One caretaker round is ten seconds on the local stack (docker-compose.yml); this leaves room for
-# a slow one.
-ROUNDS = 25
-
-
-def mail_about(email: str, booking_id: str, count: int) -> list[str]:
-    """Waits until this address has been told about this booking this many times."""
-    waited = 0
-    found = [m for m in logged_mail(email) if f"/bookings/{booking_id}" in m]
-    while waited < ROUNDS and len(found) < count:
-        time.sleep(2)
-        waited += 2
-        found = [m for m in logged_mail(email) if f"/bookings/{booking_id}" in m]
-    return found
-
-
 with sync_playwright() as p:
     browser = p.chromium.launch()
     venue_id = seeded_venue_id(browser.new_page())
@@ -51,25 +36,14 @@ with sync_playwright() as p:
     booking = take_first_free_hour(booker, venue_id, tomorrow).json()
     check("a booker holds an hour", booking["status"] == "Held")
 
-    told = mail_about(email, booking["id"], 1)
-    check("the booker is emailed about the hold without asking", len(told) == 1)
-
-    held = told[0] if told else ""
-    check("in the language the booker chose", f"Email to {email} [th]" in held)
-    check("with the Buddhist year, as the screen shows dates", str(tomorrow.year + 543) in held)
-
-    # The link still names the booking. The page it pointed at — the booker's own — was taken out
-    # (docs/plan/cut-booker.md, D17), so it is not followed here.
-    link = re.search(r"(https?://\S*/bookings/[0-9a-f-]+)", held)
-    check("the message carries a link to the booking", link is not None)
-
+    # Three rounds of the caretaker (ten seconds each on the local stack), then the hold running
+    # out and three more: a booker who was going to be told would have been by then.
+    time.sleep(32)
     run_out_hold(booking["id"])
-    told = mail_about(email, booking["id"], 2)
-    check("a hold that runs out is emailed too", len(told) == 2)
-
-    time.sleep(12)
-    again = [m for m in logged_mail(email) if f"/bookings/{booking['id']}" in m]
-    check("and nothing is sent twice on later rounds", len(again) == 2)
+    time.sleep(32)
+    told = [m for m in logged_mail(email) if f"/bookings/{booking['id']}" in m]
+    check("nobody is told about a hold or its running out while telling bookers is off",
+          told == [])
 
     browser.close()
 

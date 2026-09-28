@@ -7,6 +7,7 @@ using CourtBooking.Api.Identity;
 using CourtBooking.Api.Jobs;
 using CourtBooking.Api.Tests.Infrastructure;
 using CourtBooking.Api.Venues;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -35,6 +36,31 @@ public sealed class BookerMailTests(ApiTestFixture api) : IClassFixture<ApiTestF
 
         // In Thai the year is the Buddhist one, the way the screen shows it (PRD US-23).
         Assert.Contains((Tomorrow.Year + 543).ToString(), mail.Body);
+    }
+
+    /// <summary>
+    /// With App:TellBookers off (every deployment, until there is a booker-side app again) the
+    /// caretaker tells nobody and claims nothing, so turning it on later is not a flood.
+    /// </summary>
+    [Fact]
+    public async Task With_telling_bookers_off_nobody_is_told_and_nothing_is_claimed()
+    {
+        var (_, venue, courts) = await scenario.BookableVenueAsync();
+        var (booker, email) = await scenario.SignedInClientWithEmailAsync();
+        var booking = await VenueScenario.HoldAsync(booker, venue.Id, Tomorrow, (courts[0], 18));
+
+        using var off = api.Api.WithWebHostBuilder(
+            builder => builder.UseSetting("App:TellBookers", "false"));
+        using (var scope = off.Services.CreateScope())
+        {
+            var sent = await scope.ServiceProvider.GetRequiredService<BookerMail>()
+                .SendDueAsync(DateTimeOffset.UtcNow, CancellationToken.None);
+            Assert.Equal(0, sent);
+        }
+
+        Assert.Empty(await KindsToldAsync(booking.Id));
+        Assert.DoesNotContain(
+            api.Emails.To(email), mail => mail.Template?.StartsWith("booker.", StringComparison.Ordinal) == true);
     }
 
     [Fact]

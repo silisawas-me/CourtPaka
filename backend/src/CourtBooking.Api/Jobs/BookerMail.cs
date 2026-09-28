@@ -51,6 +51,14 @@ public sealed class BookerMail(
     /// <summary>Finds, claims and sends everything due. Answers how many went out.</summary>
     public async Task<int> SendDueAsync(DateTimeOffset now, CancellationToken cancellationToken)
     {
+        // Off until there is a booker-side app again (docs/plan/owner-complete.md 3b): every
+        // message links to a page that no longer exists. Nothing is claimed while it is off, so
+        // turning it on sends what fell due within LookBack and no further back.
+        if (!options.Value.TellBookers)
+        {
+            return 0;
+        }
+
         var due = await DueAsync(now, cancellationToken);
         var sent = 0;
 
