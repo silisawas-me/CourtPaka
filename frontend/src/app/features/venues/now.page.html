@@ -1,24 +1,13 @@
-<header class="page-head now-head">
-  <h1>{{ i18n.t('now.title') }}</h1>
-  <span class="now-clock" data-testid="now-clock">{{ time() }}</span>
-  <span class="now-counts muted" data-testid="now-counts">
-    {{ i18n.t('now.playing') }} {{ counts().playing }} · {{ i18n.t('now.due') }}
-    {{ counts().due }} · {{ i18n.t('now.free') }} {{ counts().free }}
-  </span>
-</header>
-
-@if (pageError(); as key) {
-  <p class="form-error" data-testid="now-error">{{ i18n.t(key) }}</p>
-}
-
-<div class="now">
-  <!--
-    The floor as it is this minute, on the one dark surface in the app: it is read across the
-    counter from a step away, and light cards on a dark ground carry further than tints on paper.
-    Not a dark mode — the rest of the page is the app's own paper (docs/plan/badpaka.md, C10).
-  -->
+<!--
+  The counter's "now", as the owner app draws it: the floor on one dark ground — a large card a
+  court, read from a step away — and beside it the desk: check-in, who is on the way, quick sale.
+-->
+<div class="now" data-testid="now-board">
   <section class="floor" [attr.aria-label]="i18n.t('now.floor')">
-    <ul class="courts" data-testid="now-courts">
+    @if (pageError(); as key) {
+      <p class="form-error" data-testid="now-error">{{ i18n.t(key) }}</p>
+    }
+    <ul class="courts" data-testid="now-courts" [style.--rows]="rowsNeeded()">
       @for (court of courts(); track court.courtId) {
         <li
           class="court"
@@ -27,88 +16,149 @@
         >
           <div class="court-head">
             <span class="court-name">{{ court.name }}</span>
-            <span class="court-state">{{ i18n.t('now.state.' + court.state) }}</span>
+            <span class="pill">{{ stateLabel(court.state) }}</span>
           </div>
 
           @if (court.state === 'playing' || court.state === 'due') {
             <p class="court-who">{{ who(court.booking) ?? i18n.t('booker.deleted') }}</p>
-            <p class="court-hours">{{ court.from }}:00 – {{ court.to }}:00</p>
-            <!-- How much of their time has gone, as a bar and as the minutes a counter says out loud. -->
-            <div
-              class="court-bar"
-              role="progressbar"
-              [attr.aria-valuenow]="round(court.done)"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              [attr.aria-label]="i18n.t('now.left')"
-            >
-              <span [style.width.%]="court.done"></span>
-            </div>
-            <p class="court-left" [attr.data-testid]="'now-left-' + court.courtId">
-              {{ i18n.t('now.left') }} {{ court.minutesLeft }} {{ i18n.t('now.minutes') }}
+            <p class="court-detail">
+              {{ i18n.t('board.kind.' + court.booking.kind) }} · {{ court.from }}:00–{{
+                court.to
+              }}:00
             </p>
-            @if (court.state === 'due' && court.booking.can.checkIn) {
-              <button
-                matButton="filled"
-                type="button"
-                class="check-in"
-                [attr.data-testid]="'now-check-in-' + court.booking.bookingId"
-                [disabled]="checkingIn() === court.booking.bookingId"
-                (click)="checkIn(court.booking)"
+            <div class="court-foot">
+              <div
+                class="bar"
+                role="progressbar"
+                [attr.aria-valuenow]="round(court.done)"
+                aria-valuemin="0"
+                aria-valuemax="100"
               >
-                {{ i18n.t('board.checkIn') }}
-              </button>
+                <span [style.width.%]="court.done"></span>
+              </div>
+              <div class="court-line">
+                <span [attr.data-testid]="'now-left-' + court.courtId">{{
+                  leftLabel(court.minutesLeft)
+                }}</span>
+                <span class="soft">{{ nextLabel(court.next?.hour ?? null) }}</span>
+              </div>
+            </div>
+          } @else {
+            <p class="court-who">
+              {{ court.state === 'free' ? i18n.t('now.ready') : stateLabel(court.state) }}
+            </p>
+            @if (court.state === 'free') {
+              <p class="court-detail">
+                {{ i18n.t('now.openCourt') }}
+                @if (court.baht !== null) {
+                  · ฿{{ court.baht | baht: i18n.locale() }}/{{ i18n.t('timeline.hr') }}
+                }
+              </p>
             }
-          } @else if (court.state === 'free' && court.baht !== null) {
-            <p class="court-price">
-              {{ court.baht | baht: i18n.locale() }} {{ i18n.t('now.perHour') }}
-            </p>
-          }
-
-          @if (court.next; as next) {
-            <p class="court-next">
-              {{ i18n.t('now.next') }} {{ next.hour }}:00 ·
-              {{ who(next.booking) ?? i18n.t('booker.deleted') }}
-            </p>
+            <div class="court-foot">
+              <div class="bar"><span style="width: 0"></span></div>
+              <div class="court-line">
+                <span></span>
+                <span class="soft">{{ nextLabel(court.next?.hour ?? null) }}</span>
+              </div>
+            </div>
           }
         </li>
       }
     </ul>
   </section>
 
-  <aside class="side">
-    <section class="arriving" data-testid="now-arriving">
-      <h2>{{ i18n.t('now.arriving') }}</h2>
+  <aside class="desk">
+    <div class="desk-head">
+      <div class="scan">
+        <span class="qr" aria-hidden="true">QR</span>
+        <span>
+          <span class="scan-title">{{ i18n.t('now.scanTitle') }}</span>
+          <span class="scan-sub">{{ i18n.t('now.scanSub') }}</span>
+        </span>
+      </div>
+      <div class="arriving-head">
+        <span class="arriving-title">{{ i18n.t('now.arriving') }}</span>
+        <span class="soft-ink">{{ i18n.t('now.in90') }}</span>
+      </div>
+    </div>
+
+    <div class="queue" data-testid="now-arriving">
       @if (checkInError(); as key) {
         <p class="form-error" data-testid="now-check-in-error">{{ i18n.t(key) }}</p>
       }
       @for (one of arriving(); track one.booking.bookingId) {
         <div class="arrival" [attr.data-testid]="'now-arrival-' + one.booking.bookingId">
-          <span class="arrival-when">{{ one.hour }}:00</span>
+          <span class="arrival-time">{{ one.hour }}:00</span>
           <span class="arrival-who">
-            {{ who(one.booking) ?? i18n.t('booker.deleted') }}
-            <span class="muted">· {{ one.courts }}</span>
-          </span>
-          <span class="arrival-in muted">
-            {{ i18n.t('now.in') }} {{ one.inMinutes }} {{ i18n.t('now.minutes') }}
+            <span class="arrival-name">{{ who(one.booking) ?? i18n.t('booker.deleted') }}</span>
+            <span class="arrival-meta"
+              >{{ one.courts }} · {{ i18n.t('board.kind.' + one.booking.kind) }}
+              @if (one.booking.can.takeMoney) {
+                · {{ i18n.t('timeline.payAtVenue') }}
+              }
+            </span>
           </span>
           @if (one.booking.can.checkIn) {
             <button
-              matButton="outlined"
               type="button"
+              class="arrival-go"
               [attr.data-testid]="'now-check-in-' + one.booking.bookingId"
               [disabled]="checkingIn() === one.booking.bookingId"
               (click)="checkIn(one.booking)"
             >
-              {{ i18n.t('board.checkIn') }}
+              {{ i18n.t('timeline.checkIn') }}
             </button>
           }
         </div>
       } @empty {
-        <p class="muted" data-testid="now-nobody-arriving">{{ i18n.t('now.nobodyArriving') }}</p>
+        <p class="nobody" data-testid="now-nobody-arriving">{{ i18n.t('now.nobody') }}</p>
       }
-    </section>
+      @for (court of dueNow(); track court.booking.bookingId) {
+        <div class="arrival late" [attr.data-testid]="'now-due-' + court.booking.bookingId">
+          <span class="arrival-time">{{ court.from }}:00</span>
+          <span class="arrival-who">
+            <span class="arrival-name">{{ who(court.booking) ?? i18n.t('booker.deleted') }}</span>
+            <span class="arrival-meta">{{ court.name }} · {{ i18n.t('now.notChecked') }}</span>
+          </span>
+          @if (court.booking.can.checkIn) {
+            <button
+              type="button"
+              class="arrival-go"
+              [attr.data-testid]="'now-check-in-' + court.booking.bookingId"
+              [disabled]="checkingIn() === court.booking.bookingId"
+              (click)="checkIn(court.booking)"
+            >
+              {{ i18n.t('timeline.checkIn') }}
+            </button>
+          }
+        </div>
+      }
+    </div>
 
-    <app-sell-onto-booking class="quick-sale" [venueId]="venueId()" />
+    <div class="quick">
+      <span class="soft-ink">{{ i18n.t('now.quickSell') }}</span>
+      @if (selling()) {
+        <app-sell-onto-booking class="quick-sale" [venueId]="venueId()" [openAtOnce]="true" />
+      } @else {
+        <div class="tiles">
+          @for (item of items().slice(0, 4); track item.itemId) {
+            <button
+              type="button"
+              class="tile"
+              [attr.data-testid]="'quick-' + item.itemId"
+              (click)="selling.set(true)"
+            >
+              {{ item.name }}
+              <span class="tile-price">฿{{ item.priceBaht | baht: i18n.locale() }}</span>
+            </button>
+          } @empty {
+            <button type="button" class="tile" data-testid="sell-open" (click)="selling.set(true)">
+              {{ i18n.t('now.quickSell') }}
+            </button>
+          }
+        </div>
+      }
+    </div>
   </aside>
 </div>

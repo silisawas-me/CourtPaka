@@ -70,7 +70,7 @@ with sync_playwright() as p:
     desk.goto(f"{BASE}/venues/{venue_id}/now")
     desk.wait_for_selector(f"[data-testid=now-court-{court_id}]")
     check("the schedule's top bar offers the timeline and right now, with now chosen",
-          desk.locator("[data-testid=view-bookings]").count() == 1
+          desk.locator("[data-testid=view-timeline]").count() == 1
           and "on" in (desk.locator("[data-testid=view-now]").get_attribute("class") or ""))
     check(
         "somebody starting within ninety minutes is in the queue at the desk",
@@ -90,8 +90,12 @@ with sync_playwright() as p:
           "50" in desk.locator(f"[data-testid=now-left-{court_id}]").inner_text())
     check("nobody on the court is queueing at the desk as well",
           desk.locator(f"[data-testid=now-arrival-{booking_id}]").count() == 0)
+    # The quick sale is tiles of what the shop sells (or one tile when it sells nothing yet),
+    # and a tile opens the sale with no booking attached.
+    desk.locator("[data-testid^=quick-], [data-testid=sell-open]").first.click()
+    desk.wait_for_selector("[data-testid=sell-onto-booking]")
     check("the desk can sell without a booking",
-          desk.locator("[data-testid=sell-onto-booking] [data-testid=sell-open]").count() == 1)
+          desk.locator("[data-testid=sell-onto-booking]").count() == 1, desk)
 
     # A phone gets the same floor, one court under another.
     phone = browser.new_page(viewport={"width": 390, "height": 844})

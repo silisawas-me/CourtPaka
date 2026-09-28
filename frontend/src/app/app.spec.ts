@@ -119,6 +119,7 @@ describe("A venue's own shell", () => {
           children: [],
           data: { venueShell: true },
         },
+        { path: 'venues/:venueId/timeline', children: [], data: { venueShell: true } },
         { path: 'venues/:venueId/money', children: [], data: { venueShell: true } },
         { path: 'venues/apply', children: [] },
       ]),
@@ -213,7 +214,7 @@ describe("A venue's own shell", () => {
   });
 
   it("keeps the owner's sections from somebody who only works at the venue", async () => {
-    await router.navigate(['/venues', 'v2', 'bookings']);
+    await router.navigate(['/venues', 'v2', 'timeline']);
     fixture.detectChanges();
     await showShell();
     httpMock
@@ -226,10 +227,12 @@ describe("A venue's own shell", () => {
     expect(elementOf(fixture, 'nav-dashboard')).toBeNull();
     expect(elementOf(fixture, 'nav-pricing')).toBeNull();
     // At a venue the schedule reads as a timeline or as right now.
-    expect(elementOf(fixture, 'view-bookings')?.classList).toContain('on');
+    expect(elementOf(fixture, 'view-timeline')?.classList).toContain('on');
     expect(elementOf(fixture, 'view-now')?.getAttribute('href')).toBe('/venues/v2/now');
     // Switching venue keeps the page.
-    expect(elementOf(fixture, 'pill-v1')?.getAttribute('href')).toBe('/venues/v1/bookings');
+    expect(elementOf(fixture, 'pill-v1')?.getAttribute('href')).toBe('/venues/v1/timeline');
+    // The day's list with every other door is still a page, in the quieter group.
+    expect(elementOf(fixture, 'nav-bookings')?.getAttribute('href')).toBe('/venues/v2/bookings');
   });
 
   /**

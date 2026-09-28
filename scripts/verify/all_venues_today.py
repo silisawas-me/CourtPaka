@@ -38,7 +38,7 @@ with sync_playwright() as p:
         == len(owner.locator("[data-testid=all-venues-today] .heat-hours .heat-hour").all()),
     )
     owner.locator(f"[data-testid=overview-venue-{venue_id}] .venue-name").click()
-    owner.wait_for_url(f"**/venues/{venue_id}/bookings")
+    owner.wait_for_url(f"**/venues/{venue_id}/timeline")
     check("a venue's row opens its timeline", True)
 
     # Staff who may read the reports see the venue; the door is the dashboard's.

@@ -46,5 +46,5 @@ export function landing(
     return isPlatformAdmin && venues.length === 0 ? '/admin/venues' : '/venues';
   }
 
-  return venues.length === 1 ? `/venues/${venues[0].id}/bookings` : '/venues';
+  return venues.length === 1 ? `/venues/${venues[0].id}/timeline` : '/venues';
 }

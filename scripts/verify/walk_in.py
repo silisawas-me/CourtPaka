@@ -91,11 +91,11 @@ with sync_playwright() as p:
     finally:
         ensure_bookable(browser, venue_id)
 
-    # Every venue at once has no walk-in: a walk-in is sold at one venue.
+    # Every venue at once offers the walk-in too, as the design does: it sells at the first branch.
     desk.goto(f"{BASE}/venues")
     desk.wait_for_selector("[data-testid=owner-top]")
-    check("there is no walk-in on every venue at once",
-          desk.locator("[data-testid=open-walk-in]").count() == 0)
+    check("every venue at once offers the walk-in as well",
+          desk.locator("[data-testid=open-walk-in]").count() == 1)
 
     browser.close()
 

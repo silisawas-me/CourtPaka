@@ -1,225 +1,325 @@
-/*
- * The counter's "now": the floor on the left where the eye goes first, and on the right the two
- * things the desk does between glances — take somebody in, sell something. One column on a
- * phone, floor first.
- */
+/* The owner app's "now", measured off the design: the whole page on the ink ground, courts three
+   across in rows that share its height, the desk a 360px light card on the right. */
 :host {
-  display: grid;
-  gap: var(--stack);
+  display: block;
   min-width: 0;
-
-  /*
-   * The one dark surface: the ink itself, and a card a shade lifted off it. Mixed from the theme
-   * rather than written as new colours, so the board changes with the palette.
-   */
-  --board: var(--mat-sys-inverse-surface);
-  --board-card: color-mix(in srgb, var(--mat-sys-inverse-on-surface) 9%, var(--board));
-  --board-ink: var(--mat-sys-inverse-on-surface);
-  --board-muted: color-mix(in srgb, var(--board-ink) 68%, var(--board));
-  --board-live: var(--mat-sys-inverse-primary);
-  /* The rust, lifted until it reads as text on the dark card (4.5:1 measured, not eyed). */
-  --board-due: color-mix(in srgb, var(--status-waiting) 50%, var(--board-ink));
-}
-
-.now-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.25rem 1rem;
-
-  h1 {
-    margin: 0;
-    font: var(--mat-sys-headline-small);
-  }
-}
-
-.now-clock {
-  font: var(--mat-sys-display-small);
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
 }
 
 .now {
   display: grid;
-  gap: var(--stack);
-  align-items: start;
+  gap: 16px;
+  padding: 16px;
+  border-radius: var(--mat-sys-corner-extra-large);
+  background: var(--mat-sys-inverse-surface);
 
-  @media (min-width: 75rem) {
-    grid-template-columns: minmax(0, 1fr) 21.25rem;
+  @media (min-width: 60rem) {
+    display: flex;
+    margin: calc(-2 * var(--stack)) -1.5rem calc(-1 * var(--shell-bottom, 0px));
+    height: calc(100dvh - 4.3rem);
+    padding: 20px 24px;
+    border-radius: 0;
   }
 }
 
 .floor {
+  flex: 1;
   min-width: 0;
-  padding: 1rem;
-  border-radius: var(--mat-sys-corner-extra-large);
-  background: var(--board);
-  color: var(--board-ink);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .courts {
+  flex: 1;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
-  gap: 0.75rem;
+  gap: 14px;
   margin: 0;
   padding: 0;
   list-style: none;
+
+  @media (min-width: 60rem) {
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(var(--rows), minmax(10rem, 1fr));
+    overflow-y: auto;
+  }
 }
 
 .court {
-  display: grid;
-  gap: 0.35rem;
-  align-content: start;
-  padding: 0.85rem 1rem;
-  border-radius: var(--mat-sys-corner-large);
-  background: var(--board-card);
-  /* What state it is in, as a stripe down the leading edge: read before any word on the card. */
-  box-shadow: inset 4px 0 0 var(--stripe, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 10rem;
+  padding: 18px;
+  border-radius: 20px;
+  background: var(--mat-sys-surface-container-low, #f8f5ef);
+  color: var(--mat-sys-on-surface);
 
-  p {
-    margin: 0;
-  }
-
-  /* A card with a game on it holds a name, a bar and a door; an empty one is only a price. */
-  &.playing,
-  &.due {
-    min-height: 9rem;
-  }
-
-  &.playing {
-    --stripe: var(--board-live);
-  }
+  --pill: var(--kind-app-soft);
+  --track: var(--mat-sys-outline-variant);
+  --fill: var(--mat-sys-primary);
 
   &.due {
-    --stripe: var(--board-due);
+    background: var(--kind-walkin-soft);
+    --pill: var(--kind-walkin-line);
+    --fill: var(--status-waiting);
+  }
+
+  &.free,
+  &.closed,
+  &.shut {
+    background: #3a332d;
+    color: #f8f5ef;
+    --pill: rgb(127 208 143 / 20%);
+    --track: #4a423b;
+    --fill: #7fd08f;
   }
 
   &.closed,
   &.shut {
-    opacity: 0.6;
+    --pill: rgb(255 255 255 / 10%);
+    background: repeating-linear-gradient(45deg, #3a332d 0 8px, #342e29 8px 16px);
   }
 }
 
 .court-head {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
-  gap: 0.5rem;
+  align-items: center;
 }
 
 .court-name {
-  font: var(--mat-sys-title-medium);
+  font-size: 15px;
+  font-weight: 600;
 }
 
-.court-state {
-  font: var(--mat-sys-label-medium);
-  color: var(--board-muted);
-
-  .playing & {
-    color: var(--board-live);
-  }
-
-  .due & {
-    color: var(--board-due);
-  }
+.pill {
+  padding: 4px 8px;
+  border-radius: 7px;
+  background: var(--pill);
+  font: 500 11px var(--font-mono);
 }
 
 .court-who {
-  font: var(--mat-sys-title-large);
-  overflow-wrap: anywhere;
+  margin: 6px 0 0;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.1;
 }
 
-.court-hours,
-.court-left,
-.court-price,
-.court-next {
-  font: var(--mat-sys-body-medium);
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
+.court-detail {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.75;
 }
 
-.court-hours,
-.court-next {
-  font: var(--mat-sys-label-medium);
-  font-family: var(--font-mono);
-  color: var(--board-muted);
+.court-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.court-price {
-  color: var(--board-live);
-}
-
-.court-bar {
-  height: 0.35rem;
-  border-radius: var(--mat-sys-corner-full);
-  background: color-mix(in srgb, var(--board-ink) 18%, transparent);
+.bar {
+  height: 6px;
   overflow: hidden;
+  border-radius: 3px;
+  background: var(--track);
 
   span {
     display: block;
     height: 100%;
-    background: var(--stripe);
+    background: var(--fill);
   }
 }
 
-.check-in {
-  justify-self: start;
+.court-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font: 500 12px var(--font-mono);
 }
 
-.side {
-  display: grid;
-  gap: var(--stack);
-  min-width: 0;
+.soft {
+  opacity: 0.75;
+  text-align: end;
 }
 
-.arriving,
-.quick-sale {
-  padding: 1rem;
-  border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: var(--mat-sys-corner-large);
-  background: var(--mat-sys-surface);
-}
+/* ── the desk ── */
+.desk {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 22px;
+  background: var(--mat-sys-background, #f8f5ef);
+  color: var(--mat-sys-on-surface);
 
-.arriving {
-  display: grid;
-  gap: 0.5rem;
-
-  h2 {
-    margin: 0;
-    font: var(--mat-sys-title-medium);
+  @media (min-width: 60rem) {
+    width: 360px;
+    flex: none;
   }
+}
+
+.desk-head {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 18px 12px;
+}
+
+.scan {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px;
+  border-radius: 18px;
+  background: var(--mat-sys-primary);
+  color: #fff;
+
+  > span:last-child {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+.qr {
+  width: 52px;
+  height: 52px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 2px dashed rgb(255 255 255 / 70%);
+  border-radius: 12px;
+  font: 500 10px var(--font-mono);
+}
+
+.scan-title {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.scan-sub {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.arriving-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.arriving-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.soft-ink {
+  font-size: 12px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.queue {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 18px;
+  overflow: auto;
 }
 
 .arrival {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-areas:
-    'when who in'
-    'when door door';
+  display: flex;
   align-items: center;
-  gap: 0.15rem 0.75rem;
-  padding-block: 0.5rem;
-  border-top: 1px solid var(--mat-sys-outline-variant);
+  gap: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--mat-sys-surface);
+  border: 1px solid #eee6d9;
 
-  button {
-    grid-area: door;
-    justify-self: start;
+  &.late {
+    border-color: var(--kind-walkin-line);
   }
 }
 
-.arrival-when {
-  grid-area: when;
-  font-family: var(--font-mono);
-  font-weight: 500;
+.arrival-time {
+  width: 44px;
+  text-align: center;
+  font: 500 13px var(--font-mono);
 }
 
 .arrival-who {
-  grid-area: who;
-  overflow-wrap: anywhere;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.arrival-in {
-  grid-area: in;
-  font: var(--mat-sys-label-medium);
+.arrival-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.arrival-meta {
+  font-size: 12px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.arrival-go {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--mat-sys-inverse-surface);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+  }
+}
+
+.nobody {
+  margin: 0;
+  font-size: 13px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.quick {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 18px 18px;
+  border-top: 1px solid #eee6d9;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  padding: 11px;
+  border: 0;
+  border-radius: 12px;
+  background: #efe8dc;
+  color: var(--mat-sys-on-surface);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: start;
+  cursor: pointer;
+}
+
+.tile-price {
+  font-weight: 400;
+  color: var(--mat-sys-on-surface-variant);
 }

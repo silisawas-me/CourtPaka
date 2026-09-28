@@ -31,6 +31,13 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    // The court schedule of one branch, as the owner app draws it: tracks and the booking panel.
+    path: 'venues/:venueId/timeline',
+    data: { venueShell: true },
+    loadComponent: () => import('./features/venues/timeline.page').then((m) => m.TimelinePage),
+    canActivate: [authGuard],
+  },
+  {
     // Pricing & peak, painted (owner app PR-4).
     path: 'venues/:venueId/pricing',
     data: { venueShell: true },

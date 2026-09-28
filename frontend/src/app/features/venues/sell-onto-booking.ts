@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  OnInit,
+  signal,
+} from '@angular/core';
 import { MatButton } from '@angular/material/button';
 import { BahtPipe } from '../../core/i18n/baht.pipe';
 import { errorKey } from '../../core/http/api-error';
@@ -24,13 +32,21 @@ import { PAYMENT_METHODS } from '../../core/venues/venue-bookings.service';
   styleUrl: './sell-onto-booking.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class SellOntoBooking {
+export class SellOntoBooking implements OnInit {
   private readonly shop = inject(ShopService);
   protected readonly i18n = inject(TranslationService);
 
   readonly venueId = input.required<string>();
   /** The booking it goes to, or null for a quick sale at the desk with nobody's game attached. */
   readonly bookingId = input<string | null>(null);
+  /** Opened by a press somewhere else (the quick-sell tiles): list the items straight away. */
+  readonly openAtOnce = input(false);
+
+  ngOnInit(): void {
+    if (this.openAtOnce()) {
+      this.open();
+    }
+  }
 
   protected readonly methods = PAYMENT_METHODS;
 

@@ -76,10 +76,6 @@
     <span class="pill pill-only" data-testid="venue-name">{{ venue.name }}</span>
   }
 
-  @if (onAll()) {
-    <span class="top-date" data-testid="top-date">{{ todayLabel() }}</span>
-  }
-
   @if (views().length > 0) {
     <nav class="pills views" data-testid="schedule-views" [attr.aria-label]="i18n.t('nav.view')">
       @for (view of views(); track view.testId) {
@@ -95,9 +91,13 @@
     </nav>
   }
 
+  @if (onAll() || views().length > 0) {
+    <span class="top-date" data-testid="top-date">{{ todayLabel() }}</span>
+  }
+
   <span class="top-end">
-    @if (!onAll()) {
-      <!-- Selling a court to somebody at the counter, from any of the venue's pages (PR-3). -->
+    @if (walkInAt()) {
+      <!-- Selling a court at the counter, from any schedule page (PR-3); on the overview, the first branch. -->
       <button
         type="button"
         class="walk-in-button"
@@ -107,13 +107,17 @@
         {{ i18n.t('walkIn.open') }}
       </button>
     }
+    @if (scanAt(); as at) {
+      <!-- Checking people in happens on the board of right now (the design's "สแกน QR"). -->
+      <a class="scan-button" [routerLink]="at" data-testid="open-scan">{{ i18n.t('top.scan') }}</a>
+    }
     <ng-content select="[topEnd]" />
   </span>
 </header>
 
-@if (walkIn() && !onAll()) {
+@if (walkIn() && walkInAt(); as sellAt) {
   @defer {
-    <app-walk-in [venueId]="venueId()" (closed)="walkIn.set(false)" />
+    <app-walk-in [venueId]="sellAt" (closed)="walkIn.set(false)" />
   }
 }
 
