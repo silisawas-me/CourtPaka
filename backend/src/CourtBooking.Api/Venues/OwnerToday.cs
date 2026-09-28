@@ -11,6 +11,9 @@ namespace CourtBooking.Api.Venues;
 /// <summary>How one hour of today is going at one venue: court-hours on sale, and used.</summary>
 public sealed record HourUseResponse(int Hour, int Sellable, int Booked);
 
+/// <summary>How many of today's bookings are of one kind (<see cref="BookingKinds"/>).</summary>
+public sealed record KindCountResponse(string Kind, int Count);
+
 /// <summary>Today at one of the venues a person may read the reports of (badPaka 2c).</summary>
 public sealed record VenueTodayResponse(
     Guid VenueId,
@@ -18,7 +21,16 @@ public sealed record VenueTodayResponse(
     string Status,
     /// <summary>What today's played, paid-for bookings left the venue — the dashboard's rule (US-15).</summary>
     decimal KeptBaht,
+    /// <summary>
+    /// What the same weekday last week had left the venue by this time of day — the comparison
+    /// the owner app puts under today's money, asked with the same rule at the same hour.
+    /// </summary>
+    decimal LastWeekKeptBaht,
     int Bookings,
+    /// <summary>Every booking on today's floor that still stands, played or to come.</summary>
+    int TodayBookings,
+    /// <summary>Those, by kind: walk-in, standing group, package, app.</summary>
+    KindCountResponse[] ByKind,
     int SellableHours,
     int BookedHours,
     /// <summary>Null when nothing was on sale today, which is not the same as none of it used.</summary>
@@ -34,7 +46,10 @@ public sealed record VenueTodayResponse(
 public sealed record OwnerTodayResponse(
     DateOnly Date,
     decimal KeptBaht,
+    decimal LastWeekKeptBaht,
     int Bookings,
+    int TodayBookings,
+    KindCountResponse[] ByKind,
     int DueNow,
     VenueTodayResponse[] Venues);
 
@@ -86,7 +101,10 @@ public static class OwnerToday
         return TypedResults.Ok(new OwnerTodayResponse(
             today,
             venues.Sum(venue => venue.KeptBaht),
+            venues.Sum(venue => venue.LastWeekKeptBaht),
             venues.Sum(venue => venue.Bookings),
+            venues.Sum(venue => venue.TodayBookings),
+            ByKind(venues.SelectMany(venue => venue.ByKind)),
             venues.Sum(venue => venue.DueNow),
             [.. venues]));
     }
@@ -100,6 +118,11 @@ public static class OwnerToday
     {
         var (kept, bookings, hours) = await VenueDashboard.TodayAsync(
             database, venue.Id, today, now, cancellationToken);
+
+        // The same question a week ago, asked as it stood at this minute, so a morning is not
+        // measured against a whole finished day.
+        var (lastWeek, _, _) = await VenueDashboard.TodayAsync(
+            database, venue.Id, today.AddDays(-7), now.AddDays(-7), cancellationToken);
 
         var since = PlatformRequirements.BangkokHour(today, 0);
         var until = PlatformRequirements.BangkokHour(today.AddDays(1), 0);
@@ -130,6 +153,11 @@ public static class OwnerToday
             .Distinct()
             .ToListAsync(cancellationToken);
 
+        var standing = onTheFloor
+            .Where(booking => BookedSlots.StatusAt(booking, now)
+                is not (BookingStatus.Cancelled or BookingStatus.Rejected or BookingStatus.Expired))
+            .ToArray();
+
         var sellable = hours.Sum(one => one.Sellable);
         var booked = hours.Sum(one => one.Booked);
 
@@ -138,7 +166,10 @@ public static class OwnerToday
             venue.Name,
             venue.Status.ToString(),
             kept,
+            lastWeek,
             bookings,
+            standing.Length,
+            ByKind(standing.Select(booking => new KindCountResponse(BookingKinds.Of(booking), 1))),
             sellable,
             booked,
             sellable == 0
@@ -149,4 +180,16 @@ public static class OwnerToday
             pastGrace,
             [.. shut.Order()]);
     }
+
+    /// <summary>Counts added up per kind, in the order the design lists them.</summary>
+    private static KindCountResponse[] ByKind(IEnumerable<KindCountResponse> counts) =>
+    [
+        .. counts
+            .GroupBy(one => one.Kind)
+            .Select(kind => new KindCountResponse(kind.Key, kind.Sum(one => one.Count)))
+            .OrderBy(kind => Array.IndexOf(Order, kind.Kind)),
+    ];
+
+    private static readonly string[] Order =
+        [BookingKinds.WalkIn, BookingKinds.Series, BookingKinds.Package, BookingKinds.App];
 }

@@ -27,11 +27,9 @@ with sync_playwright() as p:
     check("off-site returnUrl lands on home", page.url == f"{BASE}/", page)
 
     # 3. Make a second venue so the detail page can be asked to switch between two.
-    page.goto(f"{BASE}/venues")
-    page.wait_for_selector("[data-testid=venue-list]")
     code = f"S{int(time.time()) % 100000}"
-    # Applying moved to its own page when the form grew a tax identity (US-10).
-    page.click("[data-testid=apply-link]")
+    # Applying is its own page (US-10); the owner app's first page no longer links to it.
+    page.goto(f"{BASE}/venues/apply")
     page.wait_for_selector("[data-testid=apply]")
     page.fill("#code", code)
     page.fill("#name", f"Second Court {code}")
@@ -45,19 +43,15 @@ with sync_playwright() as p:
     page.click("[data-testid=copy-address]")
     control(page, "accepts-agreement").click()
     page.click("[data-testid=apply]")
-    # Creating a venue drops the owner on its detail page; the list is one step back.
+    # Creating a venue drops the owner on its detail page.
     page.wait_for_selector("[data-testid=venue-name]")
-    page.goto(f"{BASE}/venues")
-    page.wait_for_selector("[data-testid=venue-list] a")
 
-    links = page.locator("[data-testid=venue-list] a")
-    approved = links.filter(has_not_text="Second Court").first
-    created = page.locator("[data-testid=venue-list] a", has_text=f"Second Court {code}").first
-    # A row carries the code and the status beside the name, so read the name itself.
-    first_url = approved.get_attribute("href")
-    first_name = approved.locator(".entry-name").inner_text()
-    second_url = created.get_attribute("href")
-    second_name = created.locator(".entry-name").inner_text()
+    # Which two venues, from the account itself: the first page no longer lists them.
+    mine = page.request.get(f"{BASE}/api/venues/mine").json()
+    approved = next(v for v in mine if v["code"] == "DEV01")
+    created = next(v for v in mine if v["code"] == code)
+    first_url, first_name = f"/venues/{approved['id']}", approved["name"]
+    second_url, second_name = f"/venues/{created['id']}", created["name"]
 
     # 4. Moving between two venue pages must load the new venue, not keep the old one.
     page.goto(BASE + first_url)
@@ -66,12 +60,19 @@ with sync_playwright() as p:
     expect(page.locator("[data-testid=venue-name]")).to_have_text(second_name)
     check("detail page reloads when the venue id changes", True, page)
 
-    # In-app navigation (router reuse) is the case that used to break.
-    page.goto(f"{BASE}/venues")
-    page.click(f"[data-testid=venue-list] a[href='{first_url}']")
-    expect(page.locator("[data-testid=venue-name]")).to_have_text(first_name)
+    # In-app navigation (router reuse) is the case that used to break: switch branch on the
+    # schedule's top bar, then open that branch's own page from the rail.
+    page.goto(BASE + first_url + "/bookings")
+    page.click(f"[data-testid=pill-{created['id']}]")
+    page.wait_for_url(f"{BASE}{second_url}/bookings")
+    page.click("[data-testid=nav-venue]")
+    expect(page.locator("[data-testid=venue-name]")).to_have_text(second_name)
     page.go_back()
-    page.click(f"[data-testid=venue-list] a[href='{second_url}']")
+    page.click(f"[data-testid=pill-{approved['id']}]")
+    page.wait_for_url(f"{BASE}{first_url}/bookings")
+    page.click("[data-testid=nav-venue]")
+    expect(page.locator("[data-testid=venue-name]")).to_have_text(first_name)
+    page.goto(BASE + second_url)
     expect(page.locator("[data-testid=venue-name]")).to_have_text(second_name)
     check("router navigation between venues shows the right venue", True, page)
 

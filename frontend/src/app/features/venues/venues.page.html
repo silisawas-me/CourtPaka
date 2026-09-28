@@ -1,53 +1,5 @@
-<!-- Today across every venue, above the list of them: how the evening is going comes first. -->
+<!--
+  The court schedule of every branch (owner app): today across them all. Which venues are mine is
+  the branch bar above; applying for a new one is not something done from here (owner app).
+-->
 <app-all-venues-today />
-
-<div class="columns">
-  <mat-card>
-    <mat-card-header>
-      <mat-card-title>{{ i18n.t('venues.title') }}</mat-card-title>
-    </mat-card-header>
-
-    <mat-card-content>
-      @if (loading()) {
-        <mat-progress-bar mode="indeterminate" />
-      } @else if (mine().length === 0) {
-        <p class="muted" data-testid="no-venues">{{ i18n.t('venues.none') }}</p>
-      } @else {
-        <div class="stack" data-testid="venue-list">
-          @for (venue of mine(); track venue.id) {
-            <a class="entry" [routerLink]="['/venues', venue.id]">
-              <span class="entry-name">{{ venue.name }}</span>
-              <span class="spacer"></span>
-              <span class="muted">{{ venue.code }}</span>
-              <span class="badge" [class.badge-on]="venue.status === 'Approved'">
-                {{ i18n.t('venues.status.' + venue.status) }}
-              </span>
-            </a>
-          }
-        </div>
-      }
-
-      @if (errorKey(); as key) {
-        <p class="form-error" data-testid="form-error">{{ i18n.t(key) }}</p>
-      }
-    </mat-card-content>
-  </mat-card>
-
-  <!--
-    Applying is a sit-down job with a tax number in front of you, so it is its own page rather
-    than a panel beside the list. This side is the glance: which venues are mine, and where each
-    of them stands (PRD US-10).
-  -->
-  <mat-card>
-    <mat-card-header>
-      <mat-card-title>{{ i18n.t('venues.create.title') }}</mat-card-title>
-      <mat-card-subtitle>{{ i18n.t('venues.create.subtitle') }}</mat-card-subtitle>
-    </mat-card-header>
-
-    <mat-card-actions>
-      <a matButton="filled" routerLink="/venues/apply" data-testid="apply-link">
-        {{ i18n.t('venues.create.submit') }}
-      </a>
-    </mat-card-actions>
-  </mat-card>
-</div>

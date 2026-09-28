@@ -558,10 +558,9 @@ def clear_waiting(page, venue_id, date) -> None:
 
 
 def open_seeded_venue(page) -> str:
-    """Signs the current session into the venue list and answers its href."""
+    """Opens the first page of a signed-in session and answers the seeded venue's href. The owner
+    app's first page has no list of venues to read it from (the branches are the top bar), so the
+    id is asked for."""
     page.goto(f"{BASE}/venues")
-    page.wait_for_selector("[data-testid=venue-list] a")
-    return (
-        page.locator("[data-testid=venue-list] a", has_text=SEEDED_VENUE)
-        .first.get_attribute("href")
-    )
+    page.wait_for_selector("[data-testid=owner-top]")
+    return f"/venues/{seeded_venue_id(page)}"

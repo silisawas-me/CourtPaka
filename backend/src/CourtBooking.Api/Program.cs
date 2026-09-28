@@ -249,6 +249,11 @@ if (startupOptions.ApplyMigrationsOnStartup)
 if (startupOptions.SeedDevelopmentData && app.Environment.IsDevelopment())
 {
     await DevelopmentSeeder.SeedAsync(app.Services);
+
+    if (startupOptions.SeedMockData)
+    {
+        await DevelopmentMockData.SeedAsync(app.Services);
+    }
 }
 
 app.UseForwardedHeaders();

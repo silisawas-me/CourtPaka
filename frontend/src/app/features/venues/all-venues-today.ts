@@ -38,6 +38,31 @@ export class AllVenuesToday {
     return Array.from({ length: Math.max(...all) - first + 1 }, (_, index) => first + index);
   });
 
+  /** Up or down on the same weekday last week, whole percent; null when that day had nothing. */
+  protected readonly change = computed(() => {
+    const day = this.today();
+    return day && day.lastWeekKeptBaht > 0
+      ? Math.round(((day.keptBaht - day.lastWeekKeptBaht) / day.lastWeekKeptBaht) * 100)
+      : null;
+  });
+
+  /** "from Wednesday last week", named from the day the server says today is. */
+  protected readonly lastWeek = computed(() => {
+    const date = this.today()?.date;
+    const weekday = date ? new Date(`${date}T00:00:00Z`).getUTCDay() : 0;
+    return this.i18n
+      .t('overview.vsLastWeek')
+      .replace('{day}', this.i18n.t(`overview.weekday.${weekday}`));
+  });
+
+  /** Today's bookings by kind, as the design's note has them: "Walk-in 38 · ก๊วน 21". */
+  protected readonly kinds = computed(() => {
+    const all = this.today()?.byKind ?? [];
+    return all.length === 0
+      ? this.i18n.t('overview.noBookings')
+      : all.map((one) => `${this.i18n.t('overview.kind.' + one.kind)} ${one.count}`).join(' · ');
+  });
+
   /** Bookings past the venue's grace, across every venue — the note under "waiting now". */
   protected readonly late = computed(() =>
     (this.today()?.venues ?? []).reduce((sum, venue) => sum + venue.pastGrace, 0),

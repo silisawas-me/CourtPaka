@@ -156,6 +156,12 @@
 }
 
 // A segmented switch, as the design draws it: a tray, and the chosen one lifted out of it.
+.top-date {
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+  white-space: nowrap;
+}
+
 .pills {
   display: flex;
   gap: 0.15rem;

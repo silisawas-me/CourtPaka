@@ -49,6 +49,15 @@
   &.late {
     color: var(--status-waiting-ink);
   }
+
+  &.up {
+    color: var(--status-playing-ink);
+  }
+}
+
+.pick {
+  margin: 0;
+  padding: 1.25rem;
 }
 
 .heat-card {
@@ -102,8 +111,9 @@
 
 .heat-row {
   display: grid;
-  grid-template-columns: 9rem repeat(var(--hours), minmax(3.25rem, 1fr)) 7rem;
-  gap: 0.5rem;
+  /* Narrow enough that a whole day (6:00 to midnight) fits a laptop without scrolling. */
+  grid-template-columns: 9rem repeat(var(--hours), minmax(2.6rem, 1fr)) 7rem;
+  gap: 0.4rem;
   align-items: stretch;
   min-width: max-content;
 }
@@ -133,8 +143,8 @@
 .venue-name {
   display: grid;
   align-content: center;
-  gap: 0.1rem;
-  font: var(--mat-sys-title-small);
+  gap: 0.2rem;
+  font: var(--mat-sys-title-medium);
 }
 
 .venue-sub {
@@ -151,6 +161,11 @@
   display: grid;
   place-items: center;
   min-height: 4.5rem;
+
+  /* On a laptop, as tall as the design draws them. */
+  @media (min-width: 60rem) {
+    min-height: clamp(4.5rem, 11vh, 7rem);
+  }
   border-radius: var(--mat-sys-corner-small);
   background: color-mix(
     in srgb,
