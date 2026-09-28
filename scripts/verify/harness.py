@@ -442,6 +442,19 @@ def ensure_bookable(browser, venue_id) -> None:
     if published.status != 200:
         raise RuntimeError(f"Could not open the venue for business: {published.status}")
 
+    # A week dated ahead (venue_settings.py and venue_pricing.py publish those) would still open
+    # its own hours on its own date, and prices are checked against every week declared — so
+    # each is put back to the same hours on the date it starts.
+    for week in page.request.get(f"{BASE}/api/venues/{venue_id}/opening-hours").json():
+        if week["effectiveFrom"] > venue_today().isoformat():
+            page.request.put(
+                f"{BASE}/api/venues/{venue_id}/opening-hours",
+                data={
+                    "effectiveFrom": week["effectiveFrom"],
+                    "days": [{"day": day, "opensHour": 6, "closesHour": 22} for day in DAYS],
+                },
+            )
+
     # And at the prices the seed sets, which is what the scripts that read a price expect.
     # venue_pricing.py rewrites them because that is what it is about, and leaves them wherever
     # its last check left them (PRD: 200 an hour, 300 from 18:00).

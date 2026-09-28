@@ -65,6 +65,8 @@ with sync_playwright() as p:
         ("venue", f"/venues/{venue_id}"),
         ("now", f"/venues/{venue_id}/now"),
         ("timeline", f"/venues/{venue_id}/timeline"),
+        ("pricing", f"/venues/{venue_id}/pricing"),
+        ("members", f"/venues/{venue_id}/packages"),
         ("today", f"/venues/{venue_id}/bookings"),
         ("slip queue", f"/venues/{venue_id}/slip-queue"),
         ("money", f"/venues/{venue_id}/money"),

@@ -137,6 +137,10 @@ public sealed class ArrivalTests(ApiTestFixture api)
             (await owner.PutAsJsonAsync(
                 $"/api/venues/{venue.Id}/grace", new GraceRequest(40))).StatusCode);
 
+        // And the venue says it back, so the settings page starts from what is set (owner-complete 2c).
+        var mine = await VenueScenario.ReadAsync<VenueResponse[]>(await owner.GetAsync("/api/venues/mine"));
+        Assert.Equal(40, Assert.Single(mine, one => one.Id == venue.Id).GraceMinutes);
+
         var (_, booking) = await scenario.ConfirmedBookingAsync(owner, venue.Id, courts[0], 18);
         // Twenty minutes past the hour: late by the usual fifteen, not by this venue's forty.
         await scenario.StartsInAsync(booking.Id, TimeSpan.FromMinutes(-20));

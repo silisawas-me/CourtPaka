@@ -850,6 +850,7 @@ public static class VenueEndpoints
                 venue.Risk.FullAt,
                 venue.Risk.PeakFromHour,
                 venue.Risk.PeakUntilHour),
+            venue.GraceMinutes,
             membership.RefundCeiling);
 
     private static VenueMemberResponse ToResponse(VenueMembership membership) =>

@@ -1,140 +1,169 @@
-@if (loadError(); as key) {
-  <p class="form-error" data-testid="pricing-error">{{ i18n.t(key) }}</p>
-} @else if (grid(); as week) {
-  <p class="lead">
-    {{ i18n.t(canManage() ? 'pricing.paintLead' : 'pricing.readLead') }}
-  </p>
+<!-- Artboard c: the section's two tabs — prices, and the opening hours they are painted onto. -->
+<div class="tabs" role="tablist">
+  @for (one of ['prices', 'hours']; track one) {
+    <button
+      type="button"
+      role="tab"
+      class="tab"
+      [class.on]="tab() === one"
+      [attr.aria-selected]="tab() === one"
+      [attr.data-testid]="'pricing-tab-' + one"
+      (click)="tab.set($any(one))"
+    >
+      {{ i18n.t('pricing.tab.' + one) }}
+    </button>
+  }
+</div>
 
-  <!-- The tiers: each a price, its colour on the grid, and — for whoever may — the brush. -->
-  <div class="tiers" role="radiogroup" [attr.aria-label]="i18n.t('pricing.tiers')">
-    @for (price of week.tiers; track $index; let tier = $index) {
-      <div
-        class="tier"
-        [class]="'tier tier-' + (tier < 3 ? tier : 'n')"
-        [class.on]="brush() === tier && canManage()"
-        role="radio"
-        [attr.aria-checked]="brush() === tier"
-        [attr.tabindex]="canManage() ? 0 : -1"
-        [attr.data-testid]="'tier-' + tier"
-        (click)="brush.set(tier)"
-        (keydown.enter)="brush.set(tier)"
-        (keydown.space)="brush.set(tier)"
-      >
-        <span class="swatch" aria-hidden="true"></span>
-        <span class="tier-text">
-          <span class="tier-name">{{ tierName(tier, week.tiers.length) }}</span>
-          <span class="tier-price" [attr.data-testid]="'tier-price-' + tier"
-            >฿{{ price | baht: i18n.locale()
-            }}<span class="per">{{ i18n.t('pricing.perHour') }}</span></span
-          >
-        </span>
-        @if (canManage()) {
-          <button
-            type="button"
-            class="step"
-            [attr.aria-label]="i18n.t('pricing.cheaper') + ' ' + tierName(tier, week.tiers.length)"
-            [attr.data-testid]="'tier-less-' + tier"
-            (click)="$event.stopPropagation(); nudge(tier, -1)"
-          >
-            −
-          </button>
-          <button
-            type="button"
-            class="step dark"
-            [attr.aria-label]="i18n.t('pricing.dearer') + ' ' + tierName(tier, week.tiers.length)"
-            [attr.data-testid]="'tier-more-' + tier"
-            (click)="$event.stopPropagation(); nudge(tier, 1)"
-          >
-            +
-          </button>
-        }
-      </div>
-    }
-  </div>
+@if (tab() === 'hours') {
+  <app-venue-hours
+    [venueId]="venueId()"
+    [venue]="venue()"
+    [canManage]="canManage()"
+    [others]="others()"
+    (saved)="reload()"
+  />
+} @else {
+  @if (loadError(); as key) {
+    <p class="form-error" data-testid="pricing-error">{{ i18n.t(key) }}</p>
+  } @else if (grid(); as week) {
+    <p class="lead">
+      {{ i18n.t(canManage() ? 'pricing.paintLead' : 'pricing.readLead') }}
+    </p>
 
-  <section class="week" data-testid="price-week">
-    <div class="week-head">
-      <h2>{{ i18n.t('pricing.week') }}</h2>
-      @if (canManage()) {
-        <span class="brush-note"
-          >{{ i18n.t('pricing.painting') }} {{ tierName(brush(), week.tiers.length) }}</span
+    <!-- The tiers: each a price, its colour on the grid, and — for whoever may — the brush. -->
+    <div class="tiers" role="radiogroup" [attr.aria-label]="i18n.t('pricing.tiers')">
+      @for (price of week.tiers; track $index; let tier = $index) {
+        <div
+          class="tier"
+          [class]="'tier tier-' + (tier < 3 ? tier : 'n')"
+          [class.on]="brush() === tier && canManage()"
+          role="radio"
+          [attr.aria-checked]="brush() === tier"
+          [attr.tabindex]="canManage() ? 0 : -1"
+          [attr.data-testid]="'tier-' + tier"
+          (click)="brush.set(tier)"
+          (keydown.enter)="brush.set(tier)"
+          (keydown.space)="brush.set(tier)"
         >
+          <span class="swatch" aria-hidden="true"></span>
+          <span class="tier-text">
+            <span class="tier-name">{{ tierName(tier, week.tiers.length) }}</span>
+            <span class="tier-price" [attr.data-testid]="'tier-price-' + tier"
+              >฿{{ price | baht: i18n.locale()
+              }}<span class="per">{{ i18n.t('pricing.perHour') }}</span></span
+            >
+          </span>
+          @if (canManage()) {
+            <button
+              type="button"
+              class="step"
+              [attr.aria-label]="
+                i18n.t('pricing.cheaper') + ' ' + tierName(tier, week.tiers.length)
+              "
+              [attr.data-testid]="'tier-less-' + tier"
+              (click)="$event.stopPropagation(); nudge(tier, -1)"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              class="step dark"
+              [attr.aria-label]="i18n.t('pricing.dearer') + ' ' + tierName(tier, week.tiers.length)"
+              [attr.data-testid]="'tier-more-' + tier"
+              (click)="$event.stopPropagation(); nudge(tier, 1)"
+            >
+              +
+            </button>
+          }
+        </div>
       }
     </div>
 
-    <!-- A day does not fit a phone at this size, so the week scrolls inside its card. -->
-    <div class="week-scroll">
-      <div class="week-grid" [style.--hours]="week.hours.length" role="grid">
-        <span class="corner" role="columnheader"></span>
-        @for (hour of week.hours; track hour) {
-          <span class="hour" role="columnheader">{{ hour }}</span>
+    <section class="week" data-testid="price-week">
+      <div class="week-head">
+        <h2>{{ i18n.t('pricing.week') }}</h2>
+        @if (canManage()) {
+          <span class="brush-note"
+            >{{ i18n.t('pricing.painting') }} {{ tierName(brush(), week.tiers.length) }}</span
+          >
         }
-        @for (day of days; track day) {
-          <span class="day" role="rowheader">{{ dayName(day) }}</span>
-          @for (hour of week.hours; track hour; let at = $index) {
-            @let tier = week.cells[day][at];
-            @if (tier !== null) {
-              <button
-                type="button"
-                role="gridcell"
-                [class]="'cell tier-' + (tier < 3 ? tier : 'n')"
-                [disabled]="!canManage()"
-                [attr.aria-label]="dayName(day) + ' ' + hour + ':00 ฿' + week.tiers[tier]"
-                [attr.data-testid]="'cell-' + day + '-' + hour"
-                (pointerdown)="press(day, hour)"
-                (pointerenter)="pass(day, hour)"
-                (keydown.enter)="press(day, hour)"
-                (keydown.space)="press(day, hour)"
-              ></button>
-            } @else {
-              <span
-                class="cell shut"
-                role="gridcell"
-                [attr.aria-label]="dayName(day) + ' ' + hour + ':00 ' + i18n.t('pricing.shut')"
-              ></span>
+      </div>
+
+      <!-- A day does not fit a phone at this size, so the week scrolls inside its card. -->
+      <div class="week-scroll">
+        <div class="week-grid" [style.--hours]="week.hours.length" role="grid">
+          <span class="corner" role="columnheader"></span>
+          @for (hour of week.hours; track hour) {
+            <span class="hour" role="columnheader">{{ hour }}</span>
+          }
+          @for (day of days; track day) {
+            <span class="day" role="rowheader">{{ dayName(day) }}</span>
+            @for (hour of week.hours; track hour; let at = $index) {
+              @let tier = week.cells[day][at];
+              @if (tier !== null) {
+                <button
+                  type="button"
+                  role="gridcell"
+                  [class]="'cell tier-' + (tier < 3 ? tier : 'n')"
+                  [disabled]="!canManage()"
+                  [attr.aria-label]="dayName(day) + ' ' + hour + ':00 ฿' + week.tiers[tier]"
+                  [attr.data-testid]="'cell-' + day + '-' + hour"
+                  (pointerdown)="press(day, hour)"
+                  (pointerenter)="pass(day, hour)"
+                  (keydown.enter)="press(day, hour)"
+                  (keydown.space)="press(day, hour)"
+                ></button>
+              } @else {
+                <span
+                  class="cell shut"
+                  role="gridcell"
+                  [attr.aria-label]="dayName(day) + ' ' + hour + ':00 ' + i18n.t('pricing.shut')"
+                ></span>
+              }
             }
           }
-        }
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  @if (canManage()) {
-    <div class="actions">
-      @if (saveError(); as key) {
-        <p class="form-error" data-testid="pricing-save-error">{{ i18n.t(key) }}</p>
-      }
-      @if (saved()) {
-        <p class="success" data-testid="pricing-saved" role="status">
-          {{ i18n.t('pricing.saved') }}
-        </p>
-      }
-      @for (one of copied(); track one.name) {
-        <p [class]="one.error ? 'form-error' : 'success'" data-testid="pricing-copied">
-          {{ one.name }}: {{ one.error ? i18n.t(one.error) : i18n.t('pricing.saved') }}
-        </p>
-      }
-      @if (others().length > 0) {
+    @if (canManage()) {
+      <div class="actions">
+        @if (saveError(); as key) {
+          <p class="form-error" data-testid="pricing-save-error">{{ i18n.t(key) }}</p>
+        }
+        @if (saved()) {
+          <p class="success" data-testid="pricing-saved" role="status">
+            {{ i18n.t('pricing.saved') }}
+          </p>
+        }
+        @for (one of copied(); track one.name) {
+          <p [class]="one.error ? 'form-error' : 'success'" data-testid="pricing-copied">
+            {{ one.name }}: {{ one.error ? i18n.t(one.error) : i18n.t('pricing.saved') }}
+          </p>
+        }
+        @if (others().length > 0) {
+          <button
+            type="button"
+            class="secondary"
+            data-testid="pricing-copy-all"
+            (click)="copyToAll()"
+          >
+            {{ i18n.t('pricing.applyAll') }}
+          </button>
+        }
         <button
           type="button"
-          class="secondary"
-          data-testid="pricing-copy-all"
-          (click)="copyToAll()"
+          class="primary"
+          data-testid="pricing-save"
+          [disabled]="saving()"
+          (click)="save()"
         >
-          {{ i18n.t('pricing.applyAll') }}
+          {{ i18n.t('pricing.save') }}
         </button>
-      }
-      <button
-        type="button"
-        class="primary"
-        data-testid="pricing-save"
-        [disabled]="saving()"
-        (click)="save()"
-      >
-        {{ i18n.t('pricing.save') }}
-      </button>
-    </div>
+      </div>
+    }
+  } @else {
+    <p class="muted">{{ i18n.t('common.loading') }}</p>
   }
-} @else {
-  <p class="muted">{{ i18n.t('common.loading') }}</p>
 }
