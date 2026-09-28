@@ -25,20 +25,31 @@ with sync_playwright() as p:
     browser = p.chromium.launch()
     venue_id = seeded_venue_id(browser.new_page())
     ensure_bookable(browser, venue_id)
-    today = venue_today()
-
     desk = browser.new_page(viewport={"width": 1280, "height": 900})
     sign_in(desk, OWNER)
     api = f"{BASE}/api/venues/{venue_id}"
 
-    # A walk-in on the last hour of the day with a court free, so the floor has a known game.
-    day = desk.request.get(f"{api}/availability", params={"date": today.isoformat()}).json()
-    court_id, hour = next(
-        (court["courtId"], one["hour"])
-        for court in day["courts"]
-        for one in reversed(court["hours"])
-        if one["status"] == "Free"
-    )
+    # A walk-in on the last hour of the day with a court free, so the floor has a known game. The
+    # counter only sells an hour that has not ended by the server's clock, so after closing the
+    # day is tomorrow (the browser's clock is pinned to whichever day it is).
+    now_hour = datetime.datetime.now(BANGKOK).hour
+    found = None
+    for ahead in (0, 1):
+        today = venue_today() + datetime.timedelta(days=ahead)
+        day = desk.request.get(f"{api}/availability", params={"date": today.isoformat()}).json()
+        found = next(
+            (
+                (court["courtId"], one["hour"])
+                for court in day["courts"]
+                for one in reversed(court["hours"])
+                if one["status"] == "Free" and (ahead > 0 or one["hour"] + 1 > now_hour)
+            ),
+            None,
+        )
+        if found:
+            break
+    assert found, "no free hour today or tomorrow"
+    court_id, hour = found
     sold = desk.request.post(
         f"{api}/bookings",
         data={
