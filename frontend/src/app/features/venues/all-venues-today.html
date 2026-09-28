@@ -32,30 +32,6 @@
       <div class="heat-card">
         <div class="heat-head">
           <h2>{{ i18n.t('overview.heat') }}</h2>
-          @if (canGoEarlier() || canGoLater()) {
-            <span class="heat-walk">
-              <button
-                type="button"
-                class="walk"
-                data-testid="heat-earlier"
-                [disabled]="!canGoEarlier()"
-                [attr.aria-label]="i18n.t('overview.earlier')"
-                (click)="earlier()"
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                class="walk"
-                data-testid="heat-later"
-                [disabled]="!canGoLater()"
-                [attr.aria-label]="i18n.t('overview.later')"
-                (click)="later()"
-              >
-                ›
-              </button>
-            </span>
-          }
           <span class="heat-key" aria-hidden="true">
             {{ i18n.t('overview.free') }}<span class="heat-ramp"></span
             >{{ i18n.t('overview.full') }}

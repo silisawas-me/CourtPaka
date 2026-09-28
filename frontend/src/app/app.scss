@@ -139,11 +139,9 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   --stack: 0.75rem;
-  // The booker's column is capped because prose has a comfortable line length. Nothing on the
-  // desk is prose — it is a board of hours, rows of tiles and a money table — so the cap here is
-  // only a stop for a very large monitor, and it is set where a whole day of sixteen hours fits
-  // beside the rail rather than at a width somebody picked for reading.
-  --page-width: 108rem;
+  // No cap: nothing on the desk is prose — it is a board of hours, rows of tiles and a money
+  // table — and a wider screen is more board, not margin (the owner asked for the full width).
+  --page-width: none;
   --mat-card-title-text-size: var(--mat-sys-title-medium-size);
   --mat-card-title-text-line-height: var(--mat-sys-title-medium-line-height);
   --mat-card-title-text-weight: var(--mat-sys-title-medium-weight);
