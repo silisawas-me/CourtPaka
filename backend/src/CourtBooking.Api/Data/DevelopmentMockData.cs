@@ -25,6 +25,9 @@ namespace CourtBooking.Api.Data;
 /// </remarks>
 public static class DevelopmentMockData
 {
+    /// <summary>The account that owns the four branches (password as the seed's).</summary>
+    public const string DemoEmail = "demo@courtpaka.local";
+
     private const int DaysBack = 13;
     private const int OpensHour = 8;
     private const int ClosesHour = 24;
@@ -72,8 +75,9 @@ public static class DevelopmentMockData
         var time = scope.ServiceProvider.GetRequiredService<TimeProvider>();
         var options = scope.ServiceProvider.GetRequiredService<IOptions<AppOptions>>();
 
-        var owner = await users.FindByEmailAsync(DevelopmentSeeder.OwnerEmail)
-            ?? throw new InvalidOperationException("The development seed runs first.");
+        // An account of its own, so the branches are all it owns and the owner app looks the way
+        // the design draws it — owner@ also owns the venues the verify scripts make and leave.
+        var owner = await DevelopmentSeeder.EnsureUserAsync(users, DemoEmail);
         var now = time.GetUtcNow();
         var today = PlatformRequirements.BangkokToday(time);
 
@@ -96,6 +100,7 @@ public static class DevelopmentMockData
         var venue = await database.Venues.SingleOrDefaultAsync(v => v.Code == branch.Code, cancellationToken);
         if (venue is not null)
         {
+            await OwnedByDemoAsync(database, venue.Id, ownerId, now, cancellationToken);
             return venue;
         }
 
@@ -160,6 +165,37 @@ public static class DevelopmentMockData
 
         await database.SaveChangesAsync(cancellationToken);
         return venue;
+    }
+
+    /// <summary>
+    /// Branches written before there was a demo account belonged to owner@: they move to the demo
+    /// account, so owner@ is left with the venues the scripts drive.
+    /// </summary>
+    private static async Task OwnedByDemoAsync(
+        AppDbContext database,
+        Guid venueId,
+        Guid demoId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var seats = await database.VenueMemberships
+            .Where(member => member.VenueId == venueId)
+            .ToListAsync(cancellationToken);
+        if (seats.Any(member => member.UserId == demoId))
+        {
+            return;
+        }
+
+        database.VenueMemberships.RemoveRange(seats);
+        database.VenueMemberships.Add(new VenueMembership
+        {
+            VenueId = venueId,
+            UserId = demoId,
+            Role = VenueRole.Owner,
+            Permissions = VenuePermissions.None,
+            CreatedAt = now,
+        });
+        await database.SaveChangesAsync(cancellationToken);
     }
 
     private static async Task FillAsync(

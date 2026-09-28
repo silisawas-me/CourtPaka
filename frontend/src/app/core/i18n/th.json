@@ -974,5 +974,7 @@
   "overview.weekday.3": "พุธ",
   "overview.weekday.4": "พฤหัส",
   "overview.weekday.5": "ศุกร์",
-  "overview.weekday.6": "เสาร์"
+  "overview.weekday.6": "เสาร์",
+  "overview.earlier": "ชั่วโมงก่อนหน้า",
+  "overview.later": "ชั่วโมงถัดไป"
 }

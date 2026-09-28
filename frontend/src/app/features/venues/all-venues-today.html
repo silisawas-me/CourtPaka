@@ -32,6 +32,30 @@
       <div class="heat-card">
         <div class="heat-head">
           <h2>{{ i18n.t('overview.heat') }}</h2>
+          @if (canGoEarlier() || canGoLater()) {
+            <span class="heat-walk">
+              <button
+                type="button"
+                class="walk"
+                data-testid="heat-earlier"
+                [disabled]="!canGoEarlier()"
+                [attr.aria-label]="i18n.t('overview.earlier')"
+                (click)="earlier()"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                class="walk"
+                data-testid="heat-later"
+                [disabled]="!canGoLater()"
+                [attr.aria-label]="i18n.t('overview.later')"
+                (click)="later()"
+              >
+                ›
+              </button>
+            </span>
+          }
           <span class="heat-key" aria-hidden="true">
             {{ i18n.t('overview.free') }}<span class="heat-ramp"></span
             >{{ i18n.t('overview.full') }}
@@ -42,7 +66,12 @@
           One grid for every venue, so the same hour sits in the same column down the page — which
           is the comparison the design is for: whose evening is full and whose afternoon is not.
         -->
-        <div class="heat" [style.--hours]="hours().length" role="table">
+        <div
+          class="heat"
+          [style.--hours]="hours().length"
+          [style.--rows]="rows().length"
+          role="table"
+        >
           <div class="heat-row heat-hours" role="row">
             <span role="columnheader"></span>
             @for (hour of hours(); track hour) {
