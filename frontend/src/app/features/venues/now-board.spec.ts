@@ -1,5 +1,5 @@
 import { VenueBooking } from '../../core/venues/venue-bookings.service';
-import { arriving, courtsNow } from './now-board';
+import { arriving, courtsNow, whoIs } from './now-board';
 
 function booking(
   bookingId: string,
@@ -143,5 +143,18 @@ describe('arriving, the queue at the desk', () => {
 
     expect(queue.map((one) => one.booking.bookingId)).toEqual(['soon', 'late']);
     expect(queue[0].inMinutes).toBe(20);
+  });
+
+  it('calls a booker by the name they gave the app before their address', () => {
+    const online = {
+      customerName: null,
+      bookerName: 'คุณแพร',
+      bookerEmail: 'praew@example.com',
+      bookerPhone: null,
+    } as unknown as VenueBooking;
+
+    expect(whoIs(online)).toBe('คุณแพร');
+    expect(whoIs({ ...online, bookerName: null })).toBe('praew');
+    expect(whoIs({ ...online, customerName: 'Walk-in' })).toBe('Walk-in');
   });
 });

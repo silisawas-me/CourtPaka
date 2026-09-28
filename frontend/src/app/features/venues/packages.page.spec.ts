@@ -75,42 +75,14 @@ describe('PackagesPage', () => {
     expect(textOf(fixture, 'nothing-sold')).toBe(TRANSLATIONS.th['packages.nothingSold']);
   });
 
-  it('will not offer a sale with nothing on the board', () => {
-    render([], []);
-
-    expect(elementOf(fixture, 'nothing-on-the-board')).not.toBeNull();
-    expect(elementOf(fixture, 'sell-package')).toBeNull();
-  });
-
-  it('sells one to a named customer, on the only offer there is', () => {
-    render([offer()], []);
-
-    setInput(fixture, '[data-testid="customer-name"]', ' ก๊วนเหมา ');
-    setInput(fixture, '[data-testid="customer-phone"]', '0812345678');
-    clickOn(fixture, 'paid-PromptPay');
-    clickOn(fixture, 'sell-package');
-
-    const request = httpMock.expectOne('/api/venues/v1/packages');
-    expect(request.request.body).toEqual({
-      packageTypeId: 't1',
-      customerName: 'ก๊วนเหมา',
-      customerPhone: '0812345678',
-      paidBy: 'PromptPay',
-    });
-
-    request.flush(sold({ hoursLeft: 10, moves: [] }));
-    fixture.detectChanges();
+  // Selling a package is off this page for now (the owner's call): members and the board only.
+  it('lists the members without a way to sell a package here', () => {
+    render([offer()], [sold({ hoursLeft: 10, moves: [] })]);
 
     expect(elementOf(fixture, 'package-p1')).not.toBeNull();
-  });
-
-  it('will not sell to nobody', () => {
-    render([offer()], []);
-
-    clickOn(fixture, 'sell-package');
-
-    httpMock.expectNone('/api/venues/v1/packages');
-    expect(textOf(fixture, 'customer-name-error')).not.toBe('');
+    expect(elementOf(fixture, 'sell-package')).toBeNull();
+    expect(elementOf(fixture, 'members-add')).toBeNull();
+    expect(elementOf(fixture, 'customer-name')).toBeNull();
   });
 
   /**

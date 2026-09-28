@@ -147,7 +147,16 @@ export function arriving(bookings: readonly VenueBooking[], now: WallClock): Arr
     .sort((left, right) => left.inMinutes - right.inMinutes);
 }
 
-/** The name a counter calls out: the one they gave, their address before the @, or a phone. */
+/**
+ * The name a counter calls out: the one they gave at the counter, the one they gave the app, their
+ * address before the @, or a phone.
+ */
 export function whoIs(booking: VenueBooking): string | null {
-  return booking.customerName ?? booking.bookerEmail?.split('@')[0] ?? booking.bookerPhone ?? null;
+  return (
+    booking.customerName ??
+    booking.bookerName ??
+    booking.bookerEmail?.split('@')[0] ??
+    booking.bookerPhone ??
+    null
+  );
 }

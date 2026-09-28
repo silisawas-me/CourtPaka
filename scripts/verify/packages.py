@@ -74,8 +74,8 @@ with sync_playwright() as p:
     page.fill("[data-testid=offer-hours]", "10")
     page.fill("[data-testid=offer-price]", "1800")
     page.fill("[data-testid=offer-days]", "90")
-    page.click("[data-testid=add-offer]")
-    page.wait_for_selector("[data-testid=sell-package]")
+    with page.expect_response(lambda r: r.url.endswith("/packages/types") and r.request.method == "POST"):
+        page.click("[data-testid=add-offer]")
 
     offer = [one for one in board(page, venue_id) if one["withdrawnAt"] is None][0]
     check("an offer goes on the board and the server works out the hourly rate",
@@ -86,10 +86,17 @@ with sync_playwright() as p:
     till = till_day(page, venue_id)
     before = money(page, venue_id, till)
     already = page.locator("[data-testid^=package-]").count()
-    page.fill("[data-testid=customer-name]", "ก๊วนซื้อชั่วโมง")
-    page.fill("[data-testid=customer-phone]", "0800000000")
-    page.click("[data-testid=paid-Cash]")
-    page.click("[data-testid=sell-package]")
+    # The members page no longer sells (the owner took the form off for now): the sale goes
+    # through the same API the counter would, and the page shows the member it made.
+    bought = page.request.post(
+        f"{BASE}/api/venues/{venue_id}/packages",
+        data={"packageTypeId": offer["typeId"], "customerName": "ก๊วนซื้อชั่วโมง",
+              "customerPhone": "0800000000", "paidBy": "Cash"},
+    )
+    check("a package is sold through the API", bought.ok)
+    check("and the members page has no way to sell one",
+          page.locator("[data-testid=sell-package], [data-testid=members-add]").count() == 0, page)
+    page.reload()
 
     # A row more than there was. Waiting for "a row" would pass on the rows an earlier run left,
     # before this sale had even been answered.

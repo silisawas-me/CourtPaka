@@ -327,6 +327,8 @@ public sealed record VenueBookingResponse(
     string? BookerEmail,
     /// <summary>Only when there is no address: a LINE booker is reached on the phone (US-01).</summary>
     string? BookerPhone,
+    /// <summary>What the booker asked to be called, when they said; the counter calls out this first.</summary>
+    string? BookerName,
     /// <summary>Online or at the counter, so the row can say who it is for (PRD US-13).</summary>
     string Channel,
     /// <summary>App, WalkIn, Series or Package — the colour of its block on the floor (<see cref="BookingKinds"/>).</summary>

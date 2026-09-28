@@ -1,7 +1,7 @@
 """Checks the code-review fixes against the running Docker stack (http://localhost:8080)."""
 import time
 
-from harness import BASE, OWNER, STAFF, Checks, control, login
+from harness import BASE, OWNER, STAFF, Checks, control, login, open_more
 from playwright.sync_api import expect, sync_playwright
 
 check = Checks(__file__)
@@ -65,11 +65,13 @@ with sync_playwright() as p:
     page.goto(BASE + first_url + "/timeline")
     page.click(f"[data-testid=pill-{created['id']}]")
     page.wait_for_url(f"{BASE}{second_url}/timeline")
+    open_more(page)
     page.click("[data-testid=nav-venue]")
     expect(page.locator("[data-testid=venue-name]")).to_have_text(second_name)
     page.go_back()
     page.click(f"[data-testid=pill-{approved['id']}]")
     page.wait_for_url(f"{BASE}{first_url}/timeline")
+    open_more(page)
     page.click("[data-testid=nav-venue]")
     expect(page.locator("[data-testid=venue-name]")).to_have_text(first_name)
     page.goto(BASE + second_url)

@@ -41,9 +41,6 @@
         </button>
       }
     </div>
-    <button type="button" class="add" data-testid="members-add" (click)="toSell()">
-      {{ i18n.t('members.add') }}
-    </button>
   </div>
 
   <p class="owed muted" data-testid="hours-owed">
@@ -129,97 +126,6 @@
       </div>
     }
   </section>
-
-  <mat-card id="sell-package-card">
-    <mat-card-header>
-      <mat-card-title>{{ i18n.t('packages.sell') }}</mat-card-title>
-    </mat-card-header>
-
-    <mat-card-content>
-      @if (onSale().length === 0) {
-        <p class="muted" data-testid="nothing-on-the-board">
-          {{ i18n.t('packages.nothingOnTheBoard') }}
-        </p>
-      } @else {
-        <form class="stack" [formGroup]="sale" novalidate>
-          <!--
-            The offers as a row of choices rather than a dropdown: a venue has a handful, and
-            seeing the prices side by side is how somebody answers "which one?" at a counter.
-          -->
-          <fieldset class="methods">
-            <legend>{{ i18n.t('packages.whichOffer') }}</legend>
-            @for (one of onSale(); track one.typeId) {
-              <label class="method-choice">
-                <input
-                  type="radio"
-                  formControlName="packageTypeId"
-                  [value]="one.typeId"
-                  [attr.data-testid]="'offer-' + one.typeId"
-                />
-                <span class="offer-name">{{ one.name }}</span>
-                <span class="muted">
-                  {{ one.hours }} {{ i18n.t('packages.hours') }} ·
-                  {{ one.priceBaht | baht: i18n.locale() }}
-                </span>
-              </label>
-            }
-          </fieldset>
-
-          <div class="who">
-            <mat-form-field class="field">
-              <mat-label>{{ i18n.t('packages.customerName') }}</mat-label>
-              <input matInput data-testid="customer-name" formControlName="customerName" />
-              <mat-error
-                [appFieldError]="sale.controls.customerName"
-                testId="customer-name-error"
-              ></mat-error>
-            </mat-form-field>
-
-            <mat-form-field class="field">
-              <mat-label>{{ i18n.t('packages.customerPhone') }}</mat-label>
-              <input
-                matInput
-                inputmode="tel"
-                data-testid="customer-phone"
-                formControlName="customerPhone"
-              />
-            </mat-form-field>
-          </div>
-
-          <fieldset class="methods">
-            <legend>{{ i18n.t('packages.paidBy') }}</legend>
-            @for (method of methods; track method) {
-              <label class="method-choice">
-                <input
-                  type="radio"
-                  formControlName="paidBy"
-                  [value]="method"
-                  [attr.data-testid]="'paid-' + method"
-                />
-                <span>{{ i18n.t('money.method.' + method) }}</span>
-              </label>
-            }
-          </fieldset>
-        </form>
-
-        <div class="row">
-          <button
-            matButton="filled"
-            type="button"
-            data-testid="sell-package"
-            [disabled]="saving()"
-            (click)="sell()"
-          >
-            {{ i18n.t('packages.sell') }}
-          </button>
-        </div>
-      }
-
-      @if (saveError(); as key) {
-        <p class="form-error" data-testid="save-error">{{ i18n.t(key) }}</p>
-      }
-    </mat-card-content>
-  </mat-card>
 
   <mat-card>
     <mat-card-header>

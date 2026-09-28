@@ -11,14 +11,11 @@ import { AppDatePipe } from '../../core/i18n/app-date.pipe';
 import { BahtPipe } from '../../core/i18n/baht.pipe';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { HourPackage, PackagesService, PackageType } from '../../core/venues/packages.service';
-import { PAYMENT_METHODS } from '../../core/venues/venue-bookings.service';
 import { FieldError } from '../../shared/field-error';
 import { FORM_FIELD_DEFAULTS } from '../../shared/form-field-defaults';
 
 /** As long as an offer's name on the board may be. The customer's own is Booking's, and longer. */
 const OFFER_NAME_MAX_LENGTH = 100;
-const CUSTOMER_NAME_MAX_LENGTH = 200;
-const CUSTOMER_PHONE_MAX_LENGTH = 20;
 
 /**
  * Hours sold in advance (PRD US-31).
@@ -53,7 +50,6 @@ export class PackagesPage {
   private readonly forms = inject(FormBuilder);
 
   protected readonly i18n = inject(TranslationService);
-  protected readonly methods = PAYMENT_METHODS;
   protected readonly nameMaxLength = OFFER_NAME_MAX_LENGTH;
 
   readonly venueId = input.required<string>();
@@ -107,13 +103,6 @@ export class PackagesPage {
     return !one.live ? 'done' : one.runningOut ? 'runningOut' : 'live';
   }
 
-  /** "Add a member" is selling somebody a package: the form below, brought to hand. */
-  protected toSell(): void {
-    const card = document.getElementById('sell-package-card');
-    card?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    card?.querySelector<HTMLElement>('[data-testid=customer-name]')?.focus({ preventScroll: true });
-  }
-
   protected readonly runningOut = computed(
     () => this.sold().filter((one) => one.runningOut).length,
   );
@@ -123,20 +112,6 @@ export class PackagesPage {
   );
 
   protected readonly nothingSold = computed(() => !this.loading() && this.sold().length === 0);
-
-  /** Selling one to somebody at the desk. */
-  protected readonly sale = this.forms.group({
-    packageTypeId: this.forms.control<string | null>(null, Validators.required),
-    customerName: this.forms.nonNullable.control('', [
-      Validators.required,
-      Validators.maxLength(CUSTOMER_NAME_MAX_LENGTH),
-    ]),
-    customerPhone: this.forms.nonNullable.control(
-      '',
-      Validators.maxLength(CUSTOMER_PHONE_MAX_LENGTH),
-    ),
-    paidBy: this.forms.nonNullable.control<string>(PAYMENT_METHODS[0], Validators.required),
-  });
 
   /** Putting an offer on the board. */
   protected readonly offer = this.forms.nonNullable.group({
@@ -148,35 +123,6 @@ export class PackagesPage {
 
   constructor() {
     effect(() => this.load(this.venueId()));
-  }
-
-  protected sell(): void {
-    this.sale.markAllAsTouched();
-    if (this.sale.invalid || this.saving()) {
-      return;
-    }
-
-    const { packageTypeId, customerName, customerPhone, paidBy } = this.sale.getRawValue();
-
-    this.saving.set(true);
-    this.saveError.set(null);
-
-    this.packages
-      .sell(this.venueId(), {
-        packageTypeId: packageTypeId!,
-        customerName: customerName.trim(),
-        customerPhone: customerPhone.trim() === '' ? null : customerPhone.trim(),
-        paidBy,
-      })
-      .subscribe({
-        next: (bought) => {
-          this.saving.set(false);
-          this.sold.update((all) => [bought, ...all]);
-          this.sale.patchValue({ customerName: '', customerPhone: '' });
-          this.sale.controls.customerName.markAsUntouched();
-        },
-        error: (failure: unknown) => this.refused(failure),
-      });
   }
 
   protected putOnTheBoard(): void {
@@ -196,7 +142,6 @@ export class PackagesPage {
         this.board$.update((all) => [...all, added]);
         this.offer.patchValue({ name: '' });
         this.offer.controls.name.markAsUntouched();
-        this.pickIfOnlyOne();
       },
       error: (failure: unknown) => this.refused(failure),
     });
@@ -214,10 +159,6 @@ export class PackagesPage {
       next: (gone) => {
         this.saving.set(false);
         this.board$.update((all) => all.map((row) => (row.typeId === gone.typeId ? gone : row)));
-
-        if (this.sale.value.packageTypeId === gone.typeId) {
-          this.sale.patchValue({ packageTypeId: null });
-        }
       },
       error: (failure: unknown) => this.refused(failure),
     });
@@ -226,13 +167,6 @@ export class PackagesPage {
   private refused(failure: unknown): void {
     this.saving.set(false);
     this.saveError.set(errorKey(failure));
-  }
-
-  private pickIfOnlyOne(): void {
-    const only = this.onSale();
-    if (only.length === 1) {
-      this.sale.patchValue({ packageTypeId: only[0].typeId });
-    }
   }
 
   private load(venueId: string): void {
@@ -247,7 +181,6 @@ export class PackagesPage {
         this.loading.set(false);
         this.board$.set(board);
         this.sold.set(sold);
-        this.pickIfOnlyOne();
 
         // Nothing to sell from yet, so the thing to do first is put something on the board.
         this.editingBoard.set(this.onSale().length === 0);

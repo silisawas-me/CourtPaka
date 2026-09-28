@@ -226,3 +226,30 @@
   cursor: pointer;
   white-space: nowrap;
 }
+
+/* The folded pages: one quiet line under the four sections, as the design's rail has room for. */
+.side-more {
+  margin-top: 0.5rem;
+
+  > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    list-style: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &::after {
+      content: '▾';
+      margin-inline-start: auto;
+      padding-inline-start: 0.5rem;
+    }
+  }
+
+  &[open] > summary::after {
+    content: '▴';
+  }
+}

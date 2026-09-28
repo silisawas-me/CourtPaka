@@ -557,6 +557,14 @@ def clear_waiting(page, venue_id, date) -> None:
                 data={"paymentReceived": False})
 
 
+def open_more(page) -> None:
+    """Opens the rail's folded pages ("อื่น ๆ"), which the design's rail keeps closed."""
+    fold = page.locator("[data-testid=nav-more]")
+    fold.wait_for(state="attached")
+    if fold.get_attribute("open") is None:
+        fold.locator("summary").click()
+
+
 def open_seeded_venue(page) -> str:
     """Opens the first page of a signed-in session and answers the seeded venue's href. The owner
     app's first page has no list of venues to read it from (the branches are the top bar), so the

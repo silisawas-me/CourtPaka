@@ -169,6 +169,7 @@ public static class AccountDeletion
         user.NormalizedUserName = placeholder.ToUpperInvariant();
         user.EmailConfirmed = false;
         user.PhoneNumber = null;
+        user.DisplayName = null;
         user.PhoneNumberConfirmed = false;
         user.PasswordHash = null;
         user.DeletedAt = now;

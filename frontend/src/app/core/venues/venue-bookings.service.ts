@@ -73,6 +73,8 @@ export interface VenueBooking {
   bookerEmail: string | null;
   /** Only when there is no address: a LINE booker is reached on the phone (US-01). */
   bookerPhone: string | null;
+  /** What the booker asked to be called, when they said ("คุณแพร"). */
+  bookerName?: string | null;
   /** Online, or taken at the counter — which decides who the row is for. */
   channel: 'Online' | 'Staff';
   /** Which of the four the floor colours it as — worked out by the server (`BookingKinds`). */

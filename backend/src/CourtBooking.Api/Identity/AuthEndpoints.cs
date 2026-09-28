@@ -189,13 +189,34 @@ public static class AuthEndpoints
             : ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.InvalidVerificationToken);
     }
 
+    /// <summary>What a developer types to be the owner of the mock branches (see AppOptions.DevQuickLogin).</summary>
+    public const string QuickLoginWord = "1";
+
     private static async Task<Results<NoContent, ProblemHttpResult>> LoginAsync(
         LoginRequest request,
         SignInManager<AppUser> signInManager,
         UserManager<AppUser> userManager,
         ITransactionalEmailSender emailSender,
+        IOptions<AppOptions> options,
+        IWebHostEnvironment environment,
+        ILoggerFactory loggers,
         CancellationToken cancellationToken)
     {
+        // A local stack's shortcut: "1" / "1" is the owner of the mock branches. Two locks, as for
+        // the seed — the flag AND a development host — so a deployment cannot open it by accident.
+        if (options.Value.DevQuickLogin
+            && environment.IsDevelopment()
+            && request.Email == QuickLoginWord
+            && request.Password == QuickLoginWord
+            && (await userManager.FindByEmailAsync(DevelopmentMockData.DemoEmail)
+                ?? await userManager.FindByEmailAsync(DevelopmentSeeder.OwnerEmail)) is { } owner)
+        {
+            loggers.CreateLogger(typeof(AuthEndpoints)).LogWarning(
+                "Development quick login as the mock owner");
+            await signInManager.SignInAsync(owner, isPersistent: true);
+            return TypedResults.NoContent();
+        }
+
         var result = await signInManager.PasswordSignInAsync(
             request.Email, request.Password, isPersistent: true, lockoutOnFailure: true);
 
