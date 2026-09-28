@@ -127,12 +127,14 @@ public static class OwnerToday
         var since = PlatformRequirements.BangkokHour(today, 0);
         var until = PlatformRequirements.BangkokHour(today.AddDays(1), 0);
 
-        // Today's bookings with their hours, read as the check-in door reads them.
+        // Today's bookings with their hours, read as the check-in door reads them. An hour that
+        // runs into today counts: a game begun at a quarter to midnight is on the floor at ten
+        // past, and still waiting to be taken in if nobody has.
         var onTheFloor = await database.Bookings
             .AsNoTracking()
             .Include(booking => booking.Slots)
             .Where(booking => booking.Slots.Any(slot =>
-                slot.Court!.VenueId == venue.Id && slot.StartsAt >= since && slot.StartsAt < until))
+                slot.Court!.VenueId == venue.Id && slot.EndsAt > since && slot.StartsAt < until))
             .ToListAsync(cancellationToken);
 
         var due = onTheFloor

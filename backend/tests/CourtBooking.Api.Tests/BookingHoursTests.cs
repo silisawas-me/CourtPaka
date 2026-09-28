@@ -299,6 +299,33 @@ public sealed class BookingHoursTests(ApiTestFixture api) : IClassFixture<ApiTes
             owner, venue.Id, VenueScenario.AllWeek(0, 24, 200m));
         await VenueScenario.SetHoursAsync(owner, venue.Id, VenueScenario.Today, 0, 24);
 
+        // Yesterday too: just after midnight the first hour below is yesterday's, and the doors
+        // that open courts and set hours will not start them in the past, so both are written
+        // straight in — the courts as standing yesterday, the week as open round the clock.
+        using (var scope = api.CreateScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var ownerId = await database.VenueMemberships
+                .Where(member => member.VenueId == venue.Id)
+                .Select(member => member.UserId)
+                .SingleAsync();
+            database.OpeningHoursSchedules.Add(OpeningHoursSchedule.Create(
+                venue.Id,
+                VenueScenario.Today.AddDays(-1),
+                Enum.GetValues<DayOfWeek>().Select(day => new WeekdayHours(day, 0, 24)),
+                ownerId,
+                DateTimeOffset.UtcNow.AddMinutes(-1)));
+            database.CourtStatusChanges.AddRange(courts.Select(court => new CourtStatusChange
+            {
+                CourtId = court,
+                Active = true,
+                EffectiveFrom = VenueScenario.Today.AddDays(-1),
+                ChangedByUserId = ownerId,
+                ChangedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+            }));
+            await database.SaveChangesAsync();
+        }
+
         var booker = await scenario.SignedInClientAsync();
         var booking = await VenueScenario.HoldAsync(
             booker, venue.Id, Tomorrow, (courts[0], 18), (courts[0], 19));
