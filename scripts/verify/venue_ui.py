@@ -62,14 +62,14 @@ with sync_playwright() as p:
 
     # In-app navigation (router reuse) is the case that used to break: switch branch on the
     # schedule's top bar, then open that branch's own page from the rail.
-    page.goto(BASE + first_url + "/bookings")
+    page.goto(BASE + first_url + "/timeline")
     page.click(f"[data-testid=pill-{created['id']}]")
-    page.wait_for_url(f"{BASE}{second_url}/bookings")
+    page.wait_for_url(f"{BASE}{second_url}/timeline")
     page.click("[data-testid=nav-venue]")
     expect(page.locator("[data-testid=venue-name]")).to_have_text(second_name)
     page.go_back()
     page.click(f"[data-testid=pill-{approved['id']}]")
-    page.wait_for_url(f"{BASE}{first_url}/bookings")
+    page.wait_for_url(f"{BASE}{first_url}/timeline")
     page.click("[data-testid=nav-venue]")
     expect(page.locator("[data-testid=venue-name]")).to_have_text(first_name)
     page.goto(BASE + second_url)

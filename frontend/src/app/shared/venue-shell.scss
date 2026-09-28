@@ -200,7 +200,22 @@
   margin-inline-start: auto;
 }
 
+.scan-button {
+  order: 3;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0 1rem;
+  border-radius: var(--mat-sys-corner-medium);
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  font: var(--mat-sys-label-large);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
 .walk-in-button {
+  order: 2;
   min-height: 2.5rem;
   padding: 0 1rem;
   border: 1px solid var(--mat-sys-on-surface);

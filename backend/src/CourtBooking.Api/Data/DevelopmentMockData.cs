@@ -50,13 +50,29 @@ public static class DevelopmentMockData
         "คุณเอ็ม", "คุณหญิง", "คุณตาล", "คุณนิว", "คุณภูมิ", "คุณข้าว",
     ];
 
+    // Two standing groups every evening and one at the weekend mornings, so the timeline carries
+    // the design's mix of colours rather than a wall of walk-ins.
     private static readonly (string Name, DayOfWeek Day, int From, int Until)[] Groups =
     [
-        ("ก๊วนวันพุธ", DayOfWeek.Wednesday, 19, 21),
-        ("ก๊วนออฟฟิศ", DayOfWeek.Monday, 18, 20),
+        .. Enum.GetValues<DayOfWeek>().SelectMany(day => new[]
+        {
+            ($"ก๊วนเย็น{ThaiDay(day)}", day, 18, 20),
+            ($"ก๊วนขาประจำ{ThaiDay(day)}", day, 19, 22),
+        }),
         ("ก๊วนมือใหม่", DayOfWeek.Saturday, 10, 12),
         ("ก๊วนเช้าวันอาทิตย์", DayOfWeek.Sunday, 8, 10),
     ];
+
+    private static string ThaiDay(DayOfWeek day) => day switch
+    {
+        DayOfWeek.Monday => "วันจันทร์",
+        DayOfWeek.Tuesday => "วันอังคาร",
+        DayOfWeek.Wednesday => "วันพุธ",
+        DayOfWeek.Thursday => "วันพฤหัส",
+        DayOfWeek.Friday => "วันศุกร์",
+        DayOfWeek.Saturday => "วันเสาร์",
+        _ => "วันอาทิตย์",
+    };
 
     private static readonly (string Name, decimal Baht, string Unit, bool Counted)[] Goods =
     [
@@ -81,10 +97,23 @@ public static class DevelopmentMockData
         var now = time.GetUtcNow();
         var today = PlatformRequirements.BangkokToday(time);
 
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>()
+            .CreateLogger(typeof(DevelopmentMockData));
         foreach (var branch in Branches)
         {
-            var venue = await EnsureVenueAsync(database, branch, owner.Id, options.Value, today, now, cancellationToken);
-            await FillAsync(database, venue, branch, owner.Id, today, now, cancellationToken);
+            // Made-up data must never be why a local API does not start: a branch that fails is
+            // logged and skipped, and the next start tries it again.
+            try
+            {
+                var venue = await EnsureVenueAsync(
+                    database, branch, owner.Id, options.Value, today, now, cancellationToken);
+                await FillAsync(database, venue, branch, owner.Id, today, now, cancellationToken);
+            }
+            catch (Exception failure) when (failure is not OperationCanceledException)
+            {
+                logger.LogWarning(failure, "Mock data for {Branch} was not written", branch.Code);
+                database.ChangeTracker.Clear();
+            }
         }
     }
 
@@ -221,7 +250,7 @@ public static class DevelopmentMockData
         var since = PlatformRequirements.BangkokHour(first, 0);
         var written = await database.BookingSlots
             .Where(slot => slot.Court!.VenueId == venue.Id && slot.StartsAt >= since)
-            .Select(slot => new { slot.StartsAt, slot.Booking!.SeriesId })
+            .Select(slot => new { slot.StartsAt, slot.CourtId, slot.IsActive, slot.Booking!.SeriesId })
             .ToListAsync(cancellationToken);
 
         // A day is filled when it has a walk-in. A group's week is its own question, because the
@@ -242,7 +271,11 @@ public static class DevelopmentMockData
         for (var date = first; date <= today; date = date.AddDays(1))
         {
             var random = new Random(HashCode.Combine(branch.Code, date.DayNumber));
-            var taken = new HashSet<(Guid, int)>();
+            // What is on the courts already, so a day topped up never lays a booking over one.
+            var taken = written
+                .Where(one => one.IsActive && DayOf(one.StartsAt) == date)
+                .Select(one => (one.CourtId, one.StartsAt.AddHours(7).UtcDateTime.Hour))
+                .ToHashSet();
 
             if (date == today && branch.Code == "BNA01" && !filled.Contains(date))
             {
@@ -315,7 +348,7 @@ public static class DevelopmentMockData
 
                     var package = packages.FirstOrDefault(one => one.Left >= length);
                     Booking booking;
-                    if (package is not null && random.NextDouble() < 0.18)
+                    if (package is not null && random.NextDouble() < 0.3)
                     {
                         booking = Booking.OnHours(
                             venue.Id, package.Package.CustomerName, package.Package.CustomerPhone,
@@ -496,28 +529,34 @@ public static class DevelopmentMockData
         var existing = await database.BookingSeries
             .Where(one => one.VenueId == venue.Id)
             .ToListAsync(cancellationToken);
-        if (existing.Count > 0)
+        var named = existing.Select(one => one.CustomerName).ToHashSet();
+
+        // Only the groups not agreed yet, so a list that grew adds its new ones and nothing twice.
+        var added = Groups
+            .Select((group, index) => (group, index))
+            .Where(one => !named.Contains(one.group.Name))
+            .Select(one => new BookingSeries
+            {
+                VenueId = venue.Id,
+                CourtId = courts[courts.Count - 1 - one.index % courts.Count].Id,
+                Day = one.group.Day,
+                FromHour = one.group.From,
+                UntilHour = one.group.Until,
+                CustomerName = one.group.Name,
+                CustomerPhone = $"081{one.index % 10}00{one.index % 10}000",
+                StartsOn = first,
+                CreatedAt = now,
+                CreatedByUserId = ownerId,
+            })
+            .ToList();
+
+        if (added.Count > 0)
         {
-            return existing;
+            database.BookingSeries.AddRange(added);
+            await database.SaveChangesAsync(cancellationToken);
         }
 
-        var made = Groups.Select((group, index) => new BookingSeries
-        {
-            VenueId = venue.Id,
-            CourtId = courts[courts.Count - 1 - index % courts.Count].Id,
-            Day = group.Day,
-            FromHour = group.From,
-            UntilHour = group.Until,
-            CustomerName = group.Name,
-            CustomerPhone = $"081{index}00{index}000",
-            StartsOn = first,
-            CreatedAt = now,
-            CreatedByUserId = ownerId,
-        }).ToList();
-
-        database.BookingSeries.AddRange(made);
-        await database.SaveChangesAsync(cancellationToken);
-        return made;
+        return [.. existing, .. added];
     }
 
     private sealed class Balance(HourPackage package, int left)

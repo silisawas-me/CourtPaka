@@ -21,7 +21,7 @@ with sync_playwright() as p:
     desk = browser.new_page(viewport=DESK)
     sign_in(desk, OWNER)
 
-    desk.goto(f"{BASE}/venues/{venue_id}/bookings")
+    desk.goto(f"{BASE}/venues/{venue_id}/timeline")
     desk.wait_for_selector("[data-testid=nav-slip-queue]")
     check("the venue's doors stand down the side on a desk", desk.locator(".side").is_visible(), desk)
     # The bar above is not drawn beside a sidebar, so the rest of the app has to travel with it.
@@ -83,7 +83,7 @@ with sync_playwright() as p:
 
     phone = browser.new_page(viewport=PHONE)
     sign_in(phone, OWNER)
-    phone.goto(f"{BASE}/venues/{venue_id}/bookings")
+    phone.goto(f"{BASE}/venues/{venue_id}/timeline")
     phone.wait_for_selector("[data-testid=tab-schedule]")
     check("the sections lie along the bottom on a phone", phone.locator(".tabs").is_visible(), phone)
     check("the sidebar is not drawn on a phone", not phone.locator(".side").is_visible())

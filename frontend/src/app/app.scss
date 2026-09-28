@@ -267,3 +267,12 @@
     display: none;
   }
 }
+
+// The top bar's end, in the design's order: languages, + Walk-in, สแกน QR (the shell's), avatar.
+.languages[topEnd] {
+  order: 1;
+}
+
+.avatar[topEnd] {
+  order: 4;
+}

@@ -43,7 +43,7 @@ with sync_playwright() as p:
     through(staff, "staff", STAFF)
     staff.wait_for_url("**/venues/**")
     mine = staff.request.get(f"{BASE}/api/venues/mine").json()
-    wanted = f"{BASE}/venues/{mine[0]['id']}/bookings" if len(mine) == 1 else f"{BASE}/venues"
+    wanted = f"{BASE}/venues/{mine[0]['id']}/timeline" if len(mine) == 1 else f"{BASE}/venues"
     check("staff come in at the staff door to their venue's timeline",
           staff.url.split("?")[0] == wanted, staff)
     check("the seeded staff work at the seeded venue",

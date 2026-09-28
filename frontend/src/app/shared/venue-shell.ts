@@ -88,6 +88,17 @@ export class VenueShell {
     return `${this.i18n.t(`overview.weekday.${day.getDay()}`)} ${date.format(day)}`;
   });
 
+  /** Where "สแกน QR" goes: the board of right now of this venue, or of the first on the overview. */
+  protected readonly scanAt = computed(() => {
+    const id = this.onAll() ? this.mine()[0]?.id : this.venueId();
+    return id ? ['/venues', id, 'now'] : null;
+  });
+
+  /** The venue a walk-in is sold at: this one, or on the overview the first branch (the design's). */
+  protected readonly walkInAt = computed(() =>
+    this.onAll() ? (this.mine()[0]?.id ?? null) : this.venueId(),
+  );
+
   /** The walk-in modal is open (owner app PR-3). */
   protected readonly walkIn = signal(false);
 
@@ -175,8 +186,8 @@ export class VenueShell {
    */
   protected readonly pills = computed<Pill[]>(() => {
     const here = this.here();
-    const onSchedule = this.onAll() || here.segment === 'bookings' || here.segment === 'now';
-    const segment = this.onAll() ? 'bookings' : (here.segment ?? '');
+    const onSchedule = this.onAll() || here.segment === 'timeline' || here.segment === 'now';
+    const segment = this.onAll() ? 'timeline' : (here.segment ?? '');
 
     const venues = this.mine().map((venue) => ({
       path: ['/venues', venue.id, ...(segment ? [segment] : [])],
@@ -201,13 +212,13 @@ export class VenueShell {
   /** The timeline or the board of right now: two ways of reading the same schedule (2a / 2b). */
   protected readonly views = computed(() => {
     const segment = this.here().segment;
-    if (this.onAll() || (segment !== 'bookings' && segment !== 'now')) {
+    if (this.onAll() || (segment !== 'timeline' && segment !== 'now')) {
       return [];
     }
 
-    return (['bookings', 'now'] as const).map((view) => ({
+    return (['timeline', 'now'] as const).map((view) => ({
       path: ['/venues', this.venueId(), view],
-      label: view === 'bookings' ? 'nav.view.timeline' : 'nav.view.now',
+      label: view === 'timeline' ? 'nav.view.timeline' : 'nav.view.now',
       testId: `view-${view}`,
       on: segment === view,
     }));

@@ -66,8 +66,21 @@ describe('NowPage', () => {
       ],
     });
     httpMock.expectOne((request) => request.url === '/api/venues/v1/bookings').flush(day);
+    httpMock.expectOne('/api/venues/v1/shop/items').flush([water]);
     fixture.detectChanges();
   }
+
+  const water = {
+    itemId: 'i1',
+    name: 'Water',
+    priceBaht: 15,
+    unit: 'bottle',
+    counted: false,
+    tellMeAt: null,
+    left: null,
+    runningLow: false,
+    withdrawnAt: null,
+  };
 
   it('draws a court with somebody due on it, and takes them in from the card', () => {
     render([booking()]);
@@ -93,9 +106,18 @@ describe('NowPage', () => {
     expect(elementOf(fixture, 'now-nobody-arriving')).not.toBeNull();
   });
 
-  it('offers a quick sale with no booking attached', () => {
+  it('offers a quick sale as tiles, which open the sale with no booking attached', () => {
     render([]);
 
+    expect(textOf(fixture, 'quick-i1')).toContain('Water');
+    expect(elementOf(fixture, 'sell-onto-booking')).toBeNull();
+
+    clickOn(fixture, 'quick-i1');
+    fixture.detectChanges();
+    // Opened at once: the items are asked for without a second press.
+    httpMock.expectOne('/api/venues/v1/shop/items').flush([water]);
+    fixture.detectChanges();
     expect(elementOf(fixture, 'sell-onto-booking')).not.toBeNull();
+    expect(elementOf(fixture, 'sell-item-i1')).not.toBeNull();
   });
 });

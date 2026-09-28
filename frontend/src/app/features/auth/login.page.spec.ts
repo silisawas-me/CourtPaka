@@ -136,7 +136,7 @@ describe('LoginPage', () => {
 
       signIn('staff', [{ id: 'v1', role: 'Staff' }]);
 
-      expect(navigate).toHaveBeenCalledWith('/venues/v1/bookings');
+      expect(navigate).toHaveBeenCalledWith('/venues/v1/timeline');
     });
 
     it('offers a new account only to somebody sent here by an invitation', () => {

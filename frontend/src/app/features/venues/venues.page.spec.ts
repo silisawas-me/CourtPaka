@@ -112,7 +112,7 @@ describe('VenuesPage', () => {
     expect(textOf(fixture, 'overview-shut-v1')).toContain('Court 2');
     // Each hour says its number, to whoever cannot see the shade; an hour not sold says nothing.
     const row = elementOf(fixture, 'overview-venue-v1');
-    expect(row?.getAttribute('href')).toBe('/venues/v1/bookings');
+    expect(row?.getAttribute('href')).toBe('/venues/v1/timeline');
     const hours = row!.querySelectorAll('.heat-hour-cell');
     expect(hours[0].textContent?.trim()).toBe('50%');
     expect(hours[1].classList).toContain('off');

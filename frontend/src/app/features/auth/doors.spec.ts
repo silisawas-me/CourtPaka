@@ -22,7 +22,7 @@ describe('the two doors into the venue side', () => {
   });
 
   it('takes staff with one venue to its timeline, and anybody else to every venue', () => {
-    expect(landing('staff', [staff], false)).toBe('/venues/v2/bookings');
+    expect(landing('staff', [staff], false)).toBe('/venues/v2/timeline');
     expect(landing('staff', [owner, staff], false)).toBe('/venues');
     expect(landing('admin', [owner], false)).toBe('/venues');
   });

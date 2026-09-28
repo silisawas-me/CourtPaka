@@ -9,15 +9,15 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { MatButton } from '@angular/material/button';
 import { WalkInEvents } from '../../core/venues/walk-in.events';
 import { errorKey } from '../../core/http/api-error';
 import { BahtPipe } from '../../core/i18n/baht.pipe';
 import { venueNow } from '../../core/i18n/plain-date';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { Availability, PublicVenueService } from '../../core/venues/public-venue.service';
+import { ShopItem, ShopService } from '../../core/venues/shop.service';
 import { VenueBooking, VenueBookingsService } from '../../core/venues/venue-bookings.service';
-import { arriving, courtsNow, whoIs } from './now-board';
+import { arriving, CourtNow, courtsNow, whoIs } from './now-board';
 import { SellOntoBooking } from './sell-onto-booking';
 
 /**
@@ -34,7 +34,7 @@ export const NOW_REFRESH_MS = 30_000;
  */
 @Component({
   selector: 'app-now-page',
-  imports: [MatButton, BahtPipe, SellOntoBooking],
+  imports: [BahtPipe, SellOntoBooking],
   templateUrl: './now.page.html',
   styleUrl: './now.page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -42,6 +42,7 @@ export const NOW_REFRESH_MS = 30_000;
 export class NowPage {
   private readonly venues = inject(PublicVenueService);
   private readonly bookings = inject(VenueBookingsService);
+  private readonly shop = inject(ShopService);
   protected readonly i18n = inject(TranslationService);
 
   readonly venueId = input.required<string>();
@@ -54,10 +55,9 @@ export class NowPage {
   protected readonly checkingIn = signal<string | null>(null);
   protected readonly checkInError = signal<string | null>(null);
 
-  protected readonly time = computed(() => {
-    const { hour, minute } = this.clock();
-    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-  });
+  /** What the quick-sell tiles offer, and whether the sale is open under them. */
+  protected readonly items = signal<ShopItem[]>([]);
+  protected readonly selling = signal(false);
 
   protected readonly courts = computed(() => {
     const grid = this.grid();
@@ -67,20 +67,29 @@ export class NowPage {
 
   protected readonly arriving = computed(() => arriving(this.day() ?? [], this.clock()));
 
-  protected readonly counts = computed(() => {
-    const courts = this.courts();
-    return {
-      playing: courts.filter((court) => court.state === 'playing').length,
-      due: courts.filter((court) => court.state === 'due').length,
-      free: courts.filter((court) => court.state === 'free').length,
-    };
-  });
+  /** Somebody whose game has begun and who has not been taken in: the desk's first job. */
+  protected readonly dueNow = computed(() =>
+    this.courts().flatMap((court) =>
+      court.state === 'due' && !this.arriving().some((one) => one.booking === court.booking)
+        ? [court]
+        : [],
+    ),
+  );
+
+  /** Two rows of three as the design has it; more courts, more rows. */
+  protected readonly rowsNeeded = computed(() => Math.max(2, Math.ceil(this.courts().length / 3)));
 
   protected readonly who = whoIs;
   protected readonly round = Math.round;
 
   constructor() {
     effect(() => this.read(this.venueId(), { first: true }));
+    effect(() => {
+      this.shop.items(this.venueId()).subscribe({
+        next: (items) => this.items.set(items.filter((item) => !item.withdrawnAt)),
+        error: () => this.items.set([]),
+      });
+    });
 
     // A walk-in sold from the top bar is on a court now (owner app PR-3).
     inject(WalkInEvents)
@@ -103,6 +112,28 @@ export class NowPage {
       this.read(this.venueId(), { first: this.clock().date !== before });
     }, NOW_REFRESH_MS);
     inject(DestroyRef).onDestroy(() => clearInterval(tick));
+  }
+
+  protected stateLabel(state: CourtNow['state']): string {
+    return this.i18n.t(
+      {
+        playing: 'now.playing',
+        due: 'now.notChecked',
+        free: 'now.free',
+        closed: 'now.shutCard',
+        shut: 'now.outside',
+      }[state],
+    );
+  }
+
+  protected leftLabel(minutes: number): string {
+    return this.i18n.t('now.leftMin').replace('{n}', String(minutes));
+  }
+
+  protected nextLabel(hour: number | null): string {
+    return hour === null
+      ? this.i18n.t('now.freeToClose')
+      : this.i18n.t('now.nextAt').replace('{t}', `${hour}:00`);
   }
 
   protected checkIn(booking: VenueBooking): void {

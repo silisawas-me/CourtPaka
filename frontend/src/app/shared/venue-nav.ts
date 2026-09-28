@@ -29,7 +29,7 @@ export interface VenueLink {
  */
 export const VENUE_SECTIONS: readonly VenueLink[] = [
   {
-    to: ['bookings'],
+    to: ['timeline'],
     label: 'nav.section.schedule',
     testId: 'nav-schedule',
     alsoAt: [['now']],
@@ -44,6 +44,8 @@ export const VENUE_SECTIONS: readonly VenueLink[] = [
  * group, because each is work somebody does (the owner's ruling, docs/plan/owner-app.md).
  */
 export const VENUE_OTHER: readonly VenueLink[] = [
+  // The day's list with every door the timeline's panel does not carry (cancel, no-show, refunds).
+  { to: ['bookings'], label: 'nav.dayBookings', testId: 'nav-bookings' },
   { to: ['slip-queue'], label: 'slipQueue.title', testId: 'nav-slip-queue', waiting: 'slips' },
   { to: ['money'], label: 'money.title', testId: 'nav-money', waiting: 'money' },
   { to: ['series'], label: 'series.title', testId: 'nav-series' },
