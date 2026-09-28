@@ -112,7 +112,7 @@
 .heat-row {
   display: grid;
   /* Narrow enough that a whole day (6:00 to midnight) fits a laptop without scrolling. */
-  grid-template-columns: 9rem repeat(var(--hours), minmax(2.6rem, 1fr)) 7rem;
+  grid-template-columns: 9rem repeat(var(--hours), minmax(2.4rem, 1fr)) 7rem;
   gap: 0.4rem;
   align-items: stretch;
   min-width: max-content;

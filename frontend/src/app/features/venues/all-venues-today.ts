@@ -28,6 +28,18 @@ export class AllVenuesToday {
   protected readonly today = signal<OwnerToday | null>(null);
   protected readonly error = signal<string | null>(null);
 
+  /**
+   * The rows of the grid: every branch that trades, and a branch not yet trading only when it has
+   * hours on sale. A venue still applying has nothing to compare, and a row per application would
+   * push the branches that do trade off the screen.
+   */
+  protected readonly rows = computed(() =>
+    (this.today()?.venues ?? []).filter(
+      (venue) =>
+        venue.status === 'Approved' || venue.status === 'Suspended' || venue.sellableHours > 0,
+    ),
+  );
+
   /** Every hour any venue sells today, earliest opening to latest close, one column each. */
   protected readonly hours = computed(() => {
     const all = (this.today()?.venues ?? []).flatMap((venue) => venue.hours.map((h) => h.hour));

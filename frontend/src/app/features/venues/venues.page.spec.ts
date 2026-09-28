@@ -118,6 +118,22 @@ describe('VenuesPage', () => {
     expect(hours[1].classList).toContain('off');
   });
 
+  it('leaves out a venue still applying, which has nothing on sale to compare', () => {
+    const applying: VenueToday = {
+      ...venue,
+      venueId: 'v2',
+      name: 'Still applying',
+      status: 'Pending',
+      sellableHours: 0,
+      hours: [],
+    };
+    httpMock.expectOne('/api/venues/mine/today').flush({ ...today, venues: [venue, applying] });
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, 'overview-venue-v1')).not.toBeNull();
+    expect(elementOf(fixture, 'overview-venue-v2')).toBeNull();
+  });
+
   it('points to the branch bar for somebody with no venue whose reports they read', () => {
     httpMock
       .expectOne('/api/venues/mine/today')

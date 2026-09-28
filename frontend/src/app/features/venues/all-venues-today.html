@@ -51,7 +51,7 @@
             <span class="heat-rev-head" role="columnheader">{{ i18n.t('overview.revenue') }}</span>
           </div>
 
-          @for (venue of day.venues; track venue.venueId) {
+          @for (venue of rows(); track venue.venueId) {
             <a
               class="heat-row venue"
               role="row"
