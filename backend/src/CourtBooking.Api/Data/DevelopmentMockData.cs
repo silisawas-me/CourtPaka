@@ -29,7 +29,14 @@ public static class DevelopmentMockData
     /// <summary>The account that owns the four branches (password as the seed's).</summary>
     public const string DemoEmail = "demo@courtpaka.local";
 
-    private const int DaysBack = 13;
+    /// <summary>A year of days behind today, so every report and every day has something in it.</summary>
+    private const int DaysBack = 365;
+
+    /// <summary>The days written before the API answers anybody; the rest of the year follows it.</summary>
+    private const int RecentDays = 13;
+
+    /// <summary>Booked ahead as far as a booker could, thinning out the further away it is.</summary>
+    private const int DaysAhead = 30;
     private const int OpensHour = 8;
     private const int ClosesHour = 23;
 
@@ -114,7 +121,18 @@ public static class DevelopmentMockData
         new(6, 18, 22, "ก๊วนขาประจำ 12/12", Kind.Group, false, false),
     ];
 
-    public static async Task SeedAsync(IServiceProvider services, CancellationToken cancellationToken = default)
+    /// <summary>The fortnight around today and the month ahead — what the pages open on.</summary>
+    public static Task SeedAsync(IServiceProvider services, CancellationToken cancellationToken = default) =>
+        SeedAsync(services, history: false, cancellationToken);
+
+    /// <summary>
+    /// The year behind that, which takes minutes: run once the API is up, so a local start is not
+    /// held up by eleven months nobody is looking at yet.
+    /// </summary>
+    public static Task SeedHistoryAsync(IServiceProvider services, CancellationToken cancellationToken = default) =>
+        SeedAsync(services, history: true, cancellationToken);
+
+    private static async Task SeedAsync(IServiceProvider services, bool history, CancellationToken cancellationToken)
     {
         using var scope = services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -137,8 +155,11 @@ public static class DevelopmentMockData
             {
                 var venue = await EnsureVenueAsync(
                     database, branch, owner.Id, options.Value, today, now, cancellationToken);
+                var (from, until) = history
+                    ? (today.AddDays(-DaysBack), today.AddDays(-RecentDays - 1))
+                    : (today.AddDays(-RecentDays), today.AddDays(DaysAhead));
                 await new Filler(database, venue, branch, owner.Id, bookers, today, now)
-                    .RunAsync(cancellationToken);
+                    .RunAsync(from, until, cancellationToken);
             }
             catch (Exception failure) when (failure is not OperationCanceledException)
             {
@@ -285,7 +306,7 @@ public static class DevelopmentMockData
         private List<Balance> packages = [];
         private readonly Dictionary<string, BookingSeries> groups = [];
 
-        public async Task RunAsync(CancellationToken cancellationToken)
+        public async Task RunAsync(DateOnly first, DateOnly last, CancellationToken cancellationToken)
         {
             courts = await database.Courts
                 .Where(court => court.VenueId == venue.Id)
@@ -300,38 +321,131 @@ public static class DevelopmentMockData
             goods = await EnsureShopAsync(cancellationToken);
             packages = await EnsurePackagesAsync(cancellationToken);
 
-            var first = today.AddDays(-DaysBack);
+            // Every hour already on a court, cancelled or not: a day is topped up to what it should
+            // hold, never written twice, and a day written while it was ahead fills out once it
+            // comes round.
+            var position = courts.ToDictionary(court => court.Id, court => court.Position + 1);
             var since = PlatformRequirements.BangkokHour(first, 0);
-            var filled = (await database.BookingSlots
-                    .Where(slot => slot.Court!.VenueId == venue.Id
-                        && slot.StartsAt >= since
-                        && slot.Booking!.SeriesId == null)
-                    .Select(slot => slot.StartsAt)
+            var until = PlatformRequirements.BangkokHour(last.AddDays(1), 0);
+            var onCourts = (await database.BookingSlots
+                    .Where(slot => slot.Court!.VenueId == venue.Id && slot.StartsAt >= since && slot.StartsAt < until)
+                    .Select(slot => new { slot.CourtId, slot.StartsAt })
                     .ToListAsync(cancellationToken))
-                .Select(DayOf)
-                .ToHashSet();
+                .GroupBy(slot => DayOf(slot.StartsAt))
+                .ToDictionary(
+                    day => day.Key,
+                    day => day.Select(slot => (position[slot.CourtId], slot.StartsAt.AddHours(7).Hour)).ToHashSet());
 
-            for (var date = first; date <= today; date = date.AddDays(1))
+            // A shut court's hours are not free either — a start that forgot them would book into them.
+            var shut = await database.CourtClosures
+                .Where(closure => closure.Court!.VenueId == venue.Id && closure.StartsAt < until && closure.EndsAt > since)
+                .Select(closure => new { closure.CourtId, closure.StartsAt, closure.EndsAt })
+                .ToListAsync(cancellationToken);
+            foreach (var closure in shut)
             {
-                if (filled.Contains(date))
+                for (var at = closure.StartsAt; at < closure.EndsAt; at = at.AddHours(1))
                 {
-                    continue;
+                    var day = DayOf(at);
+                    if (onCourts.TryGetValue(day, out var hours))
+                    {
+                        hours.Add((position[closure.CourtId], at.AddHours(7).Hour));
+                    }
+                }
+            }
+
+            for (var date = first; date <= last; date = date.AddDays(1))
+            {
+                var random = new Random(Seed(branch.Code, date.DayNumber, 0));
+                var fresh = !onCourts.TryGetValue(date, out var taken);
+                taken ??= [];
+
+                if (fresh)
+                {
+                    await NewDayAsync(date, random, taken, cancellationToken);
                 }
 
-                var random = new Random(HashCode.Combine(branch.Code, date.DayNumber));
-                var taken = new HashSet<(int Court, int Hour)>();
-
-                if (date == today && branch.Code == "ARI01")
-                {
-                    await DesignedEveningAsync(date, random, taken, cancellationToken);
-                }
-                else if (date == today)
-                {
-                    await GroupsTodayAsync(date, random, taken, cancellationToken);
-                }
-
-                FillDay(date, random, taken, date == today);
+                FillDay(date, random, taken);
                 await database.SaveChangesAsync(cancellationToken);
+                database.ChangeTracker.Clear();
+            }
+        }
+
+        /// <summary>
+        /// What only a day never written gets: the design's evening today, the standing groups on
+        /// their weekday, a court shut now and then, and stock bought in on the first of the month.
+        /// </summary>
+        private async Task NewDayAsync(
+            DateOnly date,
+            Random random,
+            HashSet<(int Court, int Hour)> taken,
+            CancellationToken cancellationToken)
+        {
+            if (date == today && branch.Code == "ARI01")
+            {
+                await DesignedEveningAsync(date, random, taken, cancellationToken);
+                return;
+            }
+
+            if (date.DayOfWeek == today.DayOfWeek)
+            {
+                await GroupsOnAsync(date, random, taken, cancellationToken);
+            }
+
+            // About one day in twenty-five a court is shut for a few hours: a leak, the floor.
+            if (date != today && random.NextDouble() < 0.04)
+            {
+                var court = random.Next(1, courts.Count + 1);
+                var from = random.Next(OpensHour, ClosesHour - 4);
+                var hours = random.Next(2, 5);
+                var free = Enumerable.Range(from, hours).All(hour => !taken.Contains((court, hour)));
+                if (free)
+                {
+                    database.CourtClosures.Add(new CourtClosure
+                    {
+                        CourtId = courts[court - 1].Id,
+                        StartsAt = PlatformRequirements.BangkokHour(date, from),
+                        EndsAt = PlatformRequirements.BangkokHour(date, from + hours),
+                        Reason = random.NextDouble() < 0.5 ? "ปิดซ่อมพื้น" : "หลังคารั่ว",
+                        CreatedByUserId = ownerId,
+                        CreatedAt = Earlier(PlatformRequirements.BangkokHour(date, from).AddDays(-2), now),
+                    });
+                    for (var hour = from; hour < from + hours; hour++)
+                    {
+                        taken.Add((court, hour));
+                    }
+                }
+            }
+
+            if (date.Day == 1 && date <= today)
+            {
+                Restock(date);
+            }
+        }
+
+        /// <summary>Tubes, shuttles and water bought in for the month, one bill each.</summary>
+        private void Restock(DateOnly date)
+        {
+            var at = PlatformRequirements.BangkokHour(date, 10);
+            foreach (var item in goods)
+            {
+                const int Count = 400;
+                var spend = new Spend
+                {
+                    VenueId = venue.Id,
+                    Kind = SpendKind.Stock,
+                    AmountBaht = item.PriceBaht * 0.55m * Count,
+                    PaidOn = date,
+                    PaidBy = PaymentMethod.PromptPay,
+                    Note = item.Name,
+                    RecordedAt = at,
+                    RecordedByUserId = ownerId,
+                };
+                database.Spends.Add(spend);
+                database.StockEntries.Add(new StockEntry
+                {
+                    ItemId = item.Id, Quantity = Count, Move = StockMove.BoughtIn, SpendId = spend.Id,
+                    At = at, ByUserId = ownerId,
+                });
             }
         }
 
@@ -366,18 +480,23 @@ public static class DevelopmentMockData
             }
         }
 
-        /// <summary>Two standing groups tonight at the other branches.</summary>
-        private async Task GroupsTodayAsync(
+        /// <summary>
+        /// The standing groups, on their weekday every week of the year: at อารีย์ the design's
+        /// own, elsewhere two of their own.
+        /// </summary>
+        private async Task GroupsOnAsync(
             DateOnly date,
             Random random,
             HashSet<(int, int)> taken,
             CancellationToken cancellationToken)
         {
-            Planned[] tonight =
-            [
-                new(courts.Count, 18, 20, "ก๊วนเย็น" + branch.Name, Kind.Group, false, false),
-                new(courts.Count - 1, 19, 22, "ก๊วนขาประจำ", Kind.Group, false, false),
-            ];
+            Planned[] tonight = branch.Code == "ARI01"
+                ? [.. AriToday.Where(one => one.Kind == Kind.Group)]
+                :
+                [
+                    new(courts.Count, 18, 20, "ก๊วนเย็น" + branch.Name, Kind.Group, false, false),
+                    new(courts.Count - 1, 19, 22, "ก๊วนขาประจำ", Kind.Group, false, false),
+                ];
             foreach (var one in tonight)
             {
                 await WriteAsync(one, date, random, cancellationToken);
@@ -389,20 +508,26 @@ public static class DevelopmentMockData
         }
 
         /// <summary>
-        /// The rest of a day: from 14:00 to 22:00 as many courts as the design's percentage says,
-        /// quieter either side of it; a fortnight ago a little quieter than now.
+        /// The rest of a day, to as many courts an hour as its share says: from 14:00 to 22:00 the
+        /// design's heat map, quieter either side. Today is the design as drawn; every other day
+        /// rolls its own mood, a weekend is busier, the rains and the holidays are quieter, the
+        /// venue grew over the year, and the days ahead are only what has been booked so far.
         /// </summary>
-        private void FillDay(DateOnly date, Random random, HashSet<(int Court, int Hour)> taken, bool isToday)
+        private void FillDay(DateOnly date, Random random, HashSet<(int Court, int Hour)> taken)
         {
-            var ageing = 1.0 - (today.DayNumber - date.DayNumber) * 0.008;
+            // How full each hour should be is rolled on its own: the same day always wants the
+            // same, whatever else was written, so a second start tops up nothing.
+            var load = LoadOn(date, new Random(Seed(branch.Code, date.DayNumber, 99)));
+            var ahead = date > today;
             for (var hour = OpensHour; hour < ClosesHour; hour++)
             {
                 var share = hour is >= 14 and <= 22
                     ? branch.Evening[hour - 14]
                     : hour < 10 ? 0.2 : hour < 12 ? 0.3 : 0.35;
-                if (!isToday)
+                if (date != today)
                 {
-                    share = Math.Min(1, share * ageing * (0.9 + random.NextDouble() * 0.2));
+                    var roll = new Random(Seed(branch.Code, date.DayNumber, hour)).NextDouble();
+                    share = Math.Min(1, share * load * (0.85 + roll * 0.3));
                 }
 
                 var wanted = (int)Math.Round(share * courts.Count);
@@ -418,20 +543,48 @@ public static class DevelopmentMockData
                         ? hour + 2
                         : hour + 1;
                     var roll = random.NextDouble();
-                    var kind = roll < 0.35 ? Kind.App : roll < 0.8 ? Kind.Walk : Kind.Member;
+                    // Ahead of today it is the app and the phone: nobody walks in next week.
+                    var kind = ahead
+                        ? roll < 0.6 ? Kind.App : Kind.Walk
+                        : roll < 0.35 ? Kind.App : roll < 0.8 ? Kind.Walk : Kind.Member;
                     var name = kind switch
                     {
                         Kind.App => AppPeople[random.Next(AppPeople.Length)],
-                        Kind.Walk => WalkInNames[random.Next(WalkInNames.Length)],
+                        Kind.Walk => WalkInNames[random.Next(ahead ? 1 : 0, WalkInNames.Length)],
                         _ => "",
                     };
-                    Write(new Planned(court, hour, until, name, kind, false, false), date, random);
+                    Write(new Planned(court, hour, until, name, kind, false, ahead && kind == Kind.Walk), date, random);
                     for (var one = hour; one < until; one++)
                     {
                         taken.Add((court, one));
                     }
                 }
             }
+        }
+
+        /// <summary>How busy a day is against the design's evening, which is today's.</summary>
+        private double LoadOn(DateOnly date, Random random)
+        {
+            var days = date.DayNumber - today.DayNumber;
+            if (days > 0)
+            {
+                // What is on the books so far: most of tomorrow, little of next month.
+                return Math.Max(0.1, 0.85 - days * 0.03);
+            }
+
+            var mood = 0.7 + random.NextDouble() * 0.55;
+            var weekend = date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday ? 1.12 : 1.0;
+            var rains = date.Month is >= 7 and <= 10 ? 0.9 : 1.0;
+            var holiday = (date.Month, date.Day) switch
+            {
+                (4, >= 12 and <= 16) => 0.45,
+                (12, 31) or (1, 1) => 0.35,
+                (12, >= 24) => 0.75,
+                _ => 1.0,
+            };
+            // The branch grew: a year ago about two thirds of today's trade.
+            var grown = 0.65 + 0.35 * (1.0 + (double)days / DaysBack);
+            return mood * weekend * rains * holiday * grown;
         }
 
         private async Task WriteAsync(Planned one, DateOnly date, Random random, CancellationToken cancellationToken)
@@ -452,7 +605,10 @@ public static class DevelopmentMockData
             var hours = Enumerable.Range(one.From, one.Until - one.From).ToArray();
             var slots = Priced(one.Court, date, hours);
             var starts = PlatformRequirements.BangkokHour(date, one.From);
-            var made = Earlier(starts.AddMinutes(-random.Next(30, 60 * 24)), now);
+            // A booking ahead was made some time in the last few days, not this second.
+            var made = date > today
+                ? now.AddMinutes(-random.Next(10, 60 * 24 * 3))
+                : Earlier(starts.AddMinutes(-random.Next(30, 60 * 24)), now);
             Booking booking;
 
             switch (one.Kind)
@@ -539,9 +695,64 @@ public static class DevelopmentMockData
                 }
             }
 
+            if (EndsBadly(booking, one, made, starts, random))
+            {
+                database.Bookings.Add(booking);
+                return;
+            }
+
             Arrive(booking, starts, one.Waits, random);
             database.Bookings.Add(booking);
             MaybeSell(booking, starts, random);
+        }
+
+        /// <summary>
+        /// Now and then a booking does not end in a game: somebody who booked by phone and had not
+        /// paid calls it off, or somebody who paid in the app never turns up. Both leave nothing
+        /// owed back — no money came in for the one, the no-show keeps what it paid.
+        /// </summary>
+        private bool EndsBadly(Booking booking, Planned one, DateTimeOffset made, DateTimeOffset starts, Random random)
+        {
+            if (one.Waits || one.Unpaid && one.Kind != Kind.Walk)
+            {
+                return false;
+            }
+
+            var roll = random.NextDouble();
+            if (one.Kind == Kind.Walk && roll < 0.05)
+            {
+                var at = Earlier(made.AddMinutes(random.Next(10, 600)), Earlier(starts.AddMinutes(-30), now));
+                if (at <= made)
+                {
+                    return false;
+                }
+
+                foreach (var receipt in database.PaymentReceipts.Local.Where(r => r.BookingId == booking.Id).ToList())
+                {
+                    database.PaymentReceipts.Remove(receipt);
+                }
+
+                booking.PaymentState = PaymentState.NotReceived;
+                booking.StatusChanges.Add(BookingTransitions.Record(
+                    booking.Id, BookingStatus.Confirmed, BookingStatus.Cancelled, ownerId, at,
+                    cause: CancellationReason.CustomerRequest));
+                booking.Status = BookingStatus.Cancelled;
+                booking.RefundPercent = 100;
+                booking.Slots.ForEach(slot => slot.IsActive = false);
+                return true;
+            }
+
+            if (one.Kind == Kind.App && !one.Unpaid && starts.AddMinutes(30) < now && roll < 0.04)
+            {
+                booking.StatusChanges.Add(BookingTransitions.Record(
+                    booking.Id, BookingStatus.Confirmed, BookingStatus.NoShow, ownerId, starts.AddMinutes(20)));
+                booking.Status = BookingStatus.NoShow;
+                booking.RefundPercent = 0;
+                booking.Slots.ForEach(slot => slot.IsActive = false);
+                return true;
+            }
+
+            return false;
         }
 
         private async Task GroupBookingAsync(Planned one, DateOnly date, Random random, CancellationToken cancellationToken)
@@ -562,8 +773,8 @@ public static class DevelopmentMockData
                         UntilHour = one.Until,
                         CustomerName = one.Name,
                         CustomerPhone = $"0812{random.Next(100_000, 999_999)}",
-                        StartsOn = date.AddDays(-28),
-                        CreatedAt = now.AddDays(-28),
+                        StartsOn = today.AddDays(-DaysBack),
+                        CreatedAt = PlatformRequirements.BangkokHour(today.AddDays(-DaysBack - 1), 12),
                         CreatedByUserId = ownerId,
                     };
                     database.BookingSeries.Add(series);
@@ -827,6 +1038,21 @@ public static class DevelopmentMockData
 
         /// <summary>What anybody but the member the design names may still take from it.</summary>
         public int Spare { get; set; } = spare;
+    }
+
+    /// <summary>
+    /// A seed that is the same on every start. <see cref="HashCode"/> is not: it is salted per
+    /// process, which made every start roll a different day and top it up again.
+    /// </summary>
+    private static int Seed(string code, int day, int part)
+    {
+        var seed = 17;
+        foreach (var letter in code)
+        {
+            seed = unchecked(seed * 31 + letter);
+        }
+
+        return unchecked((seed * 31 + day) * 131 + part);
     }
 
     private static DateOnly DayOf(DateTimeOffset instant) =>

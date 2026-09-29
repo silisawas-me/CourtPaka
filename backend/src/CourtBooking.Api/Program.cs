@@ -253,6 +253,14 @@ if (startupOptions.SeedDevelopmentData && app.Environment.IsDevelopment())
     if (startupOptions.SeedMockData)
     {
         await DevelopmentMockData.SeedAsync(app.Services);
+        // The year behind, once the API answers (minutes of writing nobody should wait for).
+        app.Lifetime.ApplicationStarted.Register(() => _ = Task.Run(async () =>
+        {
+            var started = DateTimeOffset.UtcNow;
+            await DevelopmentMockData.SeedHistoryAsync(app.Services, app.Lifetime.ApplicationStopping);
+            app.Logger.LogInformation(
+                "Mock history written in {Seconds} s", (int)(DateTimeOffset.UtcNow - started).TotalSeconds);
+        }));
     }
 }
 
