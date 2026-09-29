@@ -201,9 +201,7 @@
           </button>
           <h2 class="panel-name">{{ i18n.t('timeline.cancelTitle') }}</h2>
           <span class="panel-where"
-            >{{ who(booking) }} · {{ where() }} · ฿{{
-              booking.totalBaht | baht: i18n.locale()
-            }}</span
+            >{{ cancelWhere() }} · ฿{{ booking.totalBaht | baht: i18n.locale() }}</span
           >
         </div>
 
@@ -219,12 +217,21 @@
                 [attr.data-testid]="'cancel-reason-' + choice.reason"
                 (click)="reason.set(choice.reason)"
               >
-                <span>{{ i18n.t('venueBookings.reason.' + choice.reason) }}</span>
-                <span class="reason-money"
-                  >{{ i18n.t('timeline.refund') }} ฿{{
-                    choice.refundBaht | baht: i18n.locale()
-                  }}</span
-                >
+                <span class="reason-text">
+                  <span class="reason-name">{{
+                    i18n.t('venueBookings.reason.' + choice.reason)
+                  }}</span>
+                  <span class="reason-note" [attr.data-testid]="'reason-note-' + choice.reason">{{
+                    reasonNote(choice)
+                  }}</span>
+                </span>
+                <span class="reason-money">
+                  @if (choice.reason === 'PaymentNotReceived') {
+                    —
+                  } @else {
+                    {{ i18n.t('timeline.refund') }} ฿{{ choice.refundBaht | baht: i18n.locale() }}
+                  }
+                </span>
               </button>
             }
           } @else {
@@ -253,7 +260,7 @@
               (input)="cancelNote.set($any($event.target).value)"
             />
           </label>
-          <p class="freed">{{ i18n.t('timeline.freed') }}</p>
+          <p class="freed" data-testid="cancel-freed">{{ freedLine() }}</p>
 
           @if (panelError(); as key) {
             <p class="form-error" data-testid="panel-error">{{ i18n.t(key) }}</p>

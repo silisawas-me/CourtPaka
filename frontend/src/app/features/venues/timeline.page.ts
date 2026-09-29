@@ -143,6 +143,55 @@ export class TimelinePage {
     return (id ? day.find((one) => one.bookingId === id) : null) ?? firstToShow(day, this.clock());
   });
 
+  /** The cancel page's second line, as artboard b2 writes it: who · court · time · price. */
+  protected readonly cancelWhere = computed(() => {
+    const booking = this.selected();
+    if (!booking || booking.slots.length === 0) {
+      return '';
+    }
+    const { from, to } = span(booking);
+    const courts = [...new Set(booking.slots.map((slot) => slot.courtName))].join(', ');
+    return `${whoIs(booking)} · ${courts} · ${from}:00–${to}:00`;
+  });
+
+  /** What cancelling does to the hours, and — when nothing came in — to the money (artboard b2). */
+  protected readonly freedLine = computed(() => {
+    const booking = this.selected();
+    if (!booking || booking.slots.length === 0) {
+      return '';
+    }
+    const { from, to } = span(booking);
+    const courts = [...new Set(booking.slots.map((slot) => slot.courtName))].join(', ');
+    const freed = this.i18n
+      .t('timeline.freedAt')
+      .replace('{courts}', courts)
+      .replace('{from}', `${from}:00`)
+      .replace('{to}', `${to}:00`);
+    return booking.takenBaht > 0 ? freed : `${this.i18n.t('timeline.nothingPaid')} · ${freed}`;
+  });
+
+  /** The line under a reason: what it means, and what share it gives back (artboard b2). */
+  protected reasonNote(choice: {
+    reason: string;
+    refundPercent: number;
+    underHours: number | null;
+  }): string {
+    const share =
+      choice.refundPercent >= 100
+        ? this.i18n.t('timeline.refundAll')
+        : this.i18n.t('timeline.refundShare').replace('{p}', String(choice.refundPercent));
+    switch (choice.reason) {
+      case 'CustomerRequest':
+        return choice.underHours !== null
+          ? `${this.i18n.t('timeline.underHours').replace('{h}', String(choice.underHours))} · ${share}`
+          : share;
+      case 'VenueInitiated':
+        return `${this.i18n.t('timeline.venueReasons')} · ${share}`;
+      default:
+        return this.i18n.t('timeline.neverPaid');
+    }
+  }
+
   protected readonly where = computed(() => {
     const booking = this.selected();
     if (!booking || booking.slots.length === 0) {

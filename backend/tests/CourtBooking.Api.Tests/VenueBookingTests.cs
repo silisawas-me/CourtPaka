@@ -189,6 +189,29 @@ public sealed class VenueBookingTests(ApiTestFixture api) : IClassFixture<ApiTes
         Assert.Equal(0m, offered.Can.CancelChoices[2].RefundBaht);
     }
 
+    /// <summary>
+    /// What the counter says out loud beside each reason (artboard b2): the share it gives back,
+    /// and for the customer's asking, the notice the kinder tier wanted ("less than 24 hours").
+    /// </summary>
+    [Fact]
+    public async Task Each_reason_says_its_share_and_the_customer_s_says_the_notice_it_fell_short_of()
+    {
+        var (owner, venue, booking) = await ConfirmedBookingAsync();
+        await scenario.StartsInAsync(booking.Id, TimeSpan.FromHours(10));
+
+        var offered = Assert.Single(
+            await DayAsync(owner, venue.Id, DayOf(TimeSpan.FromHours(10))),
+            row => row.BookingId == booking.Id);
+        var byReason = offered.Can.CancelChoices.ToDictionary(choice => choice.Reason);
+
+        // The default terms give it all back from 24 hours out, and nothing closer than that.
+        var asked = byReason[nameof(CancellationReason.CustomerRequest)];
+        Assert.Equal(0, asked.RefundPercent);
+        Assert.Equal(24, asked.UnderHours);
+        Assert.Equal(100, byReason[nameof(CancellationReason.VenueInitiated)].RefundPercent);
+        Assert.Null(byReason[nameof(CancellationReason.VenueInitiated)].UnderHours);
+    }
+
     [Fact]
     public async Task Hours_already_played_are_not_given_back_at_the_customer_s_asking()
     {

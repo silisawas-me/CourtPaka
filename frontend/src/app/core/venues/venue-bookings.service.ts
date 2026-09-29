@@ -46,6 +46,10 @@ export interface VenueBookingActions {
 export interface CancelChoice {
   reason: CancellationReason;
   refundBaht: number;
+  /** The share of the price it gives back, 0–100 (PRD 6.1). */
+  refundPercent: number;
+  /** For the customer's request: the notice the next tier asks for, which this falls short of. */
+  underHours: number | null;
 }
 
 /** How somebody paid at the counter (PRD US-13). */
