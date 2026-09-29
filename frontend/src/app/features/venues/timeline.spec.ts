@@ -77,6 +77,23 @@ describe('the timeline', () => {
     expect(game.done).toBe(false);
   });
 
+  it('offers every hour still for sale as a cell to tap, from the hour the clock is in', () => {
+    const [row] = timelineRows(
+      day,
+      [booking('b1', [14, 15])],
+      10,
+      { hour: 12, minute: 30 },
+      'Shut',
+    );
+
+    // 12:00 still sells (the counter sells the hour it is in); 10 and 11 are over; 14 and 15 are
+    // taken; the window ends before 19.
+    expect(row.open.map((cell) => cell.hour)).toEqual([12, 13, 16, 17, 18]);
+    const first = row.open[0];
+    expect(first.baht).toBe(200);
+    expect(first.left).toBeCloseTo((2 / 9) * 100);
+  });
+
   it('leaves out what was called off, and fades what is over', () => {
     const [row] = timelineRows(
       day,

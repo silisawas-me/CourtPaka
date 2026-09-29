@@ -9,4 +9,7 @@ import { Subject } from 'rxjs';
 @Injectable({ providedIn: 'root' })
 export class WalkInEvents {
   readonly sold = new Subject<{ venueId: string }>();
+
+  /** A page asks for the walk-in on a court and hour somebody tapped (the timeline's empty cell). */
+  readonly open = new Subject<{ venueId: string; courtId: string; hour: number }>();
 }

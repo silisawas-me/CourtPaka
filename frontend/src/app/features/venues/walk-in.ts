@@ -45,6 +45,8 @@ export class WalkIn {
   protected readonly i18n = inject(TranslationService);
 
   readonly venueId = input.required<string>();
+  /** A court and hour to open on — somebody tapped that empty cell on the timeline. */
+  readonly at = input<{ courtId: string; hour: number } | null>(null);
   readonly closed = output<void>();
 
   protected readonly payments = PAYMENTS;
@@ -68,7 +70,15 @@ export class WalkIn {
 
   protected readonly starts = computed(() => {
     const day = this.day();
-    return day ? startOptions(day, this.today.hour) : [];
+    if (!day) {
+      return [];
+    }
+    // The tapped hour is on offer even when it is further off than the usual first few.
+    const options = startOptions(day, this.today.hour);
+    const asked = this.at()?.hour;
+    return asked !== undefined && !options.includes(asked)
+      ? [...options, asked].sort((left, right) => left - right)
+      : options;
   });
 
   protected readonly courts = computed(() => {
@@ -100,7 +110,14 @@ export class WalkIn {
       this.venues.availability(this.venueId(), this.today.date, true).subscribe({
         next: (day) => {
           this.day.set(day);
-          this.start.set(this.starts()[0] ?? null);
+          const at = this.at();
+          this.start.set(
+            at && this.starts().includes(at.hour) ? at.hour : (this.starts()[0] ?? null),
+          );
+          // The tapped court, if it is free for the hour: what is left to ask is who and how.
+          if (at && this.courts().some((court) => court.id === at.courtId && court.free)) {
+            this.court.set(at.courtId);
+          }
         },
         error: (failure: unknown) => this.loadError.set(errorKey(failure)),
       });

@@ -235,3 +235,34 @@
   color: #fff;
   font: 500 10px var(--font-mono);
 }
+
+/* An hour still for sale: blank until pointed at, then it says it books. */
+.open-cell {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  margin-left: 2px;
+  padding: 0;
+  border: 1px dashed transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--mat-sys-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  .open-plus {
+    opacity: 0;
+  }
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--mat-sys-primary);
+    background: color-mix(in srgb, var(--mat-sys-primary) 6%, transparent);
+
+    .open-plus {
+      opacity: 1;
+    }
+  }
+}

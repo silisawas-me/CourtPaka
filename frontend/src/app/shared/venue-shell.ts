@@ -8,6 +8,7 @@ import { Venue, VenueService } from '../core/venues/venue.service';
 import { ALL_VENUES, VENUE_OTHER, VENUE_SECTIONS, VenueLink, waitingOn } from './venue-nav';
 
 import { WalkIn } from '../features/venues/walk-in';
+import { WalkInEvents } from '../core/venues/walk-in.events';
 /** A door with its route already built, its count read, and whether it is the page on screen. */
 interface Door {
   readonly path: unknown[];
@@ -52,6 +53,18 @@ interface Here {
 export class VenueShell {
   private readonly venues = inject(VenueService);
   private readonly router = inject(Router);
+
+  constructor() {
+    // A page asked for the walk-in on a court and hour (a tapped empty cell on the timeline).
+    inject(WalkInEvents)
+      .open.pipe(takeUntilDestroyed())
+      .subscribe(({ venueId, courtId, hour }) => {
+        if (venueId === this.walkInAt()) {
+          this.walkInCell.set({ courtId, hour });
+          this.walkIn.set(true);
+        }
+      });
+  }
 
   protected readonly i18n = inject(TranslationService);
 
@@ -101,6 +114,13 @@ export class VenueShell {
 
   /** The walk-in modal is open (owner app PR-3). */
   protected readonly walkIn = signal(false);
+  /** Where the walk-in opens when a page asked for a court and hour (a tapped empty cell). */
+  protected readonly walkInCell = signal<{ courtId: string; hour: number } | null>(null);
+
+  protected openWalkIn(): void {
+    this.walkInCell.set(null);
+    this.walkIn.set(true);
+  }
 
   /** At the venue on screen, or — on the overview — at any venue they have. */
   private readonly isOwner = computed(() => {
