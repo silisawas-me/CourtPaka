@@ -69,7 +69,7 @@ public static class BookerLetters
             BookerNoticeKind.Held => (
                 $"รอชำระเงิน: {venue}",
                 Lines(
-                    $"เราจองคอร์ทที่ {venue} ไว้ให้แล้ว",
+                    $"เราจองคอร์ตที่ {venue} ไว้ให้แล้ว",
                     when,
                     $"ยอดชำระ {Baht(letter.TotalBaht, Thai)} บาท",
                     $"กรุณาโอนเงินและส่งสลิปภายใน {Clock(letter.HoldExpiresAt)} น. "
@@ -139,22 +139,22 @@ public static class BookerLetters
             BookerNoticeKind.AboutToPlay => (
                 $"อีกไม่ถึง 2 ชั่วโมงได้เวลาเล่น: {venue}",
                 Lines(
-                    $"เตือนความจำ: คุณมีคอร์ทที่ {venue}",
+                    $"เตือนความจำ: คุณมีคอร์ตที่ {venue}",
                     when,
                     letter.Link)),
 
             BookerNoticeKind.WaitlistOffer => (
-                $"คอร์ทว่างแล้วตามที่รอไว้: {venue}",
+                $"คอร์ตว่างแล้วตามที่รอไว้: {venue}",
                 Lines(
-                    $"มีคอร์ทว่างในวันที่คุณเข้าคิวรอไว้ที่ {venue} เราจองไว้ให้คุณก่อนแล้ว",
+                    $"มีคอร์ตว่างในวันที่คุณเข้าคิวรอไว้ที่ {venue} เราจองไว้ให้คุณก่อนแล้ว",
                     when,
                     $"ยอดชำระ {Baht(letter.TotalBaht, Thai)} บาท",
                     $"กรุณาโอนเงินและส่งสลิปภายใน {Clock(letter.HoldExpiresAt)} น. "
-                    + "ถ้าเลยเวลานี้ คอร์ทจะถูกเสนอให้คนถัดไปในคิว",
+                    + "ถ้าเลยเวลานี้ คอร์ตจะถูกเสนอให้คนถัดไปในคิว",
                     letter.Link)),
 
             BookerNoticeKind.HoursChanged => (
-                $"สนามแก้ไขเวลาหรือคอร์ทของคุณ: {venue}",
+                $"สนามแก้ไขเวลาหรือคอร์ตของคุณ: {venue}",
                 Lines(
                     $"การจองของคุณที่ {venue} ถูกแก้ไขโดยสนาม ตอนนี้เป็นดังนี้",
                     when,

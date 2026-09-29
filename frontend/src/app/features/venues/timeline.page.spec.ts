@@ -97,6 +97,29 @@ describe('TimelinePage', () => {
     fixture.detectChanges();
   }
 
+  it('shows the other courts to move to at once, free ones as the server says', () => {
+    render([
+      booking('b1', 'c1', [19], {
+        can: {
+          checkIn: false,
+          takeMoney: false,
+          extend: false,
+          moveCourt: true,
+          cancelChoices: [],
+        },
+      }),
+    ]);
+    httpMock.expectOne('/api/venues/v1/bookings/b1/hours').flush({
+      extend: null,
+      move: { courts: [{ courtId: 'c2', courtName: 'Court 2', baht: null }] },
+    });
+    fixture.detectChanges();
+
+    // No button to open them first: the design draws them open.
+    expect(elementOf(fixture, 'move-open')).toBeNull();
+    expect(elementOf<HTMLButtonElement>(fixture, 'move-c2')!.disabled).toBe(false);
+  });
+
   it('draws nine hours from four before now, with the peak hours marked', () => {
     render([]);
 

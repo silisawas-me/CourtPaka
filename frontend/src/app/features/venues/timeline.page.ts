@@ -208,9 +208,6 @@ export class TimelinePage {
 
   protected readonly due = computed(() => this.takingNow() + this.itemsBaht());
 
-  /** Other courts, folded under their button until somebody asks (artboard b1). */
-  protected readonly movesOpen = signal(false);
-
   /** Cancelling: the panel turns into artboard b2. */
   protected readonly cancelling = signal(false);
   protected readonly reason = signal<CancellationReason | null>(null);
@@ -319,7 +316,6 @@ export class TimelinePage {
       this.chosen.set(block.booking.bookingId);
       this.quantities.set({});
       this.taking.set(null);
-      this.movesOpen.set(false);
       this.cancelling.set(false);
       this.refunding.set(false);
       this.panelError.set(null);

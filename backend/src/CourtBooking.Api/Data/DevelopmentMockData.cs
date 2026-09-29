@@ -258,7 +258,7 @@ public static class DevelopmentMockData
 
         for (var index = 0; index < branch.Courts; index++)
         {
-            var (court, status) = Court.Open(venue.Id, $"คอร์ท {index + 1}", index, ownerId, opened, now);
+            var (court, status) = Court.Open(venue.Id, $"คอร์ต {index + 1}", index, ownerId, opened, now);
             database.Courts.Add(court);
             database.CourtStatusChanges.Add(status);
         }
