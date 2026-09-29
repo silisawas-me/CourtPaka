@@ -112,12 +112,42 @@ describe('TimelinePage', () => {
     httpMock.expectOne('/api/venues/v1/bookings/b1/hours').flush({
       extend: null,
       move: { courts: [{ courtId: 'c2', courtName: 'Court 2', baht: null }] },
+      shorten: null,
     });
     fixture.detectChanges();
 
     // No button to open them first: the design draws them open.
     expect(elementOf(fixture, 'move-open')).toBeNull();
     expect(elementOf<HTMLButtonElement>(fixture, 'move-c2')!.disabled).toBe(false);
+    // A one-hour booking has no hour to give back.
+    expect(elementOf<HTMLButtonElement>(fixture, 'shorten')!.disabled).toBe(true);
+  });
+
+  it('takes the last hour off through its door when the server offers it', () => {
+    render([
+      booking('b1', 'c1', [19, 20], {
+        can: { checkIn: false, takeMoney: false, extend: true, moveCourt: true, cancelChoices: [] },
+      }),
+    ]);
+    httpMock.expectOne('/api/venues/v1/bookings/b1/hours').flush({
+      extend: null,
+      move: null,
+      shorten: { date, hour: 20, courtId: 'c1', baht: 300 },
+    });
+    fixture.detectChanges();
+
+    clickOn(fixture, 'shorten');
+    httpMock
+      .expectOne(
+        (request) =>
+          request.method === 'POST' && request.url === '/api/venues/v1/bookings/b1/shorten',
+      )
+      .flush(booking('b1', 'c1', [19]));
+    httpMock.expectOne((request) => request.url === '/api/venues/v1/availability').flush(grid());
+    httpMock
+      .expectOne((request) => request.url === '/api/venues/v1/bookings')
+      .flush([booking('b1', 'c1', [19])]);
+    fixture.detectChanges();
   });
 
   it('draws nine hours from four before now, with the peak hours marked', () => {

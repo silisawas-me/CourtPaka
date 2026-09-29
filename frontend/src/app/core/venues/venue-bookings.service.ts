@@ -123,6 +123,8 @@ export interface BookingHours {
     courts: FreeCourt[];
   } | null;
   move: { hours: number; courts: FreeCourt[] } | null;
+  /** The last hour, which could come off before it begins, and what it was sold for. */
+  shorten: { date: string; hour: number; courtId: string; baht: number } | null;
 }
 
 /**
@@ -306,6 +308,11 @@ export class VenueBookingsService {
   }
 
   /** One more hour, on the court they are on unless the venue names another (PRD US-29). */
+  /** One hour fewer: the last one, before it begins (the owner app's "−1 ชม."). */
+  shorten(venueId: string, bookingId: string): Observable<VenueBooking> {
+    return this.http.post<VenueBooking>(`${this.at(venueId, bookingId)}/shorten`, null);
+  }
+
   extend(venueId: string, bookingId: string, courtId?: string): Observable<VenueBooking> {
     return this.http.post<VenueBooking>(`${this.at(venueId, bookingId)}/extend`, {
       courtId: courtId ?? null,

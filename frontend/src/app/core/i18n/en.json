@@ -1086,5 +1086,7 @@
   "pricing.day.Thursday": "Thu",
   "pricing.day.Friday": "Fri",
   "pricing.day.Saturday": "Sat",
-  "pricing.day.Sunday": "Sun"
+  "pricing.day.Sunday": "Sun",
+  "timeline.oneLess": "−1 hr",
+  "error.booking.shorten_already_paid": "The hour cannot come off: more has been paid than the booking would then cost. Refund it from Day bookings."
 }

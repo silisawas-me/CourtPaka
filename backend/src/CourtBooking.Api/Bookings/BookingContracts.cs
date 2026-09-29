@@ -158,6 +158,12 @@ public static class BookingErrorCodes
     public const string HoursCannotChange = "booking.hours_cannot_change";
 
     /// <summary>
+    /// The hour cannot come off: more has been paid than the booking would then cost, and giving
+    /// the difference back is a refund, which is its own door (PRD US-18).
+    /// </summary>
+    public const string ShortenAlreadyPaid = "booking.shorten_already_paid";
+
+    /// <summary>
     /// The hour they would run on into is somebody else's on that court. The refusal carries the
     /// courts that are free for it, because that is the next thing the counter asks (PRD US-29).
     /// </summary>
@@ -410,7 +416,13 @@ public sealed record MoveOptionResponse(int Hours, FreeCourtResponse[] Courts);
 /// What could still be done to this booking's hours. Either half is null where that door is shut
 /// — a booking whose evening is over has neither.
 /// </summary>
-public sealed record BookingHoursResponse(ExtendOptionResponse? Extend, MoveOptionResponse? Move);
+public sealed record BookingHoursResponse(
+    ExtendOptionResponse? Extend,
+    MoveOptionResponse? Move,
+    ShortenOptionResponse? Shorten = null);
+
+/// <summary>The hour that would come off the end of a booking, and what it was sold for (owner app).</summary>
+public sealed record ShortenOptionResponse(DateOnly Date, int Hour, Guid CourtId, decimal Baht);
 
 /// <summary>
 /// One more hour. The court is the one they are on unless the venue names another, which is what

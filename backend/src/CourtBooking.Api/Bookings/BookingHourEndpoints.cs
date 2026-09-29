@@ -34,6 +34,9 @@ internal static class BookingHourEndpoints
         // Moving sells nothing: the hours are already theirs, and a court that has flooded still
         // floods at a venue the platform has stopped.
         bookings.MapPost("/{bookingId:guid}/move", MoveAsync);
+
+        // Giving an hour back sells nothing either: it lets one go, which a stopped venue may do.
+        bookings.MapPost("/{bookingId:guid}/shorten", ShortenAsync);
     }
 
     /// <summary>
@@ -102,7 +105,129 @@ internal static class BookingHourEndpoints
                 FreeCourts(day, [.. hours.Select(one => one.Hour)], priced: false));
         }
 
-        return TypedResults.Ok(new BookingHoursResponse(extend, move));
+        ShortenOptionResponse? shorten = null;
+        if (BookingHours.LastHour(booking, status, now) is { } lastHour)
+        {
+            var (date, hour) = PlatformRequirements.BangkokDateAndHour(lastHour.StartsAt);
+            shorten = new ShortenOptionResponse(date, hour, lastHour.CourtId, lastHour.BahtPerHour);
+        }
+
+        return TypedResults.Ok(new BookingHoursResponse(extend, move, shorten));
+    }
+
+    /// <summary>
+    /// One hour fewer: the last one, before it begins (the owner app's "−1 ชม."). The booking's
+    /// total comes down by what that hour was sold for — its own snapshot (BR-05), not today's
+    /// price — and the hour is free to sell again at once.
+    ///
+    /// Only while no more has been paid than the booking would then cost. Money that has come in
+    /// for an hour that is no longer theirs is a refund, and refunds are recorded through their
+    /// own door with their own ceiling (PRD US-18); this one does not decide that quietly.
+    /// </summary>
+    private static async Task<Results<Ok<VenueBookingResponse>, ProblemHttpResult>> ShortenAsync(
+        Guid venueId,
+        Guid bookingId,
+        CurrentVenue venue,
+        AppDbContext database,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        var membership = venue.Require();
+
+        if (await VenueBookingEndpoints.OneAsync(database, venueId, bookingId)
+            .SingleOrDefaultAsync(cancellationToken) is not { } booking)
+        {
+            return ApiProblem.Of(StatusCodes.Status404NotFound, BookingErrorCodes.NotFound);
+        }
+
+        var status = BookedSlots.StatusAt(booking, now);
+        if (BookingHours.LastHour(booking, status, now) is not { } last)
+        {
+            return ApiProblem.Of(
+                StatusCodes.Status409Conflict, BookingErrorCodes.HoursCannotChange);
+        }
+
+        var total = booking.TotalBaht - last.BahtPerHour;
+
+        await using var transaction =
+            await database.Database.BeginTransactionAsync(cancellationToken);
+
+        // The money is read behind the lock everything that reads receipts takes, in the same
+        // transaction as the write (CLAUDE.md, PRD US-26).
+        await CounterMoneyEndpoints.QueueForTheMoneyAsync(database, bookingId, cancellationToken);
+        var taken = await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken);
+
+        // A booking recorded as paid with no receipt saying how much is one from before receipts
+        // (Takings.HeldFor reads it as holding what was asked) — so it counts as paid in full.
+        var holding = booking.PaymentState == PaymentState.Received
+            ? Math.Max(taken, booking.TotalBaht)
+            : taken;
+        if (holding > total)
+        {
+            return ApiProblem.Of(
+                StatusCodes.Status409Conflict, BookingErrorCodes.ShortenAlreadyPaid);
+        }
+
+        // Paid to the last baht of the new price is paid: the desk's door closes by itself.
+        var payment = holding == total && total > 0 ? PaymentState.Received : booking.PaymentState;
+
+        var changed = await database.Bookings
+            .Where(candidate =>
+                candidate.Id == bookingId
+                && candidate.VenueId == venueId
+                && candidate.Status == booking.Status
+                && candidate.PaymentState == booking.PaymentState
+                // The price the hour was taken off. An hour added or taken meanwhile moves it, and
+                // this is told to look again rather than writing a total for a booking that no
+                // longer exists (CLAUDE.md, PRD US-29).
+                && candidate.TotalBaht == booking.TotalBaht)
+            .ExecuteUpdateAsync(
+                set => set
+                    .SetProperty(candidate => candidate.TotalBaht, total)
+                    // What was asked up front can never be more than the booking costs.
+                    .SetProperty(
+                        candidate => candidate.DepositBaht,
+                        candidate => candidate.DepositBaht > total ? total : candidate.DepositBaht)
+                    .SetProperty(candidate => candidate.PaymentState, payment),
+                cancellationToken);
+
+        // The row goes, not just its hold on the court: a released hour still reads as one the
+        // booking had (a cancelled evening shows what it was, and the dashboard counts released
+        // hours of a booking that was kept as used). This hour was never theirs to play. The
+        // audit row below is the record that it was once on the booking, and at what price.
+        var released = changed == 0
+            ? 0
+            : await database.BookingSlots
+                .Where(candidate => candidate.Id == last.Id && candidate.IsActive)
+                .ExecuteDeleteAsync(cancellationToken);
+
+        if (released == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return ApiProblem.Of(
+                StatusCodes.Status409Conflict, BookingErrorCodes.ChangedMeanwhile);
+        }
+
+        database.BookingSlotChanges.Add(new BookingSlotChange
+        {
+            BookingId = bookingId,
+            What = HoursChange.Removed,
+            FromCourtId = last.CourtId,
+            ToCourtId = last.CourtId,
+            StartsAt = last.StartsAt,
+            BahtPerHour = last.BahtPerHour,
+            ChangedAt = now,
+            ChangedByUserId = membership.UserId,
+        });
+        await database.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        // No product event: PRD 8.1 has no name for this yet, and a name it does not list fails
+        // EventNamesTests — adding one is a PRD change and waits for the owner.
+        return TypedResults.Ok(
+            await VenueBookingEndpoints.OneDrawnAsync(
+                database, venueId, bookingId, venue, now, cancellationToken));
     }
 
     /// <summary>

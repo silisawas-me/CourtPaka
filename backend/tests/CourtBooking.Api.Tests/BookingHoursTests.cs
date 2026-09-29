@@ -556,6 +556,71 @@ public sealed class BookingHoursTests(ApiTestFixture api) : IClassFixture<ApiTes
     private static string StatusOf(AvailabilityResponse day, Guid courtId, int hour) =>
         day.Courts.Single(court => court.CourtId == courtId).Hours.Single(one => one.Hour == hour).Status;
 
+    /// <summary>
+    /// The owner app's "−1 ชม.": the last hour comes off before it begins, the price comes down
+    /// by what that hour was sold for, and the hour is free to sell again.
+    /// </summary>
+    [Fact]
+    public async Task The_last_hour_comes_off_before_it_begins()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.ConfirmedBookingAsync(owner, venue.Id, courts[0], 18);
+        await Extend(owner, venue.Id, booking.Id);
+
+        var offered = await VenueScenario.ReadAsync<BookingHoursResponse>(
+            await owner.GetAsync($"/api/venues/{venue.Id}/bookings/{booking.Id}/hours"));
+        Assert.Equal(19, offered.Shorten!.Hour);
+        Assert.Equal(200m, offered.Shorten.Baht);
+
+        var shorter = await VenueScenario.ReadAsync<VenueBookingResponse>(
+            await owner.PostAsync($"/api/venues/{venue.Id}/bookings/{booking.Id}/shorten", null));
+
+        Assert.Equal([18], shorter.Slots.Select(slot => slot.Hour));
+        Assert.Equal(200m, shorter.TotalBaht);
+        // What was paid is the whole of the new price again.
+        Assert.Equal(nameof(PaymentState.Received), shorter.PaymentState);
+        Assert.False(shorter.Can.TakeMoney);
+
+        var removed = Assert.Single(await ChangesAsync(booking.Id), change => change.What == HoursChange.Removed);
+        Assert.Equal(courts[0], removed.FromCourtId);
+
+        // The hour is somebody else's to buy now: running the evening on takes it again.
+        Assert.Equal(400m, (await Extend(owner, venue.Id, booking.Id)).TotalBaht);
+    }
+
+    [Fact]
+    public async Task A_booking_of_one_hour_has_nothing_to_give_back()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.ConfirmedBookingAsync(owner, venue.Id, courts[0], 18);
+
+        var offered = await VenueScenario.ReadAsync<BookingHoursResponse>(
+            await owner.GetAsync($"/api/venues/{venue.Id}/bookings/{booking.Id}/hours"));
+        Assert.Null(offered.Shorten);
+
+        var refused = await owner.PostAsync($"/api/venues/{venue.Id}/bookings/{booking.Id}/shorten", null);
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Equal(BookingErrorCodes.HoursCannotChange, await refused.ErrorCodeAsync());
+    }
+
+    /// <summary>Money in for an hour that would no longer be theirs is a refund, not this door's.</summary>
+    [Fact]
+    public async Task An_hour_already_paid_for_does_not_come_off()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.ConfirmedBookingAsync(owner, venue.Id, courts[0], 18);
+        await Extend(owner, venue.Id, booking.Id);
+        await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/bookings/{booking.Id}/payments",
+            new TakePaymentRequest(200m, nameof(PaymentMethod.Cash), null));
+
+        var refused = await owner.PostAsync($"/api/venues/{venue.Id}/bookings/{booking.Id}/shorten", null);
+
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Equal(BookingErrorCodes.ShortenAlreadyPaid, await refused.ErrorCodeAsync());
+        Assert.Equal(400m, (await Row(owner, venue.Id, booking.Id)).TotalBaht);
+    }
+
     private static async Task<VenueBookingResponse> Extend(
         HttpClient owner,
         Guid venueId,

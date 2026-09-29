@@ -11,6 +11,12 @@ public enum HoursChange
 
     /// <summary>An hour the booking already had was played on a different court.</summary>
     Moved = 2,
+
+    /// <summary>
+    /// The last hour came off a booking before it began (the owner app's "−1 ชม."). The row says
+    /// which court it was on in both columns: it went nowhere, it stopped being theirs.
+    /// </summary>
+    Removed = 3,
 }
 
 /// <summary>
@@ -153,6 +159,34 @@ public static class BookingHours
         CanChange(status)
             ? [.. Holding(booking).Where(slot => slot.EndsAt > now).OrderBy(slot => slot.StartsAt)]
             : [];
+
+    /// <summary>
+    /// The hour that would come off the end of a booking: its last one, if it has not begun, if
+    /// the booking would still hold an hour after it, and if only one court ends there — a group
+    /// on two courts has no single last hour to give back. Null otherwise.
+    ///
+    /// A booking waiting on its slip is not shortened: what was asked of the booker is on the QR
+    /// they were shown, and changing the price under a transfer in flight is how a slip ends up
+    /// matching nothing. Nor one paid for with hours from a package (PRD US-31): the hour would
+    /// have to go back onto the package, which is the cancelling door's to do.
+    /// </summary>
+    public static BookingSlot? LastHour(Booking booking, BookingStatus status, DateTimeOffset now)
+    {
+        if (status != BookingStatus.Confirmed || booking.PackageId is not null)
+        {
+            return null;
+        }
+
+        var holding = Holding(booking);
+        if (holding.Count < 2)
+        {
+            return null;
+        }
+
+        var end = holding.Max(slot => slot.EndsAt);
+        var last = holding.Where(slot => slot.EndsAt == end).ToList();
+        return last.Count == 1 && last[0].StartsAt > now ? last[0] : null;
+    }
 
     /// <summary>The hours the booking still occupies a court with (PRD BR-04).</summary>
     private static List<BookingSlot> Holding(Booking booking) =>
