@@ -1095,5 +1095,8 @@
   "timeline.venueReasons": "Court broken, leaking roof…",
   "timeline.neverPaid": "Booked and never paid",
   "timeline.nothingPaid": "Nothing was paid, so nothing is owed back",
-  "timeline.freedAt": "{courts} {from}–{to} is free to sell again at once"
+  "timeline.freedAt": "{courts} {from}–{to} is free to sell again at once",
+  "now.clear": "Clear",
+  "now.sold": "Sold — in today's till",
+  "now.setUpShop": "Nothing to sell yet · set up the shop"
 }

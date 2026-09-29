@@ -1095,5 +1095,8 @@
   "timeline.venueReasons": "คอร์ตเสีย ฝนรั่ว ฯลฯ",
   "timeline.neverPaid": "จองแล้วไม่จ่าย",
   "timeline.nothingPaid": "ยังไม่ได้จ่าย จึงไม่มีเงินต้องคืน",
-  "timeline.freedAt": "{courts} ช่วง {from}–{to} จะกลับมาว่างให้ขายทันที"
+  "timeline.freedAt": "{courts} ช่วง {from}–{to} จะกลับมาว่างให้ขายทันที",
+  "now.clear": "ล้าง",
+  "now.sold": "ขายแล้ว เงินเข้าลิ้นชักวันนี้",
+  "now.setUpShop": "ยังไม่มีของขาย · ตั้งร้านค้า"
 }

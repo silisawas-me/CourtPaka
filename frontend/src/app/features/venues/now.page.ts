@@ -18,7 +18,8 @@ import { Availability, PublicVenueService } from '../../core/venues/public-venue
 import { ShopItem, ShopService } from '../../core/venues/shop.service';
 import { VenueBooking, VenueBookingsService } from '../../core/venues/venue-bookings.service';
 import { arriving, CourtNow, courtsNow, whoIs } from './now-board';
-import { SellOntoBooking } from './sell-onto-booking';
+import { RouterLink } from '@angular/router';
+import { PaymentMethod } from '../../core/venues/venue-bookings.service';
 
 /**
  * How often the floor is read again while the page is being looked at. The same idea as the
@@ -34,7 +35,7 @@ export const NOW_REFRESH_MS = 30_000;
  */
 @Component({
   selector: 'app-now-page',
-  imports: [BahtPipe, SellOntoBooking],
+  imports: [BahtPipe, RouterLink],
   templateUrl: './now.page.html',
   styleUrl: './now.page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -55,9 +56,25 @@ export class NowPage {
   protected readonly checkingIn = signal<string | null>(null);
   protected readonly checkInError = signal<string | null>(null);
 
-  /** What the quick-sell tiles offer, and whether the sale is open under them. */
+  /**
+   * The quick sale, as the design draws it: tiles of what the shop sells. A tap puts one on the
+   * counter (the tile says how many), and the row under the tiles takes the money in one press,
+   * the same three ways the timeline's panel does. No booking: this is the drink somebody buys
+   * on the way past.
+   */
   protected readonly items = signal<ShopItem[]>([]);
+  protected readonly counted = signal<Record<string, number>>({});
   protected readonly selling = signal(false);
+  protected readonly sellError = signal<string | null>(null);
+  protected readonly sold = signal(false);
+  protected readonly payWith: readonly PaymentMethod[] = ['PromptPay', 'Card', 'Cash'];
+
+  protected readonly quickTotal = computed(() =>
+    this.items().reduce(
+      (sum, item) => sum + item.priceBaht * (this.counted()[item.itemId] ?? 0),
+      0,
+    ),
+  );
 
   protected readonly courts = computed(() => {
     const grid = this.grid();
@@ -176,6 +193,39 @@ export class NowPage {
         if (first) {
           this.pageError.set(errorKey(failure));
         }
+      },
+    });
+  }
+
+  protected addOne(item: ShopItem): void {
+    this.sold.set(false);
+    this.sellError.set(null);
+    this.counted.update((all) => ({ ...all, [item.itemId]: (all[item.itemId] ?? 0) + 1 }));
+  }
+
+  protected clearSale(): void {
+    this.counted.set({});
+    this.sellError.set(null);
+  }
+
+  protected sellNow(method: PaymentMethod): void {
+    const lines = Object.entries(this.counted())
+      .filter(([, quantity]) => quantity > 0)
+      .map(([itemId, quantity]) => ({ itemId, quantity }));
+    if (lines.length === 0 || this.selling()) {
+      return;
+    }
+    this.selling.set(true);
+    this.sellError.set(null);
+    this.shop.sell(this.venueId(), { lines, paidBy: method, bookingId: null }).subscribe({
+      next: () => {
+        this.selling.set(false);
+        this.counted.set({});
+        this.sold.set(true);
+      },
+      error: (failure: unknown) => {
+        this.selling.set(false);
+        this.sellError.set(errorKey(failure));
       },
     });
   }

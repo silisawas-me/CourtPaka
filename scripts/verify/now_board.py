@@ -90,12 +90,30 @@ with sync_playwright() as p:
           "50" in desk.locator(f"[data-testid=now-left-{court_id}]").inner_text())
     check("nobody on the court is queueing at the desk as well",
           desk.locator(f"[data-testid=now-arrival-{booking_id}]").count() == 0)
-    # The quick sale is tiles of what the shop sells (or one tile when it sells nothing yet),
-    # and a tile opens the sale with no booking attached.
-    desk.locator("[data-testid^=quick-], [data-testid=sell-open]").first.click()
-    desk.wait_for_selector("[data-testid=sell-onto-booking]")
-    check("the desk can sell without a booking",
-          desk.locator("[data-testid=sell-onto-booking]").count() == 1, desk)
+    # The quick sale is tiles of what the shop sells, as the design draws them: a tap adds one,
+    # and one of three ways to pay takes the money, with no booking attached.
+    tile = desk.locator("[data-testid^=quick-]:not([data-testid^=quick-pay]):not([data-testid^=quick-count])").first
+    added = None
+    if tile.count() == 0:
+        check("a shop with nothing on its board points to setting it up",
+              desk.locator("[data-testid=sell-open]").count() == 1, desk)
+        # Something to sell, so the sale itself is checked too; taken off the board afterwards.
+        added = desk.request.post(
+            f"{BASE}/api/venues/{venue_id}/shop/items",
+            data={"name": "Now water", "priceBaht": 15, "unit": "bottle", "counted": False, "tellMeAt": None},
+        ).json()
+        desk.reload()
+        tile.wait_for()
+    if True:
+        tile.click()
+        desk.wait_for_selector("[data-testid=quick-pay]")
+        check("a tap on a tile puts one on the counter, and the tiles stay", tile.is_visible(), desk)
+        with desk.expect_response(lambda r: r.url.endswith("/shop/sales") and r.request.method == "POST") as sold:
+            desk.click("[data-testid=quick-pay-Cash]")
+        check("the desk can sell without a booking",
+              sold.value.status == 201 and sold.value.json().get("bookingId") is None)
+    if added:
+        desk.request.post(f"{BASE}/api/venues/{venue_id}/shop/items/{added['itemId']}/withdraw")
 
     # A phone gets the same floor, one court under another.
     phone = browser.new_page(viewport={"width": 390, "height": 844})

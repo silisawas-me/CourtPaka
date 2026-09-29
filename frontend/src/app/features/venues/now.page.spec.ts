@@ -106,18 +106,30 @@ describe('NowPage', () => {
     expect(elementOf(fixture, 'now-nobody-arriving')).not.toBeNull();
   });
 
-  it('offers a quick sale as tiles, which open the sale with no booking attached', () => {
+  it('sells from the tiles: a tap adds one, and a way to pay takes the money with no booking', () => {
     render([]);
 
     expect(textOf(fixture, 'quick-i1')).toContain('Water');
-    expect(elementOf(fixture, 'sell-onto-booking')).toBeNull();
+    expect(elementOf(fixture, 'quick-pay')).toBeNull();
 
     clickOn(fixture, 'quick-i1');
+    clickOn(fixture, 'quick-i1');
     fixture.detectChanges();
-    // Opened at once: the items are asked for without a second press.
-    httpMock.expectOne('/api/venues/v1/shop/items').flush([water]);
+    // The tiles stay as the design draws them; the tapped one says how many.
+    expect(textOf(fixture, 'quick-count-i1')).toBe('×2');
+    expect(textOf(fixture, 'quick-total')).toBe('฿30');
+
+    clickOn(fixture, 'quick-pay-Cash');
+    const sale = httpMock.expectOne('/api/venues/v1/shop/sales');
+    expect(sale.request.body).toEqual({
+      lines: [{ itemId: 'i1', quantity: 2 }],
+      paidBy: 'Cash',
+      bookingId: null,
+    });
+    sale.flush({});
     fixture.detectChanges();
-    expect(elementOf(fixture, 'sell-onto-booking')).not.toBeNull();
-    expect(elementOf(fixture, 'sell-item-i1')).not.toBeNull();
+
+    expect(elementOf(fixture, 'quick-pay')).toBeNull();
+    expect(elementOf(fixture, 'quick-done')).not.toBeNull();
   });
 });

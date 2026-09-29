@@ -138,26 +138,66 @@
 
     <div class="quick">
       <span class="soft-ink">{{ i18n.t('now.quickSell') }}</span>
-      @if (selling()) {
-        <app-sell-onto-booking class="quick-sale" [venueId]="venueId()" [openAtOnce]="true" />
-      } @else {
-        <div class="tiles">
-          @for (item of items().slice(0, 4); track item.itemId) {
+      <div class="tiles">
+        @for (item of items().slice(0, 4); track item.itemId) {
+          <button
+            type="button"
+            class="tile"
+            [class.on]="(counted()[item.itemId] ?? 0) > 0"
+            [attr.data-testid]="'quick-' + item.itemId"
+            (click)="addOne(item)"
+          >
+            <span class="tile-name">{{ item.name }}</span>
+            <span class="tile-price">฿{{ item.priceBaht | baht: i18n.locale() }}</span>
+            @if (counted()[item.itemId]; as count) {
+              <span class="tile-count" [attr.data-testid]="'quick-count-' + item.itemId"
+                >×{{ count }}</span
+              >
+            }
+          </button>
+        } @empty {
+          <a class="tile" data-testid="sell-open" [routerLink]="['/venues', venueId(), 'shop']">
+            {{ i18n.t('now.setUpShop') }}
+          </a>
+        }
+      </div>
+
+      @if (quickTotal() > 0) {
+        <div class="quick-pay" data-testid="quick-pay">
+          <div class="quick-total">
+            <span>{{ i18n.t('timeline.due') }}</span>
             <button
               type="button"
-              class="tile"
-              [attr.data-testid]="'quick-' + item.itemId"
-              (click)="selling.set(true)"
+              class="quick-clear"
+              data-testid="quick-clear"
+              (click)="clearSale()"
             >
-              {{ item.name }}
-              <span class="tile-price">฿{{ item.priceBaht | baht: i18n.locale() }}</span>
+              {{ i18n.t('now.clear') }}
             </button>
-          } @empty {
-            <button type="button" class="tile" data-testid="sell-open" (click)="selling.set(true)">
-              {{ i18n.t('now.quickSell') }}
-            </button>
-          }
+            <span class="quick-baht" data-testid="quick-total"
+              >฿{{ quickTotal() | baht: i18n.locale() }}</span
+            >
+          </div>
+          <div class="quick-methods">
+            @for (method of payWith; track method; let first = $first) {
+              <button
+                type="button"
+                [class.main]="first"
+                [attr.data-testid]="'quick-pay-' + method"
+                [disabled]="selling()"
+                (click)="sellNow(method)"
+              >
+                {{ i18n.t('money.method.' + method) }}
+              </button>
+            }
+          </div>
         </div>
+      }
+      @if (sellError(); as key) {
+        <p class="form-error" data-testid="quick-error">{{ i18n.t(key) }}</p>
+      }
+      @if (sold()) {
+        <p class="quick-done" role="status" data-testid="quick-done">{{ i18n.t('now.sold') }}</p>
       }
     </div>
   </aside>
