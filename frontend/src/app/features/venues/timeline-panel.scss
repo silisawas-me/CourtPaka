@@ -403,3 +403,49 @@
     cursor: default;
   }
 }
+
+/* Writing down a refund (PRD US-18): the confirm is green, money going back is not a danger. */
+.record {
+  padding: 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
+.refund-open {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.refund-sums {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  margin: 0;
+  font-size: 14px;
+
+  dt {
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  dd {
+    margin: 0;
+    font-family: var(--font-mono);
+    text-align: right;
+  }
+
+  .left {
+    font-weight: 600;
+    color: var(--status-waiting-ink);
+  }
+}

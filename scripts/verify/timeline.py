@@ -134,6 +134,21 @@ with sync_playwright() as p:
           desk.locator(f"[data-testid=board-block-{booking_id}]").count() == 0
           or desk.wait_for_selector(f"[data-testid=board-block-{booking_id}]", state="detached") is None, desk)
 
+    # The money it owes back is written down in the same panel (PRD US-18).
+    # A refund is dated today, and the clock was pinned to the booking's day, which can be tomorrow.
+    desk.clock.set_fixed_time(datetime.datetime.now(BANGKOK))
+    panel.locator("[data-testid=refund-open]").click()
+    panel.locator("[data-testid=refund-left]").wait_for()
+    owed = desk.request.get(f"{api}/bookings/{booking_id}/refunds").json()["outstandingBaht"]
+    check("the panel stays on the cancelled booking and offers its refund", owed > 0, desk)
+    panel.locator("[data-testid=refund-method-Transfer]").click()
+    with desk.expect_response(
+        lambda r: r.url.endswith(f"/bookings/{booking_id}/refunds") and r.request.method == "POST"
+    ) as refunded:
+        panel.locator("[data-testid=confirm-refund]").click()
+    check("writing it down takes everything owed",
+          refunded.value.status == 200 and refunded.value.json()["outstandingBaht"] == 0)
+
     # Tidy up what this made.
     desk.request.post(f"{api}/shop/items/{item['itemId']}/withdraw")
     browser.close()

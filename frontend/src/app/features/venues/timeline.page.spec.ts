@@ -220,6 +220,73 @@ describe('TimelinePage', () => {
     expect(elementOf(fixture, 'confirm-cancel')).toBeNull();
   });
 
+  it('writes down a refund right after cancelling, as much as is owed unless somebody types less', () => {
+    const can = {
+      checkIn: false,
+      takeMoney: false,
+      noShow: false,
+      cancel: true,
+      cancelChoices: [{ reason: 'VenueInitiated', refundBaht: 300 }],
+    };
+    render([booking('b1', 'c1', [19], { toPayBaht: 0, paymentState: 'Received', can })]);
+
+    clickOn(fixture, 'cancel-open');
+    fixture.detectChanges();
+    clickOn(fixture, 'cancel-reason-VenueInitiated');
+    fixture.detectChanges();
+    clickOn(fixture, 'confirm-cancel');
+    const cancelled = booking('b1', 'c1', [19], {
+      status: 'Cancelled',
+      toPayBaht: 0,
+      refundDueBaht: 300,
+      outstandingBaht: 300,
+      can: { ...can, cancel: false, cancelChoices: [] },
+    });
+    httpMock.expectOne('/api/venues/v1/bookings/b1/cancel').flush(cancelled);
+    httpMock.expectOne((request) => request.url === '/api/venues/v1/availability').flush(grid());
+    httpMock.expectOne((request) => request.url === '/api/venues/v1/bookings').flush([cancelled]);
+    fixture.detectChanges();
+
+    clickOn(fixture, 'refund-open');
+    httpMock.expectOne('/api/venues/v1/bookings/b1/refunds').flush({
+      refundDueBaht: 300,
+      sentBackBaht: 0,
+      outstandingBaht: 300,
+      records: [],
+      yourLimitBaht: 500,
+    });
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'refund-left')).toBe('฿300');
+    expect(textOf(fixture, 'refund-limit')).toContain('500');
+    setInput(fixture, '[data-testid="refund-amount"]', '200');
+    clickOn(fixture, 'refund-method-Cash');
+    fixture.detectChanges();
+    clickOn(fixture, 'confirm-refund');
+
+    const record = httpMock.expectOne(
+      (request) =>
+        request.method === 'POST' && request.url === '/api/venues/v1/bookings/b1/refunds',
+    );
+    expect(record.request.body).toEqual({
+      amountBaht: 200,
+      refundedOn: date,
+      method: 'Cash',
+      note: null,
+    });
+    record.flush({
+      refundDueBaht: 300,
+      sentBackBaht: 200,
+      outstandingBaht: 100,
+      records: [],
+      yourLimitBaht: 500,
+    });
+    httpMock.expectOne((request) => request.url === '/api/venues/v1/bookings').flush([]);
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, 'confirm-refund')).toBeNull();
+  });
+
   it('marks a no-show through its door, and says when a shut one opens', () => {
     render([
       booking('b1', 'c1', [19], {

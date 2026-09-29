@@ -984,7 +984,7 @@
   "timeline.checkedIn": "เช็กอินแล้ว ✓",
   "timeline.timeAndCourt": "เวลาและคอร์ท",
   "timeline.oneMore": "+1 ชม.",
-  "timeline.moreDoors": "คืนเงินและอื่น ๆ ในการจองรายวัน",
+  "timeline.moreDoors": "เรื่องอื่นของการจองอยู่ในการจองรายวัน",
   "timeline.moveTo": "ย้ายไปคอร์ท",
   "timeline.shop": "ลูกแบด & เครื่องดื่ม",
   "timeline.court": "คอร์ท",
@@ -1072,5 +1072,7 @@
   "inviteOwner.done": "ส่งคำเชิญแล้ว:",
   "inviteOwner.state.waiting": "รอสมัคร",
   "inviteOwner.state.accepted": "สมัครแล้ว",
-  "inviteOwner.state.expired": "หมดอายุ"
+  "inviteOwner.state.expired": "หมดอายุ",
+  "timeline.refundNow": "บันทึกครั้งนี้",
+  "timeline.refundTold": "บันทึกเงินที่โอนหรือจ่ายคืนไปแล้ว ระบบไม่ได้โอนให้เอง"
 }

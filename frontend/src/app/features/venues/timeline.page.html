@@ -95,7 +95,100 @@
 
   <aside class="panel" data-testid="booking-panel">
     @if (selected(); as booking) {
-      @if (cancelling()) {
+      @if (refunding()) {
+        <!-- Writing down money already sent back (PRD US-18); the server holds the ceiling. -->
+        <div class="panel-head">
+          <button
+            type="button"
+            class="back"
+            data-testid="refund-back"
+            (click)="refunding.set(false)"
+          >
+            ‹ {{ i18n.t('timeline.back') }}
+          </button>
+          <h2 class="panel-name">{{ i18n.t('refunds.title') }}</h2>
+          <span class="panel-where">{{ who(booking) }} · {{ where() }}</span>
+        </div>
+
+        <div class="panel-body">
+          @if (refunds(); as sent) {
+            <dl class="refund-sums" data-testid="refund-sums">
+              <dt>{{ i18n.t('timeline.refundDue') }}</dt>
+              <dd>฿{{ sent.refundDueBaht | baht: i18n.locale() }}</dd>
+              <dt>{{ i18n.t('refunds.sentBack') }}</dt>
+              <dd>฿{{ sent.sentBackBaht | baht: i18n.locale() }}</dd>
+              <dt>{{ i18n.t('refunds.outstanding') }}</dt>
+              <dd class="left" data-testid="refund-left">
+                ฿{{ sent.outstandingBaht | baht: i18n.locale() }}
+              </dd>
+            </dl>
+
+            @if (sent.outstandingBaht > 0) {
+              <label class="note-field">
+                <span class="label">{{ i18n.t('refunds.amount') }}</span>
+                <input
+                  data-testid="refund-amount"
+                  inputmode="decimal"
+                  [value]="refundText()"
+                  (input)="refundAmount.set($any($event.target).value)"
+                />
+              </label>
+              @if (sent.yourLimitBaht !== null) {
+                <p class="freed" data-testid="refund-limit">
+                  {{ i18n.t('refunds.yourLimit') }} ฿{{ sent.yourLimitBaht | baht: i18n.locale() }}
+                </p>
+              }
+
+              <span class="label">{{ i18n.t('refunds.how') }}</span>
+              @for (method of refundWith; track method) {
+                <button
+                  type="button"
+                  class="reason"
+                  [class.on]="refundMethod() === method"
+                  [attr.aria-pressed]="refundMethod() === method"
+                  [attr.data-testid]="'refund-method-' + method"
+                  (click)="refundMethod.set(method)"
+                >
+                  <span>{{ i18n.t('refunds.method.' + method) }}</span>
+                </button>
+              }
+
+              <label class="note-field">
+                <span class="label">{{ i18n.t('timeline.note') }}</span>
+                <input
+                  data-testid="refund-note"
+                  maxlength="400"
+                  [value]="refundNote()"
+                  (input)="refundNote.set($any($event.target).value)"
+                />
+              </label>
+              <p class="freed">{{ i18n.t('timeline.refundTold') }}</p>
+            } @else {
+              <p class="freed" data-testid="refund-all-sent">{{ i18n.t('refunds.allSent') }}</p>
+            }
+          }
+
+          @if (panelError(); as key) {
+            <p class="form-error" data-testid="panel-error">{{ i18n.t(key) }}</p>
+          }
+        </div>
+
+        <div class="panel-foot">
+          <div class="foot-due">
+            <span>{{ i18n.t('timeline.refundNow') }}</span>
+            <span class="due">฿{{ refundNow() | baht: i18n.locale() }}</span>
+          </div>
+          <button
+            type="button"
+            class="record"
+            data-testid="confirm-refund"
+            [disabled]="!refunds()?.outstandingBaht || refundNow() <= 0 || busy()"
+            (click)="recordRefund()"
+          >
+            {{ i18n.t('refunds.record') }}
+          </button>
+        </div>
+      } @else if (cancelling()) {
         <!-- Cancelling, as artboard b2 draws it: who called it off, and what that gives back. -->
         <div class="panel-head">
           <button
@@ -303,6 +396,22 @@
                 {{ i18n.t('timeline.cancel') }}
               </button>
             </div>
+            @if (booking.refundDueBaht > 0) {
+              <button
+                type="button"
+                class="soft doors refund-open"
+                data-testid="refund-open"
+                [disabled]="busy()"
+                (click)="openRefund()"
+              >
+                {{ i18n.t('refunds.title') }}
+                <span class="doors-hint"
+                  >{{ i18n.t('refunds.outstanding') }} ฿{{
+                    booking.outstandingBaht | baht: i18n.locale()
+                  }}</span
+                >
+              </button>
+            }
             <a
               class="more"
               [routerLink]="['/venues', venueId(), 'bookings']"
