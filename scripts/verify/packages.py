@@ -14,6 +14,7 @@ from harness import (
     Checks,
     clear_package_board,
     ensure_bookable,
+    open_more,
     open_seeded_venue,
     pick_date,
     seeded_venue_id,
@@ -64,8 +65,14 @@ with sync_playwright() as p:
 
     page.goto(f"{BASE}{open_seeded_venue(page)}")
     page.click("[data-testid=nav-packages]")
-    page.wait_for_selector("[data-testid=open-board], [data-testid=add-offer]")
+    page.wait_for_selector("[data-testid=members-add]")
     check("the venue has a door for hours sold in advance", True, page)
+    check("the members page is the design's table, without the board",
+          page.locator("[data-testid=board]").count() == 0, page)
+    # The board of offers is its own page under "อื่น ๆ".
+    open_more(page)
+    page.click("[data-testid=nav-package-board]")
+    page.wait_for_selector("[data-testid=open-board], [data-testid=add-offer]")
 
     # 1. An offer on the board, and what an hour of it costs said for them.
     if page.locator("[data-testid=add-offer]").count() == 0:
@@ -118,7 +125,7 @@ with sync_playwright() as p:
     check("hours sold are owed rather than earned",
           figures["owedHours"]["hours"] >= 10 and figures["owedHours"]["baht"] >= 1800)
 
-    page.goto(f"{BASE}/venues/{venue_id}/dashboard")
+    page.goto(f"{BASE}/venues/{venue_id}/report")
     expect(page.get_by_test_id("owed-hours")).to_be_visible()
     check("and the venue can see it on its own page", True, page)
 
@@ -217,8 +224,8 @@ with sync_playwright() as p:
         if row["bookingId"] == booked["bookingId"]][0]
     check("and nothing is owed back in money", refunded["refundDueBaht"] == 0)
 
-    page.goto(f"{BASE}/venues/{venue_id}/packages")
-    page.wait_for_selector("[data-testid^=package-]")
+    page.goto(f"{BASE}/venues/{venue_id}/package-board")
+    page.wait_for_selector("[data-testid^=moves-]", state="attached")
     check("the venue can read where every hour went", True, page)
 
     # The screens a design review asks for.

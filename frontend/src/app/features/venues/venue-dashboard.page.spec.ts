@@ -84,6 +84,7 @@ describe('VenueDashboardPage', () => {
   function render(answer: object = figures(), from?: string, to?: string): void {
     fixture = TestBed.createComponent(VenueDashboardPage);
     fixture.componentRef.setInput('venueId', 'v1');
+    fixture.componentRef.setInput('detail', true);
     if (from) {
       fixture.componentRef.setInput('from', from);
     }
@@ -95,6 +96,24 @@ describe('VenueDashboardPage', () => {
     httpMock.expectOne((request) => request.url === '/api/venues/v1/dashboard').flush(answer);
     fixture.detectChanges();
   }
+
+  it('is the design revenue page without the report: the panel over the last fourteen days', () => {
+    fixture = TestBed.createComponent(VenueDashboardPage);
+    fixture.componentRef.setInput('venueId', 'v1');
+    fixture.detectChanges();
+
+    const asked = httpMock.expectOne((request) => request.url === '/api/venues/v1/dashboard');
+    const from = new Date(asked.request.params.get('from')!);
+    const to = new Date(asked.request.params.get('to')!);
+    expect((to.getTime() - from.getTime()) / 86_400_000).toBe(13);
+    asked.flush(figures());
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, 'revenue-panel')).not.toBeNull();
+    expect(elementOf(fixture, 'range-start')).toBeNull();
+    expect(elementOf(fixture, 'download-csv')).toBeNull();
+    expect(elementOf(fixture, 'revenue-total')).toBeNull();
+  });
 
   it('leads with what the venue kept, online and at the counter together', () => {
     render();
@@ -138,6 +157,7 @@ describe('VenueDashboardPage', () => {
   it('asks for the range the URL holds', () => {
     fixture = TestBed.createComponent(VenueDashboardPage);
     fixture.componentRef.setInput('venueId', 'v1');
+    fixture.componentRef.setInput('detail', true);
     fixture.componentRef.setInput('from', '2026-08-01');
     fixture.componentRef.setInput('to', '2026-08-31');
     fixture.detectChanges();
@@ -151,6 +171,7 @@ describe('VenueDashboardPage', () => {
   it('drops an older answer once a newer range is asked for', () => {
     fixture = TestBed.createComponent(VenueDashboardPage);
     fixture.componentRef.setInput('venueId', 'v1');
+    fixture.componentRef.setInput('detail', true);
     fixture.componentRef.setInput('from', '2026-08-01');
     fixture.componentRef.setInput('to', '2026-08-31');
     fixture.detectChanges();
@@ -262,6 +283,7 @@ describe('VenueDashboardPage', () => {
   it('tells somebody without the permission what they are missing', () => {
     fixture = TestBed.createComponent(VenueDashboardPage);
     fixture.componentRef.setInput('venueId', 'v1');
+    fixture.componentRef.setInput('detail', true);
     fixture.detectChanges();
 
     httpMock
@@ -275,6 +297,7 @@ describe('VenueDashboardPage', () => {
   it('says what went wrong when the figures cannot be read', () => {
     fixture = TestBed.createComponent(VenueDashboardPage);
     fixture.componentRef.setInput('venueId', 'v1');
+    fixture.componentRef.setInput('detail', true);
     fixture.detectChanges();
 
     httpMock

@@ -1,5 +1,6 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
 import { clickOn, elementOf, pageProviders, setInput, textOf } from '../../testing/dom';
 import { TRANSLATIONS } from '../../testing/translations';
 import { PackagesPage } from './packages.page';
@@ -45,7 +46,7 @@ describe('PackagesPage', () => {
   let fixture: ComponentFixture<PackagesPage>;
   let httpMock: HttpTestingController;
 
-  function render(board: unknown[], packages: unknown[]): void {
+  function render(board: unknown[], packages: unknown[], detail = true): void {
     // The language is remembered in storage, and a spec that ran earlier in this worker may have
     // left English there; these assertions read the Thai words.
     localStorage.clear();
@@ -57,6 +58,7 @@ describe('PackagesPage', () => {
     httpMock = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(PackagesPage);
     fixture.componentRef.setInput('venueId', 'v1');
+    fixture.componentRef.setInput('detail', detail);
     fixture.detectChanges();
 
     httpMock.expectOne('/api/venues/v1/packages/types').flush(board);
@@ -121,6 +123,25 @@ describe('PackagesPage', () => {
 
     httpMock.expectNone('/api/venues/v1/packages');
     expect(textOf(fixture, 'customer-name-error')).toBe(TRANSLATIONS.th['sellPackage.nameNeeded']);
+  });
+
+  it('is the design members page without the board and the hours behind each row', () => {
+    render([offer()], [sold()], false);
+
+    expect(elementOf(fixture, 'package-p1')).not.toBeNull();
+    expect(elementOf(fixture, 'board')).toBeNull();
+    expect(elementOf(fixture, 'moves-p1')).toBeNull();
+    expect(elementOf(fixture, 'hours-owed')).toBeNull();
+  });
+
+  it('sends somebody with nothing to sell from the members page to the board own page', () => {
+    render([], [], false);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    clickOn(fixture, 'members-add');
+    fixture.detectChanges();
+    clickOn(fixture, 'sell-package-to-board');
+
+    expect(navigate).toHaveBeenCalledWith(['/venues', 'v1', 'package-board']);
   });
 
   it('sends somebody with nothing on the board to the board', () => {

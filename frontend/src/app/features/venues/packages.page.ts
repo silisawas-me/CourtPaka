@@ -1,3 +1,4 @@
+import { Router } from '@angular/router';
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -55,6 +56,12 @@ export class PackagesPage {
   protected readonly nameMaxLength = OFFER_NAME_MAX_LENGTH;
 
   readonly venueId = input.required<string>();
+  /**
+   * The page under "อื่น ๆ" (route data): the board of offers and each package's hours. Without
+   * it this is the design's members section — search, filters, "+ เพิ่มสมาชิก" and the table.
+   */
+  readonly detail = input(false);
+  private readonly router = inject(Router);
 
   protected readonly board$ = signal<PackageType[]>([]);
   protected readonly sold = signal<HourPackage[]>([]);
@@ -76,6 +83,10 @@ export class PackagesPage {
   /** Nothing to sell yet: close the dialog and open the board to put an offer on it. */
   protected toBoard(): void {
     this.selling.set(false);
+    if (!this.detail()) {
+      void this.router.navigate(['/venues', this.venueId(), 'package-board']);
+      return;
+    }
     this.editingBoard.set(true);
     requestAnimationFrame(() =>
       document.querySelector('[data-testid=offer-name]')?.scrollIntoView({ block: 'center' }),

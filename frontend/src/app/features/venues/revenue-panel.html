@@ -1,7 +1,7 @@
 <section class="revenue" data-testid="revenue-panel">
   <div class="kpis">
     <div class="kpi">
-      <span class="kpi-label">{{ i18n.t('revenue.total') }}</span>
+      <span class="kpi-label">{{ i18n.t(fortnight() ? 'revenue.total14' : 'revenue.total') }}</span>
       <span class="kpi-value" data-testid="revenue-kpi-total"
         >฿{{ total() | baht: i18n.locale() }}</span
       >
@@ -36,7 +36,7 @@
   <div class="split">
     <div class="card chart-card">
       <div class="card-head">
-        <h3>{{ i18n.t('revenue.byDay') }}</h3>
+        <h3>{{ i18n.t(fortnight() ? 'revenue.byDay14' : 'revenue.byDay') }}</h3>
         <span class="key">
           <span class="dot court" aria-hidden="true"></span>{{ i18n.t('revenue.courtFees') }}
           <span class="dot shop" aria-hidden="true"></span>{{ i18n.t('revenue.shop') }}

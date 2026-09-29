@@ -1,5 +1,7 @@
 <!-- The page's name is on the top bar (owner app); what a member is, in one line. -->
-<p class="lead">{{ i18n.t('packages.subtitle') }}</p>
+@if (detail()) {
+  <p class="lead">{{ i18n.t('packages.subtitle') }}</p>
+}
 
 @if (loading()) {
   <mat-progress-bar mode="indeterminate" />
@@ -46,12 +48,14 @@
     </button>
   </div>
 
-  <p class="owed muted" data-testid="hours-owed">
-    {{ i18n.t('packages.hoursOwed') }}: {{ hoursOwed() }}
-    @if (runningOut() > 0) {
-      · {{ i18n.t('packages.runningOutCount') }}: {{ runningOut() }}
-    }
-  </p>
+  @if (detail()) {
+    <p class="owed muted" data-testid="hours-owed">
+      {{ i18n.t('packages.hoursOwed') }}: {{ hoursOwed() }}
+      @if (runningOut() > 0) {
+        · {{ i18n.t('packages.runningOutCount') }}: {{ runningOut() }}
+      }
+    </p>
+  }
 
   <section class="members" data-testid="sold-list">
     <div class="members-head" aria-hidden="true">
@@ -114,152 +118,164 @@
           What happened to the hours, in order: the whole answer to "where did my hours go",
           which is the question a package gets asked (PRD US-31). Folded, one press away.
         -->
-        <details class="history">
-          <summary>{{ i18n.t('members.history') }}</summary>
-          <ul class="moves" [attr.data-testid]="'moves-' + one.packageId">
-            @for (move of one.moves; track $index) {
-              <li class="move">
-                <span class="move-hours">{{ move.hours > 0 ? '+' : '' }}{{ move.hours }}</span>
-                <span>{{ i18n.t('packages.move.' + move.move) }}</span>
-                <span class="muted">{{ move.at | appDate: i18n.locale() }}</span>
-              </li>
-            }
-          </ul>
-        </details>
+        @if (detail()) {
+          <details class="history">
+            <summary>{{ i18n.t('members.history') }}</summary>
+            <ul class="moves" [attr.data-testid]="'moves-' + one.packageId">
+              @for (move of one.moves; track $index) {
+                <li class="move">
+                  <span class="move-hours">{{ move.hours > 0 ? '+' : '' }}{{ move.hours }}</span>
+                  <span>{{ i18n.t('packages.move.' + move.move) }}</span>
+                  <span class="muted">{{ move.at | appDate: i18n.locale() }}</span>
+                </li>
+              }
+            </ul>
+          </details>
+        }
       </div>
     }
   </section>
 
-  <mat-card>
-    <mat-card-header>
-      <mat-card-title>{{ i18n.t('packages.board') }}</mat-card-title>
-      <mat-card-subtitle>{{ i18n.t('packages.boardHint') }}</mat-card-subtitle>
-    </mat-card-header>
+  @if (detail()) {
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>{{ i18n.t('packages.board') }}</mat-card-title>
+        <mat-card-subtitle>{{ i18n.t('packages.boardHint') }}</mat-card-subtitle>
+      </mat-card-header>
 
-    <mat-card-content>
-      <ul class="board" data-testid="board">
-        @for (one of onSale(); track one.typeId) {
-          <li class="offer" [attr.data-testid]="'board-' + one.typeId">
-            <span class="offer-name">{{ one.name }}</span>
-            <span>{{ one.hours }} {{ i18n.t('packages.hours') }}</span>
-            <span>{{ one.priceBaht | baht: i18n.locale() }}</span>
-            <span class="muted">
-              {{ one.bahtPerHour | baht: i18n.locale() }} / {{ i18n.t('packages.hour') }}
-            </span>
-            <span class="muted">
-              {{ i18n.t('packages.goodFor') }} {{ one.validForDays }}
-              {{ i18n.t('packages.days') }}
-            </span>
+      <mat-card-content>
+        <ul class="board" data-testid="board">
+          @for (one of onSale(); track one.typeId) {
+            <li class="offer" [attr.data-testid]="'board-' + one.typeId">
+              <span class="offer-name">{{ one.name }}</span>
+              <span>{{ one.hours }} {{ i18n.t('packages.hours') }}</span>
+              <span>{{ one.priceBaht | baht: i18n.locale() }}</span>
+              <span class="muted">
+                {{ one.bahtPerHour | baht: i18n.locale() }} / {{ i18n.t('packages.hour') }}
+              </span>
+              <span class="muted">
+                {{ i18n.t('packages.goodFor') }} {{ one.validForDays }}
+                {{ i18n.t('packages.days') }}
+              </span>
+              <button
+                matButton
+                type="button"
+                [attr.data-testid]="'withdraw-' + one.typeId"
+                [disabled]="saving()"
+                (click)="withdraw(one)"
+              >
+                {{ i18n.t('packages.withdraw') }}
+              </button>
+            </li>
+          }
+        </ul>
+
+        @if (editingBoard()) {
+          <form class="stack offer-form" [formGroup]="offer" novalidate>
+            <mat-form-field class="field">
+              <mat-label>{{ i18n.t('packages.offerName') }}</mat-label>
+              <input
+                matInput
+                data-testid="offer-name"
+                formControlName="name"
+                [attr.maxlength]="nameMaxLength"
+              />
+              <mat-error
+                [appFieldError]="offer.controls.name"
+                testId="offer-name-error"
+              ></mat-error>
+            </mat-form-field>
+
+            <div class="numbers">
+              <mat-form-field class="number">
+                <mat-label>{{ i18n.t('packages.hours') }}</mat-label>
+                <input
+                  matInput
+                  type="number"
+                  data-testid="offer-hours"
+                  formControlName="hours"
+                  min="1"
+                />
+              </mat-form-field>
+
+              <mat-form-field class="number">
+                <mat-label>{{ i18n.t('packages.priceBaht') }}</mat-label>
+                <input
+                  matInput
+                  type="number"
+                  data-testid="offer-price"
+                  formControlName="priceBaht"
+                  min="1"
+                />
+              </mat-form-field>
+
+              <mat-form-field class="number">
+                <mat-label>{{ i18n.t('packages.validForDays') }}</mat-label>
+                <input
+                  matInput
+                  type="number"
+                  data-testid="offer-days"
+                  formControlName="validForDays"
+                  min="1"
+                />
+              </mat-form-field>
+            </div>
+          </form>
+
+          <div class="row">
+            <button
+              matButton="filled"
+              type="button"
+              data-testid="add-offer"
+              [disabled]="saving()"
+              (click)="putOnTheBoard()"
+            >
+              {{ i18n.t('packages.addOffer') }}
+            </button>
+
             <button
               matButton
               type="button"
-              [attr.data-testid]="'withdraw-' + one.typeId"
-              [disabled]="saving()"
-              (click)="withdraw(one)"
+              data-testid="close-board"
+              (click)="editingBoard.set(false)"
             >
-              {{ i18n.t('packages.withdraw') }}
+              {{ i18n.t('packages.doneWithBoard') }}
             </button>
-          </li>
-        }
-      </ul>
-
-      @if (editingBoard()) {
-        <form class="stack offer-form" [formGroup]="offer" novalidate>
-          <mat-form-field class="field">
-            <mat-label>{{ i18n.t('packages.offerName') }}</mat-label>
-            <input
-              matInput
-              data-testid="offer-name"
-              formControlName="name"
-              [attr.maxlength]="nameMaxLength"
-            />
-            <mat-error [appFieldError]="offer.controls.name" testId="offer-name-error"></mat-error>
-          </mat-form-field>
-
-          <div class="numbers">
-            <mat-form-field class="number">
-              <mat-label>{{ i18n.t('packages.hours') }}</mat-label>
-              <input
-                matInput
-                type="number"
-                data-testid="offer-hours"
-                formControlName="hours"
-                min="1"
-              />
-            </mat-form-field>
-
-            <mat-form-field class="number">
-              <mat-label>{{ i18n.t('packages.priceBaht') }}</mat-label>
-              <input
-                matInput
-                type="number"
-                data-testid="offer-price"
-                formControlName="priceBaht"
-                min="1"
-              />
-            </mat-form-field>
-
-            <mat-form-field class="number">
-              <mat-label>{{ i18n.t('packages.validForDays') }}</mat-label>
-              <input
-                matInput
-                type="number"
-                data-testid="offer-days"
-                formControlName="validForDays"
-                min="1"
-              />
-            </mat-form-field>
           </div>
-        </form>
+        } @else {
+          <div class="row">
+            <button
+              matButton
+              type="button"
+              data-testid="open-board"
+              (click)="editingBoard.set(true)"
+            >
+              {{ i18n.t('packages.changeBoard') }}
+            </button>
+          </div>
+        }
 
-        <div class="row">
-          <button
-            matButton="filled"
-            type="button"
-            data-testid="add-offer"
-            [disabled]="saving()"
-            (click)="putOnTheBoard()"
-          >
-            {{ i18n.t('packages.addOffer') }}
-          </button>
-
-          <button
-            matButton
-            type="button"
-            data-testid="close-board"
-            (click)="editingBoard.set(false)"
-          >
-            {{ i18n.t('packages.doneWithBoard') }}
-          </button>
-        </div>
-      } @else {
-        <div class="row">
-          <button matButton type="button" data-testid="open-board" (click)="editingBoard.set(true)">
-            {{ i18n.t('packages.changeBoard') }}
-          </button>
-        </div>
-      }
-
-      <!--
-        Withdrawn offers stay, quieter: a package sold from one is still being spent, and
-        somebody will ask what its terms were (BR-05).
-      -->
-      @if (withdrawn().length > 0) {
-        <section class="gone">
-          <h2>{{ i18n.t('packages.offTheBoard') }}</h2>
-          <ul class="board">
-            @for (one of withdrawn(); track one.typeId) {
-              <li class="offer old" [attr.data-testid]="'board-' + one.typeId">
-                <span class="offer-name">{{ one.name }}</span>
-                <span>{{ one.hours }} {{ i18n.t('packages.hours') }}</span>
-                <span>{{ one.priceBaht | baht: i18n.locale() }}</span>
-              </li>
-            }
-          </ul>
-        </section>
-      }
-    </mat-card-content>
-  </mat-card>
+        <!--
+          Withdrawn offers stay, quieter: a package sold from one is still being spent, and
+          somebody will ask what its terms were (BR-05).
+        -->
+        @if (withdrawn().length > 0) {
+          <section class="gone">
+            <h2>{{ i18n.t('packages.offTheBoard') }}</h2>
+            <ul class="board">
+              @for (one of withdrawn(); track one.typeId) {
+                <li class="offer old" [attr.data-testid]="'board-' + one.typeId">
+                  <span class="offer-name">{{ one.name }}</span>
+                  <span>{{ one.hours }} {{ i18n.t('packages.hours') }}</span>
+                  <span>{{ one.priceBaht | baht: i18n.locale() }}</span>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+      </mat-card-content>
+    </mat-card>
+  }
 }
 
 @if (selling()) {

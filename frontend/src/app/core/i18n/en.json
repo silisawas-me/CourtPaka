@@ -1074,5 +1074,9 @@
   "inviteOwner.state.accepted": "Signed up",
   "inviteOwner.state.expired": "Expired",
   "timeline.refundNow": "Writing down",
-  "timeline.refundTold": "Write down money already sent back; the app does not send it for you."
+  "timeline.refundTold": "Write down money already sent back; the app does not send it for you.",
+  "nav.report": "Full report",
+  "nav.packageBoard": "Packages and hours",
+  "revenue.total14": "Revenue, 14 days",
+  "revenue.byDay14": "Revenue, last 14 days"
 }

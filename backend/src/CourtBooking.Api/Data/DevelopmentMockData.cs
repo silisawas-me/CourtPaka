@@ -320,6 +320,12 @@ public static class DevelopmentMockData
 
             goods = await EnsureShopAsync(cancellationToken);
             packages = await EnsurePackagesAsync(cancellationToken);
+            // The year behind does not touch the members' hours: the design's table says how many each
+            // has used, and the fortnight's games are the only ones allowed to add to it.
+            if (last < today.AddDays(-RecentDays))
+            {
+                packages = [];
+            }
 
             // Every hour already on a court, cancelled or not: a day is topped up to what it should
             // hold, never written twice, and a day written while it was ahead fills out once it
@@ -643,8 +649,11 @@ public static class DevelopmentMockData
                     // A member the design names plays on their own package; anybody else is one
                     // of the members, but only within the few hours the fortnight may use, so each
                     // ends up with the hours used the design's members table shows.
-                    var package = packages.FirstOrDefault(p => p.Package.CustomerName == one.Name && p.Left >= hours.Length)
-                        ?? packages
+                    // Only on or after the day it was sold: the year behind is before most
+                    // packages existed, so a member there plays as a walk-in.
+                    var owned = packages.Where(p => DayOf(p.Package.SoldAt) <= date).ToList();
+                    var package = owned.FirstOrDefault(p => p.Package.CustomerName == one.Name && p.Left >= hours.Length)
+                        ?? owned
                             .Where(p => p.Spare >= hours.Length && p.Left >= hours.Length)
                             .OrderBy(_ => random.Next())
                             .FirstOrDefault();
@@ -1027,8 +1036,11 @@ public static class DevelopmentMockData
         }
     }
 
-    /// <summary>How many hours of each member's package the fortnight's other games may use.</summary>
-    private const int SpareHours = 2;
+    /// <summary>
+    /// How many hours of each member's package the fortnight's other games may use: none, so the
+    /// members table reads exactly as the design's does.
+    /// </summary>
+    private const int SpareHours = 0;
 
     private sealed class Balance(HourPackage package, int left, int spare)
     {

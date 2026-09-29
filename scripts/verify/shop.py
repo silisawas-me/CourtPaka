@@ -205,7 +205,7 @@ with sync_playwright() as p:
     check("the shop's money is counted apart from the courts'",
           figures["trade"]["spentBaht"] >= 760)
 
-    page.goto(f"{BASE}/venues/{venue_id}/dashboard")
+    page.goto(f"{BASE}/venues/{venue_id}/report")
     expect(page.get_by_test_id("shop-baht")).to_be_visible()
     check("and the venue can see it on its own page", True, page)
 
