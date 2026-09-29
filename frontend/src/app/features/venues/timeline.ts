@@ -24,10 +24,20 @@ export interface TimelineBlock {
   width: number;
 }
 
+/** An hour of a court that can still be sold today: a place on the track to tap and book. */
+export interface OpenCell {
+  hour: number;
+  baht: number;
+  left: number;
+  width: number;
+}
+
 export interface TimelineRow {
   courtId: string;
   name: string;
   blocks: TimelineBlock[];
+  /** Hours free to sell from the hour the clock is in, drawn as empty cells to tap. */
+  open: OpenCell[];
 }
 
 /**
@@ -146,10 +156,36 @@ export function timelineRows(
       }
     }
 
+    // What the counter could still sell here: on sale with a price, not taken by anybody the
+    // day's list knows of (it is read more often than the grid), and not already over — the
+    // hour the clock is in still sells, as the counter's own door allows (PRD US-13).
+    const taken = new Set(
+      live.flatMap((booking) =>
+        booking.slots.filter((slot) => slot.courtId === court.courtId).map((slot) => slot.hour),
+      ),
+    );
+    const open: OpenCell[] = court.hours
+      .filter(
+        (hour) =>
+          hour.status === 'Free' &&
+          hour.bahtPerHour != null &&
+          hour.hour >= now.hour &&
+          hour.hour >= start &&
+          hour.hour < end &&
+          !taken.has(hour.hour),
+      )
+      .map((hour) => ({
+        hour: hour.hour,
+        baht: hour.bahtPerHour!,
+        left: ((hour.hour - start) / TIMELINE_HOURS) * 100,
+        width: 100 / TIMELINE_HOURS,
+      }));
+
     return {
       courtId: court.courtId,
       name: court.name,
       blocks: blocks.sort((left, right) => left.from - right.from),
+      open,
     };
   });
 }

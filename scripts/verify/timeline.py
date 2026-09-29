@@ -76,6 +76,27 @@ with sync_playwright() as p:
           "on" in (desk.locator("[data-testid=view-timeline]").get_attribute("class") or ""))
     check("and says the day", desk.locator("[data-testid=top-date]").count() == 1)
 
+    # An empty hour on the track books: a tap opens the walk-in on that court and hour.
+    cell = desk.locator(".open-cell").first
+    if cell.count():
+        court_of_cell, hour_of_cell = cell.get_attribute("data-testid").removeprefix("open-").rsplit("-", 1)
+        cell.click()
+        desk.wait_for_selector("[data-testid=walk-in]")
+        check("tapping an empty hour opens the walk-in on that court and hour",
+              "on" in (desk.locator(f"[data-testid=walk-in-court-{court_of_cell}]").get_attribute("class") or "")
+              and "on" in (desk.locator(f"[data-testid=walk-in-start-{hour_of_cell}]").get_attribute("class") or ""),
+              desk)
+        desk.fill("[data-testid=walk-in-name]", "Timeline tap")
+        with desk.expect_response(lambda r: r.url.endswith(f"/venues/{venue_id}/bookings") and r.request.method == "POST") as tapped:
+            desk.click("[data-testid=walk-in-confirm]")
+        slot = tapped.value.json()["slots"][0] if tapped.value.status == 201 else {}
+        check("and selling it books that very court and hour",
+              slot.get("courtId") == court_of_cell and str(slot.get("hour")) == hour_of_cell)
+        desk.request.post(f"{api}/bookings/{tapped.value.json()['bookingId']}/cancel",
+                          data={"reason": "VenueInitiated", "paymentReceived": None, "note": "verify"})
+    else:
+        check("an empty hour on the track books (no free hour in the window to try)", True)
+
     block.click()
     panel = desk.locator("[data-testid=booking-panel]")
     # The page's CSP refuses evaluated strings, so the wait is a locator's, not a function's.

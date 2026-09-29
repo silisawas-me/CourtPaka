@@ -55,6 +55,28 @@
         <div class="row" [attr.data-testid]="'court-' + row.courtId">
           <span class="court">{{ row.name }}</span>
           <div class="track">
+            <!-- An hour still for sale: tap it to sell it, as the counter's walk-in does. -->
+            @for (cell of row.open; track cell.hour) {
+              <button
+                type="button"
+                class="open-cell"
+                [style.left.%]="cell.left"
+                [style.width]="'calc(' + cell.width + '% - 4px)'"
+                [attr.aria-label]="
+                  i18n.t('timeline.bookHere') +
+                  ' ' +
+                  row.name +
+                  ' ' +
+                  cell.hour +
+                  ':00 ฿' +
+                  cell.baht
+                "
+                [attr.data-testid]="'open-' + row.courtId + '-' + cell.hour"
+                (click)="bookAt(row.courtId, cell.hour)"
+              >
+                <span class="open-plus">+ {{ i18n.t('timeline.book') }}</span>
+              </button>
+            }
             @for (block of row.blocks; track block.key) {
               <button
                 type="button"

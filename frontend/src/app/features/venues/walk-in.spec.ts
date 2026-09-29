@@ -92,3 +92,40 @@ describe('WalkIn', () => {
     expect(sold).toHaveBeenCalledWith({ venueId: 'v1' });
   });
 });
+
+describe('WalkIn opened on a tapped cell', () => {
+  it('starts on that hour and court, even further off than the first few', () => {
+    TestBed.configureTestingModule({ imports: [WalkIn], providers: pageProviders() });
+    const httpMock = TestBed.inject(HttpTestingController);
+    const fixture = TestBed.createComponent(WalkIn);
+    const { date, hour } = venueNow();
+    const hours = Array.from({ length: 24 - hour }, (_, index) => hour + index);
+    const last = hours[hours.length - 1];
+    fixture.componentRef.setInput('venueId', 'v1');
+    fixture.componentRef.setInput('at', { courtId: 'c2', hour: last });
+    fixture.detectChanges();
+    TestBed.tick();
+
+    httpMock
+      .expectOne((request) => request.url === '/api/venues/v1/availability')
+      .flush({
+        venue: { id: 'v1', name: 'Smash' },
+        date,
+        lastBookableDate: date,
+        opensHour: 0,
+        closesHour: 24,
+        courts: [
+          {
+            courtId: 'c2',
+            name: 'Court 2',
+            hours: hours.map((h) => ({ hour: h, status: 'Free', bahtPerHour: 200 })),
+          },
+        ],
+      });
+    fixture.detectChanges();
+
+    expect(elementOf(fixture, `walk-in-start-${last}`)?.classList).toContain('on');
+    expect(elementOf(fixture, 'walk-in-court-c2')?.classList).toContain('on');
+    httpMock.verify();
+  });
+});

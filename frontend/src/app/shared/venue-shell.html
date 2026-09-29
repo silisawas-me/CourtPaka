@@ -113,7 +113,7 @@
         type="button"
         class="walk-in-button"
         data-testid="open-walk-in"
-        (click)="walkIn.set(true)"
+        (click)="openWalkIn()"
       >
         {{ i18n.t('walkIn.open') }}
       </button>
@@ -128,7 +128,7 @@
 
 @if (walkIn() && walkInAt(); as sellAt) {
   @defer {
-    <app-walk-in [venueId]="sellAt" (closed)="walkIn.set(false)" />
+    <app-walk-in [venueId]="sellAt" [at]="walkInCell()" (closed)="walkIn.set(false)" />
   }
 }
 

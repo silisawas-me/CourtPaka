@@ -1098,5 +1098,7 @@
   "timeline.freedAt": "{courts} ช่วง {from}–{to} จะกลับมาว่างให้ขายทันที",
   "now.clear": "ล้าง",
   "now.sold": "ขายแล้ว เงินเข้าลิ้นชักวันนี้",
-  "now.setUpShop": "ยังไม่มีของขาย · ตั้งร้านค้า"
+  "now.setUpShop": "ยังไม่มีของขาย · ตั้งร้านค้า",
+  "timeline.book": "จอง",
+  "timeline.bookHere": "จองคอร์ต"
 }

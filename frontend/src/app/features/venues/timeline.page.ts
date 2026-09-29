@@ -66,6 +66,7 @@ export class TimelinePage {
   private readonly venues = inject(PublicVenueService);
   private readonly bookings = inject(VenueBookingsService);
   private readonly shop = inject(ShopService);
+  private readonly walkIns = inject(WalkInEvents);
   protected readonly i18n = inject(TranslationService);
 
   readonly venueId = input.required<string>();
@@ -342,13 +343,11 @@ export class TimelinePage {
       }
     });
 
-    inject(WalkInEvents)
-      .sold.pipe(takeUntilDestroyed())
-      .subscribe(({ venueId }) => {
-        if (venueId === this.venueId()) {
-          this.read(venueId, { first: true });
-        }
-      });
+    this.walkIns.sold.pipe(takeUntilDestroyed()).subscribe(({ venueId }) => {
+      if (venueId === this.venueId()) {
+        this.read(venueId, { first: true });
+      }
+    });
 
     const tick = setInterval(() => {
       const before = this.clock().date;
@@ -466,6 +465,11 @@ export class TimelinePage {
     if (booking?.can.checkIn) {
       this.run(this.bookings.checkIn(this.venueId(), booking.bookingId));
     }
+  }
+
+  /** A tap on an empty hour: the walk-in opens on that court and hour (the frame holds it). */
+  protected bookAt(courtId: string, hour: number): void {
+    this.walkIns.open.next({ venueId: this.venueId(), courtId, hour });
   }
 
   protected shorten(): void {

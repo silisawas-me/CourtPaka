@@ -1098,5 +1098,7 @@
   "timeline.freedAt": "{courts} {from}–{to} is free to sell again at once",
   "now.clear": "Clear",
   "now.sold": "Sold — in today's till",
-  "now.setUpShop": "Nothing to sell yet · set up the shop"
+  "now.setUpShop": "Nothing to sell yet · set up the shop",
+  "timeline.book": "Book",
+  "timeline.bookHere": "Book"
 }

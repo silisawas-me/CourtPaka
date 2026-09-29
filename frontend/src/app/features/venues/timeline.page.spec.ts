@@ -1,6 +1,7 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { clickOn, elementOf, pageProviders, setInput, textOf } from '../../testing/dom';
+import { WalkInEvents } from '../../core/venues/walk-in.events';
 import { TimelinePage } from './timeline.page';
 
 describe('TimelinePage', () => {
@@ -148,6 +149,18 @@ describe('TimelinePage', () => {
       .expectOne((request) => request.url === '/api/venues/v1/bookings')
       .flush([booking('b1', 'c1', [19])]);
     fixture.detectChanges();
+  });
+
+  it('asks the frame for the walk-in on the court and hour of an empty cell that is tapped', () => {
+    render([]);
+    const asked: unknown[] = [];
+    TestBed.inject(WalkInEvents).open.subscribe((one) => asked.push(one));
+
+    // 18:45 now: 18:00 still sells, and it is free on Court 1.
+    clickOn(fixture, 'open-c1-18');
+
+    expect(asked).toEqual([{ venueId: 'v1', courtId: 'c1', hour: 18 }]);
+    expect(elementOf(fixture, 'open-c1-17')).toBeNull();
   });
 
   it('draws nine hours from four before now, with the peak hours marked', () => {
