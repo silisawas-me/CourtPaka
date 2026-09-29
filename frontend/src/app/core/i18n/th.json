@@ -1102,12 +1102,11 @@
   "timeline.book": "จอง",
   "timeline.bookHere": "จองคอร์ต",
   "timeline.booker.phone": "เบอร์โทร",
-  "timeline.booker.email": "อีเมล",
-  "timeline.booker.status": "สถานะ",
   "timeline.booker.money": "ยอด",
-  "timeline.booker.taken": "รับแล้ว",
   "timeline.booker.owing": "ค้าง",
   "timeline.payment.Received": "จ่ายครบแล้ว",
   "timeline.payment.NotReceived": "ยังไม่ได้รับเงิน",
-  "timeline.payment.Unconfirmed": "รอยืนยันการรับเงิน"
+  "timeline.payment.Unconfirmed": "รอยืนยันการรับเงิน",
+  "timeline.booker.name": "ชื่อ",
+  "timeline.booker.noPhone": "ไม่มีเบอร์"
 }

@@ -1102,12 +1102,11 @@
   "timeline.book": "Book",
   "timeline.bookHere": "Book",
   "timeline.booker.phone": "Phone",
-  "timeline.booker.email": "Email",
-  "timeline.booker.status": "Status",
   "timeline.booker.money": "Amount",
-  "timeline.booker.taken": "taken",
   "timeline.booker.owing": "owing",
   "timeline.payment.Received": "Paid in full",
   "timeline.payment.NotReceived": "Not paid yet",
-  "timeline.payment.Unconfirmed": "Payment unconfirmed"
+  "timeline.payment.Unconfirmed": "Payment unconfirmed",
+  "timeline.booker.name": "Name",
+  "timeline.booker.noPhone": "No phone"
 }

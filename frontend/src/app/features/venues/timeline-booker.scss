@@ -26,19 +26,24 @@
 
   a {
     color: var(--mat-sys-primary);
+    font-family: var(--font-mono);
+    font-size: 14px;
     font-weight: 600;
     text-decoration: none;
   }
 }
 
-.booker-email {
-  overflow-wrap: anywhere;
+.booker-name {
+  font-weight: 600;
 }
 
-.booker-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+.booker-none {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.owing {
+  font-weight: 600;
+  color: var(--status-waiting-ink);
 }
 
 .booker-money {

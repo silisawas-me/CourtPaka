@@ -2,7 +2,6 @@ import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { clickOn, elementOf, pageProviders, setInput, textOf } from '../../testing/dom';
 import { WalkInEvents } from '../../core/venues/walk-in.events';
-import { TRANSLATIONS } from '../../testing/translations';
 import { TimelinePage } from './timeline.page';
 
 describe('TimelinePage', () => {
@@ -164,21 +163,21 @@ describe('TimelinePage', () => {
     expect(elementOf(fixture, 'open-c1-17')).toBeNull();
   });
 
-  it('says who booked it and where it stands, under the name', () => {
+  it('says who booked it and how to reach them, and the money in one line', () => {
     render([
       booking('b1', 'c1', [19], {
         customerPhone: '0812345678',
-        bookerEmail: null,
+        bookerEmail: 'someone@example.com',
         paymentState: 'NotReceived',
         takenBaht: 100,
         toPayBaht: 200,
       }),
     ]);
 
+    expect(textOf(fixture, 'booker-name')).toBe('Name b1');
     expect(elementOf(fixture, 'booker-phone')!.getAttribute('href')).toBe('tel:0812345678');
-    expect(elementOf(fixture, 'booker-email')).toBeNull();
-    expect(textOf(fixture, 'booker-status')).toBe(TRANSLATIONS.th['booking.status.Confirmed']);
-    expect(textOf(fixture, 'booker-payment')).toBe(TRANSLATIONS.th['timeline.payment.NotReceived']);
+    // The email is not what the desk needs, so it is not on the panel.
+    expect(fixture.nativeElement.textContent).not.toContain('someone@example.com');
     expect(textOf(fixture, 'booker-money')).toContain('฿300');
     expect(textOf(fixture, 'booker-money')).toContain('฿200');
   });
