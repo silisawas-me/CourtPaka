@@ -303,29 +303,20 @@
             </button>
           }
 
-          <div class="two">
-            <button
-              type="button"
-              class="soft"
-              data-testid="extend"
-              [disabled]="!canExtend() || busy()"
-              (click)="extend()"
-            >
-              {{ i18n.t('timeline.oneMore') }}
-            </button>
-            <button
-              type="button"
-              class="soft"
-              data-testid="move-open"
-              [attr.aria-expanded]="movesOpen()"
-              [disabled]="moves().length === 0"
-              (click)="movesOpen.set(!movesOpen())"
-            >
-              {{ i18n.t('timeline.moveOpen') }} {{ movesOpen() ? '▴' : '▾' }}
-            </button>
-          </div>
-          @if (movesOpen()) {
-            <div class="chips">
+          <button
+            type="button"
+            class="soft"
+            data-testid="extend"
+            [disabled]="!canExtend() || busy()"
+            (click)="extend()"
+          >
+            {{ i18n.t('timeline.oneMore') }}
+          </button>
+
+          <!-- Every other court, open as the design draws it: green where the server says free. -->
+          @if (moves().length > 0) {
+            <span class="label">{{ i18n.t('timeline.moveTo') }}</span>
+            <div class="chips" data-testid="move-courts">
               @for (court of moves(); track court.courtId) {
                 <button
                   type="button"
@@ -467,11 +458,13 @@
               {{ i18n.t('timeline.hr') }} · ฿{{ booking.totalBaht | baht: i18n.locale() }}</span
             >
             <span>{{
-              courtOwed() > 0 ? i18n.t('timeline.payAtVenue') : i18n.t('timeline.paid')
+              courtOwed() > 0
+                ? i18n.t('timeline.payAtVenue')
+                : i18n.t(booking.kind === 'App' ? 'timeline.paidInApp' : 'timeline.paid')
             }}</span>
           </div>
           <div class="foot-due">
-            <span>{{ i18n.t('timeline.thisTime') }}</span>
+            <span>{{ i18n.t('timeline.due') }}</span>
             <span class="due" data-testid="due">฿{{ due() | baht: i18n.locale() }}</span>
           </div>
           <div class="pay">

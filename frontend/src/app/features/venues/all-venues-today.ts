@@ -72,7 +72,10 @@ export class AllVenuesToday {
 
   /** Today's bookings by kind, as the design's note has them: "Walk-in 38 · ก๊วน 21". */
   protected readonly kinds = computed(() => {
-    const all = this.today()?.byKind ?? [];
+    // Only the two the design names: the ones that walk in and the standing groups.
+    const all = (this.today()?.byKind ?? []).filter(
+      (one) => one.kind === 'WalkIn' || one.kind === 'Series',
+    );
     return all.length === 0
       ? this.i18n.t('overview.noBookings')
       : all.map((one) => `${this.i18n.t('overview.kind.' + one.kind)} ${one.count}`).join(' · ');

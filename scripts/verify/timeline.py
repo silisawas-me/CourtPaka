@@ -85,8 +85,9 @@ with sync_playwright() as p:
 
     # Another court, through the move door — folded under its button, only a court the server
     # says is free is offered.
-    panel.locator("[data-testid=move-open]").click()
-    free = panel.locator("[data-testid^=move-]:not([disabled]):not([data-testid=move-open])")
+    check("the courts to move to are open without a press",
+          panel.locator("[data-testid=move-open]").count() == 0, desk)
+    free = panel.locator("[data-testid^=move-]:not([disabled]):not([data-testid=move-courts])")
     free.first.wait_for()
     target = free.first.get_attribute("data-testid").removeprefix("move-")
     with desk.expect_response(lambda r: r.url.endswith(f"/bookings/{booking_id}/move")) as moved:

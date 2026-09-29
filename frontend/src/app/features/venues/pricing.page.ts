@@ -92,7 +92,7 @@ export class PricingPage {
   }
 
   protected dayName(day: Weekday): string {
-    return this.i18n.t(`settings.day.${day}`);
+    return this.i18n.t(`pricing.day.${day}`);
   }
 
   protected nudge(tier: number, by: number): void {

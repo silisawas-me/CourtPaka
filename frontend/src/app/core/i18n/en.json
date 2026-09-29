@@ -1078,5 +1078,13 @@
   "nav.report": "Full report",
   "nav.packageBoard": "Packages and hours",
   "revenue.total14": "Revenue, 14 days",
-  "revenue.byDay14": "Revenue, last 14 days"
+  "revenue.byDay14": "Revenue, last 14 days",
+  "timeline.paidInApp": "Paid in the app",
+  "pricing.day.Monday": "Mon",
+  "pricing.day.Tuesday": "Tue",
+  "pricing.day.Wednesday": "Wed",
+  "pricing.day.Thursday": "Thu",
+  "pricing.day.Friday": "Fri",
+  "pricing.day.Saturday": "Sat",
+  "pricing.day.Sunday": "Sun"
 }
