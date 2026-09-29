@@ -341,7 +341,7 @@
   "venueBookings.playedConfirm": "ยืนยันว่ามาเล่นจริง",
   "venueBookings.playedReason": "เหตุผลที่แก้",
   "venueBookings.reason.CustomerRequest": "ลูกค้าขอยกเลิก",
-  "venueBookings.reason.PaymentNotReceived": "ไม่พบเงินเข้า",
+  "venueBookings.reason.PaymentNotReceived": "ไม่ได้รับเงิน",
   "venueBookings.reason.VenueInitiated": "สนามยกเลิกเอง",
   "venueBookings.reasonQuestion": "เหตุผลที่ยกเลิก",
   "venueBookings.settle": "ยืนยันการรับเงิน",
@@ -1088,5 +1088,12 @@
   "pricing.day.Saturday": "ส.",
   "pricing.day.Sunday": "อา.",
   "timeline.oneLess": "−1 ชม.",
-  "error.booking.shorten_already_paid": "ลดเวลาไม่ได้ เพราะจ่ายมาเกินยอดใหม่แล้ว ถ้าจะคืนเงินส่วนนั้นให้ยกเลิกหรือบันทึกคืนเงินในการจองรายวัน"
+  "error.booking.shorten_already_paid": "ลดเวลาไม่ได้ เพราะจ่ายมาเกินยอดใหม่แล้ว ถ้าจะคืนเงินส่วนนั้นให้ยกเลิกหรือบันทึกคืนเงินในการจองรายวัน",
+  "timeline.underHours": "ก่อนเล่นน้อยกว่า {h} ชม.",
+  "timeline.refundShare": "คืน {p}%",
+  "timeline.refundAll": "คืนเต็ม",
+  "timeline.venueReasons": "คอร์ตเสีย ฝนรั่ว ฯลฯ",
+  "timeline.neverPaid": "จองแล้วไม่จ่าย",
+  "timeline.nothingPaid": "ยังไม่ได้จ่าย จึงไม่มีเงินต้องคืน",
+  "timeline.freedAt": "{courts} ช่วง {from}–{to} จะกลับมาว่างให้ขายทันที"
 }

@@ -241,14 +241,23 @@ describe('TimelinePage', () => {
       noShow: false,
       cancel: true,
       cancelChoices: [
-        { reason: 'CustomerRequest', refundBaht: 0 },
-        { reason: 'VenueInitiated', refundBaht: 300 },
+        { reason: 'CustomerRequest', refundBaht: 0, refundPercent: 50, underHours: 24 },
+        { reason: 'VenueInitiated', refundBaht: 300, refundPercent: 100, underHours: null },
+        { reason: 'PaymentNotReceived', refundBaht: 0, refundPercent: 0, underHours: null },
       ],
     };
-    render([booking('b1', 'c1', [19], { toPayBaht: 0, can })]);
+    render([booking('b1', 'c1', [19], { toPayBaht: 0, takenBaht: 300, can })]);
 
     clickOn(fixture, 'cancel-open');
     fixture.detectChanges();
+
+    // Each reason as artboard b2 writes it: what it means, and what share it gives back.
+    expect(textOf(fixture, 'reason-note-CustomerRequest')).toBe(
+      'ก่อนเล่นน้อยกว่า 24 ชม. · คืน 50%',
+    );
+    expect(textOf(fixture, 'reason-note-VenueInitiated')).toContain('คืนเต็ม');
+    expect(textOf(fixture, 'cancel-reason-PaymentNotReceived')).toContain('—');
+    expect(textOf(fixture, 'cancel-freed')).toBe('c1 ช่วง 19:00–20:00 จะกลับมาว่างให้ขายทันที');
     expect(elementOf<HTMLButtonElement>(fixture, 'confirm-cancel')!.disabled).toBe(true);
 
     clickOn(fixture, 'cancel-reason-VenueInitiated');

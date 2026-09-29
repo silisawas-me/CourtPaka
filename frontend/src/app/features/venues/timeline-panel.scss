@@ -449,3 +449,22 @@
     color: var(--status-waiting-ink);
   }
 }
+
+/* A reason as artboard b2 draws it: its name, a line on what it means, and what it gives back. */
+.reason-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+
+.reason-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.reason-note {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--mat-sys-on-surface-variant);
+}

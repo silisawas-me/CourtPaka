@@ -341,7 +341,7 @@
   "venueBookings.playedConfirm": "Yes, they played",
   "venueBookings.playedReason": "Why this is being corrected",
   "venueBookings.reason.CustomerRequest": "The customer asked",
-  "venueBookings.reason.PaymentNotReceived": "No money arrived",
+  "venueBookings.reason.PaymentNotReceived": "Never paid",
   "venueBookings.reason.VenueInitiated": "The venue cannot honour it",
   "venueBookings.reasonQuestion": "Why is it being cancelled?",
   "venueBookings.settle": "Say whether the money arrived",
@@ -1088,5 +1088,12 @@
   "pricing.day.Saturday": "Sat",
   "pricing.day.Sunday": "Sun",
   "timeline.oneLess": "−1 hr",
-  "error.booking.shorten_already_paid": "The hour cannot come off: more has been paid than the booking would then cost. Refund it from Day bookings."
+  "error.booking.shorten_already_paid": "The hour cannot come off: more has been paid than the booking would then cost. Refund it from Day bookings.",
+  "timeline.underHours": "Under {h} hr before play",
+  "timeline.refundShare": "{p}% back",
+  "timeline.refundAll": "All back",
+  "timeline.venueReasons": "Court broken, leaking roof…",
+  "timeline.neverPaid": "Booked and never paid",
+  "timeline.nothingPaid": "Nothing was paid, so nothing is owed back",
+  "timeline.freedAt": "{courts} {from}–{to} is free to sell again at once"
 }

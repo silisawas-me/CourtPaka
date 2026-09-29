@@ -1061,6 +1061,31 @@ public static class VenueBookingEndpoints
                     booking, status, reason, paymentReceived: null, byOwner, takenBaht, now)))
                 .Where(choice => choice.offer.Allowed)
                 .Select(choice => new CancelChoiceResponse(
-                    choice.reason.ToString(), choice.offer.RefundBaht)),
+                    choice.reason.ToString(),
+                    choice.offer.RefundBaht,
+                    choice.offer.RefundPercent,
+                    choice.reason == CancellationReason.CustomerRequest
+                        ? UnderHours(booking, now)
+                        : null)),
         ];
+
+    /// <summary>
+    /// The notice the next tier of the booking's own terms asks for that this moment falls short
+    /// of — what the counter says out loud ("less than 24 hours before play, half back"). Worked
+    /// out the way the terms count notice: whole hours to the first hour of play (BR-05).
+    /// </summary>
+    private static int? UnderHours(Booking booking, DateTimeOffset now)
+    {
+        if (booking.CancellationPolicy is not { } policy || booking.Slots.Count == 0)
+        {
+            return null;
+        }
+
+        var notice = (int)Math.Floor((booking.Slots.Min(slot => slot.StartsAt) - now).TotalHours);
+        var further = policy.Tiers
+            .Where(tier => tier.HoursBefore > notice)
+            .Select(tier => tier.HoursBefore)
+            .ToList();
+        return further.Count == 0 ? null : further.Min();
+    }
 }

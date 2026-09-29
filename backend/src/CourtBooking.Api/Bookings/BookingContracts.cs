@@ -439,7 +439,17 @@ public sealed record MoveCourtRequest(Guid CourtId);
 /// still nothing (PRD 6.2) — and it is the amount the venue has to be sure about before it
 /// presses (PRD US-13).
 /// </summary>
-public sealed record CancelChoiceResponse(string Reason, decimal RefundBaht);
+/// <param name="RefundPercent">The share of the price the reason gives back (PRD 6.1).</param>
+/// <param name="UnderHours">
+/// For the customer's own request: the notice the next, kinder tier of the venue's terms asks for,
+/// which this cancellation falls short of ("less than 24 hours before play"). Null where no tier
+/// asks for more, and for the other reasons, whose share is not about notice.
+/// </param>
+public sealed record CancelChoiceResponse(
+    string Reason,
+    decimal RefundBaht,
+    int RefundPercent = 0,
+    int? UnderHours = null);
 
 /// <summary>Writing down a transfer the venue has already made (PRD US-18).</summary>
 public sealed record RecordRefundRequest(
