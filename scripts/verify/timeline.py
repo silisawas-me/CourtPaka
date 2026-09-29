@@ -96,6 +96,24 @@ with sync_playwright() as p:
     check("and it is on that court now",
           all(slot["courtId"] == target for slot in moved.value.json()["slots"]))
 
+    # Time, as the design draws it: +1 ชม. then −1 ชม. takes the evening back where it was.
+    extend = panel.locator("[data-testid=extend]")
+    if extend.is_enabled():
+        with desk.expect_response(lambda r: r.url.endswith(f"/bookings/{booking_id}/extend")) as longer:
+            extend.click()
+        check("one more hour is added", longer.value.status == 200 and len(longer.value.json()["slots"]) == 2)
+        shorten = panel.locator("[data-testid=shorten]:not([disabled])")
+        shorten.wait_for()
+        with desk.expect_response(lambda r: r.url.endswith(f"/bookings/{booking_id}/shorten")) as shorter:
+            shorten.click()
+        back = shorter.value.json()
+        check("and one hour fewer takes it off again, paid as it was",
+              shorter.value.status == 200 and len(back["slots"]) == 1
+              and back["paymentState"] == "Received", desk)
+    else:
+        check("an hour cannot come off a booking of one hour",
+              panel.locator("[data-testid=shorten]").is_disabled(), desk)
+
     # Water onto the bill: the court is paid, so what is due is the water alone.
     panel.locator(f"[data-testid=more-{item['itemId']}]").click()
     panel.locator(f"[data-testid=more-{item['itemId']}]").click()

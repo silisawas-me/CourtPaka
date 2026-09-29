@@ -1086,5 +1086,7 @@
   "pricing.day.Thursday": "พฤ.",
   "pricing.day.Friday": "ศ.",
   "pricing.day.Saturday": "ส.",
-  "pricing.day.Sunday": "อา."
+  "pricing.day.Sunday": "อา.",
+  "timeline.oneLess": "−1 ชม.",
+  "error.booking.shorten_already_paid": "ลดเวลาไม่ได้ เพราะจ่ายมาเกินยอดใหม่แล้ว ถ้าจะคืนเงินส่วนนั้นให้ยกเลิกหรือบันทึกคืนเงินในการจองรายวัน"
 }

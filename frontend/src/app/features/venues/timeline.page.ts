@@ -419,6 +419,13 @@ export class TimelinePage {
     }
   }
 
+  protected shorten(): void {
+    const booking = this.selected();
+    if (booking && this.options()?.shorten) {
+      this.run(this.bookings.shorten(this.venueId(), booking.bookingId));
+    }
+  }
+
   protected extend(): void {
     const booking = this.selected();
     if (booking && this.canExtend()) {
