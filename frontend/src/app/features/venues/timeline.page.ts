@@ -27,6 +27,7 @@ import {
   VenueBookingsService,
 } from '../../core/venues/venue-bookings.service';
 import { WalkInEvents } from '../../core/venues/walk-in.events';
+import { arrivalTone, bookingTone, paymentTone, StatusChip } from '../../shared/status-chip';
 import { whoIs } from './now-board';
 import { NOW_REFRESH_MS } from './now.page';
 import {
@@ -57,9 +58,9 @@ const REFUND_WITH: readonly RefundMethod[] = ['Transfer', 'Cash'];
  */
 @Component({
   selector: 'app-timeline-page',
-  imports: [BahtPipe, RouterLink],
+  imports: [BahtPipe, RouterLink, StatusChip],
   templateUrl: './timeline.page.html',
-  styleUrls: ['./timeline.page.scss', './timeline-panel.scss'],
+  styleUrls: ['./timeline.page.scss', './timeline-panel.scss', './timeline-booker.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TimelinePage {
@@ -321,6 +322,9 @@ export class TimelinePage {
   );
 
   protected readonly who = whoIs;
+  protected readonly bookingTone = bookingTone;
+  protected readonly paymentTone = paymentTone;
+  protected readonly arrivalTone = arrivalTone;
 
   constructor() {
     effect(() => this.read(this.venueId(), { first: true }));
