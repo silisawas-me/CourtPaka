@@ -314,51 +314,36 @@
           <h2 class="panel-name" data-testid="panel-name">{{ who(booking) }}</h2>
           <span class="panel-where" data-testid="panel-where">{{ where() }}</span>
 
-          <!-- Who booked it and where it stands: what the desk asks before anything else. -->
+          <!-- Who booked it, and how to reach them: the name and the phone, and the money in a line. -->
           <dl class="booker" data-testid="panel-booker">
-            @if (booking.customerPhone ?? booking.bookerPhone; as phone) {
-              <div>
-                <dt>{{ i18n.t('timeline.booker.phone') }}</dt>
-                <dd>
-                  <a [href]="'tel:' + phone" data-testid="booker-phone">{{ phone }}</a>
-                </dd>
-              </div>
-            }
-            @if (booking.bookerEmail; as email) {
-              <div>
-                <dt>{{ i18n.t('timeline.booker.email') }}</dt>
-                <dd class="booker-email" data-testid="booker-email">{{ email }}</dd>
-              </div>
-            }
             <div>
-              <dt>{{ i18n.t('timeline.booker.status') }}</dt>
-              <dd class="booker-chips">
-                <app-status-chip
-                  [label]="i18n.t('booking.status.' + booking.status)"
-                  [tone]="bookingTone(booking.status)"
-                  testId="booker-status"
-                />
-                <app-status-chip
-                  [label]="i18n.t('timeline.payment.' + booking.paymentState)"
-                  [tone]="paymentTone(booking.paymentState)"
-                  testId="booker-payment"
-                />
-                <app-status-chip
-                  [label]="i18n.t('board.arrival.' + booking.arrival)"
-                  [tone]="arrivalTone(booking.arrival)"
-                  testId="booker-arrival"
-                />
+              <dt>{{ i18n.t('timeline.booker.name') }}</dt>
+              <dd class="booker-name" data-testid="booker-name">{{ who(booking) }}</dd>
+            </div>
+            <div>
+              <dt>{{ i18n.t('timeline.booker.phone') }}</dt>
+              <dd>
+                @if (booking.customerPhone ?? booking.bookerPhone; as phone) {
+                  <a [href]="'tel:' + phone" data-testid="booker-phone">{{ phone }}</a>
+                } @else {
+                  <span class="booker-none" data-testid="booker-no-phone">{{
+                    i18n.t('timeline.booker.noPhone')
+                  }}</span>
+                }
               </dd>
             </div>
             <div>
               <dt>{{ i18n.t('timeline.booker.money') }}</dt>
               <dd class="booker-money" data-testid="booker-money">
                 ฿{{ booking.totalBaht | baht: i18n.locale() }} ·
-                {{ i18n.t('timeline.booker.taken') }} ฿{{ booking.takenBaht | baht: i18n.locale() }}
                 @if (booking.can.takeMoney) {
-                  · {{ i18n.t('timeline.booker.owing') }} ฿{{
-                    booking.toPayBaht | baht: i18n.locale()
-                  }}
+                  <span class="owing"
+                    >{{ i18n.t('timeline.booker.owing') }} ฿{{
+                      booking.toPayBaht | baht: i18n.locale()
+                    }}</span
+                  >
+                } @else {
+                  {{ i18n.t('timeline.payment.' + booking.paymentState) }}
                 }
               </dd>
             </div>
