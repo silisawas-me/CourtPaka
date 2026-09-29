@@ -163,7 +163,7 @@ export class VenueShell {
     }
 
     const here = this.here();
-    return VENUE_OTHER.map((link) =>
+    return VENUE_OTHER.filter((link) => !link.ownerOnly || this.isOwner()).map((link) =>
       this.door(link, ['/venues', venueId, ...link.to], isAt(link, here)),
     );
   });

@@ -1074,5 +1074,9 @@
   "inviteOwner.state.accepted": "สมัครแล้ว",
   "inviteOwner.state.expired": "หมดอายุ",
   "timeline.refundNow": "บันทึกครั้งนี้",
-  "timeline.refundTold": "บันทึกเงินที่โอนหรือจ่ายคืนไปแล้ว ระบบไม่ได้โอนให้เอง"
+  "timeline.refundTold": "บันทึกเงินที่โอนหรือจ่ายคืนไปแล้ว ระบบไม่ได้โอนให้เอง",
+  "nav.report": "รายงานละเอียด",
+  "nav.packageBoard": "แพ็กเกจและประวัติชั่วโมง",
+  "revenue.total14": "รายได้ 14 วัน",
+  "revenue.byDay14": "รายได้ 14 วันล่าสุด"
 }

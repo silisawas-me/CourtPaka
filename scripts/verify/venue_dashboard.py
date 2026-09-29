@@ -34,8 +34,14 @@ with sync_playwright() as p:
     sign_in(page, OWNER)
     page.goto(f"{BASE}{open_seeded_venue(page)}")
     page.click("[data-testid=dashboard-link]")
-    page.wait_for_selector("[data-testid=revenue-total]")
+    page.wait_for_selector("[data-testid=revenue-panel]")
     check("the venue page has a door to its figures", True, page)
+    check("the revenue page is the design's: no range, no report under it",
+          page.locator("[data-testid=range-start]").count() == 0
+          and page.locator("[data-testid=revenue-total]").count() == 0, page)
+    # Everything else about the figures is the report under "อื่น ๆ".
+    page.goto(f"{BASE}/venues/{venue_id}/report")
+    page.wait_for_selector("[data-testid=revenue-total]")
 
     before = dashboard(page, venue_id)
     days = page.locator("[data-testid=days] tbody tr")
@@ -67,12 +73,12 @@ with sync_playwright() as p:
 
     # Picking last month goes through the URL, so the link can be sent on.
     page.click("[data-testid=last-month]")
-    page.wait_for_url("**/dashboard?from=*")
+    page.wait_for_url("**/report?from=*")
     expect(page.get_by_test_id("revenue-total")).to_be_visible()
     check("last month is a link of its own", "from=" in page.url and "to=" in page.url)
 
     # Four screenshots the design review asks for: phone and desk, Thai and English.
-    page.goto(f"{BASE}/venues/{venue_id}/dashboard")
+    page.goto(f"{BASE}/venues/{venue_id}/report")
     page.wait_for_selector("[data-testid=revenue-total]")
     check("desk, Thai", True, page)
     page.set_viewport_size({"width": 390, "height": 844})
@@ -107,7 +113,7 @@ with sync_playwright() as p:
     # browser so its headings are in the reader's language — the server sends figures, not words.
     # sign_in leaves the page on the home screen, so the dashboard is opened again for it.
     sign_in(page, OWNER)
-    page.goto(f"{BASE}/venues/{venue_id}/dashboard")
+    page.goto(f"{BASE}/venues/{venue_id}/report")
     page.wait_for_selector("[data-testid=download-csv]")
 
     with page.expect_download() as download:

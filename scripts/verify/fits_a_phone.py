@@ -71,6 +71,8 @@ with sync_playwright() as p:
         ("slip queue", f"/venues/{venue_id}/slip-queue"),
         ("money", f"/venues/{venue_id}/money"),
         ("dashboard", f"/venues/{venue_id}/dashboard"),
+        ("report", f"/venues/{venue_id}/report"),
+        ("package board", f"/venues/{venue_id}/package-board"),
         ("settings", f"/venues/{venue_id}/settings"),
         ("closures", f"/venues/{venue_id}/closures"),
         ("my venues", "/venues"),

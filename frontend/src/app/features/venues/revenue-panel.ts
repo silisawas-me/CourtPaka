@@ -22,6 +22,8 @@ export class RevenuePanel {
   protected readonly i18n = inject(TranslationService);
 
   readonly figures = input.required<Dashboard>();
+  /** The design's own page, which is always the last fourteen days and says so in its titles. */
+  readonly fortnight = input(false);
 
   protected readonly court = computed(() => this.figures().onlineBaht + this.figures().staffBaht);
   protected readonly shop = computed(() => this.figures().trade.shopBaht);

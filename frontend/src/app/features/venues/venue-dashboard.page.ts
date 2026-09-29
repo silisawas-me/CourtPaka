@@ -56,6 +56,11 @@ export class VenueDashboardPage {
   readonly venueId = input.required<string>();
   readonly from = input<string>();
   readonly to = input<string>();
+  /**
+   * The report under "อื่น ๆ" (route data): any range, the CSV and every reading. Without it the
+   * page is the design's revenue section — the panel, over the last fourteen days, and nothing else.
+   */
+  readonly detail = input(false);
 
   protected readonly figures = signal<Dashboard | null>(null);
   protected readonly loading = signal(true);
@@ -75,11 +80,17 @@ export class VenueDashboardPage {
   protected readonly manyMonths = computed(() => (this.figures()?.months.length ?? 0) > 1);
 
   /** What is being asked for: the venue and the range the URL holds. */
-  private readonly asked = computed(() => ({
-    venueId: this.venueId(),
-    from: this.from(),
-    to: this.to(),
-  }));
+  private readonly asked = computed(() => {
+    if (this.detail()) {
+      return { venueId: this.venueId(), from: this.from(), to: this.to() };
+    }
+    const today = venueToday();
+    return {
+      venueId: this.venueId(),
+      from: plainDate(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 13)),
+      to: plainDate(today),
+    };
+  });
 
   constructor() {
     // switchMap, so pressing "last month" and then "this month" quickly cannot let the slower,

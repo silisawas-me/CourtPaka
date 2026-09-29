@@ -65,6 +65,14 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    // The same figures with everything the design's revenue page leaves out (under "อื่น ๆ").
+    path: 'venues/:venueId/report',
+    data: { venueShell: true, detail: true },
+    loadComponent: () =>
+      import('./features/venues/venue-dashboard.page').then((m) => m.VenueDashboardPage),
+    canActivate: [authGuard],
+  },
+  {
     path: 'venues/:venueId/closures',
     data: { venueShell: true },
     loadComponent: () =>
@@ -80,6 +88,13 @@ export const routes: Routes = [
   {
     path: 'venues/:venueId/packages',
     data: { venueShell: true },
+    loadComponent: () => import('./features/venues/packages.page').then((m) => m.PackagesPage),
+    canActivate: [authGuard],
+  },
+  {
+    // The members with the board of offers and each package's hours (under "อื่น ๆ").
+    path: 'venues/:venueId/package-board',
+    data: { venueShell: true, detail: true },
     loadComponent: () => import('./features/venues/packages.page').then((m) => m.PackagesPage),
     canActivate: [authGuard],
   },
