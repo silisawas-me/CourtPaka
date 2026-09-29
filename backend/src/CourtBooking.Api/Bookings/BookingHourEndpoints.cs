@@ -106,7 +106,13 @@ internal static class BookingHourEndpoints
         }
 
         ShortenOptionResponse? shorten = null;
-        if (BookingHours.LastHour(booking, status, now) is { } lastHour)
+        // Offered only where the door would open: an hour already paid for is a refund to make,
+        // not an hour to take off (the same test the door itself makes, read without its lock).
+        if (BookingHours.LastHour(booking, status, now) is { } lastHour
+            && ShortenedIsStillCovered(
+                booking,
+                await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken),
+                lastHour))
         {
             var (date, hour) = PlatformRequirements.BangkokDateAndHour(lastHour.StartsAt);
             shorten = new ShortenOptionResponse(date, hour, lastHour.CourtId, lastHour.BahtPerHour);
@@ -160,17 +166,16 @@ internal static class BookingHourEndpoints
 
         // A booking recorded as paid with no receipt saying how much is one from before receipts
         // (Takings.HeldFor reads it as holding what was asked) — so it counts as paid in full.
-        var holding = booking.PaymentState == PaymentState.Received
-            ? Math.Max(taken, booking.TotalBaht)
-            : taken;
-        if (holding > total)
+        if (!ShortenedIsStillCovered(booking, taken, last))
         {
             return ApiProblem.Of(
                 StatusCodes.Status409Conflict, BookingErrorCodes.ShortenAlreadyPaid);
         }
 
         // Paid to the last baht of the new price is paid: the desk's door closes by itself.
-        var payment = holding == total && total > 0 ? PaymentState.Received : booking.PaymentState;
+        var payment = Holding(booking, taken) == total && total > 0
+            ? PaymentState.Received
+            : booking.PaymentState;
 
         var changed = await database.Bookings
             .Where(candidate =>
@@ -580,6 +585,18 @@ internal static class BookingHourEndpoints
             await VenueBookingEndpoints.OneDrawnAsync(
                 database, venueId, bookingId, venue, now, cancellationToken));
     }
+
+    /// <summary>
+    /// What the venue holds for a booking. One recorded as paid with no receipt saying how much is
+    /// from before receipts were written down (Takings.HeldFor reads it as holding what was
+    /// asked), so it counts as paid in full.
+    /// </summary>
+    private static decimal Holding(Booking booking, decimal taken) =>
+        booking.PaymentState == PaymentState.Received ? Math.Max(taken, booking.TotalBaht) : taken;
+
+    /// <summary>Whether no more has been paid than the booking would cost without its last hour.</summary>
+    private static bool ShortenedIsStillCovered(Booking booking, decimal taken, BookingSlot last) =>
+        Holding(booking, taken) <= booking.TotalBaht - last.BahtPerHour;
 
     /// <summary>
     /// The day as the database has it right now, with lapsed holds let go of first: the exclusion

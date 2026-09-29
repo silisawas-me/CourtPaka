@@ -614,6 +614,11 @@ public sealed class BookingHoursTests(ApiTestFixture api) : IClassFixture<ApiTes
             $"/api/venues/{venue.Id}/bookings/{booking.Id}/payments",
             new TakePaymentRequest(200m, nameof(PaymentMethod.Cash), null));
 
+        // Not even offered: the counter is not shown a door that would refuse it.
+        var offered = await VenueScenario.ReadAsync<BookingHoursResponse>(
+            await owner.GetAsync($"/api/venues/{venue.Id}/bookings/{booking.Id}/hours"));
+        Assert.Null(offered.Shorten);
+
         var refused = await owner.PostAsync($"/api/venues/{venue.Id}/bookings/{booking.Id}/shorten", null);
 
         Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);

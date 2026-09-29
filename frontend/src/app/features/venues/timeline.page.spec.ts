@@ -2,6 +2,7 @@ import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { clickOn, elementOf, pageProviders, setInput, textOf } from '../../testing/dom';
 import { WalkInEvents } from '../../core/venues/walk-in.events';
+import { TRANSLATIONS } from '../../testing/translations';
 import { TimelinePage } from './timeline.page';
 
 describe('TimelinePage', () => {
@@ -161,6 +162,25 @@ describe('TimelinePage', () => {
 
     expect(asked).toEqual([{ venueId: 'v1', courtId: 'c1', hour: 18 }]);
     expect(elementOf(fixture, 'open-c1-17')).toBeNull();
+  });
+
+  it('says who booked it and where it stands, under the name', () => {
+    render([
+      booking('b1', 'c1', [19], {
+        customerPhone: '0812345678',
+        bookerEmail: null,
+        paymentState: 'NotReceived',
+        takenBaht: 100,
+        toPayBaht: 200,
+      }),
+    ]);
+
+    expect(elementOf(fixture, 'booker-phone')!.getAttribute('href')).toBe('tel:0812345678');
+    expect(elementOf(fixture, 'booker-email')).toBeNull();
+    expect(textOf(fixture, 'booker-status')).toBe(TRANSLATIONS.th['booking.status.Confirmed']);
+    expect(textOf(fixture, 'booker-payment')).toBe(TRANSLATIONS.th['timeline.payment.NotReceived']);
+    expect(textOf(fixture, 'booker-money')).toContain('฿300');
+    expect(textOf(fixture, 'booker-money')).toContain('฿200');
   });
 
   it('draws nine hours from four before now, with the peak hours marked', () => {
