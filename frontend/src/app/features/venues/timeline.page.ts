@@ -13,7 +13,7 @@ import { RouterLink } from '@angular/router';
 import { concat, EMPTY, Observable, toArray } from 'rxjs';
 import { errorKey } from '../../core/http/api-error';
 import { BahtPipe } from '../../core/i18n/baht.pipe';
-import { venueNow } from '../../core/i18n/plain-date';
+import { plainDate, venueNow, venueToday } from '../../core/i18n/plain-date';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { Availability, PublicVenueService } from '../../core/venues/public-venue.service';
 import { ShopItem, ShopService } from '../../core/venues/shop.service';
@@ -21,6 +21,8 @@ import {
   BookingHours,
   CancellationReason,
   PaymentMethod,
+  RefundMethod,
+  Refunds,
   VenueBooking,
   VenueBookingsService,
 } from '../../core/venues/venue-bookings.service';
@@ -40,6 +42,9 @@ import {
 /** The three ways the panel takes money, left to right as the design draws them. */
 const PAY_WITH: readonly PaymentMethod[] = ['PromptPay', 'Card', 'Cash'];
 
+/** How a refund goes back, the transfer first because that is how most do (PRD US-18). */
+const REFUND_WITH: readonly RefundMethod[] = ['Transfer', 'Cash'];
+
 /**
  * The court schedule of one branch, as the owner app draws it: a track per court across nine
  * hours, a block per booking placed by the hour, the minute now as a line — and beside it, always
@@ -47,8 +52,8 @@ const PAY_WITH: readonly PaymentMethod[] = ['PromptPay', 'Card', 'Cash'];
  * and drinks onto the bill, and what is left to take.
  *
  * Every door is the server's (`can`, `GET …/hours`), the same answers the day's list reads; this
- * page only lays them out. The list with every other door (cancel, no-show, refunds) is its own
- * page under "อื่น ๆ".
+ * page only lays them out. Cancelling, no-show and writing down a refund open in the panel too;
+ * the list with the rest (voiding a refund, settling, another day) is its own page under "อื่น ๆ".
  */
 @Component({
   selector: 'app-timeline-page',
@@ -243,6 +248,31 @@ export class TimelinePage {
     }).format(new Date(at));
   });
 
+  /**
+   * Writing down money sent back (PRD US-18), in the panel: what is owed and sent comes from the
+   * server with the reader's own ceiling, and it refuses anything over either.
+   */
+  protected readonly refundWith = REFUND_WITH;
+  protected readonly refunding = signal(false);
+  protected readonly refunds = signal<Refunds | null>(null);
+  protected readonly refundAmount = signal<string | null>(null);
+  protected readonly refundMethod = signal<RefundMethod>('Transfer');
+  protected readonly refundNote = signal('');
+
+  /** What goes down now: what somebody typed, or everything still owed until they do. */
+  protected readonly refundNow = computed(() => {
+    const left = this.refunds()?.outstandingBaht ?? 0;
+    const typed = this.refundAmount();
+    if (typed === null) {
+      return left;
+    }
+    const amount = Number(typed.replace(/,/g, ''));
+    return Number.isFinite(amount) ? Math.max(0, amount) : 0;
+  });
+  protected readonly refundText = computed(
+    () => this.refundAmount() ?? String(this.refunds()?.outstandingBaht ?? ''),
+  );
+
   protected readonly who = whoIs;
 
   constructor() {
@@ -291,8 +321,55 @@ export class TimelinePage {
       this.taking.set(null);
       this.movesOpen.set(false);
       this.cancelling.set(false);
+      this.refunding.set(false);
       this.panelError.set(null);
     }
+  }
+
+  protected openRefund(): void {
+    const booking = this.selected();
+    if (!booking) {
+      return;
+    }
+    this.refunds.set(null);
+    this.refundAmount.set(null);
+    this.refundMethod.set('Transfer');
+    this.refundNote.set('');
+    this.panelError.set(null);
+    this.refunding.set(true);
+    this.bookings.refunds(this.venueId(), booking.bookingId).subscribe({
+      next: (refunds) => this.refunds.set(refunds),
+      error: (failure: unknown) => this.panelError.set(errorKey(failure)),
+    });
+  }
+
+  protected recordRefund(): void {
+    const booking = this.selected();
+    if (!booking || this.refundNow() <= 0 || this.busy()) {
+      return;
+    }
+    const note = this.refundNote().trim();
+    this.busy.set(true);
+    this.panelError.set(null);
+    this.bookings
+      .recordRefund(this.venueId(), booking.bookingId, {
+        amountBaht: this.refundNow(),
+        refundedOn: plainDate(venueToday()),
+        method: this.refundMethod(),
+        note: note === '' ? undefined : note,
+      })
+      .subscribe({
+        next: (refunds) => {
+          this.refunds.set(refunds);
+          this.busy.set(false);
+          this.refunding.set(false);
+          this.read(this.venueId(), { first: false });
+        },
+        error: (failure: unknown) => {
+          this.panelError.set(errorKey(failure));
+          this.busy.set(false);
+        },
+      });
   }
 
   protected openCancel(): void {
@@ -408,6 +485,9 @@ export class TimelinePage {
     door.subscribe({
       next: (changed) => {
         after?.();
+        // Stay on it: a booking just cancelled is no longer the one the panel would open on
+        // its own, and what it still owes back is the next thing to do (PRD US-18).
+        this.chosen.set(changed.bookingId);
         this.day.update((day) =>
           (day ?? []).map((one) => (one.bookingId === changed.bookingId ? changed : one)),
         );

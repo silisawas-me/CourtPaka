@@ -984,7 +984,7 @@
   "timeline.checkedIn": "Checked in ✓",
   "timeline.timeAndCourt": "Time & court",
   "timeline.oneMore": "+1 hr",
-  "timeline.moreDoors": "Refunds and more in the day's bookings",
+  "timeline.moreDoors": "Everything else about bookings is in Day bookings",
   "timeline.moveTo": "Move to court",
   "timeline.shop": "Shuttles & drinks",
   "timeline.court": "Court",
@@ -1072,5 +1072,7 @@
   "inviteOwner.done": "Invitation sent:",
   "inviteOwner.state.waiting": "Waiting",
   "inviteOwner.state.accepted": "Signed up",
-  "inviteOwner.state.expired": "Expired"
+  "inviteOwner.state.expired": "Expired",
+  "timeline.refundNow": "Writing down",
+  "timeline.refundTold": "Write down money already sent back; the app does not send it for you."
 }
