@@ -62,19 +62,13 @@ with sync_playwright() as p:
     staff = browser.new_page(viewport={"width": width, "height": 844})
     sign_in(staff, OWNER)
     for name, path in (
-        ("venue", f"/venues/{venue_id}"),
         ("now", f"/venues/{venue_id}/now"),
         ("timeline", f"/venues/{venue_id}/timeline"),
         ("pricing", f"/venues/{venue_id}/pricing"),
         ("members", f"/venues/{venue_id}/packages"),
-        ("slip queue", f"/venues/{venue_id}/slip-queue"),
-        ("money", f"/venues/{venue_id}/money"),
         ("dashboard", f"/venues/{venue_id}/dashboard"),
-        ("report", f"/venues/{venue_id}/report"),
-        ("package board", f"/venues/{venue_id}/package-board"),
-        ("settings", f"/venues/{venue_id}/settings"),
-        ("closures", f"/venues/{venue_id}/closures"),
         ("my venues", "/venues"),
+        ("apply for a venue", "/venues/apply"),
         ("account", "/account"),
     ):
         staff.goto(BASE + path)

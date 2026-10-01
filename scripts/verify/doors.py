@@ -1,6 +1,6 @@
 """The two doors into the venue side: admin (owner/manager) and staff (docs/plan/cut-booker.md)."""
 
-from harness import BASE, OWNER, PASSWORD, STAFF, Checks, seeded_venue_id
+from harness import BASE, OWNER, PASSWORD, STAFF, Checks, login, seeded_venue_id
 from playwright.sync_api import sync_playwright
 
 check = Checks(__file__)
@@ -48,6 +48,22 @@ with sync_playwright() as p:
           staff.url.split("?")[0] == wanted, staff)
     check("the seeded staff work at the seeded venue",
           any(one["id"] == venue_id for one in mine))
+
+    # The guard sends an anonymous visitor to login and brings them back afterwards.
+    guarded = browser.new_page()
+    guarded.goto(f"{BASE}/venues/{venue_id}/pricing")
+    guarded.wait_for_url("**/login?returnUrl=*")
+    check("the guard sends a visitor to sign in, remembering where they were going",
+          "returnUrl=%2Fvenues%2F" in guarded.url, guarded)
+    login(guarded, OWNER)
+    guarded.wait_for_url(f"{BASE}/venues/{venue_id}/pricing")
+    check("signing in returns to the interrupted page", True, guarded)
+
+    # An off-site returnUrl is ignored instead of followed.
+    guarded.goto(f"{BASE}/login?returnUrl=%2F%2Fexample.com")
+    login(guarded, OWNER)
+    guarded.wait_for_url(f"{BASE}/")
+    check("an off-site returnUrl lands on home", guarded.url == f"{BASE}/", guarded)
 
     # The pages the booker used to have are gone: their addresses land on the front page.
     for old in ("/book", f"/book/{venue_id}", "/bookings"):

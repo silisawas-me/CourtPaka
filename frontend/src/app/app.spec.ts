@@ -114,13 +114,7 @@ describe("A venue's own shell", () => {
         { path: 'venues', children: [], data: { venueShell: 'all' } },
         // A venue's page is a venue's page because the route says so, not because its URL has an
         // id in it.
-        {
-          path: 'venues/:venueId/bookings',
-          children: [],
-          data: { venueShell: true },
-        },
         { path: 'venues/:venueId/timeline', children: [], data: { venueShell: true } },
-        { path: 'venues/:venueId/money', children: [], data: { venueShell: true } },
         { path: 'venues/apply', children: [] },
       ]),
     }).compileComponents();
@@ -152,24 +146,18 @@ describe("A venue's own shell", () => {
     fixture.detectChanges();
   }
 
-  /** The counts are what decide where a shift looks next (PRD US-17), so they come with the shell. */
-  it("draws the venue's doors with what is waiting behind them", async () => {
-    await router.navigate(['/venues', 'v1', 'bookings']);
+  /** The four sections and nothing else: the pages that were under "อื่น ๆ" are gone. */
+  it("draws the venue's four sections and nothing more", async () => {
+    await router.navigate(['/venues', 'v1', 'timeline']);
     fixture.detectChanges();
     await showShell();
 
-    httpMock.expectOne('/api/venues/v1/attention').flush({
-      slipsToCheck: 3,
-      bookingsWithMoneyWaiting: 0,
-    });
-    fixture.detectChanges();
-
-    expect(textOf(fixture, 'nav-slip-queue-waiting')).toBe('3');
-    // Nothing waiting is no number at all, not a zero to read past.
-    expect(elementOf(fixture, 'nav-money-waiting')).toBeNull();
-    expect(elementOf(fixture, 'nav-slip-queue')?.getAttribute('href')).toBe(
-      '/venues/v1/slip-queue',
-    );
+    for (const testId of ['nav-schedule', 'nav-pricing', 'nav-dashboard', 'nav-packages']) {
+      expect(elementOf(fixture, testId)).not.toBeNull();
+    }
+    expect(elementOf(fixture, 'nav-more')).toBeNull();
+    expect(elementOf(fixture, 'nav-slip-queue')).toBeNull();
+    expect(elementOf(fixture, 'nav-money')).toBeNull();
     // The app's own doors travel with it, because the bar above is not drawn beside a sidebar.
     expect(elementOf(fixture, 'side-nav-account')).not.toBeNull();
   });
@@ -184,14 +172,10 @@ describe("A venue's own shell", () => {
     fixture.detectChanges();
     expect(shellIsUp()).toBe(false);
 
-    await router.navigate(['/venues', 'v1', 'bookings']);
+    await router.navigate(['/venues', 'v1', 'timeline']);
     fixture.detectChanges();
     expect(shellIsUp()).toBe(true);
     await showShell();
-    httpMock.expectOne('/api/venues/v1/attention').flush({
-      slipsToCheck: 0,
-      bookingsWithMoneyWaiting: 0,
-    });
   });
 
   /*
@@ -209,18 +193,12 @@ describe("A venue's own shell", () => {
     expect(elementOf(fixture, 'pill-all')?.classList).toContain('on');
     // Revenue opens at a venue this person owns, never at one where they only work.
     expect(elementOf(fixture, 'nav-dashboard')?.getAttribute('href')).toBe('/venues/v1/dashboard');
-    // The rest of a venue's pages belong to one venue, so they wait until one is chosen.
-    expect(elementOf(fixture, 'nav-slip-queue')).toBeNull();
   });
 
   it("keeps the owner's sections from somebody who only works at the venue", async () => {
     await router.navigate(['/venues', 'v2', 'timeline']);
     fixture.detectChanges();
     await showShell();
-    httpMock
-      .expectOne('/api/venues/v2/attention')
-      .flush({ slipsToCheck: 0, bookingsWithMoneyWaiting: 0 });
-    fixture.detectChanges();
 
     expect(elementOf(fixture, 'nav-schedule')).not.toBeNull();
     expect(elementOf(fixture, 'nav-packages')).not.toBeNull();
@@ -233,48 +211,5 @@ describe("A venue's own shell", () => {
     expect(elementOf(fixture, 'pill-v1')?.getAttribute('href')).toBe('/venues/v1/timeline');
     // The day's list is gone: the schedule is where the day is run.
     expect(elementOf(fixture, 'nav-bookings')).toBeNull();
-  });
-
-  /**
-   * The number says which door to open next, so it has to be read again once somebody has been
-   * through one — a count that answers for the state an hour ago is worse than no count.
-   */
-  it('reads the counts again as the shift moves between the doors', async () => {
-    await router.navigate(['/venues', 'v1', 'bookings']);
-    fixture.detectChanges();
-    await showShell();
-
-    httpMock.expectOne('/api/venues/v1/attention').flush({
-      slipsToCheck: 3,
-      bookingsWithMoneyWaiting: 0,
-    });
-    fixture.detectChanges();
-    expect(textOf(fixture, 'nav-slip-queue-waiting')).toBe('3');
-
-    await router.navigate(['/venues', 'v1', 'money']);
-    fixture.detectChanges();
-
-    httpMock.expectOne('/api/venues/v1/attention').flush({
-      slipsToCheck: 0,
-      bookingsWithMoneyWaiting: 0,
-    });
-    fixture.detectChanges();
-
-    expect(elementOf(fixture, 'nav-slip-queue-waiting')).toBeNull();
-  });
-
-  /** A venue whose counts cannot be read still has doors; only the numbers go missing. */
-  it('draws the doors even when the counts cannot be read', async () => {
-    await router.navigate(['/venues', 'v2', 'money']);
-    fixture.detectChanges();
-    await showShell();
-
-    httpMock
-      .expectOne('/api/venues/v2/attention')
-      .flush(null, { status: 403, statusText: 'Forbidden' });
-    fixture.detectChanges();
-
-    expect(elementOf(fixture, 'nav-money')).not.toBeNull();
-    expect(elementOf(fixture, 'nav-money-waiting')).toBeNull();
   });
 });

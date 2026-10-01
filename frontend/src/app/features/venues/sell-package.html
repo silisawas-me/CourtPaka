@@ -26,14 +26,6 @@
 
   @if (offers().length === 0) {
     <p class="muted" data-testid="sell-package-nothing">{{ i18n.t('sellPackage.nothing') }}</p>
-    <button
-      type="button"
-      class="confirm"
-      data-testid="sell-package-to-board"
-      (click)="wantsBoard.emit()"
-    >
-      <span>{{ i18n.t('sellPackage.setUp') }}</span>
-    </button>
   } @else {
     <fieldset>
       <legend>{{ i18n.t('sellPackage.package') }}</legend>
@@ -56,14 +48,6 @@
           </button>
         }
       </div>
-      <button
-        type="button"
-        class="link"
-        data-testid="sell-package-new-offer"
-        (click)="wantsBoard.emit()"
-      >
-        {{ i18n.t('sellPackage.newOffer') }}
-      </button>
     </fieldset>
 
     <div class="who">

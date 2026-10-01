@@ -14,9 +14,7 @@ from harness import (
     Checks,
     clear_package_board,
     ensure_bookable,
-    open_more,
     open_seeded_venue,
-    pick_date,
     seeded_venue_id,
     sign_in,
     venue_today,
@@ -68,25 +66,22 @@ with sync_playwright() as p:
     page.wait_for_selector("[data-testid=members-add]")
     check("the venue has a door for hours sold in advance", True, page)
     check("the members page is the design's table, without the board",
-          page.locator("[data-testid=board]").count() == 0, page)
-    # The board of offers is its own page under "อื่น ๆ".
-    open_more(page)
-    page.click("[data-testid=nav-package-board]")
-    page.wait_for_selector("[data-testid=open-board], [data-testid=add-offer]")
-
-    # 1. An offer on the board, and what an hour of it costs said for them.
-    if page.locator("[data-testid=add-offer]").count() == 0:
-        page.click("[data-testid=open-board]")
-    page.fill("[data-testid=offer-name]", "ชุดตรวจสอบ 10 ชั่วโมง")
-    page.fill("[data-testid=offer-hours]", "10")
-    page.fill("[data-testid=offer-price]", "1800")
-    page.fill("[data-testid=offer-days]", "90")
-    with page.expect_response(lambda r: r.url.endswith("/packages/types") and r.request.method == "POST"):
-        page.click("[data-testid=add-offer]")
-
+          page.locator("[data-testid=board]").count() == 0
+          and page.locator("[data-testid=sold-list]").count() == 1, page)
+    # 1. An offer on the board, and what an hour of it costs said for them. The board has no
+    # screen of its own any more (2026-10-02), so it is set up through the door it used.
+    # Starting from an empty board, so the dialog offers this one and nothing an earlier run left.
+    clear_package_board(page, venue_id)
+    offered = page.request.post(
+        f"{BASE}/api/venues/{venue_id}/packages/types",
+        data={"name": "ชุดตรวจสอบ 10 ชั่วโมง", "hours": 10, "priceBaht": 1800, "validForDays": 90},
+    )
+    check("an offer goes on the board", offered.status == 201)
     offer = [one for one in board(page, venue_id) if one["withdrawnAt"] is None][0]
-    check("an offer goes on the board and the server works out the hourly rate",
-          offer["hours"] == 10 and offer["bahtPerHour"] == 180, page)
+    check("and the server works out the hourly rate",
+          offer["hours"] == 10 and offer["bahtPerHour"] == 180)
+    page.reload()
+    page.wait_for_selector("[data-testid=members-add]")
 
     # 2. Selling one is money in today's till.
     # The day the money will land in, asked once so the before and after are the same day.
@@ -124,10 +119,6 @@ with sync_playwright() as p:
     figures = page.request.get(f"{BASE}/api/venues/{venue_id}/dashboard").json()
     check("hours sold are owed rather than earned",
           figures["owedHours"]["hours"] >= 10 and figures["owedHours"]["baht"] >= 1800)
-
-    page.goto(f"{BASE}/venues/{venue_id}/report")
-    expect(page.get_by_test_id("owed-hours")).to_be_visible()
-    check("and the venue can see it on its own page", True, page)
 
     # 4. The counter takes hours instead of money (the counter's door, with the package named).
     # Whichever hour is free: what the other scripts have left on this day is not this one's
@@ -210,9 +201,13 @@ with sync_playwright() as p:
         if row["bookingId"] == booked["bookingId"]][0]
     check("and nothing is owed back in money", refunded["refundDueBaht"] == 0)
 
-    page.goto(f"{BASE}/venues/{venue_id}/package-board")
-    page.wait_for_selector("[data-testid^=moves-]", state="attached")
-    check("the venue can read where every hour went", True, page)
+    check("the package's ledger says where every hour went",
+          [move["move"] for move in back["moves"]].count("Used") >= 1)
+
+    # The members table reads the same hours the server holds.
+    page.goto(f"{BASE}/venues/{venue_id}/packages")
+    expect(page.get_by_test_id(f"package-{package['packageId']}")).to_be_visible()
+    check("the member's row is on the members table", True, page)
 
     # The screens a design review asks for.
     check("desk, Thai", True, page)

@@ -64,14 +64,6 @@
   }
 }
 
-// A quiet heading, because the doors under it are what is being read, not the group's name.
-.side-group {
-  margin: 1rem 0 0.25rem;
-  padding-inline: 0.75rem;
-  font: var(--mat-sys-label-small);
-  color: color-mix(in srgb, currentColor 60%, transparent);
-}
-
 .side-nav {
   display: grid;
   gap: 0.15rem;
@@ -225,31 +217,4 @@
   font: var(--mat-sys-label-large);
   cursor: pointer;
   white-space: nowrap;
-}
-
-/* The folded pages: one quiet line under the four sections, as the design's rail has room for. */
-.side-more {
-  margin-top: 0.5rem;
-
-  > summary {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    cursor: pointer;
-    list-style: none;
-
-    &::-webkit-details-marker {
-      display: none;
-    }
-
-    &::after {
-      content: '▾';
-      margin-inline-start: auto;
-      padding-inline-start: 0.5rem;
-    }
-  }
-
-  &[open] > summary::after {
-    content: '▴';
-  }
 }

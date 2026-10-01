@@ -118,15 +118,6 @@ export interface VenueInvitation {
   expiresAt: string;
 }
 
-/**
- * What is waiting at a venue for the person asking (PRD US-17). Each number is counted only for
- * somebody who could do something about it, so a member who checks slips is not shown the money.
- */
-export interface VenueAttention {
-  slipsToCheck: number;
-  bookingsWithMoneyWaiting: number;
-}
-
 /** How one hour of today is going at one venue: court-hours on sale, and used. */
 export interface HourUse {
   hour: number;
@@ -294,11 +285,6 @@ export class VenueService {
   acceptInvitation(invitationId: string, token: string): Observable<Venue> {
     return this.http.post<Venue>('/api/venues/invitations/accept', { invitationId, token });
   }
-  /** What is waiting here for the person asking (PRD US-17). */
-  attention(venueId: string): Observable<VenueAttention> {
-    return this.http.get<VenueAttention>(`/api/venues/${encodeURIComponent(venueId)}/attention`);
-  }
-
   /** Whether this member wants to hear each time a slip arrives here (PRD US-17). */
   chooseSlipEmails(venueId: string, wantsSlipEmails: boolean): Observable<void> {
     return this.http.put<void>(`/api/venues/${venueId}/notifications`, { wantsSlipEmails });

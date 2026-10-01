@@ -159,7 +159,7 @@ public sealed class VenueNotifications(
             .Where(member => !string.IsNullOrEmpty(member.Address))
             .ToList();
 
-        var link = VenueLetters.LinkFor(notice, options.Value.BaseUrl, venueId);
+        var link = VenueLetters.LinkFor(options.Value.BaseUrl, venueId);
 
         foreach (var member in told)
         {

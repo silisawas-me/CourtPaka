@@ -1,15 +1,15 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
-import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
-import { catchError, filter, map, merge, of, startWith, switchMap } from 'rxjs';
+import { catchError, filter, map, of, startWith } from 'rxjs';
 import { venueToday } from '../core/i18n/plain-date';
 import { TranslationService } from '../core/i18n/translation.service';
 import { Venue, VenueService } from '../core/venues/venue.service';
-import { ALL_VENUES, VENUE_OTHER, VENUE_SECTIONS, VenueLink, waitingOn } from './venue-nav';
+import { ALL_VENUES, VENUE_SECTIONS, VenueLink } from './venue-nav';
 
 import { WalkIn } from '../features/venues/walk-in';
 import { WalkInEvents } from '../core/venues/walk-in.events';
-/** A door with its route already built, its count read, and whether it is the page on screen. */
+/** A door with its route already built, and whether it is the page on screen. */
 interface Door {
   readonly path: unknown[];
   readonly fragment: string | undefined;
@@ -17,7 +17,6 @@ interface Door {
   readonly testId: string;
   /** The same door, named for the bar it is in, so a script says which one it pressed. */
   readonly tabTestId: string;
-  readonly waiting: number | null;
   readonly on: boolean;
 }
 
@@ -129,29 +128,6 @@ export class VenueShell {
   });
 
   /**
-   * What is waiting at this venue (PRD US-17), read when the shell arrives and again on every
-   * move between its pages — which is when the number can have changed. None on the overview:
-   * the counts belong to one venue. `switchMap` drops the answer for the venue that was left.
-   */
-  private readonly attention = toSignal(
-    merge(
-      toObservable(this.venueId),
-      this.router.events.pipe(
-        filter((event) => event instanceof NavigationEnd),
-        map(() => this.venueId()),
-      ),
-    ).pipe(
-      switchMap((venueId) =>
-        venueId === ALL_VENUES
-          ? of(null)
-          : this.venues.attention(venueId).pipe(catchError(() => of(null))),
-      ),
-      takeUntilDestroyed(),
-    ),
-    { initialValue: null },
-  );
-
-  /**
    * The four sections. On the overview the schedule is every venue's, and the others open at
    * the first venue they make sense for — a section with nowhere to open is not drawn.
    */
@@ -175,36 +151,9 @@ export class VenueShell {
     });
   });
 
-  /** The rest of a venue's pages. Only at a venue: each is one venue's, never every venue's. */
-  protected readonly others = computed<Door[]>(() => {
-    const venueId = this.venueId();
-    if (this.onAll()) {
-      return [];
-    }
-
-    const here = this.here();
-    return VENUE_OTHER.filter((link) => !link.ownerOnly || this.isOwner()).map((link) =>
-      this.door(link, ['/venues', venueId, ...link.to], isAt(link, here)),
-    );
-  });
-
-  /** One of the folded pages is on screen, so the fold stands open. */
-  protected readonly otherOn = computed(() => this.others().some((door) => door.on));
-
-  /** What is waiting behind the folded pages, added up, so a closed fold still says so. */
-  protected readonly otherWaiting = computed(() =>
-    this.others().reduce((sum, door) => sum + (door.waiting ?? 0), 0),
-  );
-
-  /** The phone's tabs: the sections, then the venue's own page for everything else. */
-  protected readonly tabs = computed<Door[]>(() => {
-    const venue = this.others().find((door) => door.testId === 'nav-venue');
-    return [...this.sections(), ...(venue ? [venue] : [])].slice(0, 5);
-  });
-
   /** The name of the page on screen, which is what the top bar says first. */
   protected readonly title = computed(() => {
-    const on = [...this.sections(), ...this.others()].find((door) => door.on);
+    const on = this.sections().find((door) => door.on);
     return on?.label ?? 'nav.section.schedule';
   });
 
@@ -263,7 +212,6 @@ export class VenueShell {
       label: link.label,
       testId: link.testId,
       tabTestId: link.testId.replace('nav-', 'tab-'),
-      waiting: waitingOn(link, this.attention()),
       on,
     };
   }

@@ -1,10 +1,13 @@
-"""The venue's own shell: a sidebar on a desk, a bar under a thumb on a phone (US-25)."""
+"""The venue's own shell: a sidebar on a desk, a bar under a thumb on a phone (US-25), and the
+four sections that are the whole app since the pages under "อื่น ๆ" went (2026-10-02)."""
+
+import time
 
 from harness import (
-    open_more,
     BASE,
     OWNER,
     Checks,
+    control,
     seeded_venue_id,
     sign_in,
 )
@@ -15,6 +18,17 @@ check = Checks(__file__)
 DESK = {"width": 1280, "height": 900}
 PHONE = {"width": 390, "height": 844}
 
+
+def lands(page, url: str, wanted: str) -> bool:
+    """Opens `url` and answers whether the app settled on `wanted` (query and fragment aside)."""
+    page.goto(BASE + url)
+    try:
+        page.wait_for_url(lambda now: now.split("?")[0].split("#")[0] == BASE + wanted, timeout=10_000)
+        return True
+    except Exception:
+        return False
+
+
 with sync_playwright() as p:
     browser = p.chromium.launch()
     venue_id = seeded_venue_id(browser.new_page())
@@ -23,12 +37,10 @@ with sync_playwright() as p:
     sign_in(desk, OWNER)
 
     desk.goto(f"{BASE}/venues/{venue_id}/timeline")
-    desk.wait_for_selector("[data-testid=nav-more]")
-    check("the rail shows the design's four sections, the rest folded under one line",
+    desk.wait_for_selector("[data-testid=nav-schedule]")
+    check("the rail shows the design's four sections and nothing folded under them",
           desk.locator(".side-link.section").count() == 4
-          and not desk.locator("[data-testid=nav-slip-queue]").is_visible(), desk)
-    open_more(desk)
-    desk.wait_for_selector("[data-testid=nav-slip-queue]")
+          and desk.locator("[data-testid=nav-more]").count() == 0, desk)
     check("the venue's doors stand down the side on a desk", desk.locator(".side").is_visible(), desk)
     # The bar above is not drawn beside a sidebar, so the rest of the app has to travel with it.
     check(
@@ -46,15 +58,12 @@ with sync_playwright() as p:
     # Every door leads where it says, which is the only thing a list of links can get wrong —
     # so the page it lands on is named here, not merely required to be one of this venue's.
     doors = {
-        "nav-slip-queue": "slip-queue",
-        "nav-money": "money",
+        "nav-pricing": "pricing",
         "nav-dashboard": "dashboard",
-        "nav-settings": "settings",
-        "nav-closures": "closures",
+        "nav-packages": "packages",
+        "nav-schedule": "timeline",
     }
     for door, page in doors.items():
-        if door != "nav-dashboard":
-            open_more(desk)
         desk.click(f"[data-testid={door}]")
         wanted = f"{BASE}/venues/{venue_id}/{page}"
         try:
@@ -64,9 +73,67 @@ with sync_playwright() as p:
             landed = False
         check(f"{door} leads to {page}", landed)
 
-    # A page outside any venue keeps the bar and is given no shift to work.
+    # The pages that were folded under "อื่น ๆ" are gone. Their addresses — the venue's own emails
+    # among them — still land somewhere a person can work from.
+    gone = {
+        "": "timeline",
+        "/bookings": "timeline",
+        "/settings": "timeline",
+        "/slip-queue": "timeline",
+        "/money": "timeline",
+        "/series": "timeline",
+        "/shop": "timeline",
+        "/closures": "timeline",
+        "/report": "dashboard",
+        "/package-board": "packages",
+    }
+    for old, page in gone.items():
+        check(
+            f"/venues/{{id}}{old} lands on {page}",
+            lands(desk, f"/venues/{venue_id}{old}", f"/venues/{venue_id}/{page}"),
+            desk,
+        )
+
+    # Switching branch on the top bar keeps the page and loads the other venue (router reuse is
+    # the case that used to break). A second venue of the owner's own, made if there is none.
+    mine = desk.request.get(f"{BASE}/api/venues/mine").json()
+    other = next((v for v in mine if v["id"] != venue_id), None)
+    if other is None:
+        code = f"S{int(time.time()) % 100000}"
+        # Applying is its own page (US-10); the owner app's first page no longer links to it.
+        desk.goto(f"{BASE}/venues/apply")
+        desk.wait_for_selector("[data-testid=apply]")
+        desk.fill("#code", code)
+        desk.fill("#name", f"Second Court {code}")
+        desk.fill("#address-line", "9 ถนนพระราม 4")
+        desk.fill("#district", "ปทุมวัน")
+        desk.fill("#province", "กรุงเทพมหานคร")
+        desk.fill("#promptpay-id", "0812345678")
+        desk.fill("#promptpay-name", "บริษัท ทดสอบ จำกัด")
+        desk.fill("#legal-name", "บริษัท ทดสอบ จำกัด")
+        desk.fill("#tax-id", "0105561000000")
+        desk.click("[data-testid=copy-address]")
+        control(desk, "accepts-agreement").click()
+        desk.click("[data-testid=apply]")
+        # Creating a venue sends the owner to it, and a venue's own address is its schedule now.
+        desk.wait_for_url("**/timeline")
+        other = next(v for v in desk.request.get(f"{BASE}/api/venues/mine").json()
+                     if v["code"] == code)
+        check("a venue applied for opens on its schedule",
+              desk.url == f"{BASE}/venues/{other['id']}/timeline", desk)
+
+    desk.goto(f"{BASE}/venues/{venue_id}/timeline")
+    desk.click(f"[data-testid=pill-{other['id']}]")
+    desk.wait_for_url(f"{BASE}/venues/{other['id']}/timeline")
+    desk.wait_for_selector(f"[data-testid=pill-{other['id']}].on")
+    desk.click(f"[data-testid=pill-{venue_id}]")
+    desk.wait_for_url(f"{BASE}/venues/{venue_id}/timeline")
+    check("switching branch on the top bar stays on the schedule and marks the branch",
+          "on" in (desk.locator(f"[data-testid=pill-{venue_id}]").get_attribute("class") or ""),
+          desk)
+
     # Every venue at once stands in the same frame, with the schedule as its page
-    # (docs/plan/owner-app.md) — and the pages of one venue wait until one is chosen.
+    # (docs/plan/owner-app.md).
     desk.goto(f"{BASE}/venues")
     desk.wait_for_selector("[data-testid=owner-top]")
     check(
@@ -77,8 +144,6 @@ with sync_playwright() as p:
         else desk.locator(".side").is_visible(),
         desk,
     )
-    check("one venue's pages are not offered on every venue's",
-          desk.locator("[data-testid=nav-slip-queue]").count() == 0)
 
     # A page outside any venue keeps the bar and is given no rail.
     desk.goto(f"{BASE}/account")
@@ -94,6 +159,7 @@ with sync_playwright() as p:
     phone.goto(f"{BASE}/venues/{venue_id}/timeline")
     phone.wait_for_selector("[data-testid=tab-schedule]")
     check("the sections lie along the bottom on a phone", phone.locator(".tabs").is_visible(), phone)
+    check("the phone has the same four sections", phone.locator(".tabs .tab").count() == 4)
     check("the sidebar is not drawn on a phone", not phone.locator(".side").is_visible())
     check(
         "the schedule's tab is marked as the one being read",
