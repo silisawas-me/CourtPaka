@@ -149,9 +149,9 @@ with sync_playwright() as p:
         and sale.value.json()["totalBaht"] == 30,
     )
 
-    # The list with every other door is one press away.
-    check("the day's list is in the quieter group",
-          desk.locator("[data-testid=nav-bookings]").count() == 1)
+    # The day's list is gone: the schedule is where the day is run.
+    check("there is no separate day's list any more",
+          desk.locator("[data-testid=nav-bookings]").count() == 0)
 
     # The doors that end a booking (artboard b1): no-show is shut until the grace runs out.
     check("no-show waits for the grace to run out",

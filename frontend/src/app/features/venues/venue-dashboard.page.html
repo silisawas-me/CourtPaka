@@ -130,7 +130,7 @@
             <a
               matButton
               data-testid="payments-unanswered"
-              [routerLink]="['/venues', venueId(), 'bookings']"
+              [routerLink]="['/venues', venueId(), 'timeline']"
             >
               {{ f.attention.paymentsUnanswered }}
             </a>
@@ -141,7 +141,7 @@
             <a
               matButton
               data-testid="refunds-outstanding"
-              [routerLink]="['/venues', venueId(), 'bookings']"
+              [routerLink]="['/venues', venueId(), 'timeline']"
             >
               {{ f.attention.refundsOutstanding }}
             </a>

@@ -31,10 +31,13 @@ public static class VenueLetters
         _ => throw new ArgumentOutOfRangeException(nameof(notice), notice, null),
     };
 
-    /// <summary>The page each notice is dealt with on.</summary>
+    /// <summary>
+    /// The page each notice is dealt with on: money owed back or unanswered is the court
+    /// schedule's (the day's own list is gone), a slip is the slip queue's.
+    /// </summary>
     public static string LinkFor(VenueNotice notice, string baseUrl, Guid venueId) =>
         notice is VenueNotice.RefundOwed or VenueNotice.PaymentUnanswered
-            ? $"{baseUrl.TrimEnd('/')}/venues/{venueId}/bookings"
+            ? $"{baseUrl.TrimEnd('/')}/venues/{venueId}/timeline"
             : $"{baseUrl.TrimEnd('/')}/venues/{venueId}/slip-queue";
 
     public static (string Subject, string Body) Notice(

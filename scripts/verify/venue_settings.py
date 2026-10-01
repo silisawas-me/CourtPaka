@@ -149,9 +149,16 @@ with sync_playwright() as p:
     yesterday = today - datetime.timedelta(days=1)
     # By its label, so the check cannot read a day of the wrong month, and expect() waits for the
     # calendar to settle.
-    yesterday_cell = page.locator(f'[aria-label="{calendar_label(yesterday)}"]')
-    expect(yesterday_cell).to_be_visible()
-    offered = yesterday_cell.get_attribute("aria-disabled") != "true"
+    if yesterday.month == today.month:
+        yesterday_cell = page.locator(f'[aria-label="{calendar_label(yesterday)}"]')
+        expect(yesterday_cell).to_be_visible()
+        offered = yesterday_cell.get_attribute("aria-disabled") != "true"
+    else:
+        # On the first of a month yesterday is last month's: the calendar will not even turn
+        # back to it, which is the same answer.
+        back = page.locator(".mat-calendar-previous-button")
+        expect(back).to_be_visible()
+        offered = back.is_enabled()
 
     check("yesterday cannot be picked", not offered, page)
     page.keyboard.press("Escape")

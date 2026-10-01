@@ -49,13 +49,17 @@ public sealed class VenueDashboardTests(ApiTestFixture api) : IClassFixture<ApiT
 
         var figures = await ReadAsync(
             owner, venue.Id, VenueScenario.Today.AddDays(-4), VenueScenario.Today);
-        var month = figures.Months.Single();
+        // Four days back can reach into last month (on the first few of a month), so the range is
+        // read across however many months it holds.
+        var bookings = figures.Months.Sum(month => month.Bookings);
+        var refundDue = figures.Months.Sum(month => month.RefundDueBaht);
+        var refunded = figures.Months.Sum(month => month.RefundedBaht);
 
-        Assert.True(month.Bookings >= 1);
-        Assert.True(month.RefundDueBaht >= booking.TotalBaht);
-        Assert.True(month.RefundedBaht >= half);
+        Assert.True(bookings >= 1);
+        Assert.True(refundDue >= booking.TotalBaht);
+        Assert.True(refunded >= half);
         // Owed and sent are not the same number, which is the whole reason both are reported.
-        Assert.True(month.RefundedBaht < month.RefundDueBaht);
+        Assert.True(refunded < refundDue);
     }
 
     [Fact]    public async Task Revenue_is_what_was_kept_on_the_day_it_was_played_by_channel()

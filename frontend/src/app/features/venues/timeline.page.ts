@@ -9,7 +9,6 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { RouterLink } from '@angular/router';
 import { concat, EMPTY, Observable, toArray } from 'rxjs';
 import { errorKey } from '../../core/http/api-error';
 import { BahtPipe } from '../../core/i18n/baht.pipe';
@@ -57,7 +56,7 @@ const REFUND_WITH: readonly RefundMethod[] = ['Transfer', 'Cash'];
  */
 @Component({
   selector: 'app-timeline-page',
-  imports: [BahtPipe, RouterLink],
+  imports: [BahtPipe],
   templateUrl: './timeline.page.html',
   styleUrls: ['./timeline.page.scss', './timeline-panel.scss', './timeline-booker.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
