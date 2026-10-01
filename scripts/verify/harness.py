@@ -404,8 +404,8 @@ STAFF_DEFAULT = ["VerifySlip", "ManageBookings", "CloseCourt"]
 def staff_can(browser, venue_id, *permissions) -> None:
     """Sets what the seeded staff account may do at the seeded venue.
 
-    `venue_ui.py` hands the staff more permissions because that is what it tests, and leaves them
-    wherever its last check left them — so a script that checks what somebody *without* a
+    A script that tests permissions hands the staff more of them, and leaves them wherever its
+    last check left them — so a script that checks what somebody *without* a
     permission sees would pass alone and fail after it. Ask for the standing you need; do not
     assume the script before you left it (rule 7 in this directory's README)."""
     page = browser.new_page()
@@ -426,7 +426,7 @@ def ensure_bookable(browser, venue_id) -> None:
     """Puts the seeded venue back to the hours every booking script assumes: open 06:00 to 22:00,
     every day, from today.
 
-    venue_settings.py edits those hours because they are what it is about, and leaves the venue
+    venue_pricing.py edits those hours because they are what it is about, and leaves the venue
     wherever its last check left it — so a script that ran afterwards would find the venue closed
     and no free hour anywhere. Setting up repeatable state is the first rule in this directory's
     README, and this is the state the rest of them mean."""
@@ -442,7 +442,7 @@ def ensure_bookable(browser, venue_id) -> None:
     if published.status != 200:
         raise RuntimeError(f"Could not open the venue for business: {published.status}")
 
-    # A week dated ahead (venue_settings.py and venue_pricing.py publish those) would still open
+    # A week dated ahead (venue_pricing.py publishes those) would still open
     # its own hours on its own date, and prices are checked against every week declared — so
     # each is put back to the same hours on the date it starts.
     for week in page.request.get(f"{BASE}/api/venues/{venue_id}/opening-hours").json():
@@ -474,15 +474,15 @@ def ensure_bookable(browser, venue_id) -> None:
     if priced.status != 200:
         raise RuntimeError(f"Could not price the venue: {priced.status} {priced.text()}")
 
-    # And with no court shut. court_closures.py closes courts because that is what it is about,
-    # and a court left shut is an hour with no price — which reads to every other script as a
+    # And with no court shut. A run that closed one through the API (the screen for it is gone)
+    # may have left it, and a court left shut is an hour with no price — which reads to every other script as a
     # grid that has gone wrong rather than as a court somebody closed.
     for shut in page.request.get(f"{BASE}/api/venues/{venue_id}/closures").json():
         if shut["liftedAt"] is None:
             page.request.post(f"{BASE}/api/venues/{venue_id}/closures/{shut['id']}/lift")
 
     # And asking for the whole price up front, which is what every script that reads an amount
-    # assumes. deposit.py lowers it because that is what it is about (PRD US-28), and a venue left
+    # assumes. The deposit can still be lowered through the API (PRD US-28), and a venue left
     # asking for a quarter turns every "the code is for the price" check into a puzzle.
     whole = page.request.put(
         f"{BASE}/api/venues/{venue_id}/deposit", data={"percent": 100}
@@ -490,8 +490,8 @@ def ensure_bookable(browser, venue_id) -> None:
     if whole.status != 204:
         raise RuntimeError(f"Could not reset the deposit: {whole.status} {whole.text()}")
 
-    # And counting misses the way the product says, with no hour treated as peak. deposit_risk.py
-    # moves these because that is what it is about (PRD US-28).
+    # And counting misses the way the product says, with no hour treated as peak. The rule can
+    # still be moved through the API (PRD US-28), and an earlier run may have.
     counting = page.request.put(
         f"{BASE}/api/venues/{venue_id}/risk-rule",
         data={
@@ -506,8 +506,8 @@ def ensure_bookable(browser, venue_id) -> None:
     if counting.status != 204:
         raise RuntimeError(f"Could not reset the risk rule: {counting.status} {counting.text()}")
 
-    # And with no group coming every week. series.py writes one down because that is what it is
-    # about (PRD US-30), and one left standing keeps booking an hour of every week from now on —
+    # And with no group coming every week. An earlier run may have agreed one
+    # through the API (PRD US-30), and one left standing keeps booking an hour of every week from now on —
     # which reads to every other script as a floor that has gone wrong rather than as a group
     # somebody agreed.
     stop_every_series(page, venue_id)
@@ -517,8 +517,8 @@ def ensure_bookable(browser, venue_id) -> None:
     # counts have to step around.
     clear_package_board(page, venue_id)
 
-    # And with nothing on the counter's own board. shop.py puts things on it because that is what
-    # it is about (PRD US-32), and one left there is a row every other script has to step around.
+    # And with nothing on the counter's own board. timeline.py and now_board.py put things on
+    # it for their sales (PRD US-32), and one left there is a row every other script has to step around.
     clear_shop_board(page, venue_id)
 
     page.close()
@@ -568,14 +568,6 @@ def clear_waiting(page, venue_id, date) -> None:
             page.request.post(
                 f"{BASE}/api/venues/{venue_id}/bookings/{booking['bookingId']}/settle-payment",
                 data={"paymentReceived": False})
-
-
-def open_more(page) -> None:
-    """Opens the rail's folded pages ("อื่น ๆ"), which the design's rail keeps closed."""
-    fold = page.locator("[data-testid=nav-more]")
-    fold.wait_for(state="attached")
-    if fold.get_attribute("open") is None:
-        fold.locator("summary").click()
 
 
 def open_seeded_venue(page) -> str:

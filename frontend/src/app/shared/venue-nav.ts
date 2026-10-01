@@ -1,5 +1,3 @@
-import { VenueAttention } from '../core/venues/venue.service';
-
 /** The shell stands on "every venue" rather than on one: the owner's overview (badPaka Owner App). */
 export const ALL_VENUES = 'all';
 
@@ -11,8 +9,6 @@ export interface VenueLink {
   readonly testId: string;
   /** A fragment on the page it opens, for a section that is a part of a longer page. */
   readonly fragment?: string;
-  /** Which count, if any, belongs beside it (PRD US-17). */
-  readonly waiting?: 'slips' | 'money';
   /** Drawn only for somebody who owns the venue: money and prices are the owner's (US-14). */
   readonly ownerOnly?: boolean;
   /** Also where a page further down this list is — the timeline and "now" are both the schedule. */
@@ -38,33 +34,3 @@ export const VENUE_SECTIONS: readonly VenueLink[] = [
   { to: ['dashboard'], label: 'nav.section.revenue', testId: 'nav-dashboard', ownerOnly: true },
   { to: ['packages'], label: 'nav.section.members', testId: 'nav-packages' },
 ];
-
-/**
- * Everything else a venue has, which the design's four sections do not name. Kept, in a quieter
- * group, because each is work somebody does (the owner's ruling, docs/plan/owner-app.md).
- */
-export const VENUE_OTHER: readonly VenueLink[] = [
-  { to: ['slip-queue'], label: 'slipQueue.title', testId: 'nav-slip-queue', waiting: 'slips' },
-  { to: ['money'], label: 'money.title', testId: 'nav-money', waiting: 'money' },
-  // What the revenue section's design does not draw: any range, the CSV, the day table (US-15, US-16).
-  { to: ['report'], label: 'nav.report', testId: 'nav-report', ownerOnly: true },
-  // What the members section's design does not draw: the board of offers and each package's hours.
-  { to: ['package-board'], label: 'nav.packageBoard', testId: 'nav-package-board' },
-  { to: ['series'], label: 'series.title', testId: 'nav-series' },
-  { to: ['shop'], label: 'shop.title', testId: 'nav-shop' },
-  { to: ['closures'], label: 'closures.title', testId: 'nav-closures' },
-  { to: ['settings'], label: 'settings.title', testId: 'nav-settings' },
-  { to: [], label: 'venues.detail', testId: 'nav-venue' },
-];
-
-/** The count that belongs beside a door, or null when there is nothing waiting behind it. */
-export function waitingOn(link: VenueLink, attention: VenueAttention | null): number | null {
-  if (!attention || !link.waiting) {
-    return null;
-  }
-
-  const count =
-    link.waiting === 'slips' ? attention.slipsToCheck : attention.bookingsWithMoneyWaiting;
-
-  return count > 0 ? count : null;
-}

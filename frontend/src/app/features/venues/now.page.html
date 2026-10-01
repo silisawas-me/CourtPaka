@@ -156,9 +156,7 @@
             }
           </button>
         } @empty {
-          <a class="tile" data-testid="sell-open" [routerLink]="['/venues', venueId(), 'shop']">
-            {{ i18n.t('now.setUpShop') }}
-          </a>
+          <p class="muted" data-testid="shop-empty">{{ i18n.t('now.shopEmpty') }}</p>
         }
       </div>
 

@@ -94,9 +94,11 @@ with sync_playwright() as p:
     # and one of three ways to pay takes the money, with no booking attached.
     tile = desk.locator("[data-testid^=quick-]:not([data-testid^=quick-pay]):not([data-testid^=quick-count])").first
     added = None
+    # Either tiles or the line saying there is nothing to sell — counted only once one is drawn.
+    desk.wait_for_selector("[data-testid=shop-empty], .tiles .tile", state="attached")
     if tile.count() == 0:
-        check("a shop with nothing on its board points to setting it up",
-              desk.locator("[data-testid=sell-open]").count() == 1, desk)
+        check("a shop with nothing on its board says so instead of drawing tiles",
+              desk.locator("[data-testid=shop-empty]").count() == 1, desk)
         # Something to sell, so the sale itself is checked too; taken off the board afterwards.
         added = desk.request.post(
             f"{BASE}/api/venues/{venue_id}/shop/items",

@@ -51,12 +51,6 @@ export const routes: Routes = [
     redirectTo: 'venues/:venueId/timeline',
   },
   {
-    path: 'venues/:venueId/money',
-    data: { venueShell: true },
-    loadComponent: () => import('./features/venues/money.page').then((m) => m.MoneyPage),
-    canActivate: [authGuard],
-  },
-  {
     path: 'venues/:venueId/dashboard',
     data: { venueShell: true },
     loadComponent: () =>
@@ -64,49 +58,9 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
-    // The same figures with everything the design's revenue page leaves out (under "อื่น ๆ").
-    path: 'venues/:venueId/report',
-    data: { venueShell: true, detail: true },
-    loadComponent: () =>
-      import('./features/venues/venue-dashboard.page').then((m) => m.VenueDashboardPage),
-    canActivate: [authGuard],
-  },
-  {
-    path: 'venues/:venueId/closures',
-    data: { venueShell: true },
-    loadComponent: () =>
-      import('./features/venues/court-closures.page').then((m) => m.CourtClosuresPage),
-    canActivate: [authGuard],
-  },
-  {
-    path: 'venues/:venueId/shop',
-    data: { venueShell: true },
-    loadComponent: () => import('./features/venues/shop.page').then((m) => m.ShopPage),
-    canActivate: [authGuard],
-  },
-  {
     path: 'venues/:venueId/packages',
     data: { venueShell: true },
     loadComponent: () => import('./features/venues/packages.page').then((m) => m.PackagesPage),
-    canActivate: [authGuard],
-  },
-  {
-    // The members with the board of offers and each package's hours (under "อื่น ๆ").
-    path: 'venues/:venueId/package-board',
-    data: { venueShell: true, detail: true },
-    loadComponent: () => import('./features/venues/packages.page').then((m) => m.PackagesPage),
-    canActivate: [authGuard],
-  },
-  {
-    path: 'venues/:venueId/series',
-    data: { venueShell: true },
-    loadComponent: () => import('./features/venues/series.page').then((m) => m.SeriesPage),
-    canActivate: [authGuard],
-  },
-  {
-    path: 'venues/:venueId/slip-queue',
-    data: { venueShell: true },
-    loadComponent: () => import('./features/venues/slip-queue.page').then((m) => m.SlipQueuePage),
     canActivate: [authGuard],
   },
   {
@@ -155,18 +109,23 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    // The pages that were under "อื่น ๆ" are gone (the owner's call, 2026-10-02): the four sections
+    // are the app. Old links — the venue's own emails among them — land on the court schedule.
     path: 'venues/:venueId',
-    data: { venueShell: true },
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import('./features/venues/venue-detail.page').then((m) => m.VenueDetailPage),
+    pathMatch: 'full',
+    redirectTo: 'venues/:venueId/timeline',
   },
   {
-    path: 'venues/:venueId/settings',
-    data: { venueShell: true },
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import('./features/venues/venue-settings.page').then((m) => m.VenueSettingsPage),
+    path: 'venues/:venueId/report',
+    redirectTo: 'venues/:venueId/dashboard',
+  },
+  {
+    path: 'venues/:venueId/package-board',
+    redirectTo: 'venues/:venueId/packages',
+  },
+  {
+    path: 'venues/:venueId/:gone',
+    redirectTo: 'venues/:venueId/timeline',
   },
   {
     path: 'venue-invitation',

@@ -9,8 +9,6 @@ from harness import (
     as_upload,
     ensure_bookable,
     new_booker,
-    open_seeded_venue,
-    pick_date,
     real_jpeg,
     seeded_venue_id,
     send_slip,
@@ -18,7 +16,7 @@ from harness import (
     take_first_free_hour,
     venue_today,
 )
-from playwright.sync_api import expect, sync_playwright
+from playwright.sync_api import sync_playwright
 
 check = Checks(__file__)
 
@@ -85,13 +83,7 @@ with sync_playwright() as p:
     )
     check("and the same door is not offered again", row["can"]["takeMoney"] is False)
 
-    # 3. The day's money, from the door the venue page offers.
-    page.goto(f"{BASE}{open_seeded_venue(page)}")
-    page.wait_for_selector("[data-testid=money-link]")
-    page.click("[data-testid=money-link]")
-    page.wait_for_selector("[data-testid=taken-today]")
-    check("the day's money opens from the venue page", "/money" in page.url, page)
-
+    # 3. The day's money. The page that drew it is gone (2026-10-02); the door it read is not.
     today = page.request.get(f"{BASE}/api/venues/{venue_id}/money").json()
     check(
         "what was taken at the desk is counted as cash",
@@ -100,22 +92,10 @@ with sync_playwright() as p:
     check(
         "and each amount is listed by itself, because the till is counted against it",
         len(today["cashReceipts"]) >= 2,
-        page,
     )
-
-    # The day being looked at lives in the URL, so a count somebody argues about in the morning
-    # is a link. The calendar is the only way to change it: the field is read-only because Intl
-    # prints Thai dates but cannot read one back.
-    yesterday = venue_today() - datetime.timedelta(days=1)
-    pick_date(page, yesterday)
-    page.wait_for_selector("[data-testid=taken-today]")
-    check("the day being looked at is in the URL", yesterday.isoformat() in page.url, page)
 
     # 4. The count. A day is counted once and stays counted, so this run closes one that never was.
     counting = day_not_counted_yet(page, venue_id)
-    page.goto(f"{BASE}/venues/{venue_id}/money?date={counting.isoformat()}")
-    page.wait_for_selector("[data-testid=close-day]")
-
     before = page.request.get(
         f"{BASE}/api/venues/{venue_id}/money?date={counting.isoformat()}").json()
     # Everything that left the drawer, not only what was handed back: an expense paid in cash is
@@ -123,47 +103,33 @@ with sync_playwright() as p:
     expected = (1000 + before["cashBaht"]
                 - before["cashRefundedBaht"] - before["cashPaidOutBaht"])
 
-    page.fill("[data-testid=opening-float]", "1000")
     # Short by exactly one of the day's cash receipts when there is one, so the run exercises
     # the list of rows that would explain it.
     short = before["cashReceipts"][0]["amountBaht"] if before["cashReceipts"] else 100
-    page.fill("[data-testid=counted-cash]", str(expected - short))
-    page.fill("[data-testid=closing-note]", "ขาดร้อยนึง")
-    with page.expect_response(lambda r: "/money/closing" in r.url) as closed:
-        page.click("[data-testid=close-day]")
-    check("the till is counted", closed.value.status == 200)
+    closed = page.request.post(
+        f"{BASE}/api/venues/{venue_id}/money/closing?date={counting.isoformat()}",
+        data={"openingFloatBaht": 1000, "countedCashBaht": expected - short,
+              "note": "ขาดร้อยนึง"},
+    )
+    check("the till is counted", closed.status == 200)
     check(
         "and the server works out what should have been in it",
-        closed.value.json()["expectedCashBaht"] == expected,
+        closed.json()["expectedCashBaht"] == expected,
     )
-    check("and says how far off it was", closed.value.json()["differenceBaht"] == -short)
-    expect(page.locator("[data-testid=closed-difference]")).to_be_visible()
-    check(
-        "which the page shows instead of the form it replaces",
-        page.locator("[data-testid=close-day]").count() == 0,
-        page,
-    )
+    check("and says how far off it was", closed.json()["differenceBaht"] == -short)
 
     # 5. A count that did not come out even says which rows are exactly that amount (US-26).
-    leads = page.request.get(
-        f"{BASE}/api/venues/{venue_id}/money?date={counting.isoformat()}").json()["leads"]
+    counted = page.request.get(
+        f"{BASE}/api/venues/{venue_id}/money?date={counting.isoformat()}").json()
+    check("the day reads as counted afterwards", counted["closed"] is not None)
+    leads = counted["leads"]
     if before["cashReceipts"]:
         check(
             "a till that is short points at the rows of exactly that amount",
             any(lead["kind"] == "CashTaken" for lead in leads),
-            page,
-        )
-        check(
-            "and the page shows them",
-            page.locator("[data-testid=leads]").count() == 1,
-            page,
         )
     else:
-        check(
-            "a day with nothing in the till has nothing to point at",
-            leads == [] and page.locator("[data-testid=leads]").count() == 0,
-            page,
-        )
+        check("a day with nothing in the till has nothing to point at", leads == [])
 
     again = page.request.post(
         f"{BASE}/api/venues/{venue_id}/money/closing?date={counting.isoformat()}",

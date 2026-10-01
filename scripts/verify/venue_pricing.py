@@ -1,4 +1,4 @@
-"""Prices and the cancellation policy (US-11) against the running stack."""
+"""Prices and peak hours, opening hours and grace (owner app PR-4, 2c) against the running stack."""
 
 import datetime
 
@@ -17,7 +17,7 @@ with sync_playwright() as p:
     venue_url = open_seeded_venue(page)
     venue_id = venue_url.split("/venues/")[1]
 
-    # This script checks what somebody without ManageSettings sees, and venue_ui.py hands the
+    # This script checks what somebody without ManageSettings sees, and an earlier run may have handed the
     # staff that permission as the thing it tests. Ask for the standing needed.
     staff_can(browser, venue_id)
 
@@ -88,33 +88,6 @@ with sync_playwright() as p:
     # A gap cannot be painted — every open hour always carries a tier — so the refusal the old
     # editor could provoke is no longer a thing a venue can do from this page.
 
-    # The policy stayed on settings.
-    page.goto(BASE + venue_url + "/settings")
-
-    # 4. The cancellation policy starts at the default and takes a second step.
-    page.wait_for_selector("[data-testid=policy-list]")
-    check("the default policy is shown", page.locator("[data-testid=tier-24]").count() == 1)
-
-    page.locator("[data-testid=add-tier]").click()
-    page.locator('[data-testid="tier-row-1"] input[type=number]').first.fill("6")
-    with page.expect_response(lambda response: response.url.endswith("/cancellation-policy")) as saved:
-        page.locator("[data-testid=save-policy]").click()
-    check("the server took the policy", saved.value.status == 200)
-    page.reload()
-    page.wait_for_selector("[data-testid=policy-list]")
-    check("the second step survives a reload", page.locator("[data-testid=tier-6]").count() == 1, page)
-
-    # 5. A ladder that goes the wrong way is refused.
-    page.locator('[data-testid="tier-row-0"] input[type=number]').nth(1).fill("10")
-    with page.expect_response(lambda response: response.url.endswith("/cancellation-policy")):
-        page.locator("[data-testid=save-policy]").click()
-    page.wait_for_selector("[data-testid=policy-error]")
-    check(
-        "a policy that pays less for cancelling earlier is refused",
-        "ไม่น้อยกว่า" in page.locator("[data-testid=policy-error]").inner_text(),
-        page,
-    )
-
     # 5b. Opening hours and the grace for latecomers, on the section's second tab (artboard c).
     page.goto(BASE + venue_url + "/pricing")
     page.click("[data-testid=pricing-tab-hours]")
@@ -138,7 +111,7 @@ with sync_playwright() as p:
     page.request.put(f"{api}/grace", data={"minutes": 15})
     ensure_bookable(browser, venue_url.rsplit("/", 1)[-1])
 
-    # 6. Staff read the prices and the policy and can change neither.
+    # 6. Staff read the prices and cannot change them.
     page.goto(f"{BASE}/")
     page.click("[data-testid=sign-out]")
     page.goto(BASE + venue_url + "/pricing")
@@ -149,10 +122,6 @@ with sync_playwright() as p:
     check("staff cannot paint them",
           page.locator("[data-testid=cell-Monday-18]").is_disabled()
           and page.locator("[data-testid=pricing-save]").count() == 0, page)
-    page.goto(BASE + venue_url + "/settings")
-    page.wait_for_selector("[data-testid=policy-list]")
-    check("staff read the policy", page.locator("[data-testid=policy-list]").count() == 1)
-    check("staff get no policy editor", page.locator("[data-testid=add-tier]").count() == 0, page)
 
     browser.close()
 

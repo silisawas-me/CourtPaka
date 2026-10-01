@@ -32,13 +32,11 @@ public static class VenueLetters
     };
 
     /// <summary>
-    /// The page each notice is dealt with on: money owed back or unanswered is the court
-    /// schedule's (the day's own list is gone), a slip is the slip queue's.
+    /// The page every notice is dealt with on: the court schedule — the app is its
+    /// four sections now, and the slip queue's own page is gone with the rest of "อื่น ๆ".
     /// </summary>
-    public static string LinkFor(VenueNotice notice, string baseUrl, Guid venueId) =>
-        notice is VenueNotice.RefundOwed or VenueNotice.PaymentUnanswered
-            ? $"{baseUrl.TrimEnd('/')}/venues/{venueId}/timeline"
-            : $"{baseUrl.TrimEnd('/')}/venues/{venueId}/slip-queue";
+    public static string LinkFor(string baseUrl, Guid venueId) =>
+        $"{baseUrl.TrimEnd('/')}/venues/{venueId}/timeline";
 
     public static (string Subject, string Body) Notice(
         VenueNotice notice, Guid bookingId, string link, string language) =>

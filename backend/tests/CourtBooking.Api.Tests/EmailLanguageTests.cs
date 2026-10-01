@@ -72,7 +72,7 @@ public sealed class EmailLanguageTests
     {
         foreach (var notice in Enum.GetValues<VenueNotice>())
         {
-            var link = VenueLetters.LinkFor(notice, "https://courtpaka.test", Guid.Empty);
+            var link = VenueLetters.LinkFor("https://courtpaka.test", Guid.Empty);
             var (subject, body) = VenueLetters.Notice(notice, Guid.NewGuid(), link, language);
 
             Assert.Contains(link, body);

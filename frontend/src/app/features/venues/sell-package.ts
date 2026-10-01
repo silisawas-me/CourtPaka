@@ -47,8 +47,6 @@ export class SellPackage {
 
   readonly sold = output<HourPackage>();
   readonly closed = output<void>();
-  /** Nothing on the board to sell: the page opens its board instead. */
-  readonly wantsBoard = output<void>();
 
   protected readonly payWith = PAY_WITH;
   protected readonly nameMaxLength = NAME_MAX_LENGTH;

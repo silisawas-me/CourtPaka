@@ -7,7 +7,7 @@ sees.
 ```bash
 docker compose --profile full up -d --build      # from the repo root
 pip install playwright && playwright install chromium
-python scripts/verify/venue_settings.py
+python scripts/verify/venue_shell.py
 ```
 
 They sign in as the seeded accounts (`owner@courtpaka.local` / `staff@courtpaka.local`,
@@ -43,28 +43,26 @@ Eight rules worth keeping.
 
 | Script | Covers |
 |---|---|
-| `doors.py` | The admin door and the staff door on the front page; old booker addresses are gone |
-| `day_panel.py` | The booking pressed on the floor, opened beside it (badPaka 2a) |
+| `doors.py` | The admin door and the staff door, the sign-in guard and its returnUrl; old booker addresses are gone |
+| `venue_shell.py` | The four sections on a desk and a phone, branch switching, and where the removed pages' addresses land (US-25) |
+| `timeline.py` | The court schedule of one branch and its booking panel |
 | `now_board.py` | Every court this minute, with the browser clock pinned (badPaka 2b) |
 | `all_venues_today.py` | Today at every venue on "my venues" (badPaka 2c) |
-| `venue_ui.py` | Sign-in redirects, venue detail, members and permissions (US-14) |
-| `venue_shell.py` | The venue's own navigation: the sidebar on a desk, the tabs on a phone (US-25) |
-| `venue_settings.py` | Courts and opening hours (US-11) |
-| `venue_pricing.py` | Prices and the cancellation policy (US-11) |
-| `slip_queue.py` | The venue looking at a slip and deciding (US-12) |
-| `counter_money.py` | Money taken at the desk and the day's count (US-26) |
-| `deposit.py` | A venue asking for part of the price up front (US-28) |
-| `deposit_risk.py` | The rule that asks somebody for more, and its settings (US-28) |
+| `walk_in.py` | Selling a walk-in from the top bar |
+| `venue_pricing.py` | Prices and peak, opening hours and grace (owner app PR-4, 2c) |
+| `venue_dashboard.py` | The revenue panel over the last fourteen days (US-15, PR-5) |
+| `packages.py` | Hours sold in advance and the members table (US-31) |
+| `counter_money.py` | Money taken at the desk and the day's count, through the API (US-26) |
 
 8. **Ask for the state you need; do not assume the script before you left it.**
-   `venue_settings.py` edits the seeded venue's opening hours because that is what it is about,
+   `venue_pricing.py` edits the seeded venue's opening hours because that is what it is about,
    and it leaves them wherever its last check left them. Every script that books an hour calls
    `ensure_bookable()` first, which puts the venue back to 06:00–22:00 every day. This was found
    the hard way: run in one order the suite was green, and in another every booking script failed
    with no free hour anywhere and nothing to say why.
 
-   The same goes for who may do what. `venue_ui.py` hands the seeded staff account permissions
-   because that is what it tests, and leaves them there — so a script checking what somebody
+   The same goes for who may do what. A script that hands the seeded staff account permissions
+   because that is what it tests leaves them there — so a script checking what somebody
    *without* a permission sees passes alone and fails after it. `staff_can(browser, venue_id)`
    puts the staff back to what the seed gives them, or to whatever the script needs.
 
@@ -79,5 +77,4 @@ posts the file to the booking that page held last. What they check is the venue'
 
 The production build registers a service worker (PWA, PRD 8). Requests the app makes go through
 it, and Playwright's `page.route(...)` cannot see requests a service worker makes. A script that
-stubs API answers with `page.route` must open its page with `service_workers="block"` (see
-`venue_ui.py`). `pwa.py` is the script that checks the worker itself.
+stubs API answers with `page.route` must open its page with `service_workers="block"`. `pwa.py` is the script that checks the worker itself.

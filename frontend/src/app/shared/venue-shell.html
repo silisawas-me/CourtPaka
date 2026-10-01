@@ -21,40 +21,6 @@
     }
   </nav>
 
-  @if (others().length > 0) {
-    <!--
-      The design's rail has the four sections and nothing else, so the rest of a venue's pages
-      are folded away under one line — open by itself when one of them is the page on screen.
-    -->
-    <details class="side-more" [open]="otherOn()" data-testid="nav-more">
-      <summary class="side-group">
-        {{ i18n.t('nav.other') }}
-        @if (otherWaiting(); as count) {
-          <span class="badge badge-waiting">{{ count }}</span>
-        }
-      </summary>
-      <nav class="side-nav" [attr.aria-label]="i18n.t('nav.other')">
-        @for (door of others(); track door.testId) {
-          <a
-            class="side-link"
-            [class.on]="door.on"
-            [attr.aria-current]="door.on ? 'page' : null"
-            [routerLink]="door.path"
-            [fragment]="door.fragment"
-            [attr.data-testid]="door.testId"
-          >
-            <span>{{ i18n.t(door.label) }}</span>
-            @if (door.waiting; as count) {
-              <span class="badge badge-waiting" [attr.data-testid]="door.testId + '-waiting'">
-                {{ count }}
-              </span>
-            }
-          </a>
-        }
-      </nav>
-    </details>
-  }
-
   <!-- Who is signed in, and the way out: where the design had its demo switch (O6). -->
   <div class="side-foot">
     <ng-content select="[sideFoot]" />
@@ -137,7 +103,7 @@
   page, where everything that is not a section lives.
 -->
 <nav class="tabs" [attr.aria-label]="i18n.t('nav.venueLabel')">
-  @for (tab of tabs(); track tab.testId) {
+  @for (tab of sections(); track tab.testId) {
     <a
       class="tab"
       [class.on]="tab.on"
@@ -147,9 +113,6 @@
       [attr.data-testid]="tab.tabTestId"
     >
       {{ i18n.t(tab.label) }}
-      @if (tab.waiting; as count) {
-        <span class="badge badge-waiting">{{ count }}</span>
-      }
     </a>
   }
 </nav>

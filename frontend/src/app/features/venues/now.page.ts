@@ -18,7 +18,6 @@ import { Availability, PublicVenueService } from '../../core/venues/public-venue
 import { ShopItem, ShopService } from '../../core/venues/shop.service';
 import { VenueBooking, VenueBookingsService } from '../../core/venues/venue-bookings.service';
 import { arriving, CourtNow, courtsNow, whoIs } from './now-board';
-import { RouterLink } from '@angular/router';
 import { PaymentMethod } from '../../core/venues/venue-bookings.service';
 
 /**
@@ -35,7 +34,7 @@ export const NOW_REFRESH_MS = 30_000;
  */
 @Component({
   selector: 'app-now-page',
-  imports: [BahtPipe, RouterLink],
+  imports: [BahtPipe],
   templateUrl: './now.page.html',
   styleUrl: './now.page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
