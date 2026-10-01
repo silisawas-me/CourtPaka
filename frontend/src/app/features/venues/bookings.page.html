@@ -1,0 +1,192 @@
+<!-- The schedule's list view: one day's bookings (or a search across days) and the same panel. -->
+<div class="list-view" data-testid="booking-list">
+  <section class="list">
+    <div class="bar">
+      <div class="day" role="group" [attr.aria-label]="dayLabel()">
+        <button
+          type="button"
+          class="step"
+          data-testid="day-earlier"
+          [attr.aria-label]="i18n.t('bookingList.earlier')"
+          (click)="walk(-1)"
+        >
+          ‹
+        </button>
+        <span class="day-label" data-testid="day-label"
+          >{{ dayLabel() }}
+          @if (isToday()) {
+            <span class="muted">· {{ i18n.t('bookingList.today') }}</span>
+          }
+        </span>
+        <button
+          type="button"
+          class="step"
+          data-testid="day-later"
+          [attr.aria-label]="i18n.t('bookingList.later')"
+          (click)="walk(1)"
+        >
+          ›
+        </button>
+      </div>
+      @if (isToday()) {
+        <button type="button" class="plain" data-testid="day-tomorrow" (click)="go(tomorrow())">
+          {{ i18n.t('bookingList.tomorrow') }}
+        </button>
+      } @else {
+        <button type="button" class="plain" data-testid="day-today" (click)="go(today())">
+          {{ i18n.t('bookingList.today') }}
+        </button>
+      }
+      <label class="search">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          aria-hidden="true"
+        >
+          <circle cx="11" cy="11" r="7"></circle>
+          <path d="M20 20l-4-4"></path>
+        </svg>
+        <span class="visually-hidden">{{ i18n.t('bookingList.search') }}</span>
+        <input
+          type="search"
+          data-testid="list-search"
+          [placeholder]="i18n.t('bookingList.search')"
+          [value]="query()"
+          (input)="query.set($any($event.target).value)"
+        />
+      </label>
+    </div>
+
+    <div class="filters-row">
+      <div class="filters" role="group" [attr.aria-label]="i18n.t('bookingList.filter')">
+        @for (one of filters; track one) {
+          <button
+            type="button"
+            class="filter"
+            [class.on]="filter() === one"
+            [attr.aria-pressed]="filter() === one"
+            [attr.data-testid]="'list-filter-' + one"
+            (click)="filter.set(one)"
+          >
+            {{ i18n.t('bookingList.filter.' + one) }}
+            <span class="count" [attr.data-testid]="'list-count-' + one">{{ counts()[one] }}</span>
+          </button>
+        }
+      </div>
+      @if (!searching()) {
+        <dl class="sums" data-testid="list-sums">
+          <div>
+            <dt>{{ i18n.t('bookingList.hoursSold') }}</dt>
+            <dd data-testid="sum-hours">{{ summary().hours }}</dd>
+          </div>
+          <div>
+            <dt>{{ i18n.t('bookingList.taken') }}</dt>
+            <dd data-testid="sum-taken">฿{{ summary().takenBaht | baht: i18n.locale() }}</dd>
+          </div>
+          <div>
+            <dt>{{ i18n.t('bookingList.owing') }}</dt>
+            <dd class="owing" data-testid="sum-owing">
+              ฿{{ summary().owingBaht | baht: i18n.locale() }}
+            </dd>
+          </div>
+        </dl>
+      }
+    </div>
+
+    @if (pageError(); as key) {
+      <p class="form-error" data-testid="page-error">{{ i18n.t(key) }}</p>
+    }
+
+    <section
+      class="table"
+      [attr.aria-label]="searching() ? i18n.t('bookingList.found') : dayLabel()"
+    >
+      <div class="head" aria-hidden="true">
+        <span>{{ i18n.t('bookingList.time') }}</span>
+        <span>{{ i18n.t('bookingList.court') }}</span>
+        <span>{{ i18n.t('bookingList.customer') }}</span>
+        <span>{{ i18n.t('bookingList.kind') }}</span>
+        <span>{{ i18n.t('bookingList.hours') }}</span>
+        <span class="right">{{ i18n.t('bookingList.price') }}</span>
+        <span>{{ i18n.t('bookingList.state') }}</span>
+      </div>
+
+      @for (row of shown(); track row.booking.bookingId) {
+        <button
+          type="button"
+          class="row"
+          [class.on]="selected()?.bookingId === row.booking.bookingId"
+          [class.faded]="row.state.tone === 'done' || row.state.key === 'cancelled'"
+          [attr.aria-pressed]="selected()?.bookingId === row.booking.bookingId"
+          [attr.data-testid]="'list-row-' + row.booking.bookingId"
+          (click)="choose(row.booking)"
+        >
+          <span class="time">
+            @if (searching()) {
+              <span class="row-day">{{ labelOf(row.day) }}</span>
+            }
+            {{ timeOf(row.booking) }}
+          </span>
+          <span class="court">{{ courtsOf(row.booking) }}</span>
+          <span class="person">
+            <span class="name" [class.struck]="row.state.key === 'cancelled'">{{
+              who(row.booking)
+            }}</span>
+            <span class="phone">{{
+              row.booking.customerPhone ?? row.booking.bookerPhone ?? '—'
+            }}</span>
+          </span>
+          <span class="kind-cell"
+            ><span class="tag" [class]="'tag kind-' + row.booking.kind">{{
+              i18n.t('board.kind.' + row.booking.kind)
+            }}</span></span
+          >
+          <span class="hours">{{ row.booking.slots.length }}</span>
+          <span class="price">฿{{ row.booking.totalBaht | baht: i18n.locale() }}</span>
+          <span class="state">
+            <span
+              class="chip"
+              [class]="'chip tone-' + row.state.tone"
+              [attr.data-testid]="'list-state-' + row.booking.bookingId"
+              >{{ i18n.t('bookingList.state.' + row.state.key) }}</span
+            >
+            @if (row.booking.can.takeMoney) {
+              <span class="chip owe" [attr.data-testid]="'list-owe-' + row.booking.bookingId"
+                >{{ i18n.t('bookingList.owing') }} ฿{{
+                  row.booking.toPayBaht | baht: i18n.locale()
+                }}</span
+              >
+            }
+          </span>
+        </button>
+      } @empty {
+        @if (!loading()) {
+          <p class="empty" data-testid="list-empty">
+            {{
+              i18n.t(
+                searching()
+                  ? 'bookingList.nothingFound'
+                  : filter() === 'all'
+                    ? 'bookingList.nothing'
+                    : 'bookingList.nothingFiltered'
+              )
+            }}
+          </p>
+        }
+      }
+    </section>
+  </section>
+
+  <app-booking-panel
+    [venueId]="venueId()"
+    [booking]="selected()"
+    [courts]="courts()"
+    emptyKey="bookingList.pick"
+    (changed)="changed($event)"
+    (refreshed)="refresh()"
+  />
+</div>

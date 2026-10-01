@@ -64,6 +64,8 @@ describe('TimelinePage', () => {
 
   afterEach(() => {
     fixture.destroy();
+    // The panel reads each booking's story; these specs are about the doors, not the story.
+    httpMock.match((request) => request.url.endsWith('/history'));
     httpMock.verify();
     vi.useRealTimers();
   });

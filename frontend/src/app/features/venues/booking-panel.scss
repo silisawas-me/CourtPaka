@@ -1,6 +1,6 @@
 /* The timeline's panel (artboards b1 and b2 of docs/plan/owner-complete.md). */
 /* ── panel ── */
-.panel {
+:host {
   display: flex;
   flex-direction: column;
   background: var(--mat-sys-surface);

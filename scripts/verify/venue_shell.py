@@ -77,7 +77,6 @@ with sync_playwright() as p:
     # among them — still land somewhere a person can work from.
     gone = {
         "": "timeline",
-        "/bookings": "timeline",
         "/settings": "timeline",
         "/slip-queue": "timeline",
         "/money": "timeline",
@@ -87,6 +86,16 @@ with sync_playwright() as p:
         "/report": "dashboard",
         "/package-board": "packages",
     }
+    # The booking list is the schedule's third view, not a gone page (the booking list's design).
+    check(
+        "/venues/{id}/bookings is the booking list",
+        lands(desk, f"/venues/{venue_id}/bookings", f"/venues/{venue_id}/bookings"),
+        desk,
+    )
+    check("the schedule has three views: timeline, now, list",
+          all(desk.locator(f"[data-testid=view-{view}]").count() == 1
+              for view in ("timeline", "now", "bookings")), desk)
+
     for old, page in gone.items():
         check(
             f"/venues/{{id}}{old} lands on {page}",

@@ -1,0 +1,360 @@
+/* The schedule's list view, off the approved artboard: the list on the left, the panel against
+   the right edge. Full bleed on a laptop, like the timeline; rows fold into cards on a phone. */
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.list-view {
+  display: grid;
+  gap: 1rem;
+
+  @media (min-width: 60rem) {
+    display: flex;
+    gap: 0;
+    margin: calc(-2 * var(--stack)) -1.5rem calc(-1 * var(--shell-bottom, 0px));
+    height: calc(100dvh - 4.3rem);
+  }
+}
+
+.list {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+
+  @media (min-width: 60rem) {
+    padding: 20px 24px;
+    overflow-y: auto;
+  }
+}
+
+.bar,
+.filters-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.day {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 10px;
+  background: var(--mat-sys-surface);
+}
+
+.step {
+  width: 44px;
+  height: 42px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.day-label {
+  padding: 0 12px;
+  font-weight: 600;
+  border-inline: 1px solid var(--mat-sys-outline-variant);
+  line-height: 42px;
+  white-space: nowrap;
+}
+
+.muted {
+  color: var(--mat-sys-on-surface-variant);
+  font-weight: 400;
+}
+
+.plain {
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 10px;
+  background: var(--mat-sys-surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.search {
+  flex: 1 1 14rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 10px;
+  background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface-variant);
+
+  input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--mat-sys-on-surface);
+    font: inherit;
+  }
+
+  &:focus-within {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 1px;
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.filter {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 999px;
+  background: var(--mat-sys-surface);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+
+  &.on {
+    border-color: var(--mat-sys-on-surface);
+    background: var(--mat-sys-on-surface);
+    color: var(--mat-sys-surface);
+  }
+}
+
+.count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.sums {
+  display: flex;
+  gap: 18px;
+  margin: 0 0 0 auto;
+  font-size: 13px;
+  color: var(--mat-sys-on-surface-variant);
+
+  div {
+    display: flex;
+    gap: 6px;
+  }
+
+  dd {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--mat-sys-on-surface);
+  }
+
+  .owing {
+    color: var(--status-waiting-ink);
+  }
+}
+
+/* ── the table ── */
+.table {
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 14px;
+  background: var(--mat-sys-surface);
+  overflow: hidden;
+}
+
+.head,
+.row {
+  display: grid;
+  grid-template-columns: 112px 84px minmax(0, 1.6fr) 100px 44px 84px minmax(0, 1.3fr);
+  gap: 12px;
+  align-items: center;
+  padding: 9px 18px;
+}
+
+.head {
+  font-size: 12px;
+  color: var(--mat-sys-on-surface-variant);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  background: color-mix(in srgb, var(--mat-sys-surface-container) 50%, var(--mat-sys-surface));
+}
+
+.row {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--mat-sys-outline-variant) 60%, transparent);
+  background: var(--mat-sys-surface);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: color-mix(in srgb, var(--mat-sys-primary) 4%, var(--mat-sys-surface));
+  }
+
+  &.on {
+    background: color-mix(in srgb, var(--mat-sys-primary) 9%, var(--mat-sys-surface));
+    box-shadow: inset 3px 0 0 var(--mat-sys-primary);
+  }
+
+  &.faded {
+    opacity: 0.62;
+  }
+}
+
+.right,
+.price {
+  text-align: right;
+}
+
+.time,
+.hours,
+.price,
+.phone {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.row-day {
+  display: block;
+  font-family: var(--mat-sys-body-medium-font, inherit);
+  font-size: 12px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.person {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &.struck {
+    text-decoration: line-through;
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+.phone {
+  font-size: 12px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.tag,
+.chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.tag {
+  border: 1px solid var(--line);
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.state {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+@each $tone in playing, confirmed, waiting, risk, done {
+  .tone-#{$tone} {
+    background: var(--status-#{$tone}-soft);
+    color: var(--status-#{$tone}-ink);
+  }
+}
+
+.owe {
+  border: 1px solid var(--kind-walkin-line);
+  background: var(--mat-sys-surface);
+  color: var(--status-waiting-ink);
+}
+
+.empty {
+  margin: 0;
+  padding: 2rem 18px;
+  text-align: center;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+/* A phone: each row is a card — time on the left, who and how it stands on the right. */
+@media (max-width: 59.99rem) {
+  .head {
+    display: none;
+  }
+
+  .table {
+    border: 0;
+    background: transparent;
+    display: grid;
+    gap: 8px;
+  }
+
+  .row {
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    grid-template-areas:
+      'time person price'
+      'time court court'
+      'time kind kind'
+      'time state state';
+    row-gap: 4px;
+    padding: 12px 14px;
+    border: 1px solid var(--mat-sys-outline-variant);
+    border-radius: 14px;
+  }
+
+  .time {
+    grid-area: time;
+    align-self: start;
+  }
+  .person {
+    grid-area: person;
+  }
+  .price {
+    grid-area: price;
+  }
+  .court {
+    grid-area: court;
+    font-size: 12px;
+    color: var(--mat-sys-on-surface-variant);
+  }
+  .kind-cell {
+    grid-area: kind;
+  }
+  .hours {
+    display: none;
+  }
+  .state {
+    grid-area: state;
+  }
+
+  .sums {
+    margin: 0;
+  }
+}

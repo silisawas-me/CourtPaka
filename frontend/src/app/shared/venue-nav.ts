@@ -28,7 +28,7 @@ export const VENUE_SECTIONS: readonly VenueLink[] = [
     to: ['timeline'],
     label: 'nav.section.schedule',
     testId: 'nav-schedule',
-    alsoAt: [['now']],
+    alsoAt: [['now'], ['bookings']],
   },
   { to: ['pricing'], label: 'nav.section.pricing', testId: 'nav-pricing', ownerOnly: true },
   { to: ['dashboard'], label: 'nav.section.revenue', testId: 'nav-dashboard', ownerOnly: true },

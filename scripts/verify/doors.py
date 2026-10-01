@@ -27,6 +27,15 @@ with sync_playwright() as p:
           and front.locator("[data-testid=home-door-staff]").count() == 1
           and front.locator("a[href^='/register']").count() == 0, front)
 
+    # The full stylesheet arrives as media="print" and an inline script switches it on. The CSP
+    # in the Caddyfile has to allow that script by its hash, or only the critical CSS applies
+    # (it broke silently with Angular 22.2, which changed the onload handler into a script).
+    front.wait_for_load_state("load")
+    check("the full stylesheet is switched on, not left as print",
+          front.evaluate("""() => [...document.querySelectorAll('link[rel=stylesheet]')]
+              .every((link) => link.media !== 'print' && !link.hasAttribute('data-beasties-media'))"""),
+          front)
+
     owner = browser.new_page()
     through(owner, "admin", OWNER)
     owner.wait_for_url(f"{BASE}/venues")
