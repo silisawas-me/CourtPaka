@@ -43,8 +43,8 @@ with sync_playwright() as p:
     check("the venue is opened around the clock for the script", opened.ok and priced.ok)
 
     try:
-        desk.goto(f"{BASE}/venues/{venue_id}/bookings")
-        desk.wait_for_selector("[data-testid=day-board]")
+        desk.goto(f"{BASE}/venues/{venue_id}/timeline")
+        desk.wait_for_selector("[data-testid=booking-panel]")
         desk.click("[data-testid=open-walk-in]")
         desk.wait_for_selector("[data-testid=walk-in]")
         check("the top bar opens the walk-in", True, desk)

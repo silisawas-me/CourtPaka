@@ -231,8 +231,8 @@ describe("A venue's own shell", () => {
     expect(elementOf(fixture, 'view-now')?.getAttribute('href')).toBe('/venues/v2/now');
     // Switching venue keeps the page.
     expect(elementOf(fixture, 'pill-v1')?.getAttribute('href')).toBe('/venues/v1/timeline');
-    // The day's list with every other door is still a page, in the quieter group.
-    expect(elementOf(fixture, 'nav-bookings')?.getAttribute('href')).toBe('/venues/v2/bookings');
+    // The day's list is gone: the schedule is where the day is run.
+    expect(elementOf(fixture, 'nav-bookings')).toBeNull();
   });
 
   /**

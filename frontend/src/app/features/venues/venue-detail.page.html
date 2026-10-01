@@ -41,10 +41,10 @@
       -->
       <a
         matButton
-        [routerLink]="['/venues', current.id, 'bookings']"
+        [routerLink]="['/venues', current.id, 'timeline']"
         data-testid="venue-bookings-link"
       >
-        {{ i18n.t('venueBookings.title') }}
+        {{ i18n.t('nav.section.schedule') }}
       </a>
       <!--
         Its own door rather than a panel inside the settings, because it is its own permission:

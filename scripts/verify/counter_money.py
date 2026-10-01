@@ -63,72 +63,22 @@ with sync_playwright() as p:
 
     booking = waiting_booking(browser, venue_id)
 
-    # The counter opens the day it is selling into, which is where the money is taken.
+    # The counter's money door (the timeline's panel calls it), in parts.
     page = browser.new_page(viewport={"width": 1280, "height": 900})
     sign_in(page, OWNER)
-    page.goto(f"{BASE}{open_seeded_venue(page)}")
-    page.wait_for_selector("[data-testid=venue-bookings-link]")
-    page.click("[data-testid=venue-bookings-link]")
-    page.wait_for_selector("[data-testid=day]")
-    pick_date(page, tomorrow)
-    page.wait_for_selector("[data-testid=day-list]")
-
-    check(
-        "a booking that has not been paid for offers to take money",
-        page.locator(f"[data-testid=take-{booking['id']}]").count() == 1,
-        page,
-    )
-
-    # The board answers "how much is that hour" without anybody opening the price page (US-25).
-    day = page.request.get(
-        f"{BASE}/api/venues/{venue_id}/availability?date={tomorrow.isoformat()}").json()
-    free = next(
-        (row["courtId"], cell["hour"], cell["bahtPerHour"])
-        for row in day["courts"]
-        for cell in row["hours"]
-        if cell["status"] == "Free" and cell["bahtPerHour"] is not None
-    )
-    shown = page.locator(f"[data-testid=board-free-{free[0]}-{free[1]}]").inner_text()
-    check(
-        "an empty hour on the board says what it costs",
-        shown.strip().replace(",", "") == f"{free[2]:g}",
-        page,
-    )
+    pay = f"{BASE}/api/venues/{venue_id}/bookings/{booking['id']}/payments"
 
     # 1. Money is taken in parts, in the form it arrived.
-    page.click(f"[data-testid=take-{booking['id']}]")
-    amount = page.locator("[data-testid=take-amount]")
-    check(
-        "and offers what is owed, because that is what usually changes hands",
-        amount.input_value() == str(int(booking["totalBaht"])),
-        page,
-    )
-
     half = booking["totalBaht"] / 2
-    amount.fill(str(half))
-    page.click("[data-testid=pay-method-Cash]")
-    with page.expect_response(lambda r: r.url.endswith("/payments")) as deposit:
-        page.click("[data-testid=take-money]")
-    check("a deposit is accepted", deposit.value.status == 200)
-    check(
-        "and the rest is what is left",
-        deposit.value.json()["toPayBaht"] == booking["totalBaht"] - half,
-    )
-    check(
-        "which the row now says out loud",
-        page.locator(f"[data-testid=to-pay-{booking['id']}]").is_visible(),
-        page,
-    )
+    deposit = page.request.post(pay, data={"amountBaht": half, "method": "Cash", "note": None})
+    check("a deposit is accepted", deposit.status == 200)
+    check("and the rest is what is left", deposit.json()["toPayBaht"] == booking["totalBaht"] - half)
 
     # 2. Paying the last of it is what answers the booking, not a second button.
-    page.click(f"[data-testid=take-{booking['id']}]")
-    with page.expect_response(lambda r: r.url.endswith("/payments")) as rest:
-        page.click("[data-testid=take-money]")
-    check("the rest is accepted", rest.value.status == 200)
-    check("and nothing is left owing", rest.value.json()["toPayBaht"] == 0)
-
-    # The answer is the row itself, so what the counter now sees is what the server says.
-    row = rest.value.json()
+    rest = page.request.post(pay, data={"amountBaht": half, "method": "Cash", "note": None})
+    check("the rest is accepted", rest.status == 200)
+    check("and nothing is left owing", rest.json()["toPayBaht"] == 0)
+    row = rest.json()
     check(
         "a booking waiting on a slip is confirmed by the money arriving",
         row["status"] == "Confirmed",

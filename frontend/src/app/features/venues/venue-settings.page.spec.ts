@@ -55,6 +55,10 @@ describe('VenueSettingsPage', () => {
   let httpMock: HttpTestingController;
 
   beforeEach(async () => {
+    // The dates below are written as days ahead of 20 September 2026; the clock stays there so
+    // they stay ahead (the form refuses a week that starts in the past).
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-20T05:00:00Z'));
     localStorage.clear();
     await TestBed.configureTestingModule({
       imports: [VenueSettingsPage],
@@ -66,7 +70,10 @@ describe('VenueSettingsPage', () => {
     httpMock = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => httpMock.verify());
+  afterEach(() => {
+    httpMock.verify();
+    vi.useRealTimers();
+  });
 
   function render(
     overrides: Record<string, unknown> = {},

@@ -609,9 +609,15 @@ public sealed class PackageTests(ApiTestFixture api)
         await VenueScenario.ReadAsync<DayMoneyResponse>(
             await owner.GetAsync($"/api/venues/{venueId}/money"));
 
+    /// <summary>
+    /// The last week to today — not "this month", which the dashboard reads when asked for
+    /// nothing: a booking played out two days ago is last month's on the first of a month.
+    /// </summary>
     private static async Task<DashboardResponse> DashboardAsync(HttpClient owner, Guid venueId) =>
         await VenueScenario.ReadAsync<DashboardResponse>(
-            await owner.GetAsync($"/api/venues/{venueId}/dashboard"));
+            await owner.GetAsync(
+                $"/api/venues/{venueId}/dashboard"
+                + $"?from={VenueScenario.Today.AddDays(-7):yyyy-MM-dd}&to={VenueScenario.Today:yyyy-MM-dd}"));
 
     /// <summary>Moves a package's last day into the past, which is the only thing time does here.</summary>
     private async Task RanOutAsync(Guid packageId)

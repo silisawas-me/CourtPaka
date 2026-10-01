@@ -45,11 +45,10 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    // The day's list is gone: the court schedule is where the day is run now. Old links (and the
+    // venue's emails about money owed back) land there.
     path: 'venues/:venueId/bookings',
-    data: { venueShell: true },
-    loadComponent: () =>
-      import('./features/venues/venue-bookings.page').then((m) => m.VenueBookingsPage),
-    canActivate: [authGuard],
+    redirectTo: 'venues/:venueId/timeline',
   },
   {
     path: 'venues/:venueId/money',

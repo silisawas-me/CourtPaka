@@ -44,8 +44,6 @@ export const VENUE_SECTIONS: readonly VenueLink[] = [
  * group, because each is work somebody does (the owner's ruling, docs/plan/owner-app.md).
  */
 export const VENUE_OTHER: readonly VenueLink[] = [
-  // The day's list with every door the timeline's panel does not carry (cancel, no-show, refunds).
-  { to: ['bookings'], label: 'nav.dayBookings', testId: 'nav-bookings' },
   { to: ['slip-queue'], label: 'slipQueue.title', testId: 'nav-slip-queue', waiting: 'slips' },
   { to: ['money'], label: 'money.title', testId: 'nav-money', waiting: 'money' },
   // What the revenue section's design does not draw: any range, the CSV, the day table (US-15, US-16).

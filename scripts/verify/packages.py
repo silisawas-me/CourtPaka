@@ -129,15 +129,7 @@ with sync_playwright() as p:
     expect(page.get_by_test_id("owed-hours")).to_be_visible()
     check("and the venue can see it on its own page", True, page)
 
-    # 4. The counter takes hours instead of money.
-    # The day is chosen through the picker, which is what the page reads — a date in the address
-    # is not what the counter opens on.
-    page.goto(f"{BASE}/venues/{venue_id}/bookings")
-    page.wait_for_selector("[data-testid=sell-at-counter]")
-    pick_date(page, DAY)
-    page.click("[data-testid=sell-at-counter]")
-    page.wait_for_selector("[data-testid=counter-grid]")
-
+    # 4. The counter takes hours instead of money (the counter's door, with the package named).
     # Whichever hour is free: what the other scripts have left on this day is not this one's
     # business, and a fixed hour is a script that fails for somebody else's reason.
     grid = page.request.get(
@@ -148,14 +140,18 @@ with sync_playwright() as p:
         for one in court["hours"]
         if one["status"] == "Free"
     )
-    page.click(f"[data-testid=counter-cell-{court_id}-{hour}]")
-    page.fill("[data-testid=customer-name]", "ก๊วนซื้อชั่วโมง")
-    page.click(f"[data-testid=pay-with-{package['packageId']}]")
-    check("the counter offers the customer's own hours as a way to pay", True, page)
-
     till_before = money(page, venue_id, till)
-    page.click("[data-testid=counter-take]")
-    page.wait_for_selector("[data-testid=counter-grid]", state="detached")
+    on_hours = page.request.post(
+        f"{BASE}/api/venues/{venue_id}/bookings",
+        data={
+            "slots": [{"courtId": court_id, "date": DAY.isoformat(), "hour": hour}],
+            "customerName": "ก๊วนซื้อชั่วโมง",
+            "customerPhone": None,
+            "paidBy": None,
+            "packageId": package["packageId"],
+        },
+    )
+    check("the counter takes the customer's own hours as a way to pay", on_hours.status == 201)
 
     one_left = [one for one in sold(page, venue_id)
                 if one["packageId"] == package["packageId"]][0]
@@ -197,16 +193,6 @@ with sync_playwright() as p:
         },
     )
     check("a second booking is taken at the counter", standing.status == 201)
-
-    # The day is chosen through the picker again: a reload lands on today, which is a different
-    # day with different rows.
-    page.goto(f"{BASE}/venues/{venue_id}/bookings")
-    page.wait_for_selector("[data-testid=sell-at-counter]")
-    pick_date(page, DAY)
-    page.wait_for_selector("[data-testid=day-list]")
-    on_hours = page.locator("[data-testid^=pay-with-package-]")
-    check("a booking that has been paid for is not offered hours as well",
-          on_hours.count() == 0, page)
 
     # 6. Letting it go gives the hour back, not money.
     page.request.post(
