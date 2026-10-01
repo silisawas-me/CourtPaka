@@ -72,6 +72,21 @@ export type BookingKind = 'App' | 'WalkIn' | 'Series' | 'Package';
 /** In the order the floor's legend reads them. */
 export const BOOKING_KINDS: readonly BookingKind[] = ['App', 'WalkIn', 'Series', 'Package'];
 
+/** One line of a booking's story, as the server read it from the record (the booking list). */
+export interface BookingHistoryEntry {
+  at: string;
+  kind: 'Status' | 'Arrival' | 'Hours' | 'Payment' | 'Refund' | 'RefundVoided';
+  from: string | null;
+  to: string | null;
+  amountBaht: number | null;
+  method: string | null;
+  fromCourt: string | null;
+  toCourt: string | null;
+  hours: number;
+  cause: string | null;
+  by: string | null;
+}
+
 export interface VenueBooking {
   bookingId: string;
   bookerEmail: string | null;
@@ -243,6 +258,20 @@ export class VenueBookingsService {
     return this.http.get<VenueBooking[]>(`/api/venues/${venueId}/bookings`, {
       params: { date },
     });
+  }
+
+  /** Bookings whose customer's name or phone holds what was typed, on any day. */
+  find(venueId: string, q: string): Observable<VenueBooking[]> {
+    return this.http.get<VenueBooking[]>(`/api/venues/${venueId}/bookings/find`, {
+      params: { q },
+    });
+  }
+
+  /** What has happened to one booking, oldest first. */
+  history(venueId: string, bookingId: string): Observable<BookingHistoryEntry[]> {
+    return this.http.get<BookingHistoryEntry[]>(
+      `/api/venues/${venueId}/bookings/${bookingId}/history`,
+    );
   }
 
   cancel(

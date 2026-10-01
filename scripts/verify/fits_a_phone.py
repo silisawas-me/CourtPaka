@@ -64,6 +64,7 @@ with sync_playwright() as p:
     for name, path in (
         ("now", f"/venues/{venue_id}/now"),
         ("timeline", f"/venues/{venue_id}/timeline"),
+        ("booking list", f"/venues/{venue_id}/bookings"),
         ("pricing", f"/venues/{venue_id}/pricing"),
         ("members", f"/venues/{venue_id}/packages"),
         ("dashboard", f"/venues/{venue_id}/dashboard"),

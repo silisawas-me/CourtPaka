@@ -20,6 +20,9 @@ interface Door {
   readonly on: boolean;
 }
 
+/** The schedule's three views, left to right: the tracks, the floor this minute, the list. */
+const SCHEDULE_VIEWS = ['timeline', 'now', 'bookings'] as const;
+
 /** One venue in the switch along the top bar, or "every venue". */
 interface Pill {
   readonly path: unknown[];
@@ -163,7 +166,7 @@ export class VenueShell {
    */
   protected readonly pills = computed<Pill[]>(() => {
     const here = this.here();
-    const onSchedule = this.onAll() || here.segment === 'timeline' || here.segment === 'now';
+    const onSchedule = this.onAll() || SCHEDULE_VIEWS.some((view) => view === here.segment);
     const segment = this.onAll() ? 'timeline' : (here.segment ?? '');
 
     const venues = this.mine().map((venue) => ({
@@ -186,16 +189,16 @@ export class VenueShell {
       : venues;
   });
 
-  /** The timeline or the board of right now: two ways of reading the same schedule (2a / 2b). */
+  /** The timeline, the board of right now, and the list: three ways of reading one schedule. */
   protected readonly views = computed(() => {
     const segment = this.here().segment;
-    if (this.onAll() || (segment !== 'timeline' && segment !== 'now')) {
+    if (this.onAll() || !SCHEDULE_VIEWS.some((view) => view === segment)) {
       return [];
     }
 
-    return (['timeline', 'now'] as const).map((view) => ({
+    return SCHEDULE_VIEWS.map((view) => ({
       path: ['/venues', this.venueId(), view],
-      label: view === 'timeline' ? 'nav.view.timeline' : 'nav.view.now',
+      label: `nav.view.${view}`,
       testId: `view-${view}`,
       on: segment === view,
     }));

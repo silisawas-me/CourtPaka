@@ -78,6 +78,9 @@ public static class VenueBookingEndpoints
         bookings.MapPost("/{bookingId:guid}/pay-with-package", PackageEndpoints.SpendAsync)
             .RequireAuthorization(VenuePolicies.Needs(VenuePermissions.ManageBookings));
 
+        // Find a caller's booking on any day, and read one booking's story (the booking list).
+        bookings.MapBookingLookupEndpoints();
+
         bookings.MapRefundEndpoints();
         // Money taken at the desk, in parts and in the form it arrived (PRD US-26).
         bookings.MapCounterMoneyEndpoints();
@@ -637,7 +640,7 @@ public static class VenueBookingEndpoints
         return null;
     }
 
-    private static bool IsOwner(VenueMembership membership) => membership.Role == VenueRole.Owner;
+    internal static bool IsOwner(VenueMembership membership) => membership.Role == VenueRole.Owner;
 
     /// <summary>
     /// Which answer belongs to which refusal. A missing answer is the caller's mistake, a booking
@@ -879,7 +882,7 @@ public static class VenueBookingEndpoints
     /// The bookings a query selects, as the counter reads them. Court names belong to the venue
     /// rather than to a booking, so they are fetched once for the whole set.
     /// </summary>
-    private static async Task<VenueBookingResponse[]> ReadManyAsync(
+    internal static async Task<VenueBookingResponse[]> ReadManyAsync(
         AppDbContext database,
         IQueryable<Booking> bookings,
         Guid venueId,

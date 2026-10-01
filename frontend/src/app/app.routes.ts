@@ -45,10 +45,11 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
-    // The day's list is gone: the court schedule is where the day is run now. Old links (and the
-    // venue's emails about money owed back) land there.
+    // The schedule's list view: any day's bookings, a search across days, the same panel.
     path: 'venues/:venueId/bookings',
-    redirectTo: 'venues/:venueId/timeline',
+    data: { venueShell: true },
+    loadComponent: () => import('./features/venues/bookings.page').then((m) => m.BookingsPage),
+    canActivate: [authGuard],
   },
   {
     path: 'venues/:venueId/dashboard',

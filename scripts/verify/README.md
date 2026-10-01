@@ -46,6 +46,7 @@ Eight rules worth keeping.
 | `doors.py` | The admin door and the staff door, the sign-in guard and its returnUrl; old booker addresses are gone |
 | `venue_shell.py` | The four sections on a desk and a phone, branch switching, and where the removed pages' addresses land (US-25) |
 | `timeline.py` | The court schedule of one branch and its booking panel |
+| `booking_list.py` | The schedule's list view: a day in the URL, search across days, the shared panel and its history |
 | `now_board.py` | Every court this minute, with the browser clock pinned (badPaka 2b) |
 | `all_venues_today.py` | Today at every venue on "my venues" (badPaka 2c) |
 | `walk_in.py` | Selling a walk-in from the top bar |
