@@ -1,7 +1,7 @@
 """The setup tabs of "ราคา & ตั้งค่า" (docs/plan/thai-fit.md): courts & closures, packages & shop,
-cancellation policy. Everything made here is taken away again, so the seeded venue stays as the
+cancellation policy and the grace. Everything made here is taken away again, so the seeded venue stays as the
 other scripts expect it (a court added is taken out of use, an offer and an item come off sale,
-a closure is lifted, the policy is saved back as it was).
+a closure is lifted, the policy is saved back as it was, the grace goes back to 15).
 """
 
 import datetime
@@ -102,6 +102,26 @@ with sync_playwright() as p:
         desk.click("[data-testid=policy-save]")
     after = saved.value.json()["tiers"]
     check("the policy is saved as shown", saved.value.ok and after == before, desk)
+
+    # ── how long a late customer is waited for (US-24), the card under the policy ──
+    def grace_now():
+        mine = desk.request.get(f"{BASE}/api/venues/mine").json()
+        return next(v for v in mine if v["id"] == venue_id)["graceMinutes"]
+
+    def save_grace(minutes):
+        desk.click(f"[data-testid=grace-{minutes}]")
+        with desk.expect_response(lambda r: r.url == f"{api}/grace" and r.request.method == "PUT") as put:
+            desk.click("[data-testid=grace-save]")
+        desk.wait_for_selector("[data-testid=grace-saved]")
+        return put.value.ok
+
+    was = grace_now()
+    desk.click("[data-testid=grace-more]")
+    expect(desk.locator("[data-testid=grace-minutes]")).to_contain_text(str(min(60, was + 5)))
+    check("the grace card shows the venue's minutes and steps by five", True, desk)
+    check("the grace is saved and the venue waits that long",
+          save_grace(30) and grace_now() == 30, desk)
+    check("and set back to fifteen", save_grace(15) and grace_now() == 15)
 
     browser.close()
 

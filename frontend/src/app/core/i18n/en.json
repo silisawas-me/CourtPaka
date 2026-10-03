@@ -1233,5 +1233,17 @@
   "catalog.unitPlaceholder": "piece",
   "catalog.col.name": "Name",
   "catalog.col.price": "Price",
-  "catalog.col.left": "Left"
+  "catalog.col.left": "Left",
+  "grace.title": "How long you wait for somebody late",
+  "grace.scope": "Every booking at this branch · changes no money, never stops a check-in",
+  "grace.minutes": "min",
+  "grace.less": "5 minutes less",
+  "grace.more": "5 minutes more",
+  "grace.presets": "Common choices",
+  "grace.exampleLabel": "For example:",
+  "grace.example": "A court booked for 19:00 · not checked in by {t} → \"no-show\" opens and the court can be sold to a walk-in",
+  "grace.exampleMore": "The all-branches page warns where somebody is past it · somebody later than that can still check in until no-show is pressed",
+  "grace.save": "Save the wait",
+  "grace.saved": "Saved",
+  "grace.atOnce": "Applies at once to every booking, those already made too"
 }

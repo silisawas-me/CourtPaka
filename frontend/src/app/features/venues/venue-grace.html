@@ -1,0 +1,84 @@
+<!-- The policy artboard's second card: how long the venue waits for somebody late (US-24). -->
+<section class="card" data-testid="grace" [attr.aria-label]="i18n.t('grace.title')">
+  <div class="grace-head">
+    <h2>{{ i18n.t('grace.title') }}</h2>
+    <span class="muted">{{ i18n.t('grace.scope') }}</span>
+  </div>
+
+  <div class="grace-body">
+    <div class="grace-set">
+      <div class="stepper">
+        <button
+          type="button"
+          class="step"
+          data-testid="grace-less"
+          [attr.aria-label]="i18n.t('grace.less')"
+          [disabled]="!canManage() || grace() === 0"
+          (click)="nudge(-1)"
+        >
+          −
+        </button>
+        <span class="minutes" data-testid="grace-minutes"
+          >{{ grace() }}<small> {{ i18n.t('grace.minutes') }}</small></span
+        >
+        <button
+          type="button"
+          class="step"
+          data-testid="grace-more"
+          [attr.aria-label]="i18n.t('grace.more')"
+          [disabled]="!canManage() || grace() === max"
+          (click)="nudge(1)"
+        >
+          +
+        </button>
+      </div>
+      <div class="presets" role="group" [attr.aria-label]="i18n.t('grace.presets')">
+        @for (minutes of presets; track minutes) {
+          <button
+            type="button"
+            class="preset"
+            [class.on]="grace() === minutes"
+            [attr.aria-pressed]="grace() === minutes"
+            [attr.data-testid]="'grace-' + minutes"
+            [disabled]="!canManage()"
+            (click)="pick(minutes)"
+          >
+            {{ minutes }}
+          </button>
+        }
+      </div>
+    </div>
+
+    <div class="example">
+      <span
+        ><b>{{ i18n.t('grace.exampleLabel') }}</b>
+        {{ i18n.t('grace.example').replace('{t}', opensAt()) }}</span
+      >
+      <span class="muted">{{ i18n.t('grace.exampleMore') }}</span>
+    </div>
+  </div>
+
+  @if (error(); as key) {
+    <p class="form-error" data-testid="grace-error">{{ i18n.t(key) }}</p>
+  }
+  @if (canManage()) {
+    <div class="grace-foot">
+      <button
+        type="button"
+        class="main"
+        data-testid="grace-save"
+        [disabled]="busy()"
+        (click)="save()"
+      >
+        {{ i18n.t('grace.save') }}
+      </button>
+      @if (saved()) {
+        <span class="success" data-testid="grace-saved" role="status">{{
+          i18n.t('grace.saved')
+        }}</span>
+      } @else {
+        <span class="muted">{{ i18n.t('grace.atOnce') }}</span>
+      }
+    </div>
+  }
+</section>

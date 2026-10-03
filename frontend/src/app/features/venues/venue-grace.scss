@@ -1,0 +1,95 @@
+/* The policy artboard's grace card: the number with − and +, presets under it, an example beside. */
+:host {
+  display: block;
+  margin-top: 16px;
+}
+
+.grace-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px 12px;
+
+  .muted {
+    font-size: 12px;
+  }
+}
+
+.grace-body {
+  display: grid;
+  gap: 18px 24px;
+  align-items: center;
+
+  @media (min-width: 48rem) {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+}
+
+.grace-set {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.step {
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+}
+
+.minutes {
+  min-width: 110px;
+  font: 800 34px var(--font-display);
+  text-align: center;
+
+  small {
+    color: var(--mat-sys-on-surface-variant);
+    font: 500 14px var(--mat-sys-body-medium-font, inherit);
+  }
+}
+
+.presets {
+  display: flex;
+  gap: 6px;
+}
+
+.preset {
+  height: 34px;
+  font-family: var(--font-mono);
+
+  &.on {
+    border: 2px solid var(--mat-sys-on-surface);
+    font-weight: 600;
+  }
+}
+
+.example {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--mat-sys-surface-container) 40%, var(--mat-sys-surface));
+  font-size: 13px;
+}
+
+.grace-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+
+  .muted,
+  .success {
+    font-size: 12px;
+  }
+}
