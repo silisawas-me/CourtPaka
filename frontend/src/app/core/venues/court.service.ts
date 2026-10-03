@@ -55,6 +55,38 @@ export interface OpeningHours {
   days: OpeningHoursDay[];
 }
 
+/** A court shut for a while and back by itself (PRD US-11), not taken out of use. */
+export interface CourtClosure {
+  id: string;
+  courtId: string;
+  startsOn: string;
+  startHour: number;
+  endsOn: string;
+  endHour: number;
+  reason: string;
+  createdAt: string;
+  liftedAt: string | null;
+}
+
+export interface CloseCourtRequest {
+  startsOn: string;
+  startHour: number;
+  endsOn: string;
+  endHour: number;
+  reason: string;
+}
+
+/** A booking a closure would displace: where and when, never who (PDPA). */
+export interface BlockingBooking {
+  bookingId: string;
+  courtId: string;
+  courtName: string;
+  date: string;
+  fromHour: number;
+  toHour: number;
+  status: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class CourtService {
   private readonly http = inject(HttpClient);
@@ -92,5 +124,18 @@ export class CourtService {
       effectiveFrom,
       days,
     });
+  }
+
+  closures(venueId: string): Observable<CourtClosure[]> {
+    return this.http.get<CourtClosure[]>(`/api/venues/${venueId}/closures`);
+  }
+
+  /** Refused with the bookings in the way (`bookings` on the problem) when there are any. */
+  closeCourt(venueId: string, courtId: string, asked: CloseCourtRequest): Observable<CourtClosure> {
+    return this.http.post<CourtClosure>(`/api/venues/${venueId}/courts/${courtId}/closures`, asked);
+  }
+
+  liftClosure(venueId: string, closureId: string): Observable<CourtClosure> {
+    return this.http.post<CourtClosure>(`/api/venues/${venueId}/closures/${closureId}/lift`, null);
   }
 }

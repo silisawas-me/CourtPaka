@@ -226,6 +226,8 @@
   display: flex;
   align-self: flex-start;
   width: fit-content;
+  max-width: 100%;
+  flex-wrap: wrap;
   padding: 4px;
   border-radius: 12px;
   background: #efe8dc;

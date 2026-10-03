@@ -1,0 +1,97 @@
+<!-- Cancellation policy (thai-fit "นโยบายยกเลิก"): the steps, and what the booker will read. -->
+<div class="settings-tab two" data-testid="venue-policy">
+  <section class="card" [attr.aria-label]="i18n.t('policy.title')">
+    <h2>{{ i18n.t('policy.title') }}</h2>
+    <ul class="list">
+      @for (one of tiers(); track $index; let i = $index) {
+        <li class="row">
+          <label class="field-inline"
+            >{{ i18n.t('policy.atLeast') }}
+            <input
+              class="input"
+              inputmode="numeric"
+              size="4"
+              [attr.data-testid]="'policy-hours-' + i"
+              [disabled]="!canManage()"
+              [value]="one.hoursBefore"
+              (input)="change(i, 'hoursBefore', $any($event.target).value)"
+            />
+            {{ i18n.t('timeline.hr') }}</label
+          >
+          <label class="field-inline"
+            >{{ i18n.t('policy.back') }}
+            <input
+              class="input"
+              inputmode="numeric"
+              size="4"
+              [attr.data-testid]="'policy-percent-' + i"
+              [disabled]="!canManage()"
+              [value]="one.refundPercent"
+              (input)="change(i, 'refundPercent', $any($event.target).value)"
+            />
+            %</label
+          >
+          @if (canManage()) {
+            <button
+              type="button"
+              class="small"
+              [attr.aria-label]="i18n.t('policy.remove')"
+              [attr.data-testid]="'policy-remove-' + i"
+              (click)="remove(i)"
+            >
+              {{ i18n.t('policy.remove') }}
+            </button>
+          }
+        </li>
+      }
+    </ul>
+    @if (floor() !== null) {
+      <p class="muted">{{ i18n.t('policy.under').replace('{h}', '' + floor()) }}</p>
+    } @else {
+      <p class="muted">{{ i18n.t('policy.none') }}</p>
+    }
+    @if (canManage()) {
+      <button type="button" class="small" data-testid="policy-add" (click)="addStep()">
+        + {{ i18n.t('policy.addStep') }}
+      </button>
+      @if (error(); as key) {
+        <p class="form-error" data-testid="policy-error">{{ i18n.t(key) }}</p>
+      }
+      <div class="row-buttons">
+        <button
+          type="button"
+          class="main"
+          data-testid="policy-save"
+          [disabled]="busy()"
+          (click)="save()"
+        >
+          {{ i18n.t('policy.save') }}
+        </button>
+        @if (saved()) {
+          <span class="muted" data-testid="policy-saved">{{ i18n.t('policy.saved') }}</span>
+        }
+      </div>
+      <p class="muted small">{{ i18n.t('policy.hint') }}</p>
+    }
+  </section>
+
+  <section class="card" [attr.aria-label]="i18n.t('policy.preview')">
+    <h2>{{ i18n.t('policy.preview') }}</h2>
+    <ul class="preview" data-testid="policy-preview">
+      @for (one of parsed(); track $index) {
+        <li>
+          {{
+            i18n
+              .t('policy.previewLine')
+              .replace('{h}', '' + one.hoursBefore)
+              .replace('{p}', '' + one.refundPercent)
+          }}
+        </li>
+      }
+      @if (floor() !== null) {
+        <li>{{ i18n.t('policy.under').replace('{h}', '' + floor()) }}</li>
+      }
+    </ul>
+    <p class="muted small">{{ i18n.t('policy.venueCancels') }}</p>
+  </section>
+</div>
