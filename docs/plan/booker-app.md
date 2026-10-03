@@ -19,7 +19,7 @@
   - ภาษา TypeScript → ใช้ `th.json`/`en.json`, type ของ API และฟังก์ชันเงิน/วันที่ ร่วมกับเว็บผ่าน `shared/`
   - **ยอมรับแล้ว:** หน้าจอมีสองชุด (Angular บนเว็บ, React Native บนมือถือ) กฎเงินและสิทธิ์อยู่ที่ API ชุดเดียว
   - **ไม่ใช้ Capacitor / WebView**
-- **โครงโฟลเดอร์ (ยอมรับแล้ว ยังไม่ได้ย้าย):**
+- **โครงโฟลเดอร์ (ย้ายแล้ว 2026-10-04 · `venue/mobile`, `booker/*`, `shared/` สร้างตอนเริ่มแต่ละตัว):**
 
 ```
 repo/
@@ -70,7 +70,7 @@ repo/
 
 ### หน้าจอเดิมที่ลบไป (ใช้ดูตรรกะได้ ห้ามเอามาเป็นหน้าตา)
 
-อยู่ใน git ที่ commit ก่อน `13cf827`: `git show 13cf827^:frontend/src/app/features/booking/<ไฟล์>`
+อยู่ใน git ที่ commit ก่อน `13cf827`: `git show 13cf827^:venue/web/src/app/features/booking/<ไฟล์>`
 - `venue-search.page.*` · `availability.page.*` (grid + poll 10 วิ + `refresh=true`) · `day-picker.ts`
 - `booking.page.*` (QR + สลิป + countdown) · `my-bookings.page.*` (ยกเลิก + ยอดคืน) · `waitlist-card.*`
 - spec ของแต่ละหน้า + verify script `booking_grid`, `booking`, `payment`, `my_bookings`, `waitlist`, `line_login`, `line_notices`, `perf/grid_lcp.py`
@@ -115,7 +115,7 @@ api/ (.NET) ── PostgreSQL
 
 - [ ] **0. เจ้าของตอบ B1–B8** (อย่างน้อย B1, B2, B6, B7 ก่อนเริ่มขั้น 2)
 - [ ] **1. ออกแบบ (Design artifact)** mobile-first ตาม brand badPaka: ค้นหาสนาม · หน้าสนาม + ตารางว่าง · สรุปการจอง · จ่ายเงิน (QR + นับถอยหลัง + อัปโหลดสลิป) · การจองของฉัน + ยกเลิก · คิวรอ · สมัคร/เข้าสู่ระบบ (อีเมล + LINE) · ยอมรับนโยบาย · บัญชี/ลบบัญชี · หน้าตอนเปิดใน LINE → **รออนุมัติ**
-- [ ] **R. ย้ายโฟลเดอร์** ตามโครงข้างบน (`backend/` → `api/`, `frontend/` → `venue/web/`) + `shared/` · PR เดียว แตะ CI, docker-compose, Dockerfile, deploy workflow, scripts, CLAUDE.md, verify README — ต้องผ่าน CI ครบและ `local.py` ก่อน merge · ทำก่อนขั้น 2
+- [x] **R. ย้ายโฟลเดอร์** ตามโครงข้างบน (`api/` → `api/`, `venue/web/` → `venue/web/`) + `shared/` · PR เดียว แตะ CI, docker-compose, Dockerfile, deploy workflow, scripts, CLAUDE.md, verify README — ต้องผ่าน CI ครบและ `local.py` ก่อน merge · ทำก่อนขั้น 2
 - [ ] **2. โครงแอป:** project ใหม่ + route + i18n + CI (build/test/format/งบ bundle) + Caddy/compose เสิร์ฟโดเมนแอปผู้จอง + CSP · หน้าแรกเปล่าขึ้นบน local
 - [ ] **3. backend สำหรับผู้จอง:** แยก "สมัครผู้จอง" ออกจาก "สร้างสนาม" (B6) · `App:BookerBaseUrl` · test
 - [ ] **4. หน้าจอเว็บตาม design** ทีละกลุ่ม (ค้นหา+grid → จอง+จ่าย → การจองของฉัน → คิวรอ → บัญชี) แต่ละกลุ่มมี spec + verify script (ดัดแปลงจากของเดิมใน git) + `fits_a_phone`
@@ -139,3 +139,4 @@ api/ (.NET) ── PostgreSQL
 
 - 2026-10-04 · — · เจ้าของสั่งเตรียมแอปผู้จองสามช่องทาง (เว็บ / มือถือ / LIFF) · เขียนแผนนี้เป็น handoff · สำรวจ: API ผู้จองครบ, หน้าเดิมอยู่ใน `13cf827^`, `TellBookers` ปิด, `OpenSignUp` ปิด, ลิงก์ในอีเมลชี้ `App:BaseUrl/bookings/{id}` · รอเจ้าของตอบ B1–B8
 - 2026-10-04 · — · เจ้าของตัดสิน: ระบบมี 5 ตัว (API · เว็บสนาม · แอปสนาม · เว็บคนจอง · แอปคนจอง) · แอปมือถือเป็น native (React Native + Expo) ไม่เอา WebView · ยอมรับโครงโฟลเดอร์ `api/` `venue/{web,mobile}` `booker/{web,mobile}` `shared/` · เพิ่มขั้น R (ย้ายโฟลเดอร์) และ 7b (แอปสนาม)
+- 2026-10-04 · R · ย้าย `backend/` → `api/` และ `frontend/` → `venue/web/` (git rename) · แก้ CI (path filter, working-directory, cache, docker context), deploy workflow, docker-compose, `local.py`, `gen_app_icons.py`, `gen_court.py`, `EventNamesTests` (หา source ที่ `api/`), CLAUDE.md, README, design skill · ชื่อ job CI คงเดิม · `shared/` ยังไม่สร้าง (ยังไม่มีคนใช้คนที่สอง สร้างตอนทำ `booker/web`) · ประวัติใน plan เก่าไม่แก้

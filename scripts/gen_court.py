@@ -1,6 +1,6 @@
 """Draws a badminton court as a flat isometric picture and prints it as SVG.
 
-The output is the body of the drawing in `frontend/src/app/shared/court.ts`:
+The output is the body of the drawing in `venue/web/src/app/shared/court.ts`:
 
     python scripts/gen_court.py > body.svg    # then paste inside the <svg> in court.ts
 

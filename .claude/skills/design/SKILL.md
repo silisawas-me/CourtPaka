@@ -1,6 +1,6 @@
 ---
 name: design
-description: ออกแบบและแก้หน้าจอของ badPaka ให้ดูตั้งใจ ไม่ใช่ UI แบบ AI สำเร็จรูป — ใช้เมื่อสร้างหน้าใหม่, แก้ layout/สี/ตัวอักษร/ระยะห่าง/motion, เขียน template หรือ .scss ใน frontend/, ทำหน้าให้ใช้บนมือถือได้, หรือเมื่อผลลัพธ์ที่ได้ดู generic. Frontend/UI/visual design work in the Angular Material M3 app.
+description: ออกแบบและแก้หน้าจอของ badPaka ให้ดูตั้งใจ ไม่ใช่ UI แบบ AI สำเร็จรูป — ใช้เมื่อสร้างหน้าใหม่, แก้ layout/สี/ตัวอักษร/ระยะห่าง/motion, เขียน template หรือ .scss ใน venue/web/ (หรือเว็บ/แอปอื่นของ badPaka), ทำหน้าให้ใช้บนมือถือได้, หรือเมื่อผลลัพธ์ที่ได้ดู generic. Frontend/UI/visual design work in the Angular Material M3 app.
 ---
 
 # ออกแบบหน้าจอ badPaka
@@ -15,7 +15,7 @@ description: ออกแบบและแก้หน้าจอของ bad
    - ผู้ใช้เข้ามาจากไหน บนมือถือหรือจอคอม (แอปเหลือแค่ฝั่งสนาม: admin = จอคอมก่อน · พนักงานหน้าเคาน์เตอร์ = จอคอมหรือแท็บเล็ต แต่ต้องไม่พังบนมือถือ)
    - ต่อยอดจากหน้าไหนที่มีอยู่ (ชื่อไฟล์) และจะ **ไม่** ให้หน้าตาเป็นแบบไหน
    - ถ้า brief เขียนไม่ได้เพราะ requirement ไม่ชัด ให้ถามก่อน (CLAUDE.md > วิธีทำงาน)
-2. **สำรวจของที่มีก่อนสร้างของใหม่** — `frontend/src/styles.scss` มี primitive ครบชุดแล้ว (`.shell` `.stack` `.row` `.columns` `.entry` `.badge` `.field` `.muted`)
+2. **สำรวจของที่มีก่อนสร้างของใหม่** — `venue/web/src/styles.scss` มี primitive ครบชุดแล้ว (`.shell` `.stack` `.row` `.columns` `.entry` `.badge` `.field` `.muted`)
    และหน้าที่ใกล้เคียงมักแก้ปัญหาเดียวกันไปแล้ว: `login.page.scss` (หน้าเต็มจอสองฝั่ง), `availability.page.scss` (ตาราง court × ชั่วโมง), `app.scss` (บาร์ + เมนูมือถือ)
 3. **เลือกส่วนประกอบโดยคิดราคา** — Material module ที่ยังไม่มีในแอปมีต้นทุน bundle จริง
    แอปตั้งใจไม่ใช้ `MatMenu` (16 kB gzipped สำหรับพับลิงก์ 4 อัน — ดูคอมเมนต์ใน `app.html`) และไม่ใช้ icon set เลย
@@ -64,7 +64,7 @@ description: ออกแบบและแก้หน้าจอของ bad
 ## Verify
 
 ```bash
-cd frontend && npm test -- --watch=false     # unit + component tests
+cd venue/web && npm test -- --watch=false     # unit + component tests
 npm run format                                # prettier
 npm run build                                 # budget: initial 500 kB warn, component style 4 kB warn
 ```

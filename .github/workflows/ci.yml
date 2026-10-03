@@ -52,9 +52,9 @@ jobs:
           }
 
           {
-            echo "backend=$(matches '^(backend/|\.github/workflows/)')"
-            echo "frontend=$(matches '^(frontend/|\.github/workflows/)')"
-            echo "stack=$(matches '^(backend/|frontend/|scripts/|docker-compose|\.github/workflows/)')"
+            echo "backend=$(matches '^(api/|\.github/workflows/)')"
+            echo "frontend=$(matches '^(venue/web/|\.github/workflows/)')"
+            echo "stack=$(matches '^(api/|venue/web/|scripts/|docker-compose|\.github/workflows/)')"
           } >> "$GITHUB_OUTPUT"
 
   backend:
@@ -63,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: backend
+        working-directory: api
     env:
       # The runner is thrown away after the job, so the Testcontainers reaper adds a pull for nothing.
       TESTCONTAINERS_RYUK_DISABLED: "true"
@@ -72,15 +72,15 @@ jobs:
 
       - uses: actions/setup-dotnet@v6
         with:
-          global-json-file: backend/global.json
+          global-json-file: api/global.json
 
       - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('backend/**/*.csproj', 'backend/Directory.Build.props') }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('api/**/*.csproj', 'api/Directory.Build.props') }}
           restore-keys: nuget-${{ runner.os }}-
 
-      # NuGet audit runs here and fails the job on critical advisories (backend/Directory.Build.props).
+      # NuGet audit runs here and fails the job on critical advisories (api/Directory.Build.props).
       - name: Restore
         run: dotnet restore
 
@@ -97,15 +97,15 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: frontend
+        working-directory: venue/web
     steps:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
         with:
-          node-version-file: frontend/.node-version
+          node-version-file: venue/web/.node-version
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: venue/web/package-lock.json
 
       - name: Install
         run: npm ci
@@ -146,7 +146,7 @@ jobs:
       - name: Build API image
         uses: docker/build-push-action@v7
         with:
-          context: backend
+          context: api
           platforms: ${{ steps.platforms.outputs.value }}
           push: false
           cache-from: type=gha,scope=api
@@ -155,7 +155,7 @@ jobs:
       - name: Build web image
         uses: docker/build-push-action@v7
         with:
-          context: frontend
+          context: venue/web
           platforms: ${{ steps.platforms.outputs.value }}
           push: false
           cache-from: type=gha,scope=web

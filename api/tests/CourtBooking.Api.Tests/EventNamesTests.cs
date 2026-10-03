@@ -176,7 +176,7 @@ public sealed class EventNamesTests
             .Any(part => part is "Migrations" or "bin" or "obj");
 
     private static string SourceRoot() =>
-        Path.Combine(RepoRoot(), "backend", "src", "CourtBooking.Api");
+        Path.Combine(RepoRoot(), "api", "src", "CourtBooking.Api");
 
     /// <summary>
     /// Walks up from wherever the test binary sits until it finds the repository. Tests run from
