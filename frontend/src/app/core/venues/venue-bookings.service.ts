@@ -150,14 +150,17 @@ export interface BookingHours {
  * How money reached the venue (PRD US-26). One list, in the order a counter reaches for them, so
  * that a screen offering a choice of method cannot quietly be missing one.
  */
-export const PAYMENT_METHODS = ['Cash', 'PromptPay', 'Card'] as const;
+export const PAYMENT_METHODS = ['Cash', 'PromptPay', 'Card', 'BankTransfer', 'TrueMoney'] as const;
 
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 /** One amount the venue took, as the counter reads it back. */
 export interface PaymentReceipt {
   id: string;
-  bookingId: string;
+  /** What the money was for: one booking, one package sold, or one shop sale. */
+  bookingId: string | null;
+  packageId?: string | null;
+  saleId?: string | null;
   amountBaht: number;
   method: PaymentMethod;
   receivedAt: string;
@@ -173,7 +176,7 @@ export interface Takings {
 }
 
 /** Which kind of row might be what the till is out by (PRD US-26). */
-export type MoneyLeadKind = 'CashTaken' | 'CashHandedBack' | 'StillOwed';
+export type MoneyLeadKind = 'CashTaken' | 'CashHandedBack' | 'CashPaidOut' | 'StillOwed';
 
 /**
  * One row whose amount is exactly what the count came out by. It is where to look, not what
@@ -201,8 +204,22 @@ export interface DayMoney {
   outstandingBaht: number;
   cashReceipts: PaymentReceipt[];
   closed: DailyClosing | null;
-  /** Empty until the day has been counted, and empty when it came out even. */
+  /** Empty until the latest count, and empty when it came out even. */
   leads: MoneyLead[];
+  /** Straight into the bank account, and TrueMoney (thai-fit T3). Not in the till. */
+  bankTransferBaht: number;
+  trueMoneyBaht: number;
+  /** Every count of the day so far, shifts and then the close (thai-fit T2). */
+  counts: DailyClosing[];
+  /** The drawer since the last count, while the day is still open. */
+  openShift: OpenShift | null;
+}
+
+/** The shift running now: from the last count, the cash it has taken and paid out. */
+export interface OpenShift {
+  from: string;
+  cashInBaht: number;
+  cashOutBaht: number;
 }
 
 export interface DailyClosing {
@@ -213,6 +230,11 @@ export interface DailyClosing {
   differenceBaht: number;
   note: string | null;
   closedAt: string;
+  /** True for the count that closed the day; false for a shift handing over. */
+  endsDay: boolean;
+  closedBy: string | null;
+  /** Where this count's shift started. */
+  from: string | null;
 }
 
 /** How the venue got the money back to the booker (PRD US-18). */
@@ -313,10 +335,11 @@ export class VenueBookingsService {
     openingFloatBaht: number,
     countedCashBaht: number,
     note?: string,
+    endsDay = true,
   ): Observable<DailyClosing> {
     return this.http.post<DailyClosing>(
       `/api/venues/${venueId}/money/closing`,
-      { openingFloatBaht, countedCashBaht, note },
+      { openingFloatBaht, countedCashBaht, note, endsDay },
       { params: { date } },
     );
   }

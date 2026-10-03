@@ -16,7 +16,13 @@ import { HourPackage, PackagesService, PackageType } from '../../core/venues/pac
 import { PaymentMethod } from '../../core/venues/venue-bookings.service';
 
 /** The three ways the dialog takes money, left to right as the design draws them. */
-const PAY_WITH: readonly PaymentMethod[] = ['PromptPay', 'Card', 'Cash'];
+const PAY_WITH: readonly PaymentMethod[] = [
+  'PromptPay',
+  'Card',
+  'Cash',
+  'BankTransfer',
+  'TrueMoney',
+];
 
 /** As long as the customer's name and phone may be (Booking's columns, which a sale shares). */
 const NAME_MAX_LENGTH = 200;

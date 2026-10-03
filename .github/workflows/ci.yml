@@ -195,7 +195,7 @@ jobs:
 
       - name: Run the flows
         run: |
-          for check in doors venue_shell counter_money walk_in now_board timeline booking_list; do
+          for check in doors venue_shell close_drawer counter_money walk_in now_board timeline booking_list; do
             echo "== $check"
             python scripts/verify/$check.py
           done

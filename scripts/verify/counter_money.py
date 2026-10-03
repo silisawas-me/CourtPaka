@@ -100,8 +100,10 @@ with sync_playwright() as p:
         f"{BASE}/api/venues/{venue_id}/money?date={counting.isoformat()}").json()
     # Everything that left the drawer, not only what was handed back: an expense paid in cash is
     # out of the same till, and a run that forgot it would be short by the water bill (US-33).
-    expected = (1000 + before["cashBaht"]
-                - before["cashRefundedBaht"] - before["cashPaidOutBaht"])
+    # A count covers the drawer since the last one (thai-fit T2): a shift handed over earlier
+    # that day already took what came before it, so the open shift's numbers are what count.
+    shift = before["openShift"]
+    expected = 1000 + shift["cashInBaht"] - shift["cashOutBaht"]
 
     # Short by exactly one of the day's cash receipts when there is one, so the run exercises
     # the list of rows that would explain it.

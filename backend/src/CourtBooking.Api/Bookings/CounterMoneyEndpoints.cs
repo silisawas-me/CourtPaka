@@ -31,7 +31,15 @@ public sealed record TakingsResponse(
     decimal OutstandingBaht,
     PaymentReceiptResponse[] Receipts);
 
-public sealed record CloseDayRequest(decimal OpeningFloatBaht, decimal CountedCashBaht, string? Note);
+/// <summary>
+/// A count of the drawer. <c>EndsDay</c> false is a shift handing over (thai-fit T2); true, the
+/// default, closes the venue's day as every count used to.
+/// </summary>
+public sealed record CloseDayRequest(
+    decimal OpeningFloatBaht,
+    decimal CountedCashBaht,
+    string? Note,
+    bool EndsDay = true);
 
 /// <summary>
 /// A day's money, whether or not it has been counted yet (PRD US-26). The screen draws the count
@@ -60,7 +68,21 @@ public sealed record DayMoneyResponse(
     /// Where the difference might have come from, once the day has been counted and did not come
     /// out even. Empty until then, and empty when nothing matches (PRD US-26).
     /// </summary>
-    MoneyLeadResponse[] Leads);
+    MoneyLeadResponse[] Leads,
+    /// <summary>Into the bank account directly, and TrueMoney (thai-fit T3).</summary>
+    decimal BankTransferBaht = 0,
+    decimal TrueMoneyBaht = 0,
+    /// <summary>Every count of the day so far, shifts and the close, in the order they were made.</summary>
+    DailyClosingResponse[]? Counts = null,
+    /// <summary>The drawer since the last count: what the shift now open has taken and paid out.</summary>
+    OpenShiftResponse? OpenShift = null);
+
+/// <summary>
+/// The shift still running (thai-fit T2): from the last count (or the start of the venue's day)
+/// to now. Its expected cash is the float the shift was handed plus these, so the screen shows
+/// what the server will check without working it out.
+/// </summary>
+public sealed record OpenShiftResponse(DateTimeOffset From, decimal CashInBaht, decimal CashOutBaht);
 
 /// <summary>
 /// One row whose amount is exactly what the till came out by (PRD US-26). The system does not say
@@ -80,7 +102,13 @@ public sealed record DailyClosingResponse(
     decimal CountedCashBaht,
     decimal DifferenceBaht,
     string? Note,
-    DateTimeOffset ClosedAt);
+    DateTimeOffset ClosedAt,
+    /// <summary>True for the count that closed the day; false for a shift handing over.</summary>
+    bool EndsDay = true,
+    /// <summary>Who counted, by the name the counter knows them by.</summary>
+    string? ClosedBy = null,
+    /// <summary>Where this count's shift started: the count before it, or the start of the day.</summary>
+    DateTimeOffset? From = null);
 
 public static class MoneyErrorCodes
 {
@@ -358,18 +386,50 @@ public static class CounterMoneyEndpoints
         var owing = await OwingOnAsync(database, venueId, day, cancellationToken);
         var outstanding = owing.Sum(one => one.Baht);
 
-        var closed = await database.DailyClosings
+        // Every count of the day, shifts first and the close last (thai-fit T2). Each covers the
+        // drawer from the count before it, so the list reads as the day handed from hand to hand.
+        var rows = await database.DailyClosings
             .AsNoTracking()
             .Where(closing => closing.VenueId == venueId && closing.Date == day)
-            .Select(closing => new DailyClosingResponse(
-                closing.Date,
-                closing.OpeningFloatBaht,
-                closing.ExpectedCashBaht,
-                closing.CountedCashBaht,
-                closing.DifferenceBaht,
-                closing.Note,
-                closing.ClosedAt))
-            .SingleOrDefaultAsync(cancellationToken);
+            .OrderBy(closing => closing.ClosedAt)
+            .Select(closing => new
+            {
+                Closing = closing,
+                By = closing.ClosedBy!.DeletedAt == null
+                    ? closing.ClosedBy.DisplayName ?? closing.ClosedBy.Email
+                    : null,
+            })
+            .ToListAsync(cancellationToken);
+
+        var counts = rows
+            .Select((row, index) => new DailyClosingResponse(
+                row.Closing.Date,
+                row.Closing.OpeningFloatBaht,
+                row.Closing.ExpectedCashBaht,
+                row.Closing.CountedCashBaht,
+                row.Closing.DifferenceBaht,
+                row.Closing.Note,
+                row.Closing.ClosedAt,
+                row.Closing.EndsDay,
+                row.By,
+                index == 0 ? from : rows[index - 1].Closing.ClosedAt))
+            .ToArray();
+
+        var closed = counts.SingleOrDefault(count => count.EndsDay);
+
+        // The shift still open: from the last count to the end of the day's window. Once the day
+        // is closed there is no open shift — what comes in now is tomorrow's.
+        OpenShiftResponse? openShift = null;
+        if (closed is null)
+        {
+            var shiftFrom = counts.Length > 0 ? counts[^1].ClosedAt : from;
+            openShift = new OpenShiftResponse(
+                shiftFrom,
+                receipts
+                    .Where(receipt => receipt.Method == PaymentMethod.Cash && receipt.ReceivedAt > shiftFrom)
+                    .Sum(receipt => receipt.AmountBaht),
+                cashOut.Where(one => one.At > shiftFrom).Sum(one => one.AmountBaht));
+        }
 
         decimal By(PaymentMethod method) =>
             receipts.Where(receipt => receipt.Method == method).Sum(receipt => receipt.AmountBaht);
@@ -403,7 +463,12 @@ public static class CounterMoneyEndpoints
             outstanding,
             cashTaken,
             closed,
-            LeadsFor(closed, cashTaken, cashOut, owing)));
+            // Leads answer the latest count, shift or close: that is the drawer just counted.
+            LeadsFor(counts.LastOrDefault(), cashTaken, cashOut, owing),
+            By(PaymentMethod.BankTransfer),
+            By(PaymentMethod.TrueMoney),
+            counts,
+            openShift));
     }
 
     /// <summary>
@@ -578,14 +643,32 @@ public static class CounterMoneyEndpoints
         // and the receipt decides that by asking whether this row is already there (PRD US-26).
         await QueueForTheDayAsync(database, venueId, day, cancellationToken);
 
+        // Read inside the queue: a shift counted a moment ago moves where this one starts, and a
+        // day already closed takes no more counts (thai-fit T2).
+        var earlier = await database.DailyClosings
+            .Where(closing => closing.VenueId == venueId && closing.Date == day)
+            .Select(closing => new { closing.ClosedAt, closing.EndsDay })
+            .ToListAsync(cancellationToken);
+        if (earlier.Any(one => one.EndsDay))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return ApiProblem.Of(StatusCodes.Status409Conflict, MoneyErrorCodes.AlreadyClosed);
+        }
+
+        // This count covers the drawer since the last one, or since the day began.
+        DateTimeOffset? since = earlier.Count > 0 ? earlier.Max(one => one.ClosedAt) : null;
+
         var cashIn = await database.PaymentReceipts
             .Where(receipt =>
                 receipt.VenueId == venueId
                 && receipt.Method == PaymentMethod.Cash
-                && receipt.CountsOn == day)
+                && receipt.CountsOn == day
+                && (since == null || receipt.ReceivedAt > since))
             .SumAsync(receipt => (decimal?)receipt.AmountBaht, cancellationToken) ?? 0m;
 
-        var cashOut = await CashOutAsync(database, venueId, from, until, cancellationToken);
+        var cashOut = (await CashOutAsync(database, venueId, from, until, cancellationToken))
+            .Where(one => since == null || one.At > since)
+            .ToList();
 
         var expected = Takings.ExpectedCash(
             request.OpeningFloatBaht, cashIn, cashOut.Sum(one => one.AmountBaht));
@@ -600,6 +683,7 @@ public static class CounterMoneyEndpoints
             CountedCashBaht = counted,
             DifferenceBaht = decimal.Round(counted - expected, 2, MidpointRounding.AwayFromZero),
             Note = string.IsNullOrEmpty(note) ? null : note,
+            EndsDay = request.EndsDay,
             ClosedByUserId = venue.Require().UserId,
             ClosedAt = timeProvider.GetUtcNow(),
         };
@@ -619,8 +703,12 @@ public static class CounterMoneyEndpoints
 
         await transaction.CommitAsync(cancellationToken);
 
-        AppEvents.For(loggers).LogInformation(
-            "day_closed {VenueId} {Date} {Difference}", venueId, day, closing.DifferenceBaht);
+        // A shift handing over is not the day closing; the event of PRD 8.1 is the day's.
+        if (closing.EndsDay)
+        {
+            AppEvents.For(loggers).LogInformation(
+                "day_closed {VenueId} {Date} {Difference}", venueId, day, closing.DifferenceBaht);
+        }
 
         return TypedResults.Ok(new DailyClosingResponse(
             closing.Date,
@@ -629,7 +717,10 @@ public static class CounterMoneyEndpoints
             closing.CountedCashBaht,
             closing.DifferenceBaht,
             closing.Note,
-            closing.ClosedAt));
+            closing.ClosedAt,
+            closing.EndsDay,
+            null,
+            since ?? from));
     }
 
 
@@ -652,9 +743,10 @@ public static class CounterMoneyEndpoints
         var receivedOn = PlatformRequirements.BangkokDateAndHour(receivedAt).Date;
         await QueueForTheDayAsync(database, venueId, receivedOn, cancellationToken);
 
+        // Only the close of the day sends money to tomorrow; a shift's count does not (thai-fit T2).
         var counted = await database.DailyClosings
             .AnyAsync(
-                closing => closing.VenueId == venueId && closing.Date == receivedOn,
+                closing => closing.VenueId == venueId && closing.Date == receivedOn && closing.EndsDay,
                 cancellationToken);
 
         return Takings.CountsOn(receivedOn, counted);

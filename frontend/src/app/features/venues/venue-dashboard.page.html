@@ -1,14 +1,34 @@
-@if (loading() && figures() === null) {
-  <mat-progress-bar mode="indeterminate" />
-} @else if (pageError(); as key) {
-  <mat-card>
-    <mat-card-content>
-      <p class="form-error" data-testid="page-error">{{ i18n.t(key) }}</p>
-    </mat-card-content>
-  </mat-card>
-} @else if (figures(); as f) {
-  @if (loading()) {
-    <mat-progress-bar mode="indeterminate" />
+<div class="tabs" role="tablist" [attr.aria-label]="i18n.t('nav.section.revenue')">
+  @for (one of tabs; track one) {
+    <button
+      type="button"
+      role="tab"
+      class="tab"
+      [class.on]="tab() === one"
+      [attr.aria-selected]="tab() === one"
+      [attr.data-testid]="'revenue-tab-' + one"
+      (click)="tab.set(one)"
+    >
+      {{ i18n.t('revenue.tab.' + one) }}
+    </button>
   }
-  <app-revenue-panel [figures]="f" [fortnight]="true" />
+</div>
+
+@if (tab() === 'close') {
+  <app-close-drawer [venueId]="venueId()" />
+} @else {
+  @if (loading() && figures() === null) {
+    <mat-progress-bar mode="indeterminate" />
+  } @else if (pageError(); as key) {
+    <mat-card>
+      <mat-card-content>
+        <p class="form-error" data-testid="page-error">{{ i18n.t(key) }}</p>
+      </mat-card-content>
+    </mat-card>
+  } @else if (figures(); as f) {
+    @if (loading()) {
+      <mat-progress-bar mode="indeterminate" />
+    }
+    <app-revenue-panel [figures]="f" [fortnight]="true" />
+  }
 }
