@@ -68,6 +68,8 @@ public static class VenueEndpoints
             .RequireAuthorization(VenuePolicies.OwnerOnly);
         venue.MapPut("/members/{userId:guid}/permissions", ChangePermissionsAsync).RequireAuthorization(VenuePolicies.OwnerOnly);
         venue.MapDelete("/members/{userId:guid}", RemoveMemberAsync).RequireAuthorization(VenuePolicies.OwnerOnly);
+        // Staff added by the owner with a six-digit passcode (thai-fit T1).
+        venue.MapStaffEndpoints();
 
         venue.MapCourtEndpoints();
         venue.MapClosureEndpoints();
@@ -439,7 +441,17 @@ public static class VenueEndpoints
             .OrderBy(member => member.CreatedAt)
             .ToListAsync(cancellationToken);
 
-        return TypedResults.Ok(members.Select(ToResponse).ToArray());
+        // A passcode account that has accepted nothing has never signed in (thai-fit T1).
+        var userIds = members.Select(member => member.UserId).ToArray();
+        var consented = await database.UserConsents
+            .Where(consent => userIds.Contains(consent.UserId))
+            .Select(consent => consent.UserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        return TypedResults.Ok(members
+            .Select(member => MemberResponse(member, !consented.Contains(member.UserId)))
+            .ToArray());
     }
 
     private static async Task<Ok<VenueInvitationResponse[]>> ListInvitationsAsync(
@@ -946,7 +958,8 @@ public static class VenueEndpoints
             membership.RefundCeiling,
             venue.DayStartsHour);
 
-    private static VenueMemberResponse ToResponse(VenueMembership membership) =>
+    /// <summary>A seat as the staff tab lists it; <paramref name="acceptedNothing"/> marks who never signed in.</summary>
+    internal static VenueMemberResponse MemberResponse(VenueMembership membership, bool acceptedNothing) =>
         new(
             membership.UserId,
             membership.User?.Email ?? string.Empty,
@@ -955,6 +968,8 @@ public static class VenueEndpoints
                 membership.Role == VenueRole.Owner ? VenuePermissions.All : membership.Permissions),
             membership.RefundCeiling,
             membership.User?.DisplayName,
-            membership.User?.PhoneNumber);
+            membership.User?.PhoneNumber,
+            membership.User is { } user && Passcodes.Is(user),
+            membership.User is { } passcode && Passcodes.Is(passcode) && acceptedNothing);
 
 }

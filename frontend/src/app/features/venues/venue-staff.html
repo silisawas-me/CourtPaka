@@ -1,4 +1,5 @@
-<!-- Staff (thai-fit T1, artboard "พนักงาน"): who works here, then inviting somebody by link. -->
+<!-- Staff (thai-fit T1, artboard "พนักงาน · passcode"): who works here, then adding somebody
+     who can sign in at once with a six-digit passcode. -->
 <div class="settings-tab" data-testid="venue-staff">
   @if (error(); as key) {
     <p class="form-error" data-testid="staff-error">{{ i18n.t(key) }}</p>
@@ -7,7 +8,7 @@
   <section class="card list-card" [attr.aria-label]="i18n.t('staff.title')">
     <div class="card-head head-line">
       <h2>{{ i18n.t('staff.title') }} · {{ members().length }} {{ i18n.t('staff.people') }}</h2>
-      <span class="muted">{{ i18n.t('staff.limitHint') }}</span>
+      <span class="muted">{{ i18n.t('staff.passcodeHint') }}</span>
     </div>
     <div class="staff-row staff-cols" aria-hidden="true">
       <span>{{ i18n.t('staff.col.name') }}</span>
@@ -22,8 +23,15 @@
           <span class="who">
             <span class="avatar" aria-hidden="true">{{ initial(member) }}</span>
             <span class="who-text">
-              <span class="name">{{ who(member) }}</span>
-              <span class="muted">{{ contact(member) }}</span>
+              <span class="name"
+                >{{ who(member) }}
+                @if (member.neverSignedIn) {
+                  <span class="chip fresh" [attr.data-testid]="'staff-fresh-' + member.userId">{{
+                    i18n.t('staff.neverSignedIn')
+                  }}</span>
+                }
+              </span>
+              <span class="muted mono">{{ contact(member) }}</span>
             </span>
           </span>
           <span>
@@ -66,7 +74,18 @@
                 }}</span>
               }
             </label>
-            <span>
+            <span class="row-actions">
+              @if (member.usesPasscode) {
+                <button
+                  type="button"
+                  class="small"
+                  [attr.data-testid]="'staff-passcode-' + member.userId"
+                  [disabled]="busy()"
+                  (click)="newPasscode(member)"
+                >
+                  {{ i18n.t('staff.newPasscode') }}
+                </button>
+              }
               <button
                 type="button"
                 class="small warn"
@@ -84,51 +103,40 @@
   </section>
 
   <div class="settings-tab two">
-    <section class="card" [attr.aria-label]="i18n.t('staff.invite.title')">
-      <h2>{{ i18n.t('staff.invite.title') }}</h2>
-      <label class="field"
-        >{{ i18n.t('staff.invite.name') }}
-        <input
-          class="input"
-          data-testid="invite-name"
-          maxlength="100"
-          [placeholder]="i18n.t('staff.invite.namePlaceholder')"
-          [value]="name()"
-          (input)="name.set($any($event.target).value)"
-        />
-      </label>
+    <section class="card" [attr.aria-label]="i18n.t('staff.add.title')">
+      <h2>{{ i18n.t('staff.add.title') }}</h2>
       <div class="pair">
         <label class="field"
-          >{{ i18n.t('staff.invite.phone') }}
+          >{{ i18n.t('staff.add.name') }}
           <input
             class="input"
+            data-testid="add-name"
+            maxlength="100"
+            [placeholder]="i18n.t('staff.add.namePlaceholder')"
+            [value]="name()"
+            (input)="name.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field"
+          >{{ i18n.t('staff.add.phone') }}
+          <input
+            class="input mono"
             type="tel"
-            data-testid="invite-phone"
+            data-testid="add-phone"
             placeholder="08x-xxx-xxxx"
             [value]="phone()"
             (input)="phone.set($any($event.target).value)"
           />
         </label>
-        <label class="field"
-          >{{ i18n.t('staff.invite.email') }}
-          <input
-            class="input"
-            type="email"
-            data-testid="invite-email"
-            placeholder="name@example.com"
-            [value]="email()"
-            (input)="email.set($any($event.target).value)"
-          />
-        </label>
       </div>
       <fieldset class="grant">
-        <legend class="muted">{{ i18n.t('staff.invite.permissions') }}</legend>
+        <legend class="muted">{{ i18n.t('staff.add.permissions') }}</legend>
         <span class="perms">
           @for (permission of permissions; track permission) {
             <label class="perm" [class.on]="granted().includes(permission)">
               <input
                 type="checkbox"
-                [attr.data-testid]="'invite-perm-' + permission"
+                [attr.data-testid]="'add-perm-' + permission"
                 [checked]="granted().includes(permission)"
                 (change)="grant(permission, $any($event.target).checked)"
               />
@@ -139,78 +147,45 @@
       </fieldset>
       <button
         type="button"
-        class="main"
-        data-testid="invite-create"
-        [disabled]="!canInvite()"
-        (click)="invite()"
+        class="main add-button"
+        data-testid="add-staff"
+        [disabled]="!canAdd()"
+        (click)="add()"
       >
-        {{ i18n.t('staff.invite.create') }}
+        {{ i18n.t('staff.add.submit') }}
       </button>
-      @if (!name().trim() && !email().trim()) {
-        <p class="muted hint">{{ i18n.t('staff.invite.needName') }}</p>
-      }
+      <p class="muted hint">{{ i18n.t('staff.add.hint') }}</p>
+    </section>
 
-      @if (made(); as invitation) {
-        <div class="made" data-testid="invite-made">
-          <span class="muted"
-            >{{ i18n.t('staff.invite.ready') }} {{ invitation.name || invitation.email }}</span
-          >
-          <code class="link" data-testid="invite-link">{{ invitation.link }}</code>
+    @if (made(); as answer) {
+      <section
+        class="card made-card"
+        data-testid="staff-made"
+        [attr.aria-label]="i18n.t('staff.code.title')"
+      >
+        @if (answer.passcode) {
+          <h2>{{ i18n.t('staff.code.added').replace('{name}', who(answer.member)) }}</h2>
+          <div class="code-box">
+            <span class="code-for"
+              >{{ i18n.t('staff.code.door') }} · {{ answer.member.phone }}</span
+            >
+            <span class="code" data-testid="staff-passcode">{{ shownCode() }}</span>
+          </div>
           <div class="row-buttons">
-            @if (lineUrl(); as url) {
-              <a
-                class="line"
-                data-testid="invite-line"
-                target="_blank"
-                rel="noopener"
-                [href]="url"
-                >{{ i18n.t('staff.invite.line') }}</a
-              >
-            }
-            <button type="button" data-testid="invite-copy" (click)="copy()">
-              {{ i18n.t(copied() ? 'staff.invite.copied' : 'staff.invite.copy') }}
+            <button type="button" data-testid="staff-copy" (click)="copy()">
+              {{ i18n.t(copied() ? 'staff.code.copied' : 'staff.code.copy') }}
+            </button>
+            <button type="button" data-testid="staff-hide" (click)="hidden.set(!hidden())">
+              {{ i18n.t(hidden() ? 'staff.code.show' : 'staff.code.hide') }}
             </button>
           </div>
-          @if (invitation.email) {
-            <span class="muted">{{ i18n.t('staff.invite.emailed') }}</span>
-          }
-        </div>
-      }
-      <p class="muted hint">{{ i18n.t('staff.invite.hint') }}</p>
-    </section>
-
-    <section class="card" [attr.aria-label]="i18n.t('staff.pending.title')">
-      <h2>{{ i18n.t('staff.pending.title') }}</h2>
-      <ul class="list">
-        @for (invitation of invitations(); track invitation.id) {
-          <li class="pending" [attr.data-testid]="'invitation-' + invitation.id">
-            <span class="who-text">
-              <span class="name">
-                {{ invitation.name || invitation.email }}
-                @if (invitation.phone) {
-                  · {{ invitation.phone }}
-                }
-              </span>
-              <span class="muted">
-                {{ invitation.email ? invitation.email : i18n.t('staff.pending.byLink') }} ·
-                {{ i18n.t('staff.pending.expires') }}
-                {{ invitation.expiresAt | appDateTime: i18n.locale() }}
-              </span>
-            </span>
-            <button
-              type="button"
-              class="small warn"
-              [attr.data-testid]="'invitation-revoke-' + invitation.id"
-              [disabled]="busy()"
-              (click)="revoke(invitation)"
-            >
-              {{ i18n.t('staff.pending.revoke') }}
-            </button>
-          </li>
-        } @empty {
-          <li class="muted">{{ i18n.t('staff.pending.none') }}</li>
+          <p class="muted hint">{{ i18n.t('staff.code.once') }}</p>
+        } @else {
+          <!-- Somebody already working at another branch: they sign in as they already do. -->
+          <h2>{{ i18n.t('staff.code.joined').replace('{name}', who(answer.member)) }}</h2>
+          <p class="muted hint">{{ i18n.t('staff.code.samePasscode') }}</p>
         }
-      </ul>
-    </section>
+      </section>
+    }
   </div>
 </div>

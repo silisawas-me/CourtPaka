@@ -43,7 +43,17 @@ public sealed record CurrentUserResponse(
     /// <summary>What the account still needs before it can book (BookingEligibility), or null.</summary>
     string? CannotBookBecause = null,
     /// <summary>The name the counter knows them by ("บอม"), where they have one.</summary>
-    string? DisplayName = null);
+    string? DisplayName = null,
+    /// <summary>Signs in with a six-digit passcode an owner set (thai-fit T1).</summary>
+    bool UsesPasscode = false,
+    /// <summary>Has not yet accepted the privacy policy in force: the first sign-in asks (PDPA).</summary>
+    bool NeedsConsent = false);
+
+/// <summary>The staff's own new passcode, with the one they have now.</summary>
+public sealed record ChangePasscodeRequest(string? Current, string? New);
+
+/// <summary>Accepting the privacy policy, by the version the screen showed.</summary>
+public sealed record ConsentRequest(string? PrivacyPolicyVersion);
 
 public sealed record PrivacyPolicyResponse(string Version);
 
@@ -80,6 +90,15 @@ public static class AuthErrorCodes
 
     /// <summary>A phone-only account signs in with its number, so the number has to be its own.</summary>
     public const string PhoneTaken = "auth.phone_taken";
+
+    /// <summary>A passcode is six digits.</summary>
+    public const string InvalidPasscode = "auth.invalid_passcode";
+
+    /// <summary>The passcode typed as the current one is not it.</summary>
+    public const string WrongPasscode = "auth.wrong_passcode";
+
+    /// <summary>Only an account that signs in with a passcode has one to change.</summary>
+    public const string NoPasscode = "auth.no_passcode";
 }
 
 public static class RateLimitPolicies

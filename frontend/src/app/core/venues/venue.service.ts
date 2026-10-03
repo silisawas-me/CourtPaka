@@ -96,6 +96,10 @@ export interface VenueMember {
   name?: string | null;
   phone?: string | null;
   role: 'Owner' | 'Staff';
+  /** Signs in with a six-digit passcode the owner can set (thai-fit T1). */
+  usesPasscode?: boolean;
+  /** A passcode account that has never signed in yet. */
+  neverSignedIn?: boolean;
   permissions: VenuePermission[];
   /**
    * The most they may write down as sent back in one record (PRD US-18). Null for the owner,
@@ -129,6 +133,19 @@ export interface VenueInvitation {
   phone?: string | null;
   /** Only in the answer to the invite itself: the token is never stored, so never shown again. */
   link?: string | null;
+}
+
+/** Somebody the owner adds, who can sign in at once (thai-fit T1). */
+export interface AddStaffRequest {
+  name: string;
+  phone: string;
+  permissions: readonly VenuePermission[];
+}
+
+/** A member and their passcode, shown once; null for somebody who already had an account. */
+export interface StaffPasscode {
+  member: VenueMember;
+  passcode: string | null;
 }
 
 /** Who an invitation is for: an address, or a name (and a phone) for a link sent over LINE. */
@@ -252,6 +269,16 @@ export class VenueService {
 
   invite(venueId: string, request: InviteRequest): Observable<VenueInvitation> {
     return this.http.post<VenueInvitation>(`/api/venues/${venueId}/invitations`, request);
+  }
+
+  /** Adds somebody to the staff with a six-digit passcode they can sign in with at once. */
+  addStaff(venueId: string, request: AddStaffRequest): Observable<StaffPasscode> {
+    return this.http.post<StaffPasscode>(`/api/venues/${venueId}/staff`, request);
+  }
+
+  /** A new passcode for a staff member who lost theirs; the old one stops working. */
+  newPasscode(venueId: string, userId: string): Observable<StaffPasscode> {
+    return this.http.post<StaffPasscode>(`/api/venues/${venueId}/members/${userId}/passcode`, {});
   }
 
   /** Takes back an invitation nobody has used; its link stops working at once. */

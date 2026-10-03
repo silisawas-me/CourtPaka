@@ -1,0 +1,34 @@
+<mat-card data-testid="welcome">
+  <mat-card-header>
+    <mat-card-title
+      >{{ i18n.t('welcome.title') }}
+      @if (user()?.displayName; as name) {
+        {{ name }}
+      }
+    </mat-card-title>
+  </mat-card-header>
+  <mat-card-content class="stack">
+    <p>{{ venue() }} {{ i18n.t('welcome.added') }}</p>
+    <mat-checkbox
+      data-testid="welcome-accept"
+      [checked]="accepted()"
+      (change)="accepted.set($event.checked)"
+    >
+      {{ i18n.t('welcome.accept') }}
+    </mat-checkbox>
+    @if (error(); as key) {
+      <p class="form-error" data-testid="welcome-error">{{ i18n.t(key) }}</p>
+    }
+  </mat-card-content>
+  <mat-card-actions>
+    <button
+      matButton="filled"
+      type="button"
+      data-testid="welcome-start"
+      [disabled]="!accepted() || busy()"
+      (click)="start()"
+    >
+      {{ i18n.t('welcome.start') }}
+    </button>
+  </mat-card-actions>
+</mat-card>

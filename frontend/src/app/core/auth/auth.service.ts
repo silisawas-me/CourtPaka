@@ -19,6 +19,10 @@ export interface CurrentUser {
   phoneNumber: string | null;
   /** The name the counter knows them by, where they have one. */
   displayName?: string | null;
+  /** Signs in with a six-digit passcode an owner set (thai-fit T1). */
+  usesPasscode?: boolean;
+  /** Has not accepted the privacy policy yet: the first sign-in asks before anything else. */
+  needsConsent?: boolean;
   invitationId?: string;
   invitationToken?: string;
   /** False for a LINE account: deleting it is confirmed at LINE instead of with a password. */
@@ -187,6 +191,21 @@ export class AuthService {
     return this.http
       .post<void>('/api/auth/line/complete', input)
       .pipe(switchMap(() => this.loadCurrentUser()));
+  }
+
+  /** The privacy policy, accepted by the person themselves (PDPA); the server owns the version. */
+  consent(): Observable<CurrentUser | null> {
+    return this.privacyPolicyVersion().pipe(
+      switchMap((privacyPolicyVersion) =>
+        this.http.post<void>('/api/auth/me/consent', { privacyPolicyVersion }),
+      ),
+      switchMap(() => this.loadCurrentUser()),
+    );
+  }
+
+  /** A passcode account's own new passcode, given the one it has now. */
+  changePasscode(current: string, next: string): Observable<void> {
+    return this.http.post<void>('/api/auth/me/passcode', { current, new: next });
   }
 
   /** The number a venue reaches the booker on (PRD US-01); empty clears it. */

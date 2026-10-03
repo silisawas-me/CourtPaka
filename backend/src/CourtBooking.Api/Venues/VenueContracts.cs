@@ -146,6 +146,22 @@ public sealed record RiskRuleResponse(
     int? PeakUntilHour);
 
 /// <summary>
+/// Somebody added to the venue's staff by the owner (thai-fit T1): a name, the phone they sign
+/// in with, and what they may do. They can work at once, with the passcode the answer carries.
+/// </summary>
+public sealed record AddStaffRequest(
+    string? Name,
+    string? Phone,
+    string[]? Permissions,
+    decimal? RefundLimitBaht = null);
+
+/// <summary>
+/// The member just added, or whose passcode was just set, with the passcode — shown once: only
+/// its hash is kept, so a lost one is replaced, never read back.
+/// </summary>
+public sealed record StaffPasscodeResponse(VenueMemberResponse Member, string? Passcode);
+
+/// <summary>
 /// A seat at the venue. <c>Email</c> is empty for somebody who joined by a LINE link with only a
 /// phone (thai-fit T1); <c>Name</c> and <c>Phone</c> are what the list shows them by then.
 /// </summary>
@@ -160,7 +176,11 @@ public sealed record VenueMemberResponse(
     /// </summary>
     decimal? RefundLimitBaht,
     string? Name = null,
-    string? Phone = null);
+    string? Phone = null,
+    /// <summary>Signs in with a passcode the owner can set (thai-fit T1).</summary>
+    bool UsesPasscode = false,
+    /// <summary>A passcode account that has never signed in (it has accepted nothing yet).</summary>
+    bool NeverSignedIn = false);
 
 /// <summary>
 /// What is waiting at this venue for the person asking (PRD US-17). Each number is counted only
@@ -234,6 +254,15 @@ public static class VenueErrorCodes
 
     /// <summary>An invitation with no address has to say who it is for.</summary>
     public const string InvitationNeedsName = "venue.invitation_needs_name";
+
+    /// <summary>Somebody added as staff has to be called something.</summary>
+    public const string StaffNeedsName = "venue.staff_needs_name";
+
+    /// <summary>A passcode can only be set for an account that signs in with one.</summary>
+    public const string NotAPasscodeAccount = "venue.not_a_passcode_account";
+
+    /// <summary>The phone already signs in to an account that does not use a passcode.</summary>
+    public const string PhoneHasAnotherAccount = "venue.phone_has_another_account";
 
     public const string InvalidPhone = "venue.invalid_phone";
     public const string InvalidCode = "venue.invalid_code";

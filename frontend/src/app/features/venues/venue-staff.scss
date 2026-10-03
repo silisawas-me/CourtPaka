@@ -17,7 +17,7 @@
   border-bottom: 1px solid color-mix(in srgb, var(--mat-sys-outline-variant) 60%, transparent);
 
   @media (min-width: 60rem) {
-    grid-template-columns: minmax(0, 1.2fr) 84px minmax(0, 2.4fr) 140px 96px;
+    grid-template-columns: minmax(0, 1.2fr) 84px minmax(0, 2.2fr) 130px 220px;
   }
 }
 
@@ -130,39 +130,43 @@
   font-size: 12px;
 }
 
-.made {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: var(--status-playing-soft);
+/* The artboard's green passcode card: the code big, in two groups, to read out at the desk. */
+.made-card {
+  border: 2px solid var(--mat-sys-primary);
 }
 
-.link {
-  overflow-wrap: anywhere;
+.code-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--status-playing-soft);
+  color: var(--status-playing-ink);
+}
+
+.code-for {
   font-size: 12px;
 }
 
-/* LINE's green, darkened from #06c755 until white on it reads (4.9:1, not 2.3:1). */
-.line {
-  display: inline-flex;
-  align-items: center;
-  min-height: 36px;
-  padding: 0 14px;
-  border-radius: 8px;
-  background: #05823a;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  text-decoration: none;
+.code {
+  font: 800 44px var(--font-display);
+  letter-spacing: 8px;
 }
 
-.pending {
+.row-actions {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--mat-sys-outline-variant) 60%, transparent);
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip.fresh {
+  margin-left: 6px;
+  background: var(--status-waiting-soft);
+  color: var(--status-waiting-ink);
+  font-weight: 400;
+}
+
+.add-button {
+  align-self: flex-start;
 }

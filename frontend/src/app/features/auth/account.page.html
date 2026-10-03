@@ -57,6 +57,61 @@
   </mat-card-content>
 </mat-card>
 
+@if (user()?.usesPasscode) {
+  <!-- Staff an owner added change their own passcode here, whenever they like (thai-fit T1). -->
+  <mat-card data-testid="passcode-card">
+    <mat-card-header>
+      <mat-card-title>{{ i18n.t('account.passcode.title') }}</mat-card-title>
+    </mat-card-header>
+    <mat-card-content class="stack">
+      <mat-form-field class="field">
+        <mat-label>{{ i18n.t('account.passcode.current') }}</mat-label>
+        <input
+          matInput
+          type="password"
+          inputmode="numeric"
+          maxlength="6"
+          autocomplete="current-password"
+          data-testid="passcode-current"
+          [value]="passcodeNow()"
+          (input)="passcodeNow.set($any($event.target).value)"
+        />
+      </mat-form-field>
+      <mat-form-field class="field">
+        <mat-label>{{ i18n.t('account.passcode.new') }}</mat-label>
+        <input
+          matInput
+          type="password"
+          inputmode="numeric"
+          maxlength="6"
+          autocomplete="new-password"
+          data-testid="passcode-new"
+          [value]="passcodeNext()"
+          (input)="passcodeNext.set($any($event.target).value)"
+        />
+      </mat-form-field>
+      @if (passcodeError(); as key) {
+        <p class="form-error" data-testid="passcode-error">{{ i18n.t(key) }}</p>
+      }
+      @if (passcodeSaved()) {
+        <p class="success" data-testid="passcode-saved">{{ i18n.t('account.passcode.saved') }}</p>
+      }
+      <div>
+        <button
+          matButton="filled"
+          type="button"
+          data-testid="passcode-save"
+          [disabled]="savingPasscode()"
+          (click)="savePasscode()"
+        >
+          {{ i18n.t('account.passcode.save') }}
+        </button>
+      </div>
+      <p class="muted">{{ i18n.t('account.passcode.hint') }}</p>
+    </mat-card-content>
+  </mat-card>
+}
+
 <mat-card>
   <mat-card-header>
     <mat-card-title>{{ i18n.t('account.delete.title') }}</mat-card-title>
