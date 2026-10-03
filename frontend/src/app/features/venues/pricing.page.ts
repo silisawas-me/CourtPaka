@@ -19,6 +19,7 @@ import { ClockPipe } from '../../core/i18n/clock.pipe';
 import { VenueCatalog } from './venue-catalog';
 import { VenueCourts } from './venue-courts';
 import { VenueStaff } from './venue-staff';
+import { VenueGrace } from './venue-grace';
 import { VenuePolicy } from './venue-policy';
 import { VenueHours } from './venue-hours';
 
@@ -35,7 +36,16 @@ const PRICE_STEP = 10;
  */
 @Component({
   selector: 'app-pricing-page',
-  imports: [BahtPipe, ClockPipe, VenueHours, VenueCourts, VenueStaff, VenueCatalog, VenuePolicy],
+  imports: [
+    BahtPipe,
+    ClockPipe,
+    VenueHours,
+    VenueCourts,
+    VenueStaff,
+    VenueCatalog,
+    VenuePolicy,
+    VenueGrace,
+  ],
   templateUrl: './pricing.page.html',
   styleUrl: './pricing.page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

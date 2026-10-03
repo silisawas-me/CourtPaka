@@ -7,6 +7,12 @@
   <app-venue-catalog [venueId]="venueId()" [canManage]="canManage()" />
 } @else if (tab() === 'policy') {
   <app-venue-policy [venueId]="venueId()" [canManage]="canManage()" />
+  <app-venue-grace
+    [venueId]="venueId()"
+    [minutes]="venue()?.graceMinutes ?? 15"
+    [canManage]="canManage()"
+    (saved)="reload()"
+  />
 } @else if (tab() === 'hours') {
   <app-venue-hours
     [venueId]="venueId()"
