@@ -1,5 +1,6 @@
-/* The owner app's "now", measured off the design: the whole page on the ink ground, courts three
-   across in rows that share its height, the desk a 360px light card on the right. */
+/* The owner app's "now", measured off the design: courts three across in rows that share its
+   height, the desk a 360px card on the right. On the paper ground like every other page (the
+   owner's call, 2026-10-03 — the design's ink ground read as a dark mode). */
 :host {
   display: block;
   min-width: 0;
@@ -9,15 +10,12 @@
   display: grid;
   gap: 16px;
   padding: 16px;
-  border-radius: var(--mat-sys-corner-extra-large);
-  background: var(--mat-sys-inverse-surface);
 
   @media (min-width: 60rem) {
     display: flex;
     margin: calc(-2 * var(--stack)) -1.5rem calc(-1 * var(--shell-bottom, 0px));
     height: calc(100dvh - 4.3rem);
     padding: 20px 24px;
-    border-radius: 0;
   }
 }
 
@@ -51,34 +49,42 @@
   gap: 8px;
   min-height: 10rem;
   padding: 18px;
+  border: 1px solid var(--mat-sys-outline-variant);
   border-radius: 20px;
-  background: var(--mat-sys-surface-container-low, #f8f5ef);
+  background: var(--mat-sys-surface);
   color: var(--mat-sys-on-surface);
 
   --pill: var(--kind-app-soft);
   --track: var(--mat-sys-outline-variant);
   --fill: var(--mat-sys-primary);
 
+  // Somebody is due and has not checked in: the rust edge, the card itself stays white.
   &.due {
-    background: var(--kind-walkin-soft);
-    --pill: var(--kind-walkin-line);
+    border-color: var(--kind-walkin-line);
+    box-shadow: inset 0 0 0 1px var(--kind-walkin-line);
+    --pill: var(--status-waiting-soft);
     --fill: var(--status-waiting);
   }
 
+  // Nobody on it: the paper shows through, so a free court reads as room, not as a booking.
   &.free,
   &.closed,
   &.shut {
-    background: #3a332d;
-    color: #f8f5ef;
-    --pill: rgb(127 208 143 / 20%);
-    --track: #4a423b;
-    --fill: #7fd08f;
+    border-style: dashed;
+    background: transparent;
+    --pill: var(--status-playing-soft);
   }
 
   &.closed,
   &.shut {
-    --pill: rgb(255 255 255 / 10%);
-    background: repeating-linear-gradient(45deg, #3a332d 0 8px, #342e29 8px 16px);
+    border-style: solid;
+    --pill: var(--status-done-soft);
+    background: repeating-linear-gradient(
+      45deg,
+      var(--mat-sys-surface-container) 0 8px,
+      transparent 8px 16px
+    );
+    color: var(--mat-sys-on-surface-variant);
   }
 }
 
@@ -151,8 +157,9 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  border: 1px solid var(--mat-sys-outline-variant);
   border-radius: 22px;
-  background: var(--mat-sys-background, #f8f5ef);
+  background: var(--mat-sys-surface);
   color: var(--mat-sys-on-surface);
 
   @media (min-width: 60rem) {
