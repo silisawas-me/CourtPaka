@@ -1207,5 +1207,9 @@
   "closing.spend.Utilities": "Utilities",
   "closing.spend.Wages": "Wages",
   "closing.spend.Repairs": "Repairs",
-  "closing.spend.Other": "Other"
+  "closing.spend.Other": "Other",
+  "closing.leadsWaiting": "Type what you counted: if it is out, the rows for exactly that amount show here",
+  "closing.groupHint.CashTaken": "Cash written as taken that may not be in the drawer",
+  "closing.groupHint.StillOwed": "Bookings still owing that may have paid without it being taken in",
+  "closing.groupHint.CashOut": "Cash written as out that may not have left"
 }

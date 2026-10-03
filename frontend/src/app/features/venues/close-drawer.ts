@@ -16,12 +16,11 @@ import { TranslationService } from '../../core/i18n/translation.service';
 import {
   DailyClosing,
   DayMoney,
-  MoneyLead,
   MoneyLine,
   PaymentMethod,
   VenueBookingsService,
 } from '../../core/venues/venue-bookings.service';
-import { groupOf, inShift, LeadGroup, lineOf, Shift, shiftsOf, totalsOf } from './till';
+import { inShift, Lead, LEAD_GROUPS, leadsFor, Shift, shiftsOf, totalsOf } from './till';
 
 /** The forms money arrives in, as the artboard's tiles lay them out (thai-fit T3). */
 const METHODS: readonly { method: PaymentMethod; note: string }[] = [
@@ -31,8 +30,6 @@ const METHODS: readonly { method: PaymentMethod; note: string }[] = [
   { method: 'TrueMoney', note: 'closing.notInTill' },
   { method: 'Card', note: 'closing.notInTill' },
 ];
-
-const LEAD_GROUPS: readonly LeadGroup[] = ['CashTaken', 'StillOwed', 'CashOut'];
 
 /**
  * Counting the drawer by shift, as the "ปิดยอด" artboard of docs/plan/thai-fit.md draws it: the
@@ -136,10 +133,23 @@ export class CloseDrawer {
     return counted === null ? null : round(counted - this.expected());
   });
 
-  /** Where the latest count came out, if it came out wrong: what the leads are about. */
+  /**
+   * What the bottom of the page is looking for: the count being typed, while it is out; else the
+   * last count, if it came out wrong. Null when there is nothing to explain.
+   */
   protected readonly outBy = computed(() => {
+    const typed = this.difference();
+    if (typed !== null && typed !== 0) {
+      return typed;
+    }
     const last = this.lastCount();
-    return last && last.differenceBaht !== 0 ? Math.abs(last.differenceBaht) : null;
+    return last && last.differenceBaht !== 0 ? last.differenceBaht : null;
+  });
+
+  protected readonly leads = computed(() => {
+    const money = this.money();
+    const diff = this.outBy();
+    return money && diff !== null ? leadsFor(diff, money.lines ?? [], money.owing ?? []) : [];
   });
 
   protected readonly dayLabel = computed(() =>
@@ -252,29 +262,33 @@ export class CloseDrawer {
     return parts.filter(Boolean).join(' · ');
   }
 
-  protected leadsIn(group: LeadGroup): MoneyLead[] {
-    return (this.money()?.leads ?? []).filter((lead) => groupOf(lead) === group);
+  protected leadsIn(group: string): Lead[] {
+    return this.leads().filter((lead) => lead.group === group);
   }
 
-  /** What a lead was, from the line it points at: "น้ำดื่ม ×4 · ฿60", "คุณแนน · คอร์ต 5 · ค้าง ฿60". */
-  protected leadTitle(lead: MoneyLead): string {
-    const line = lineOf(lead, this.money()?.lines ?? []);
-    const baht = `฿${formatBaht(lead.amountBaht, this.i18n.locale())}`;
-    if (lead.kind === 'StillOwed') {
-      const who = [line?.who, line?.courts].filter(Boolean).join(' · ');
-      return `${who ? `${who} · ` : ''}${this.i18n.t('closing.owing')} ${baht}`;
+  /** What a lead was: "น้ำดื่ม ×4 · ฿60", "คุณแนน · คอร์ต 5 · ค้าง ฿60". */
+  protected leadTitle(lead: Lead): string {
+    const baht = (value: number) => `฿${formatBaht(value, this.i18n.locale())}`;
+    if (lead.group === 'StillOwed') {
+      const who = [lead.owing.who, lead.owing.courts].filter(Boolean).join(' · ');
+      return `${who ? `${who} · ` : ''}${this.i18n.t('closing.owing')} ${baht(lead.owing.baht)}`;
     }
-    return line ? `${this.whatShort(line)} · ${baht}` : baht;
+    return `${this.whatShort(lead.line)} · ${baht(lead.line.amountBaht)}`;
   }
 
-  protected leadHint(lead: MoneyLead): string {
-    const at = lead.at ? `${this.clock(lead.at)} · ` : '';
-    const line = lead.kind === 'CashTaken' ? lineOf(lead, this.money()?.lines ?? []) : null;
+  protected leadHint(lead: Lead): string {
+    if (lead.group === 'StillOwed') {
+      return this.i18n.t('closing.leadHint.StillOwed');
+    }
+    const line = lead.line;
     const noBooking =
-      line && line.kind === 'Sale' && !line.bookingId
-        ? `${this.i18n.t('closing.line.noBooking')} · `
-        : '';
-    return `${at}${noBooking}${this.i18n.t(`closing.leadHint.${lead.kind}`)}`;
+      line.kind === 'Sale' && !line.bookingId ? `${this.i18n.t('closing.line.noBooking')} · ` : '';
+    const why = line.out
+      ? line.kind === 'PaidOut'
+        ? 'closing.leadHint.CashPaidOut'
+        : 'closing.leadHint.CashHandedBack'
+      : 'closing.leadHint.CashTaken';
+    return `${this.clock(line.at)} · ${noBooking}${this.i18n.t(why)}`;
   }
 
   /** Short or over is said in words beside it, so the amount is shown without a sign. */

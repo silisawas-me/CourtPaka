@@ -79,7 +79,15 @@ public sealed record DayMoneyResponse(
     /// <summary>Every movement of the day's money, in and out, as the drawer page lists it.</summary>
     MoneyLineResponse[]? Lines = null,
     /// <summary>When the venue opened that day, which is where its first shift is said to start.</summary>
-    int? OpensHour = null);
+    int? OpensHour = null,
+    /// <summary>
+    /// The day's bookings still short, and by how much: what the drawer page checks a count
+    /// against while it is being typed, by the same exact-amount rule the leads use.
+    /// </summary>
+    OwingResponse[]? Owing = null);
+
+/// <summary>A booking of the day still owing, and whose it is.</summary>
+public sealed record OwingResponse(Guid BookingId, decimal Baht, string? Who, string? Courts);
 
 /// <summary>
 /// The shift still running (thai-fit T2): from the last count (or the start of the venue's day)
@@ -476,7 +484,8 @@ public static class CounterMoneyEndpoints
             openShift,
             await MoneyLines.ForDayAsync(database, venueId, day, cashOut, cancellationToken),
             (await CourtEndpoints.ScheduleOnAsync(database, venueId, day, cancellationToken))?
-                .Days.SingleOrDefault(one => one.Day == day.DayOfWeek)?.OpensHour));
+                .Days.SingleOrDefault(one => one.Day == day.DayOfWeek)?.OpensHour,
+            [.. owing.Select(one => new OwingResponse(one.BookingId, one.Baht, one.Who, one.Courts))]));
     }
 
     /// <summary>
@@ -608,8 +617,8 @@ public static class CounterMoneyEndpoints
         return [.. refunded, .. paidOut, .. handedBack];
     }
 
-    /// <summary>A booking of that day and what it is still short.</summary>
-    private sealed record StillOwed(Guid BookingId, decimal Baht);
+    /// <summary>A booking of that day and what it is still short, and whose it is.</summary>
+    private sealed record StillOwed(Guid BookingId, decimal Baht, string? Who = null, string? Courts = null);
 
     /// <summary>
     /// Counts the day and writes it down (PRD US-26). What the till should hold is the server's
@@ -872,6 +881,9 @@ public static class CounterMoneyEndpoints
                 Taken = database.PaymentReceipts
                     .Where(receipt => receipt.BookingId == booking.Id)
                     .Sum(receipt => (decimal?)receipt.AmountBaht) ?? 0m,
+                Who = booking.CustomerName
+                      ?? (booking.Booker!.DeletedAt == null ? booking.Booker.DisplayName : null),
+                Courts = booking.Slots.Select(slot => slot.Court!.Name).ToList(),
             })
             .ToListAsync(cancellationToken);
 
@@ -879,7 +891,10 @@ public static class CounterMoneyEndpoints
         [
             .. owed
                 .Select(one => new StillOwed(
-                    one.Id, Takings.OutstandingOf(one.TotalBaht, one.Taken)))
+                    one.Id,
+                    Takings.OutstandingOf(one.TotalBaht, one.Taken),
+                    one.Who,
+                    string.Join(", ", one.Courts.Distinct())))
                 .Where(one => one.Baht > 0),
         ];
     }

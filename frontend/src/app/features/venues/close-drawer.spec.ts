@@ -198,6 +198,23 @@ describe('CloseDrawer', () => {
     expect(textOf(fixture, 'close-taken')).toBe('฿520');
   });
 
+  it('points at rows for exactly the difference while the count is still being typed', () => {
+    render(money({ owing: [{ bookingId: 'b5', baht: 60, who: 'คุณแนน', courts: 'คอร์ต 5' }] }));
+
+    // Before anything is typed, the three places to look are named and nothing is pointed at.
+    expect(textOf(fixture, 'close-leads-sub')).toBe(TRANSLATIONS.th['closing.leadsWaiting']);
+    expect(textOf(fixture, 'close-lead-none-StillOwed')).toContain(
+      TRANSLATIONS.th['closing.groupHint.StillOwed'],
+    );
+
+    type('close-float', '1000');
+    type('close-counted', '1190');
+
+    expect(textOf(fixture, 'close-lead-CashTaken')).toContain('น้ำดื่ม ×4 · ฿60');
+    expect(textOf(fixture, 'close-lead-StillOwed')).toContain('คุณแนน · คอร์ต 5 · ค้าง ฿60');
+    expect(elementOf(fixture, 'close-lead-none-CashOut')).not.toBeNull();
+  });
+
   it('after a count that came out short, says where the difference may be', () => {
     const shift = {
       date: today,
