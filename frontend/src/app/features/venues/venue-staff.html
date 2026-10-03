@@ -1,0 +1,216 @@
+<!-- Staff (thai-fit T1, artboard "พนักงาน"): who works here, then inviting somebody by link. -->
+<div class="settings-tab" data-testid="venue-staff">
+  @if (error(); as key) {
+    <p class="form-error" data-testid="staff-error">{{ i18n.t(key) }}</p>
+  }
+
+  <section class="card list-card" [attr.aria-label]="i18n.t('staff.title')">
+    <div class="card-head head-line">
+      <h2>{{ i18n.t('staff.title') }} · {{ members().length }} {{ i18n.t('staff.people') }}</h2>
+      <span class="muted">{{ i18n.t('staff.limitHint') }}</span>
+    </div>
+    <div class="staff-row staff-cols" aria-hidden="true">
+      <span>{{ i18n.t('staff.col.name') }}</span>
+      <span>{{ i18n.t('staff.col.role') }}</span>
+      <span>{{ i18n.t('staff.col.permissions') }}</span>
+      <span>{{ i18n.t('staff.col.limit') }}</span>
+      <span></span>
+    </div>
+    <ul class="list">
+      @for (member of members(); track member.userId) {
+        <li class="staff-row" [attr.data-testid]="'staff-' + member.userId">
+          <span class="who">
+            <span class="avatar" aria-hidden="true">{{ initial(member) }}</span>
+            <span class="who-text">
+              <span class="name">{{ who(member) }}</span>
+              <span class="muted">{{ contact(member) }}</span>
+            </span>
+          </span>
+          <span>
+            <span class="chip" [class.owner]="member.role === 'Owner'">
+              {{ i18n.t('staff.role.' + member.role) }}
+            </span>
+          </span>
+          @if (member.role === 'Owner') {
+            <span class="muted">{{ i18n.t('staff.ownerAll') }}</span>
+            <span class="muted mono">{{ i18n.t('staff.noLimit') }}</span>
+            <span></span>
+          } @else {
+            <span class="perms">
+              @for (permission of permissions; track permission) {
+                <label class="perm" [class.on]="member.permissions.includes(permission)">
+                  <input
+                    type="checkbox"
+                    [attr.data-testid]="'staff-perm-' + member.userId + '-' + permission"
+                    [checked]="member.permissions.includes(permission)"
+                    [disabled]="busy()"
+                    (change)="toggle(member, permission, $any($event.target).checked)"
+                  />
+                  {{ i18n.t('venues.permission.' + permission) }}
+                </label>
+              }
+            </span>
+            <label class="limit">
+              <span class="muted">฿</span>
+              <input
+                class="input mono"
+                inputmode="decimal"
+                [attr.data-testid]="'staff-limit-' + member.userId"
+                [attr.aria-label]="i18n.t('staff.col.limit') + ' ' + who(member)"
+                [value]="member.refundLimitBaht ?? 0"
+                (change)="setLimit(member, $any($event.target).value)"
+              />
+              @if (savedFor() === member.userId) {
+                <span class="saved" [attr.data-testid]="'staff-saved-' + member.userId">{{
+                  i18n.t('staff.saved')
+                }}</span>
+              }
+            </label>
+            <span>
+              <button
+                type="button"
+                class="small warn"
+                [attr.data-testid]="'staff-remove-' + member.userId"
+                [disabled]="busy()"
+                (click)="remove(member)"
+              >
+                {{ i18n.t(removing() === member.userId ? 'staff.removeSure' : 'staff.remove') }}
+              </button>
+            </span>
+          }
+        </li>
+      }
+    </ul>
+  </section>
+
+  <div class="settings-tab two">
+    <section class="card" [attr.aria-label]="i18n.t('staff.invite.title')">
+      <h2>{{ i18n.t('staff.invite.title') }}</h2>
+      <label class="field"
+        >{{ i18n.t('staff.invite.name') }}
+        <input
+          class="input"
+          data-testid="invite-name"
+          maxlength="100"
+          [placeholder]="i18n.t('staff.invite.namePlaceholder')"
+          [value]="name()"
+          (input)="name.set($any($event.target).value)"
+        />
+      </label>
+      <div class="pair">
+        <label class="field"
+          >{{ i18n.t('staff.invite.phone') }}
+          <input
+            class="input"
+            type="tel"
+            data-testid="invite-phone"
+            placeholder="08x-xxx-xxxx"
+            [value]="phone()"
+            (input)="phone.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field"
+          >{{ i18n.t('staff.invite.email') }}
+          <input
+            class="input"
+            type="email"
+            data-testid="invite-email"
+            placeholder="name@example.com"
+            [value]="email()"
+            (input)="email.set($any($event.target).value)"
+          />
+        </label>
+      </div>
+      <fieldset class="grant">
+        <legend class="muted">{{ i18n.t('staff.invite.permissions') }}</legend>
+        <span class="perms">
+          @for (permission of permissions; track permission) {
+            <label class="perm" [class.on]="granted().includes(permission)">
+              <input
+                type="checkbox"
+                [attr.data-testid]="'invite-perm-' + permission"
+                [checked]="granted().includes(permission)"
+                (change)="grant(permission, $any($event.target).checked)"
+              />
+              {{ i18n.t('venues.permission.' + permission) }}
+            </label>
+          }
+        </span>
+      </fieldset>
+      <button
+        type="button"
+        class="main"
+        data-testid="invite-create"
+        [disabled]="!canInvite()"
+        (click)="invite()"
+      >
+        {{ i18n.t('staff.invite.create') }}
+      </button>
+      @if (!name().trim() && !email().trim()) {
+        <p class="muted hint">{{ i18n.t('staff.invite.needName') }}</p>
+      }
+
+      @if (made(); as invitation) {
+        <div class="made" data-testid="invite-made">
+          <span class="muted"
+            >{{ i18n.t('staff.invite.ready') }} {{ invitation.name || invitation.email }}</span
+          >
+          <code class="link" data-testid="invite-link">{{ invitation.link }}</code>
+          <div class="row-buttons">
+            @if (lineUrl(); as url) {
+              <a
+                class="line"
+                data-testid="invite-line"
+                target="_blank"
+                rel="noopener"
+                [href]="url"
+                >{{ i18n.t('staff.invite.line') }}</a
+              >
+            }
+            <button type="button" data-testid="invite-copy" (click)="copy()">
+              {{ i18n.t(copied() ? 'staff.invite.copied' : 'staff.invite.copy') }}
+            </button>
+          </div>
+          @if (invitation.email) {
+            <span class="muted">{{ i18n.t('staff.invite.emailed') }}</span>
+          }
+        </div>
+      }
+      <p class="muted hint">{{ i18n.t('staff.invite.hint') }}</p>
+    </section>
+
+    <section class="card" [attr.aria-label]="i18n.t('staff.pending.title')">
+      <h2>{{ i18n.t('staff.pending.title') }}</h2>
+      <ul class="list">
+        @for (invitation of invitations(); track invitation.id) {
+          <li class="pending" [attr.data-testid]="'invitation-' + invitation.id">
+            <span class="who-text">
+              <span class="name">
+                {{ invitation.name || invitation.email }}
+                @if (invitation.phone) {
+                  · {{ invitation.phone }}
+                }
+              </span>
+              <span class="muted">
+                {{ invitation.email ? invitation.email : i18n.t('staff.pending.byLink') }} ·
+                {{ i18n.t('staff.pending.expires') }}
+                {{ invitation.expiresAt | appDateTime: i18n.locale() }}
+              </span>
+            </span>
+            <button
+              type="button"
+              class="small warn"
+              [attr.data-testid]="'invitation-revoke-' + invitation.id"
+              [disabled]="busy()"
+              (click)="revoke(invitation)"
+            >
+              {{ i18n.t('staff.pending.revoke') }}
+            </button>
+          </li>
+        } @empty {
+          <li class="muted">{{ i18n.t('staff.pending.none') }}</li>
+        }
+      </ul>
+    </section>
+  </div>
+</div>

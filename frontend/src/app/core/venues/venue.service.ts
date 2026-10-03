@@ -86,7 +86,10 @@ export interface VenueRiskRule {
 
 export interface VenueMember {
   userId: string;
+  /** Empty for somebody who joined by a LINE link with only a phone (thai-fit T1). */
   email: string;
+  name?: string | null;
+  phone?: string | null;
   role: 'Owner' | 'Staff';
   permissions: VenuePermission[];
   /**
@@ -113,9 +116,22 @@ export interface VenueCommission {
 
 export interface VenueInvitation {
   id: string;
-  email: string;
+  /** Null for an invitation by link, which names nobody's mailbox (thai-fit T1). */
+  email: string | null;
   permissions: VenuePermission[];
   expiresAt: string;
+  name?: string | null;
+  phone?: string | null;
+  /** Only in the answer to the invite itself: the token is never stored, so never shown again. */
+  link?: string | null;
+}
+
+/** Who an invitation is for: an address, or a name (and a phone) for a link sent over LINE. */
+export interface InviteRequest {
+  email?: string | null;
+  name?: string | null;
+  phone?: string | null;
+  permissions: readonly VenuePermission[];
 }
 
 /** How one hour of today is going at one venue: court-hours on sale, and used. */
@@ -229,15 +245,13 @@ export class VenueService {
     return this.http.get<VenueInvitation[]>(`/api/venues/${venueId}/invitations`);
   }
 
-  invite(
-    venueId: string,
-    email: string,
-    permissions: readonly VenuePermission[],
-  ): Observable<VenueInvitation> {
-    return this.http.post<VenueInvitation>(`/api/venues/${venueId}/invitations`, {
-      email,
-      permissions,
-    });
+  invite(venueId: string, request: InviteRequest): Observable<VenueInvitation> {
+    return this.http.post<VenueInvitation>(`/api/venues/${venueId}/invitations`, request);
+  }
+
+  /** Takes back an invitation nobody has used; its link stops working at once. */
+  revokeInvitation(venueId: string, invitationId: string): Observable<void> {
+    return this.http.delete<void>(`/api/venues/${venueId}/invitations/${invitationId}`);
   }
 
   /**

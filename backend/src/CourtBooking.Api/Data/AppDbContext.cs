@@ -232,6 +232,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             invitation.Property(i => i.Email).HasMaxLength(256);
             invitation.Property(i => i.NormalizedEmail).HasMaxLength(256);
+            invitation.Property(i => i.Name).HasMaxLength(100);
+            invitation.Property(i => i.Phone).HasMaxLength(20);
             invitation.Property(i => i.TokenHash).HasMaxLength(64);
             // The database enforces "one live invitation per address", so a race cannot create two.
             invitation.HasIndex(i => new { i.VenueId, i.NormalizedEmail })

@@ -22,8 +22,9 @@
     <mat-card-content>
       <form class="stack" [formGroup]="form" (ngSubmit)="submit()" novalidate>
         <mat-form-field class="field">
-          <mat-label>{{ i18n.t('common.email') }}</mat-label>
-          <input matInput id="email" type="email" formControlName="email" autocomplete="email" />
+          <!-- An address, or the phone a staff member signed up with from a LINE link (thai-fit T1). -->
+          <mat-label>{{ i18n.t('login.emailOrPhone') }}</mat-label>
+          <input matInput id="email" type="text" formControlName="email" autocomplete="username" />
           <mat-error [appFieldError]="form.controls.email" testId="email-error"></mat-error>
         </mat-form-field>
 
@@ -69,7 +70,12 @@
       @if (invited()) {
         <!-- The one way a new account is made now: somebody was invited to a venue (D16). -->
         <span class="muted">{{ i18n.t('login.invitedNoAccount') }}</span>
-        <a matButton="tonal" routerLink="/register" data-testid="register-link">
+        <a
+          matButton="tonal"
+          routerLink="/register"
+          [queryParams]="{ returnUrl: returnUrl() }"
+          data-testid="register-link"
+        >
           {{ i18n.t('login.createAccount') }}
         </a>
       } @else if (otherDoor(); as other) {

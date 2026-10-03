@@ -17,8 +17,14 @@ namespace CourtBooking.Api.Venues;
 
 public static class VenueEndpoints
 {
-    /// <summary>An invitation has to outlive a weekend but not a month (PRD US-14).</summary>
-    private static readonly TimeSpan InvitationLifetime = TimeSpan.FromDays(7);
+    /// <summary>
+    /// An invitation has to outlive a weekend but not a month (PRD US-14). Two weeks, as the
+    /// approved setup artboard says: a link sent over LINE waits until somebody's next shift.
+    /// </summary>
+    internal static readonly TimeSpan InvitationLifetime = TimeSpan.FromDays(14);
+
+    /// <summary>As long as the name the owner gives an invitation may be.</summary>
+    public const int InvitationNameMaxLength = 100;
 
     public static RouteGroupBuilder MapVenueEndpoints(this IEndpointRouteBuilder routes)
     {
@@ -57,6 +63,9 @@ public static class VenueEndpoints
         venue.MapGet("/members", ListMembersAsync).RequireAuthorization(VenuePolicies.Member);
         venue.MapGet("/invitations", ListInvitationsAsync).RequireAuthorization(VenuePolicies.OwnerOnly);
         venue.MapPost("/invitations", InviteAsync).RequireAuthorization(VenuePolicies.OwnerOnly);
+        // A link sent to the wrong chat has to be taken back before somebody uses it (thai-fit T1).
+        venue.MapDelete("/invitations/{invitationId:guid}", RevokeInvitationAsync)
+            .RequireAuthorization(VenuePolicies.OwnerOnly);
         venue.MapPut("/members/{userId:guid}/permissions", ChangePermissionsAsync).RequireAuthorization(VenuePolicies.OwnerOnly);
         venue.MapDelete("/members/{userId:guid}", RemoveMemberAsync).RequireAuthorization(VenuePolicies.OwnerOnly);
 
@@ -449,8 +458,27 @@ public static class VenueEndpoints
 
         return TypedResults.Ok(invitations
             .Select(invitation => new VenueInvitationResponse(
-                invitation.Id, invitation.Email, VenuePermissionSet.Describe(invitation.Permissions), invitation.ExpiresAt))
+                invitation.Id,
+                invitation.Email,
+                VenuePermissionSet.Describe(invitation.Permissions),
+                invitation.ExpiresAt,
+                invitation.Name,
+                invitation.Phone))
             .ToArray());
+    }
+
+    /// <summary>Takes back an invitation nobody has used yet. Its link stops working at once.</summary>
+    private static async Task<Results<NoContent, NotFound>> RevokeInvitationAsync(
+        Guid venueId,
+        Guid invitationId,
+        AppDbContext database,
+        CancellationToken cancellationToken)
+    {
+        var removed = await database.VenueInvitations
+            .Where(invitation =>
+                invitation.Id == invitationId && invitation.VenueId == venueId && invitation.AcceptedAt == null)
+            .ExecuteDeleteAsync(cancellationToken);
+        return removed == 0 ? TypedResults.NotFound() : TypedResults.NoContent();
     }
 
     /// <summary>
@@ -478,15 +506,29 @@ public static class VenueEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, VenueErrorCodes.InvalidPermissions);
         }
 
-        var invalidEmail = VenueValidation.ValidateEmail(request.Email);
-        if (invalidEmail is not null)
+        // An address is optional (thai-fit T1). Without one the link is the whole invitation, so
+        // it has to say who it was for: a name.
+        var email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim();
+        var name = string.IsNullOrWhiteSpace(request.Name) ? null : request.Name.Trim();
+        if (email is not null && VenueValidation.ValidateEmail(email) is { } invalidEmail)
         {
             return ApiProblem.Of(StatusCodes.Status400BadRequest, invalidEmail);
         }
 
-        var email = request.Email.Trim();
-        var normalizedEmail = Normalize(email);
-        var existing = await userManager.FindByEmailAsync(email);
+        if ((email is null && name is null) || name is { Length: > InvitationNameMaxLength })
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, VenueErrorCodes.InvitationNeedsName);
+        }
+
+        string? phone = null;
+        if (!string.IsNullOrWhiteSpace(request.Phone)
+            && (phone = PhoneNumbers.Normalize(request.Phone)) is null)
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, VenueErrorCodes.InvalidPhone);
+        }
+
+        var normalizedEmail = email is null ? null : Normalize(email);
+        var existing = email is null ? null : await userManager.FindByEmailAsync(email);
         if (existing is not null
             && await database.VenueMemberships.AnyAsync(
                 member => member.VenueId == venueId && member.UserId == existing.Id, cancellationToken))
@@ -498,11 +540,15 @@ public static class VenueEndpoints
 
         // One live invitation per address: re-inviting replaces the old link instead of leaving
         // several valid tokens the owner cannot revoke. Matching is on the normalized address, so
-        // a difference in capitalisation cannot leave an older, more permissive link alive.
-        await database.VenueInvitations
-            .Where(item =>
-                item.VenueId == venueId && item.NormalizedEmail == normalizedEmail && item.AcceptedAt == null)
-            .ExecuteDeleteAsync(cancellationToken);
+        // a difference in capitalisation cannot leave an older, more permissive link alive. A link
+        // with no address is its own invitation; the owner takes it back by revoking it.
+        if (normalizedEmail is not null)
+        {
+            await database.VenueInvitations
+                .Where(item =>
+                    item.VenueId == venueId && item.NormalizedEmail == normalizedEmail && item.AcceptedAt == null)
+                .ExecuteDeleteAsync(cancellationToken);
+        }
 
         var token = GenerateToken();
         var invitation = new VenueInvitation
@@ -510,6 +556,8 @@ public static class VenueEndpoints
             VenueId = venueId,
             Email = email,
             NormalizedEmail = normalizedEmail,
+            Name = name,
+            Phone = phone,
             Permissions = permissions,
             TokenHash = HashToken(token),
             ExpiresAt = now + InvitationLifetime,
@@ -523,17 +571,27 @@ public static class VenueEndpoints
             $"{options.Value.BaseUrl.TrimEnd('/')}/venue-invitation",
             new Dictionary<string, string?> { ["invitationId"] = invitation.Id.ToString(), ["token"] = token });
 
-        // In the invited person's language if they already have an account, Thai otherwise.
-        var language = existing?.Language ?? SupportedLanguages.Default;
-        var (subject, body) = AccountLetters.Invitation(language, currentVenue.Require().Venue!.Name, link);
-        await emailSender.SendAsync(
-            new EmailMessage(email, language, subject, body, AccountLetters.InvitationTemplate),
-            cancellationToken);
+        // An address gets the link by email, in the invited person's language if they already
+        // have an account, Thai otherwise. Either way the owner gets it back to send over LINE.
+        if (email is not null)
+        {
+            var language = existing?.Language ?? SupportedLanguages.Default;
+            var (subject, body) = AccountLetters.Invitation(language, currentVenue.Require().Venue!.Name, link);
+            await emailSender.SendAsync(
+                new EmailMessage(email, language, subject, body, AccountLetters.InvitationTemplate),
+                cancellationToken);
+        }
 
         return TypedResults.Created(
             $"/api/venues/{venueId}/invitations",
             new VenueInvitationResponse(
-                invitation.Id, email, VenuePermissionSet.Describe(permissions), invitation.ExpiresAt));
+                invitation.Id,
+                email,
+                VenuePermissionSet.Describe(permissions),
+                invitation.ExpiresAt,
+                name,
+                phone,
+                link));
     }
 
     private static async Task<Results<Ok<VenueResponse>, ProblemHttpResult>> AcceptInvitationAsync(
@@ -564,8 +622,9 @@ public static class VenueEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, VenueErrorCodes.InvitationInvalid);
         }
 
-        // The invitation names an address; only that person may take it.
-        if (Normalize(user.Email) != invitation.NormalizedEmail)
+        // An invitation that names an address is that person's alone. One that names none is a
+        // link the owner handed to somebody over LINE: holding it, once, is the invitation.
+        if (invitation.NormalizedEmail is not null && Normalize(user.Email) != invitation.NormalizedEmail)
         {
             return ApiProblem.Of(StatusCodes.Status403Forbidden, VenueErrorCodes.InvitationForAnotherAddress);
         }
@@ -586,6 +645,9 @@ public static class VenueEndpoints
             return ApiProblem.Of(StatusCodes.Status409Conflict, VenueErrorCodes.AlreadyMember);
         }
 
+        // The name the owner invited them by is what the counter calls them, until they say otherwise.
+        user.DisplayName ??= invitation.Name;
+
         var membership = new VenueMembership
         {
             VenueId = invitation.VenueId,
@@ -596,7 +658,6 @@ public static class VenueEndpoints
         };
 
         database.VenueMemberships.Add(membership);
-        invitation.AcceptedAt = now;
         database.MembershipChanges.Add(new MembershipChange
         {
             VenueId = invitation.VenueId,
@@ -613,6 +674,16 @@ public static class VenueEndpoints
         if (await AccountGate.RefusalAsync(database, user.Id, cancellationToken) is { } closed)
         {
             return ApiProblem.Of(StatusCodes.Status403Forbidden, closed);
+        }
+
+        // Spent in the same transaction as the seat it gives, and only if nobody spent it first: a
+        // link with no address in it can be opened by two people at once, and it is one seat.
+        var spent = await database.VenueInvitations
+            .Where(item => item.Id == invitation.Id && item.AcceptedAt == null)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.AcceptedAt, now), cancellationToken);
+        if (spent == 0)
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, VenueErrorCodes.InvitationInvalid);
         }
 
         try
@@ -817,6 +888,27 @@ public static class VenueEndpoints
 
     private static string Normalize(string? email) => email?.Trim().ToUpperInvariant() ?? string.Empty;
 
+    /// <summary>
+    /// Whether a link holds a live staff invitation (thai-fit T1): the one way a person with no
+    /// address and no open sign-up may become an account.
+    /// </summary>
+    internal static async Task<bool> InvitationIsLiveAsync(
+        AppDbContext database,
+        Guid invitationId,
+        string token,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var hash = await database.VenueInvitations
+            .Where(invitation =>
+                invitation.Id == invitationId && invitation.AcceptedAt == null && invitation.ExpiresAt > now)
+            .Select(invitation => invitation.TokenHash)
+            .SingleOrDefaultAsync(cancellationToken);
+        return hash is not null
+            && CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(hash), Encoding.UTF8.GetBytes(HashToken(token)));
+    }
+
     private static string GenerateToken() => WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
 
     private static string HashToken(string token) =>
@@ -860,6 +952,8 @@ public static class VenueEndpoints
             membership.Role.ToString(),
             VenuePermissionSet.Describe(
                 membership.Role == VenueRole.Owner ? VenuePermissions.All : membership.Permissions),
-            membership.RefundCeiling);
+            membership.RefundCeiling,
+            membership.User?.DisplayName,
+            membership.User?.PhoneNumber);
 
 }
