@@ -34,6 +34,13 @@ with sync_playwright() as p:
           desk.locator("[data-testid=close-method-BankTransfer]").count() == 1
           and desk.locator("[data-testid=close-method-TrueMoney]").count() == 1)
 
+    # The cash list says what each row was for, from the server's lines, not only how much.
+    rows = desk.locator("[data-testid=close-cash-rows] li")
+    cash_lines = [line for line in before.get("lines", []) if line["method"] == "Cash"
+                  and line["at"] > before["openShift"]["from"]]
+    check("the cash list has the shift's cash, in and out",
+          rows.count() == max(1, len(cash_lines)), desk)
+
     # What the screen says the shift should hold is what the server checks against.
     expected = desk.locator("[data-testid=close-expected]").inner_text()
     counted = expected.replace("฿", "").replace(",", "").strip()
@@ -55,8 +62,8 @@ with sync_playwright() as p:
           and len(after["counts"]) == len(before["counts"]) + 1)
 
     desk.wait_for_selector(f"[data-testid=close-count-{len(after['counts']) - 1}]")
-    check("the next shift is handed what the last one counted",
-          float(desk.locator("[data-testid=close-float]").input_value()) == float(shift["countedCashBaht"]),
+    check("the next shift starts with the float the last one did: the takings were handed in",
+          float(desk.locator("[data-testid=close-float]").input_value()) == float(shift["openingFloatBaht"]),
           desk)
 
     browser.close()

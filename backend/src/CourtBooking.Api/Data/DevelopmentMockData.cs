@@ -143,6 +143,13 @@ public static class DevelopmentMockData
             .CreateLogger(typeof(DevelopmentMockData));
 
         var owner = await DevelopmentSeeder.EnsureUserAsync(users, DemoEmail);
+        // The name the design gives whoever is signed in at the desk ("รับโดย เดโม่").
+        if (owner.DisplayName is null)
+        {
+            owner.DisplayName = "เดโม่";
+            await users.UpdateAsync(owner);
+        }
+
         var bookers = await EnsureBookersAsync(users, cancellationToken);
         var now = time.GetUtcNow();
         var today = PlatformRequirements.BangkokToday(time);
@@ -158,8 +165,15 @@ public static class DevelopmentMockData
                 var (from, until) = history
                     ? (today.AddDays(-DaysBack), today.AddDays(-RecentDays - 1))
                     : (today.AddDays(-RecentDays), today.AddDays(DaysAhead));
-                await new Filler(database, venue, branch, owner.Id, bookers, today, now)
-                    .RunAsync(from, until, cancellationToken);
+                var filler = new Filler(database, venue, branch, owner.Id, bookers, today, now);
+                await filler.RunAsync(from, until, cancellationToken);
+
+                // อารีย์'s drawer today, as the "ปิดยอด" artboard draws it (thai-fit T2).
+                if (!history && branch.Code == "ARI01")
+                {
+                    await filler.TillTodayAsync(
+                        await EnsureStaffAsync(users, cancellationToken), cancellationToken);
+                }
             }
             catch (Exception failure) when (failure is not OperationCanceledException)
             {
@@ -167,6 +181,52 @@ public static class DevelopmentMockData
                 database.ChangeTracker.Clear();
             }
         }
+    }
+
+    // The staff of the design's staff board: name, account, phone, what they may do, refund limit.
+    private static readonly (string Name, string Email, string Phone, VenuePermissions Can, decimal Limit)[] Staff =
+    [
+        ("ปุ้ย", "staff-pui@mock.badpaka.test", "0811112201",
+            VenuePermissions.ManageBookings | VenuePermissions.VerifySlip | VenuePermissions.CloseCourt
+            | VenuePermissions.ViewReports, 2_000m),
+        ("บอม", "staff-bom@mock.badpaka.test", "0861117710",
+            VenuePermissions.ManageBookings | VenuePermissions.CloseCourt, 300m),
+        ("ฝน", "staff-fon@mock.badpaka.test", "0951114408", VenuePermissions.ManageBookings, 0m),
+    ];
+
+    /// <summary>The staff accounts, made once. Like the bookers they cannot be mailed: nobody is there.</summary>
+    private static async Task<Dictionary<string, Guid>> EnsureStaffAsync(
+        UserManager<AppUser> users,
+        CancellationToken cancellationToken)
+    {
+        var found = new Dictionary<string, Guid>();
+        foreach (var one in Staff)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var user = await users.FindByEmailAsync(one.Email);
+            if (user is null)
+            {
+                user = new AppUser
+                {
+                    UserName = one.Email,
+                    Email = one.Email,
+                    EmailConfirmed = false,
+                    DisplayName = one.Name,
+                    PhoneNumber = one.Phone,
+                    Language = SupportedLanguages.Thai,
+                };
+                var made = await users.CreateAsync(user);
+                if (!made.Succeeded)
+                {
+                    throw new InvalidOperationException(
+                        $"Could not make {one.Email}: {string.Join(", ", made.Errors.Select(error => error.Description))}");
+                }
+            }
+
+            found[one.Name] = user.Id;
+        }
+
+        return found;
     }
 
     /// <summary>
@@ -899,6 +959,201 @@ public static class DevelopmentMockData
             Quantity = quantity,
             EachBaht = item.PriceBaht,
         };
+
+        /// <summary>
+        /// Today's drawer at อารีย์ as the "ปิดยอด" artboard draws it: a first shift ปุ้ย counted and
+        /// handed over even, then a shift still open with a walk-in, a deposit and its rest, a
+        /// package, the shop, a repair paid from the drawer and a refund — and a booking still
+        /// ฿60 short, which is where a count ฿60 out points. Written once a day, all of it before
+        /// now: a drawer is never ahead of the clock.
+        /// </summary>
+        public async Task TillTodayAsync(Dictionary<string, Guid> staff, CancellationToken cancellationToken)
+        {
+            foreach (var one in Staff)
+            {
+                var userId = staff[one.Name];
+                if (!await database.VenueMemberships.AnyAsync(
+                        member => member.VenueId == venue.Id && member.UserId == userId, cancellationToken))
+                {
+                    database.VenueMemberships.Add(new VenueMembership
+                    {
+                        VenueId = venue.Id, UserId = userId, Role = VenueRole.Staff, Permissions = one.Can,
+                        RefundLimitBaht = one.Limit, CreatedAt = now,
+                    });
+                    database.MembershipChanges.Add(new MembershipChange
+                    {
+                        VenueId = venue.Id, UserId = userId, Kind = MembershipChangeKind.Joined,
+                        Role = VenueRole.Staff, PermissionsAfter = one.Can, RefundLimitAfter = one.Limit,
+                        ChangedByUserId = ownerId, ChangedAt = now,
+                    });
+                }
+            }
+
+            await database.SaveChangesAsync(cancellationToken);
+
+            var opens = PlatformRequirements.BangkokHour(today, OpensHour);
+            if (now < opens.AddHours(2)
+                || await database.DailyClosings.AnyAsync(
+                    closing => closing.VenueId == venue.Id && closing.Date == today, cancellationToken))
+            {
+                return;
+            }
+
+            // The first shift ran from opening until three hours ago; ปุ้ย counted it, and it was right.
+            var handOver = now.AddHours(-3) > opens.AddHours(1) ? now.AddHours(-3) : opens.AddHours(1);
+            var cashBefore = await database.PaymentReceipts
+                .Where(receipt =>
+                    receipt.VenueId == venue.Id && receipt.CountsOn == today
+                    && receipt.Method == PaymentMethod.Cash && receipt.ReceivedAt <= handOver)
+                .SumAsync(receipt => (decimal?)receipt.AmountBaht, cancellationToken) ?? 0m;
+            const decimal handedFloat = 1_000m;
+            database.DailyClosings.Add(new DailyClosing
+            {
+                VenueId = venue.Id, Date = today, OpeningFloatBaht = handedFloat, EndsDay = false,
+                ExpectedCashBaht = handedFloat + cashBefore, CountedCashBaht = handedFloat + cashBefore,
+                DifferenceBaht = 0m, ClosedByUserId = staff["ปุ้ย"], ClosedAt = handOver,
+            });
+
+            // Tonight's free court-hours, latest first: the evening the design draws is already
+            // on the courts, and these come on top of it.
+            var (dayFrom, dayUntil) = (PlatformRequirements.BangkokHour(today, 0), PlatformRequirements.BangkokHour(today.AddDays(1), 0));
+            var courtIds = courts.Select(court => court.Id).ToArray();
+            var taken = (await database.BookingSlots
+                    .Where(slot => slot.IsActive && courtIds.Contains(slot.CourtId)
+                                   && slot.StartsAt >= dayFrom && slot.StartsAt < dayUntil)
+                    .Select(slot => new { slot.CourtId, slot.StartsAt })
+                    .ToListAsync(cancellationToken))
+                .Select(slot => (slot.CourtId, slot.StartsAt))
+                .ToHashSet();
+            free = new(Enumerable.Range(OpensHour, ClosesHour - OpensHour).Reverse()
+                .SelectMany(hour => courts.Select((court, index) => (Court: index + 1, Hour: hour)))
+                .Where(one => !taken.Contains((courts[one.Court - 1].Id, PlatformRequirements.BangkokHour(today, one.Hour)))));
+
+            // The open shift's rows, spread between the hand-over and a few minutes ago.
+            var span = now.AddMinutes(-5) - handOver;
+            DateTimeOffset At(int step) => handOver + span * (step + 1) / 12;
+            var bom = staff["บอม"];
+
+            // A walk-in paid in full, and one more later on.
+            var witt = Counter("คุณวิทย์", At(0), bom);
+            Paid(witt, witt.TotalBaht, PaymentMethod.Cash, At(0), bom);
+
+            // Water for somebody waiting, with no booking: the ฿60 a count ฿60 out points to.
+            Sell([(goods[2], 4)], PaymentMethod.Cash, At(1), bom);
+
+            // A package sold over the counter.
+            var type = await database.PackageTypes
+                .Where(one => one.VenueId == venue.Id && one.WithdrawnAt == null)
+                .OrderBy(one => one.PriceBaht)
+                .FirstAsync(cancellationToken);
+            var package = new HourPackage
+            {
+                VenueId = venue.Id, PackageTypeId = type.Id, CustomerName = "คุณนัท",
+                CustomerPhone = "0896660123", HoursSold = type.Hours, PriceBaht = type.PriceBaht,
+                ExpiresOn = today.AddDays(type.ValidForDays), SoldAt = At(2), SoldByUserId = ownerId,
+            };
+            database.HourPackages.Add(package);
+            database.PackageEntries.Add(new PackageEntry
+            {
+                PackageId = package.Id, Hours = type.Hours, Move = PackageMove.Sold, At = At(2), ByUserId = ownerId,
+            });
+            database.PaymentReceipts.Add(new PaymentReceipt
+            {
+                PackageId = package.Id, VenueId = venue.Id, CountsOn = today, AmountBaht = package.PriceBaht,
+                Method = PaymentMethod.Cash, ReceivedAt = At(2), ReceivedByUserId = ownerId,
+            });
+
+            // A light over court 6, paid from the drawer.
+            database.Spends.Add(new Spend
+            {
+                VenueId = venue.Id, Kind = SpendKind.Repairs, AmountBaht = 450m, PaidOn = today,
+                PaidBy = PaymentMethod.Cash, Note = "ค่าซ่อมไฟคอร์ต 6", RecordedAt = At(3), RecordedByUserId = ownerId,
+            });
+
+            // A deposit now, the rest when they come in.
+            var boss = Counter("คุณบอส", At(4), bom);
+            Paid(boss, boss.TotalBaht / 2, PaymentMethod.Cash, At(4), bom);
+            Paid(boss, boss.TotalBaht / 2, PaymentMethod.Cash, At(6), bom);
+
+            // Paid, then the venue called it off (the court's floor), and the money went back.
+            var ton = Counter("คุณต้น", At(5), ownerId);
+            Paid(ton, ton.TotalBaht, PaymentMethod.Cash, At(5), ownerId);
+            ton.StatusChanges.Add(BookingTransitions.Record(
+                ton.Id, BookingStatus.Confirmed, BookingStatus.Cancelled, ownerId, At(5).AddMinutes(2),
+                cause: CancellationReason.VenueInitiated));
+            ton.Status = BookingStatus.Cancelled;
+            ton.RefundPercent = 100;
+            ton.RefundDueBaht = ton.TotalBaht;
+            ton.Slots.ForEach(slot => slot.IsActive = false);
+            database.RefundRecords.Add(new RefundRecord
+            {
+                BookingId = ton.Id, AmountBaht = ton.TotalBaht, RefundedOn = today, Method = RefundMethod.Cash,
+                RecordedByUserId = ownerId, RecordedAt = At(5).AddMinutes(3),
+            });
+
+            // The shop through the evening, paid every way the desk takes.
+            Sell([(goods[0], 1)], PaymentMethod.Cash, At(7), bom);
+            Sell([(goods[1], 2), (goods[2], 2)], PaymentMethod.TrueMoney, At(8), bom);
+            Sell([(goods[1], 6), (goods[3], 1), (goods[2], 3)], PaymentMethod.Card, At(8).AddMinutes(1), bom);
+            Sell([(goods[1], 8)], PaymentMethod.BankTransfer, At(9), ownerId);
+
+            // A deposit that left ฿60 to pay at the door.
+            var nan = Counter("คุณแนน", At(9), bom);
+            nan.PaymentState = PaymentState.NotReceived;
+            Paid(nan, nan.TotalBaht - 60m, PaymentMethod.Cash, At(9).AddMinutes(2), bom);
+
+            var palm = Counter("คุณปาล์ม", At(10), bom);
+            Paid(palm, palm.TotalBaht, PaymentMethod.Cash, At(10), bom);
+
+            // Paid by scanning the venue's QR at the desk: into the account, not the drawer.
+            var ploy = Counter("คุณพลอย", At(10).AddMinutes(3), bom, CounterPayment.Transfer);
+            Paid(ploy, ploy.TotalBaht, PaymentMethod.PromptPay, At(10).AddMinutes(3), bom);
+
+            await database.SaveChangesAsync(cancellationToken);
+        }
+
+        /// <summary>The court-hours still free today, latest first, for the drawer's walk-ins.</summary>
+        private Queue<(int Court, int Hour)> free = new();
+
+        /// <summary>An hour sold at the counter today, its money written by <see cref="Paid"/>.</summary>
+        private Booking Counter(string name, DateTimeOffset at, Guid by, CounterPayment paid = CounterPayment.Cash)
+        {
+            var (court, hour) = free.Dequeue();
+            var booking = Booking.AtCounter(
+                venue.Id, name, null, paid, policyId, Priced(court, today, [hour]), by, at);
+            database.Bookings.Add(booking);
+            return booking;
+        }
+
+        private void Paid(Booking booking, decimal baht, PaymentMethod method, DateTimeOffset at, Guid by) =>
+            database.PaymentReceipts.Add(new PaymentReceipt
+            {
+                BookingId = booking.Id, VenueId = venue.Id, CountsOn = today, AmountBaht = baht,
+                Method = method, ReceivedAt = at, ReceivedByUserId = by,
+            });
+
+        /// <summary>A sale off the shelf with no booking, its stock taken off and its money in.</summary>
+        private void Sell((ShopItem Item, int Quantity)[] what, PaymentMethod method, DateTimeOffset at, Guid? by)
+        {
+            var sale = new ShopSale { VenueId = venue.Id, SoldAt = at, SoldByUserId = by ?? ownerId };
+            var lines = what.Select(one => Line(sale, one.Item, one.Quantity)).ToList();
+            sale.Selling(lines);
+            database.ShopSales.Add(sale);
+            foreach (var line in lines)
+            {
+                database.StockEntries.Add(new StockEntry
+                {
+                    ItemId = line.ItemId, Quantity = -line.Quantity, Move = StockMove.Sold, SaleId = sale.Id,
+                    At = at, ByUserId = by ?? ownerId,
+                });
+            }
+
+            database.PaymentReceipts.Add(new PaymentReceipt
+            {
+                SaleId = sale.Id, VenueId = venue.Id, CountsOn = today, AmountBaht = sale.TotalBaht,
+                Method = method, ReceivedAt = at, ReceivedByUserId = by,
+            });
+        }
 
         private SlotPrice[] Priced(int court, DateOnly date, int[] hours) =>
         [

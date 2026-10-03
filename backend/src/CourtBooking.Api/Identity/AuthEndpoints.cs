@@ -365,7 +365,8 @@ public static class AuthEndpoints
             user.PhoneNumber,
             user.PasswordHash is not null,
             signsInWithLine,
-            BookingEligibility.MissingFor(user.EmailConfirmed, signsInWithLine, user.PhoneNumber)));
+            BookingEligibility.MissingFor(user.EmailConfirmed, signsInWithLine, user.PhoneNumber),
+            user.DisplayName));
     }
 
     /// <summary>

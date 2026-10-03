@@ -27,7 +27,72 @@ describe('CloseDrawer', () => {
       leads: [],
       counts: [],
       openShift: { from: `${today}T01:00:00Z`, cashInBaht: 300, cashOutBaht: 50 },
+      opensHour: 8,
+      lines: [
+        line({
+          at: `${today}T02:00:00Z`,
+          kind: 'Court',
+          method: 'Cash',
+          amountBaht: 260,
+          who: 'คุณวิทย์',
+          courts: 'คอร์ต 1',
+          bookingKind: 'WalkIn',
+          by: 'บอม',
+        }),
+        line({
+          at: `${today}T02:30:00Z`,
+          kind: 'Sale',
+          method: 'Cash',
+          amountBaht: 60,
+          items: [{ name: 'น้ำดื่ม', quantity: 4 }],
+        }),
+        line({
+          at: `${today}T03:00:00Z`,
+          kind: 'Court',
+          method: 'BankTransfer',
+          amountBaht: 150,
+          who: 'คุณบอส',
+          courts: 'คอร์ต 2',
+          bookingKind: 'WalkIn',
+          part: 'Deposit',
+          bookingId: 'b2',
+        }),
+        line({
+          at: `${today}T03:30:00Z`,
+          kind: 'Sale',
+          method: 'TrueMoney',
+          amountBaht: 50,
+          items: [{ name: 'เกลือแร่', quantity: 2 }],
+        }),
+        line({
+          at: `${today}T04:00:00Z`,
+          out: true,
+          kind: 'PaidOut',
+          method: 'Cash',
+          amountBaht: 50,
+          spendKind: 'Repairs',
+          note: 'ค่าซ่อมไฟคอร์ต 6',
+          by: 'เดโม่',
+        }),
+      ],
       ...overrides,
+    };
+  }
+
+  function line(fields: object) {
+    return {
+      out: false,
+      who: null,
+      courts: null,
+      bookingKind: null,
+      part: null,
+      items: null,
+      packageHours: null,
+      spendKind: null,
+      note: null,
+      by: null,
+      bookingId: null,
+      ...fields,
     };
   }
 
@@ -74,7 +139,7 @@ describe('CloseDrawer', () => {
     expect(textOf(fixture, 'close-expected')).toBe('฿1,250');
 
     type('close-counted', '1240');
-    expect(textOf(fixture, 'close-difference')).toBe('฿10');
+    expect(textOf(fixture, 'close-difference')).toBe('−฿10');
     expect(elementOf(fixture, 'close-difference')!.parentElement!.textContent).toContain(
       TRANSLATIONS.th['closing.short'],
     );
@@ -100,8 +165,8 @@ describe('CloseDrawer', () => {
       }),
     );
 
-    // The next shift is handed what the last count left in the drawer.
-    expect(elementOf<HTMLInputElement>(fixture, 'close-float')!.value).toBe('600');
+    // The last shift handed its takings in and left its float: the next one starts with that.
+    expect(elementOf<HTMLInputElement>(fixture, 'close-float')!.value).toBe('500');
     expect(textOf(fixture, 'close-count-0')).toContain('ปุ้ย');
 
     type('close-counted', '850');
@@ -109,13 +174,65 @@ describe('CloseDrawer', () => {
 
     const sent = httpMock.expectOne((request) => request.url === '/api/venues/v1/money/closing');
     expect(sent.request.body).toEqual({
-      openingFloatBaht: 600,
+      openingFloatBaht: 500,
       countedCashBaht: 850,
       note: undefined,
       endsDay: false,
     });
     sent.flush({});
     httpMock.expectOne((request) => request.url === '/api/venues/v1/money').flush(money());
+  });
+
+  it('writes each cash row as what it was for and whose, with money out marked', () => {
+    render();
+
+    const rows = textOf(fixture, 'close-cash-rows');
+    expect(rows).toContain('ค่าคอร์ต · Walk-in');
+    expect(rows).toContain('คุณวิทย์ · คอร์ต 1 · รับโดย บอม');
+    expect(rows).toContain('ขายของ · น้ำดื่ม ×4');
+    expect(rows).toContain('ค่าซ่อมไฟคอร์ต 6');
+    expect(rows).toContain('ค่าซ่อม · บันทึกโดย เดโม่');
+    expect(rows).toContain('−฿50');
+    // Only cash is in the drawer: the transfer and TrueMoney rows are tiles, not rows.
+    expect(rows).not.toContain('คุณบอส');
+    expect(textOf(fixture, 'close-taken')).toBe('฿520');
+  });
+
+  it('after a count that came out short, says where the difference may be', () => {
+    const shift = {
+      date: today,
+      openingFloatBaht: 1_000,
+      expectedCashBaht: 1_310,
+      countedCashBaht: 1_250,
+      differenceBaht: -60,
+      note: null,
+      closedAt: `${today}T05:00:00Z`,
+      endsDay: false,
+      closedBy: 'บอม',
+      from: `${today}T01:00:00Z`,
+    };
+    render(
+      money({
+        counts: [shift],
+        openShift: { from: shift.closedAt, cashInBaht: 0, cashOutBaht: 0 },
+        leads: [
+          {
+            kind: 'CashTaken',
+            amountBaht: 60,
+            bookingId: null,
+            at: `${today}T02:30:00Z`,
+            note: null,
+          },
+        ],
+      }),
+    );
+
+    expect(textOf(fixture, 'close-leads')).toContain('฿60');
+    expect(textOf(fixture, 'close-lead-CashTaken')).toContain('น้ำดื่ม ×4 · ฿60');
+    // Kinds with nothing for that amount still show, dashed, so nobody goes looking there.
+    expect(textOf(fixture, 'close-leads')).toContain(
+      TRANSLATIONS.th['closing.leadGroup.StillOwed'],
+    );
   });
 
   it('shows a closed day as counted, with nothing more to count', () => {

@@ -16,6 +16,39 @@ public sealed class CounterMoneyTests(ApiTestFixture api)
     private readonly VenueScenario scenario = new(api);
 
     [Fact]
+    public async Task The_day_lists_each_movement_of_money_with_what_it_was_for_and_whose()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        await Take(owner, venue.Id, booking.Id, 100m, nameof(PaymentMethod.Cash));
+        await Take(owner, venue.Id, booking.Id, booking.TotalBaht - 100m, nameof(PaymentMethod.Card));
+        var spent = await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/spending",
+            new SpendRequest(nameof(SpendKind.Repairs), 450m, null, nameof(PaymentMethod.Cash), "ค่าซ่อมไฟ", null, null));
+        Assert.True(spent.IsSuccessStatusCode);
+
+        var day = await VenueScenario.ReadAsync<DayMoneyResponse>(await owner.GetAsync($"/api/venues/{venue.Id}/money"));
+        var lines = day.Lines!;
+
+        // The two payments of one booking: the first is its deposit, the second the rest.
+        var court = lines.Where(line => line.Kind == "Court").ToArray();
+        Assert.Equal(["Deposit", "Rest"], court.Select(line => line.Part));
+        Assert.All(court, line => Assert.Equal("Court 1", line.Courts));
+        Assert.All(court, line => Assert.Equal(booking.Id, line.BookingId));
+        Assert.Equal(
+            [nameof(PaymentMethod.Cash), nameof(PaymentMethod.Card)],
+            court.Select(line => line.Method));
+
+        // The bill paid from the drawer is money out, with what kind of bill it was.
+        var bill = Assert.Single(lines, line => line.Out);
+        Assert.Equal((nameof(CashOutKind.PaidOut), nameof(SpendKind.Repairs), 450m, "ค่าซ่อมไฟ"),
+            (bill.Kind, bill.SpendKind, bill.AmountBaht, bill.Note));
+
+        // The tiles add up from the lines: what came in is the day's taken.
+        Assert.Equal(day.TakenBaht, lines.Where(line => !line.Out).Sum(line => line.AmountBaht));
+    }
+
+    [Fact]
     public async Task A_booking_is_paid_for_in_parts_and_the_rest_is_what_is_left()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync();

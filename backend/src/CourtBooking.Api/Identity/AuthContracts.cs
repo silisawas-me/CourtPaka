@@ -41,7 +41,9 @@ public sealed record CurrentUserResponse(
     bool HasPassword = true,
     bool SignsInWithLine = false,
     /// <summary>What the account still needs before it can book (BookingEligibility), or null.</summary>
-    string? CannotBookBecause = null);
+    string? CannotBookBecause = null,
+    /// <summary>The name the counter knows them by ("บอม"), where they have one.</summary>
+    string? DisplayName = null);
 
 public sealed record PrivacyPolicyResponse(string Version);
 
