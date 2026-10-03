@@ -79,11 +79,18 @@ export class VenueHours {
   }
 
   protected dayName(day: Weekday): string {
-    return this.i18n.t(`settings.day.${day}`);
+    return this.i18n.t(`hours.day.${day}`);
   }
 
   protected hourLabel(hour: number): string {
     return `${String(hour).padStart(2, '0')}:00`;
+  }
+
+  /** Closing at 24 is midnight, and the artboard says so beside the number. */
+  protected closeLabel(hour: number): string {
+    return hour === 24
+      ? `${this.hourLabel(hour)} ${this.i18n.t('hours.midnight')}`
+      : this.hourLabel(hour);
   }
 
   protected setOpens(day: Weekday, value: string): void {

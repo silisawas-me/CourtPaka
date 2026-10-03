@@ -66,6 +66,14 @@ describe('VenueHours', () => {
     expect(textOf(fixture, 'hours-result')).toContain('1');
   });
 
+  it('names each day in words, and says a 24:00 close is midnight', () => {
+    // The day names once came from a key deleted with the old settings page, and the rows read
+    // "settings.day.Monday" until somebody looked (2026-10-03).
+    expect(textOf(fixture, 'hours-Monday')).toContain('จันทร์');
+    const closes = elementOf(fixture, 'closes-Monday') as HTMLSelectElement;
+    expect(closes.options[closes.options.length - 1].textContent).toContain('(เที่ยงคืน)');
+  });
+
   it('shuts a day, and opens a shut one as the rest of the week opens', () => {
     clickOn(fixture, 'toggle-Sunday');
     fixture.detectChanges();
