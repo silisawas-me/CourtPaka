@@ -349,6 +349,24 @@
             >
           </button>
         }
+        <!-- What its receipt would say (thai-fit T6): a preview until Q1 is answered. -->
+        <button
+          type="button"
+          class="soft doors"
+          data-testid="receipt-open"
+          (click)="receiptOpen.set(true)"
+        >
+          {{ i18n.t('receipt.open') }}
+        </button>
+        @if (receiptOpen()) {
+          @defer (on immediate) {
+            <app-receipt-sheet
+              [venueId]="venueId()"
+              [bookingId]="booking.bookingId"
+              (closed)="receiptOpen.set(false)"
+            />
+          }
+        }
       </div>
 
       @if (items().length > 0) {

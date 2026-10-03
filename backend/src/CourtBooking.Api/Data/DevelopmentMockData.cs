@@ -311,6 +311,34 @@ public static class DevelopmentMockData
         return found;
     }
 
+    /// <summary>
+    /// ทองหล่อ is run by a person who is not registered for VAT, so the receipts (thai-fit T6)
+    /// show all three papers: ใบเสร็จรับเงิน there, the abbreviated and full invoices elsewhere.
+    /// </summary>
+    private static bool Unregistered(Branch branch) => branch.Code == "TLO01";
+
+    private static VenueBusiness Business(Branch branch) => Unregistered(branch)
+        ? new VenueBusiness
+        {
+            PromptPayId = "0812345678",
+            PromptPayAccountName = "นายสมชาย ใจดี",
+            IsVatRegistered = false,
+            LegalName = "นายสมชาย ใจดี",
+            TaxId = "1100700123456",
+            TaxBranch = VenueBusiness.HeadOfficeBranch,
+            BillingAddress = $"badPaka {branch.Name} เขต{branch.District} กรุงเทพมหานคร",
+        }
+        : new VenueBusiness
+        {
+            PromptPayId = "0812345678",
+            PromptPayAccountName = "บริษัท แบดปะก้า จำกัด",
+            IsVatRegistered = true,
+            LegalName = "บริษัท แบดปะก้า จำกัด",
+            TaxId = "0105561000000",
+            TaxBranch = VenueBusiness.HeadOfficeBranch,
+            BillingAddress = $"badPaka {branch.Name} เขต{branch.District} กรุงเทพมหานคร",
+        };
+
     private static async Task<Venue> EnsureVenueAsync(
         AppDbContext database,
         Branch branch,
@@ -323,6 +351,13 @@ public static class DevelopmentMockData
         var venue = await database.Venues.SingleOrDefaultAsync(v => v.Code == branch.Code, cancellationToken);
         if (venue is not null)
         {
+            // Branches seeded before the receipts (thai-fit T6) learn which kind of paper they give.
+            if (Unregistered(branch) && venue.Business.IsVatRegistered)
+            {
+                venue.Business = Business(branch);
+                await database.SaveChangesAsync(cancellationToken);
+            }
+
             return venue;
         }
 
@@ -335,16 +370,7 @@ public static class DevelopmentMockData
             District = branch.District,
             Province = "กรุงเทพมหานคร",
             Status = VenueStatus.Approved,
-            Business = new VenueBusiness
-            {
-                PromptPayId = "0812345678",
-                PromptPayAccountName = "บริษัท แบดปะก้า จำกัด",
-                IsVatRegistered = true,
-                LegalName = "บริษัท แบดปะก้า จำกัด",
-                TaxId = "0105561000000",
-                TaxBranch = VenueBusiness.HeadOfficeBranch,
-                BillingAddress = $"badPaka {branch.Name} เขต{branch.District} กรุงเทพมหานคร",
-            },
+            Business = Business(branch),
             AgreementVersion = options.VenueAgreementVersion,
             AgreementAcceptedAt = now,
             AgreementAcceptedByUserId = ownerId,

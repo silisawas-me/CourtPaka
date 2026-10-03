@@ -672,3 +672,23 @@ a.entry {
 .entry-name {
   font: var(--mat-sys-title-medium);
 }
+
+/* Printing a receipt (thai-fit T6): the paper and nothing else. The sheet puts the class on
+   <body> for the length of the print; everything else is hidden rather than removed, so the
+   page is as it was when the dialog closes. */
+@media print {
+  body.printing-receipt * {
+    visibility: hidden;
+  }
+
+  body.printing-receipt .receipt-paper,
+  body.printing-receipt .receipt-paper * {
+    visibility: visible;
+  }
+
+  body.printing-receipt .receipt-paper {
+    position: absolute;
+    inset: 0 auto auto 0;
+    border: 0;
+  }
+}

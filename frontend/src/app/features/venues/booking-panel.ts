@@ -29,6 +29,7 @@ import {
 import { historyLine } from './booking-history';
 import { whoIs } from './now-board';
 import { span } from './timeline';
+import { ReceiptSheet } from './receipt-sheet';
 
 /** The three ways the panel takes money, left to right as the design draws them. */
 const PAY_WITH: readonly PaymentMethod[] = [
@@ -59,7 +60,7 @@ export interface PanelCourt {
  */
 @Component({
   selector: 'app-booking-panel',
-  imports: [BahtPipe],
+  imports: [BahtPipe, ReceiptSheet],
   templateUrl: './booking-panel.html',
   styleUrls: ['./booking-panel.scss', './booking-booker.scss', './booking-history.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -75,6 +76,9 @@ export class BookingPanel {
   readonly courts = input<readonly PanelCourt[]>([]);
   /** What the panel says with nothing chosen: the timeline's day, or the list's. */
   readonly emptyKey = input('timeline.nothingToday');
+
+  /** The receipt preview is open over the page (thai-fit T6). */
+  protected readonly receiptOpen = signal(false);
 
   /** A door changed this booking: the row to put in the day's place. */
   readonly changed = output<VenueBooking>();

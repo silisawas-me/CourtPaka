@@ -1,0 +1,172 @@
+<!-- The receipt artboard (thai-fit T6): the paper, and what the desk can do with it. -->
+<dialog
+  #dialog
+  class="scrim"
+  data-testid="receipt-sheet"
+  [attr.aria-label]="i18n.t('receipt.title')"
+  (close)="closed.emit()"
+>
+  <div class="sheet">
+    <div class="controls">
+      <div class="controls-head">
+        <h2>{{ i18n.t('receipt.title') }}</h2>
+        <button type="button" data-testid="receipt-close" (click)="close()">
+          {{ i18n.t('receipt.close') }}
+        </button>
+      </div>
+
+      @if (error(); as key) {
+        <p class="form-error" data-testid="receipt-error">{{ i18n.t(key) }}</p>
+      }
+
+      @if (receipt(); as r) {
+        <p class="muted">{{ i18n.t('receipt.kindChosen.' + r.kind) }}</p>
+        @if (r.kind === 'Abb') {
+          <label class="check">
+            <input
+              type="checkbox"
+              data-testid="receipt-full"
+              [checked]="full()"
+              (change)="full.set($any($event.target).checked)"
+            />
+            {{ i18n.t('receipt.askFull') }}
+          </label>
+          @if (full()) {
+            <div class="buyer" data-testid="receipt-buyer">
+              <label class="field"
+                >{{ i18n.t('receipt.buyer.name') }}
+                <input
+                  class="input"
+                  data-testid="buyer-name"
+                  maxlength="200"
+                  [value]="buyer().name"
+                  (input)="setBuyer('name', $any($event.target).value)"
+              /></label>
+              <div class="pair">
+                <label class="field"
+                  >{{ i18n.t('receipt.buyer.taxId') }}
+                  <input
+                    class="input mono"
+                    data-testid="buyer-tax-id"
+                    inputmode="numeric"
+                    maxlength="13"
+                    [value]="buyer().taxId"
+                    (input)="setBuyer('taxId', $any($event.target).value)"
+                /></label>
+                <label class="field"
+                  >{{ i18n.t('receipt.buyer.branch') }}
+                  <input
+                    class="input mono"
+                    data-testid="buyer-branch"
+                    inputmode="numeric"
+                    maxlength="5"
+                    [value]="buyer().branch"
+                    (input)="setBuyer('branch', $any($event.target).value)"
+                /></label>
+              </div>
+              <label class="field"
+                >{{ i18n.t('receipt.buyer.address') }}
+                <textarea
+                  class="input"
+                  data-testid="buyer-address"
+                  rows="2"
+                  maxlength="400"
+                  [value]="buyer().address"
+                  (input)="setBuyer('address', $any($event.target).value)"
+                ></textarea>
+              </label>
+              @if (!buyerComplete()) {
+                <p class="muted small" data-testid="buyer-missing">
+                  {{ i18n.t('receipt.buyer.missing') }}
+                </p>
+              }
+            </div>
+          }
+        }
+        <button type="button" class="main" data-testid="receipt-print" (click)="print()">
+          {{ i18n.t('receipt.print') }}
+        </button>
+        <p class="muted small">{{ i18n.t('receipt.printNote') }}</p>
+      }
+    </div>
+
+    @if (receipt(); as r) {
+      <article class="receipt-paper" data-testid="receipt-paper" [attr.data-paper]="paper()">
+        <div class="sample">{{ i18n.t('receipt.sample') }}</div>
+        <header>
+          <span class="kind" data-testid="receipt-kind">{{
+            i18n.t('receipt.kind.' + paper())
+          }}</span>
+          <span class="sub">{{ i18n.t('receipt.law.' + paper()) }}</span>
+        </header>
+        <div class="seller">
+          <span class="seller-name">{{ r.seller.name }} ({{ r.seller.legalName }})</span>
+          <span class="sub"
+            >{{ i18n.t('receipt.taxId') }} {{ r.seller.taxId }} ·
+            {{
+              r.seller.taxBranch === '00000'
+                ? i18n.t('receipt.headOffice')
+                : i18n.t('receipt.branch') + ' ' + r.seller.taxBranch
+            }}</span
+          >
+          @if (paper() === 'Tax') {
+            <span class="sub">{{ r.seller.address }}</span>
+          }
+        </div>
+        <div class="facts">
+          <span class="sub">{{ i18n.t('receipt.number') }}</span
+          ><span class="mono" data-testid="receipt-number">{{ number() }}</span>
+          <span class="sub">{{ i18n.t('receipt.date') }}</span
+          ><span>{{ r.date | appDate: i18n.locale() }}</span>
+          @if (paper() === 'Tax') {
+            <span class="sub">{{ i18n.t('receipt.buyer') }}</span
+            ><span data-testid="receipt-buyer-name">{{ buyer().name }}</span> <span></span
+            ><span class="small"
+              >{{ i18n.t('receipt.taxId') }} {{ buyer().taxId }} ·
+              {{
+                buyer().branch === '00000'
+                  ? i18n.t('receipt.headOffice')
+                  : i18n.t('receipt.branch') + ' ' + buyer().branch
+              }}<br />{{ buyer().address }}</span
+            >
+          } @else if (r.customerName) {
+            <span class="sub">{{ i18n.t('receipt.customer') }}</span
+            ><span>{{ r.customerName }}</span>
+          }
+        </div>
+        <ul class="lines">
+          <li class="sub">
+            <span>{{ i18n.t('receipt.col.item') }}</span
+            ><span class="num">{{ i18n.t('receipt.col.qty') }}</span
+            ><span class="num">{{ i18n.t('receipt.col.baht') }}</span>
+          </li>
+          @for (line of r.lines; track $index) {
+            <li data-testid="receipt-line">
+              <span>{{ lineName(line) }}</span
+              ><span class="num mono">{{ line.quantity }}</span
+              ><span class="num mono">{{ money(line.amountBaht) }}</span>
+            </li>
+          }
+        </ul>
+        <div class="totals">
+          @if (paper() === 'Tax') {
+            <span class="sub">{{ i18n.t('receipt.beforeVat') }}</span
+            ><span class="num mono" data-testid="receipt-before-vat"
+              >฿{{ money(r.beforeVatBaht) }}</span
+            >
+            <span class="sub">{{ i18n.t('receipt.vat') }}</span
+            ><span class="num mono" data-testid="receipt-vat">฿{{ money(r.vatBaht) }}</span>
+          }
+          <b>{{ i18n.t(paper() === 'Rec' ? 'receipt.totalReceived' : 'receipt.total') }}</b
+          ><b class="num mono big" data-testid="receipt-total">฿{{ money(r.totalBaht) }}</b>
+          @if (paper() !== 'Tax' && r.paidBy.length > 0) {
+            <span class="sub">{{ i18n.t('receipt.paidBy') }}</span
+            ><span class="num">{{ paidByText(r) }}</span>
+          }
+        </div>
+        <p class="sub note">{{ i18n.t('receipt.note.' + paper()) }}</p>
+        <span class="sub small">{{ i18n.t('receipt.footer') }}</span>
+      </article>
+    }
+  </div>
+</dialog>
