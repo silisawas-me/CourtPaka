@@ -1207,5 +1207,9 @@
   "closing.spend.Utilities": "ค่าน้ำค่าไฟ",
   "closing.spend.Wages": "ค่าจ้าง",
   "closing.spend.Repairs": "ค่าซ่อม",
-  "closing.spend.Other": "อื่น ๆ"
+  "closing.spend.Other": "อื่น ๆ",
+  "closing.leadsWaiting": "พิมพ์ยอดที่นับได้ ถ้าไม่ตรง จะชี้รายการที่ยอดเท่ากับผลต่างพอดีทันที",
+  "closing.groupHint.CashTaken": "เงินสดที่บันทึกว่ารับ แต่อาจไม่ได้อยู่ในลิ้นชัก",
+  "closing.groupHint.StillOwed": "การจองที่ยังค้าง อาจรับเงินแล้วแต่ยังไม่ได้กดรับ",
+  "closing.groupHint.CashOut": "เงินสดที่บันทึกว่าออก แต่อาจยังไม่ได้ออกจริง"
 }

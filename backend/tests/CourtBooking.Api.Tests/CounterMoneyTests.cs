@@ -21,6 +21,14 @@ public sealed class CounterMoneyTests(ApiTestFixture api)
         var (owner, venue, courts) = await scenario.BookableVenueAsync();
         var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
         await Take(owner, venue.Id, booking.Id, 100m, nameof(PaymentMethod.Cash));
+
+        // Part-paid, it is a booking still owing the rest: what a count is checked against.
+        var played = booking.Slots[0].Date;
+        var halfway = await VenueScenario.ReadAsync<DayMoneyResponse>(
+            await owner.GetAsync($"/api/venues/{venue.Id}/money?date={played:yyyy-MM-dd}"));
+        var owing = Assert.Single(halfway.Owing!);
+        Assert.Equal((booking.Id, booking.TotalBaht - 100m, "Court 1"), (owing.BookingId, owing.Baht, owing.Courts));
+
         await Take(owner, venue.Id, booking.Id, booking.TotalBaht - 100m, nameof(PaymentMethod.Card));
         var spent = await owner.PostAsJsonAsync(
             $"/api/venues/{venue.Id}/spending",

@@ -1,5 +1,5 @@
 import { DayMoney, MoneyLine } from '../../core/venues/venue-bookings.service';
-import { inShift, partOf, shiftsOf, totalsOf } from './till';
+import { inShift, leadsFor, partOf, shiftsOf, totalsOf } from './till';
 
 function line(fields: Partial<MoneyLine>): MoneyLine {
   return {
@@ -62,5 +62,21 @@ describe('till (the drawer page arithmetic)', () => {
       2_180, 260, 520, 1_400,
     ]);
     expect([totals.cashIn, totals.cashOut, totals.byMethod.Card]).toEqual([1_660, 450, 520]);
+  });
+
+  it('points only at cash rows and owing bookings for exactly the difference', () => {
+    const leads = leadsFor(
+      -60,
+      [
+        line({ kind: 'Sale', method: 'Cash', amountBaht: 60 }),
+        line({ kind: 'Sale', method: 'Card', amountBaht: 60 }),
+        line({ kind: 'Court', method: 'Cash', amountBaht: 61 }),
+        line({ out: true, kind: 'PaidOut', method: 'Cash', amountBaht: 60 }),
+      ],
+      [{ bookingId: 'b', baht: 60, who: 'คุณแนน', courts: 'คอร์ต 5' }],
+    );
+
+    expect(leads.map((lead) => lead.group)).toEqual(['CashTaken', 'CashOut', 'StillOwed']);
+    expect(leadsFor(0, [line({ amountBaht: 0 })], [])).toEqual([]);
   });
 });

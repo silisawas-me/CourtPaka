@@ -252,37 +252,43 @@
       </section>
     </div>
 
-    @if (outBy(); as diff) {
-      <section
-        class="card"
-        data-testid="close-leads"
-        [attr.aria-label]="i18n.t('closing.leadsTitle')"
-      >
-        <div class="card-head">
-          <h2>{{ i18n.t('closing.leadsTitle') }}</h2>
-          <span class="muted">{{
-            i18n.t('closing.leadsMatch').replace('{n}', diff | baht: i18n.locale())
-          }}</span>
-        </div>
-        <ul class="leads">
-          @for (group of leadGroups; track group) {
-            @for (lead of leadsIn(group); track $index) {
-              <li class="lead" [attr.data-testid]="'close-lead-' + group">
-                <span class="chip waiting">{{ i18n.t('closing.leadGroup.' + group) }}</span>
-                <span class="lead-title">{{ leadTitle(lead) }}</span>
-                <span class="muted">{{ leadHint(lead) }}</span>
-              </li>
-            } @empty {
-              <li class="lead none">
-                <span class="chip">{{ i18n.t('closing.leadGroup.' + group) }}</span>
-                <span>{{
-                  i18n.t('closing.noLead').replace('{n}', diff | baht: i18n.locale())
-                }}</span>
-              </li>
-            }
+    <section
+      class="card"
+      data-testid="close-leads"
+      [attr.aria-label]="i18n.t('closing.leadsTitle')"
+    >
+      <div class="card-head">
+        <h2>{{ i18n.t('closing.leadsTitle') }}</h2>
+        <span class="muted" data-testid="close-leads-sub">
+          @if (outBy(); as diff) {
+            {{ i18n.t('closing.leadsMatch').replace('{n}', abs(diff) | baht: i18n.locale()) }}
+          } @else {
+            {{ i18n.t('closing.leadsWaiting') }}
           }
-        </ul>
-      </section>
-    }
+        </span>
+      </div>
+      <ul class="leads">
+        @for (group of leadGroups; track group) {
+          @for (lead of leadsIn(group); track $index) {
+            <li class="lead" [attr.data-testid]="'close-lead-' + group">
+              <span class="chip waiting">{{ i18n.t('closing.leadGroup.' + group) }}</span>
+              <span class="lead-title">{{ leadTitle(lead) }}</span>
+              <span class="muted">{{ leadHint(lead) }}</span>
+            </li>
+          } @empty {
+            <li class="lead none" [attr.data-testid]="'close-lead-none-' + group">
+              <span class="chip">{{ i18n.t('closing.leadGroup.' + group) }}</span>
+              @if (outBy(); as diff) {
+                <span>{{
+                  i18n.t('closing.noLead').replace('{n}', abs(diff) | baht: i18n.locale())
+                }}</span>
+              } @else {
+                <span class="muted">{{ i18n.t('closing.groupHint.' + group) }}</span>
+              }
+            </li>
+          }
+        }
+      </ul>
+    </section>
   }
 </div>

@@ -1,8 +1,8 @@
 import {
   DailyClosing,
   DayMoney,
-  MoneyLead,
   MoneyLine,
+  Owing,
   PaymentMethod,
 } from '../../core/venues/venue-bookings.service';
 
@@ -112,26 +112,34 @@ export function totalsOf(lines: readonly MoneyLine[]): ShiftTotals {
 /** The artboard groups what a difference may be into three: cash in, owing, cash out. */
 export type LeadGroup = 'CashTaken' | 'StillOwed' | 'CashOut';
 
-export function groupOf(lead: MoneyLead): LeadGroup {
-  return lead.kind === 'CashTaken'
-    ? 'CashTaken'
-    : lead.kind === 'StillOwed'
-      ? 'StillOwed'
-      : 'CashOut';
-}
+export const LEAD_GROUPS: readonly LeadGroup[] = ['CashTaken', 'StillOwed', 'CashOut'];
 
-/** The line a lead points at, so its card can say what it was rather than only how much. */
-export function lineOf(lead: MoneyLead, lines: readonly MoneyLine[]): MoneyLine | null {
-  if (lead.kind === 'StillOwed') {
-    return lines.find((line) => line.bookingId && line.bookingId === lead.bookingId) ?? null;
+/** One row whose amount is exactly what the drawer is out by. */
+export type Lead =
+  { group: 'StillOwed'; owing: Owing } | { group: 'CashTaken' | 'CashOut'; line: MoneyLine };
+
+/**
+ * Where a difference may have come from, by the server's own rule (`Takings.Explains`): any
+ * cash row of the day, in or out, and any booking still short, whose amount is exactly the
+ * difference — never "about". Worked out here too so the page can point while the count is
+ * still being typed, before anybody presses close.
+ */
+export function leadsFor(
+  difference: number,
+  lines: readonly MoneyLine[],
+  owing: readonly Owing[],
+): Lead[] {
+  if (difference === 0) {
+    return [];
   }
-  return (
-    lines.find(
-      (line) =>
-        line.amountBaht === lead.amountBaht &&
-        line.method === 'Cash' &&
-        lead.at !== null &&
-        Date.parse(line.at) === Date.parse(lead.at),
-    ) ?? null
-  );
+  const exact = (baht: number) =>
+    Math.abs(Math.round(baht * 100) - Math.round(Math.abs(difference) * 100)) === 0;
+  return [
+    ...lines
+      .filter((line) => line.method === 'Cash' && exact(line.amountBaht))
+      .map((line): Lead => ({ group: line.out ? 'CashOut' : 'CashTaken', line })),
+    ...owing
+      .filter((one) => exact(one.baht))
+      .map((one): Lead => ({ group: 'StillOwed', owing: one })),
+  ];
 }

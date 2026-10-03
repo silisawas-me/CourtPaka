@@ -217,6 +217,15 @@ export interface DayMoney {
   lines?: MoneyLine[];
   /** When the venue opened that day: where its first shift is said to start. */
   opensHour?: number | null;
+  /** The day's bookings still short, and by how much (what a count is checked against). */
+  owing?: Owing[];
+}
+
+export interface Owing {
+  bookingId: string;
+  baht: number;
+  who: string | null;
+  courts: string | null;
 }
 
 /** One movement of money, as data the drawer page words (thai-fit T2). */
