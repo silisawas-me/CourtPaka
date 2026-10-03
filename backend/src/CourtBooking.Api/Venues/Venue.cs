@@ -152,18 +152,28 @@ public sealed class VenueInvitation
 
     public required Guid VenueId { get; init; }
 
-    /// <summary>The address as the owner typed it; shown back to them.</summary>
-    public required string Email { get; init; }
+    /// <summary>
+    /// The address as the owner typed it, when they had one. Staff at a Thai court often have only
+    /// LINE and a phone (docs/plan/thai-fit.md T1), so an invitation may name nobody's mailbox: the
+    /// link the owner sends over LINE is then what grants the seat, once.
+    /// </summary>
+    public string? Email { get; init; }
 
     /// <summary>
     /// Upper-cased address used for every comparison. Without it "Bob@x.com" and "bob@x.com" are two
     /// live invitations for one mailbox, and replacing one would leave the other usable.
     /// </summary>
-    public required string NormalizedEmail { get; init; }
+    public string? NormalizedEmail { get; init; }
+
+    /// <summary>What the owner calls them ("บอม"), so the pending list says who a link was for.</summary>
+    public string? Name { get; init; }
+
+    /// <summary>The number they were invited at, normalized (thai-fit T1). Shown, never matched.</summary>
+    public string? Phone { get; init; }
 
     public required VenuePermissions Permissions { get; set; }
 
-    /// <summary>Only the hash is stored; the token itself lives in the invitation email.</summary>
+    /// <summary>Only the hash is stored; the token lives in the link (the email, or the LINE message).</summary>
     public required string TokenHash { get; init; }
 
     public required DateTimeOffset ExpiresAt { get; init; }

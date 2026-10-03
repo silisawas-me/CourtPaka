@@ -57,7 +57,15 @@ public sealed record VenueBusinessResponse(
     double? Latitude,
     double? Longitude);
 
-public sealed record InviteMemberRequest(string Email, string[]? Permissions);
+/// <summary>
+/// An invitation to work at the venue. An address is optional (thai-fit T1): without one the owner
+/// gets a link back to send over LINE, and a name says who it was for.
+/// </summary>
+public sealed record InviteMemberRequest(
+    string? Email,
+    string[]? Permissions,
+    string? Name = null,
+    string? Phone = null);
 
 public sealed record AcceptInvitationRequest(Guid InvitationId, string Token);
 
@@ -132,6 +140,10 @@ public sealed record RiskRuleResponse(
     int? PeakFromHour,
     int? PeakUntilHour);
 
+/// <summary>
+/// A seat at the venue. <c>Email</c> is empty for somebody who joined by a LINE link with only a
+/// phone (thai-fit T1); <c>Name</c> and <c>Phone</c> are what the list shows them by then.
+/// </summary>
 public sealed record VenueMemberResponse(
     Guid UserId,
     string Email,
@@ -141,7 +153,9 @@ public sealed record VenueMemberResponse(
     /// The most they may write down as sent back in one record (PRD US-18). Null for the owner,
     /// who has no ceiling — there is nobody above them to raise one.
     /// </summary>
-    decimal? RefundLimitBaht);
+    decimal? RefundLimitBaht,
+    string? Name = null,
+    string? Phone = null);
 
 /// <summary>
 /// What is waiting at this venue for the person asking (PRD US-17). Each number is counted only
@@ -153,7 +167,18 @@ public sealed record VenueAttentionResponse(int SlipsToCheck, int BookingsWithMo
 /// <summary>What this member wants to hear about, for the one notice that can be turned off.</summary>
 public sealed record NotificationPreferenceRequest(bool WantsSlipEmails);
 
-public sealed record VenueInvitationResponse(Guid Id, string Email, string[] Permissions, DateTimeOffset ExpiresAt);
+/// <summary>
+/// A pending invitation. <c>Link</c> is only in the answer to the invite itself: the token is never
+/// stored, so the link cannot be shown again — re-inviting makes a new one.
+/// </summary>
+public sealed record VenueInvitationResponse(
+    Guid Id,
+    string? Email,
+    string[] Permissions,
+    DateTimeOffset ExpiresAt,
+    string? Name = null,
+    string? Phone = null,
+    string? Link = null);
 
 public static class VenueErrorCodes
 {
@@ -201,6 +226,11 @@ public static class VenueErrorCodes
     public const string InvalidPermissions = "venue.invalid_permissions";
     public const string InvitationInvalid = "venue.invitation_invalid";
     public const string InvitationForAnotherAddress = "venue.invitation_for_another_address";
+
+    /// <summary>An invitation with no address has to say who it is for.</summary>
+    public const string InvitationNeedsName = "venue.invitation_needs_name";
+
+    public const string InvalidPhone = "venue.invalid_phone";
     public const string InvalidCode = "venue.invalid_code";
     public const string InvalidName = "venue.invalid_name";
     public const string InvalidAddressLine = "venue.invalid_address_line";

@@ -17,6 +17,8 @@ export interface CurrentUser {
    */
   isPlatformAdmin: boolean;
   phoneNumber: string | null;
+  invitationId?: string;
+  invitationToken?: string;
   /** False for a LINE account: deleting it is confirmed at LINE instead of with a password. */
   hasPassword: boolean;
   signsInWithLine: boolean;
@@ -31,11 +33,14 @@ export interface LinePendingSignUp {
 }
 
 export interface RegisterInput {
-  email: string;
+  /** Optional when signing up from a staff invitation link with a phone (thai-fit T1). */
+  email: string | null;
   password: string;
   privacyPolicyVersion: string;
   language: Language;
   phoneNumber: string | null;
+  invitationId?: string;
+  invitationToken?: string;
 }
 
 @Injectable({ providedIn: 'root' })

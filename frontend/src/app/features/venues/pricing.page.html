@@ -1,6 +1,6 @@
 <!-- Artboard c: the section's two tabs — prices, and the opening hours they are painted onto. -->
 <div class="tabs" role="tablist">
-  @for (one of tabs; track one) {
+  @for (one of shownTabs(); track one) {
     <button
       type="button"
       role="tab"
@@ -17,6 +17,8 @@
 
 @if (tab() === 'courts') {
   <app-venue-courts [venueId]="venueId()" [canManage]="canManage()" />
+} @else if (tab() === 'staff') {
+  <app-venue-staff [venueId]="venueId()" [venueName]="venue()?.name ?? ''" />
 } @else if (tab() === 'catalog') {
   <app-venue-catalog [venueId]="venueId()" [canManage]="canManage()" />
 } @else if (tab() === 'policy') {

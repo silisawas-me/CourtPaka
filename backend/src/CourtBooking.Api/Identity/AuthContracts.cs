@@ -1,12 +1,20 @@
 namespace CourtBooking.Api.Identity;
 
+/// <summary>
+/// A new account. <c>InvitationId</c> + <c>InvitationToken</c> are the link a venue sent over LINE
+/// (thai-fit T1): with them, sign-up is open to its holder and a phone number can stand in for an
+/// address.
+/// </summary>
 public sealed record RegisterRequest(
     string? Email,
     string Password,
     string PrivacyPolicyVersion,
     string? Language,
-    string? PhoneNumber);
+    string? PhoneNumber,
+    Guid? InvitationId = null,
+    string? InvitationToken = null);
 
+/// <summary>An address — or, for an account that signed up with a phone, its phone number.</summary>
 public sealed record LoginRequest(string Email, string Password);
 
 public sealed record VerifyEmailRequest(Guid UserId, string Token);
@@ -67,6 +75,9 @@ public static class AuthErrorCodes
     public const string PhoneRequired = "auth.phone_required";
 
     public const string InvalidPhone = "auth.invalid_phone";
+
+    /// <summary>A phone-only account signs in with its number, so the number has to be its own.</summary>
+    public const string PhoneTaken = "auth.phone_taken";
 }
 
 public static class RateLimitPolicies

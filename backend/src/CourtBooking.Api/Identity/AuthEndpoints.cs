@@ -3,6 +3,7 @@ using System.Text;
 using CourtBooking.Api.Data;
 using CourtBooking.Api.Email;
 using CourtBooking.Api.Http;
+using CourtBooking.Api.Venues;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
@@ -60,22 +61,11 @@ public static class AuthEndpoints
             return ApiProblem.Of(StatusCodes.Status409Conflict, AuthErrorCodes.PrivacyPolicyOutdated);
         }
 
-        // An account signed up here signs in with its address, so it must have one. (A LINE
-        // account may not; EmailRules lets that through, which is why it is asked here.)
-        if (string.IsNullOrWhiteSpace(request.Email))
-        {
-            return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.InvalidEmail);
-        }
-
-        // Sign-up is closed (owner-complete 3a): only an address somebody invited may become an
-        // account. Answered the same whether or not the address has an account already, so it
-        // tells nobody who is a member.
-        if (!options.Value.OpenSignUp
-            && !await OwnerInvitations.InvitedAsync(
-                database, userManager.NormalizeEmail(request.Email), timeProvider.GetUtcNow(), cancellationToken))
-        {
-            return ApiProblem.Of(StatusCodes.Status403Forbidden, AuthErrorCodes.InvitationRequired);
-        }
+        // A venue's invitation link opens sign-up to whoever holds it (thai-fit T1), address or not.
+        var byLink = request.InvitationId is { } invitationId
+            && !string.IsNullOrEmpty(request.InvitationToken)
+            && await VenueEndpoints.InvitationIsLiveAsync(
+                database, invitationId, request.InvitationToken, timeProvider.GetUtcNow(), cancellationToken);
 
         string? phone = null;
         if (!string.IsNullOrWhiteSpace(request.PhoneNumber)
@@ -84,10 +74,39 @@ public static class AuthEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.InvalidPhone);
         }
 
+        var email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim();
+
+        // An account signed up here signs in with its address — or, when it came by a venue's link,
+        // with its phone number. It must have one of the two. (A LINE account may have neither;
+        // EmailRules lets that through, which is why it is asked here.)
+        if (email is null && !(byLink && phone is not null))
+        {
+            return ApiProblem.Of(
+                StatusCodes.Status400BadRequest,
+                byLink ? AuthErrorCodes.InvalidPhone : AuthErrorCodes.InvalidEmail);
+        }
+
+        // Sign-up is closed (owner-complete 3a): only an address somebody invited — or the holder
+        // of a venue's link — may become an account. Answered the same whether or not the address
+        // has an account already, so it tells nobody who is a member.
+        if (!options.Value.OpenSignUp
+            && !byLink
+            && !await OwnerInvitations.InvitedAsync(
+                database, userManager.NormalizeEmail(email!), timeProvider.GetUtcNow(), cancellationToken))
+        {
+            return ApiProblem.Of(StatusCodes.Status403Forbidden, AuthErrorCodes.InvitationRequired);
+        }
+
+        // A phone-only account signs in with its number, so that number must lead to one account.
+        if (email is null && await userManager.Users.AnyAsync(other => other.PhoneNumber == phone, cancellationToken))
+        {
+            return ApiProblem.Of(StatusCodes.Status409Conflict, AuthErrorCodes.PhoneTaken);
+        }
+
         var user = new AppUser
         {
-            UserName = request.Email,
-            Email = request.Email,
+            UserName = email ?? PhoneUserName(phone!),
+            Email = email,
             PhoneNumber = phone,
             Language = language,
         };
@@ -110,11 +129,19 @@ public static class AuthEndpoints
                     AcceptedAt = timeProvider.GetUtcNow(),
                 });
                 await database.SaveChangesAsync(cancellationToken);
-                await OwnerInvitations.SpendAsync(
-                    database, user.NormalizedEmail!, timeProvider.GetUtcNow(), cancellationToken);
+                if (user.NormalizedEmail is not null)
+                {
+                    await OwnerInvitations.SpendAsync(
+                        database, user.NormalizedEmail, timeProvider.GetUtcNow(), cancellationToken);
+                }
+
                 await transaction.CommitAsync(cancellationToken);
 
-                await SendVerificationEmailAsync(user, userManager, emailSender, options.Value, CancellationToken.None);
+                if (user.Email is not null)
+                {
+                    await SendVerificationEmailAsync(user, userManager, emailSender, options.Value, CancellationToken.None);
+                }
+
                 return TypedResults.Created("/api/auth/me");
             }
         }
@@ -122,7 +149,12 @@ public static class AuthEndpoints
         {
             // Two registrations for the same address raced past the uniqueness check.
             await transaction.RollbackAsync(cancellationToken);
-            await SendAccountExistsEmailAsync(request.Email, language, userManager, emailSender, CancellationToken.None);
+            if (email is null)
+            {
+                return ApiProblem.Of(StatusCodes.Status409Conflict, AuthErrorCodes.PhoneTaken);
+            }
+
+            await SendAccountExistsEmailAsync(email, language, userManager, emailSender, CancellationToken.None);
             return TypedResults.Created("/api/auth/me");
         }
 
@@ -133,7 +165,13 @@ public static class AuthEndpoints
         var codes = result.Errors.Select(error => error.Code).ToArray();
         if (codes.Any(code => code is "DuplicateUserName" or "DuplicateEmail"))
         {
-            await SendAccountExistsEmailAsync(request.Email, language, userManager, emailSender, CancellationToken.None);
+            // A phone-only account has nobody's mailbox to tell; its number is simply taken.
+            if (email is null)
+            {
+                return ApiProblem.Of(StatusCodes.Status409Conflict, AuthErrorCodes.PhoneTaken);
+            }
+
+            await SendAccountExistsEmailAsync(email, language, userManager, emailSender, CancellationToken.None);
             return TypedResults.Created("/api/auth/me");
         }
 
@@ -229,8 +267,14 @@ public static class AuthEndpoints
             return TypedResults.NoContent();
         }
 
-        var result = await signInManager.PasswordSignInAsync(
-            request.Email, request.Password, isPersistent: true, lockoutOnFailure: true);
+        // A phone-only account (thai-fit T1) signs in with its number: find whose it is, then sign
+        // in by the user name the account was given. Anything else is an address, as before.
+        var byPhone = await FindByPhoneAsync(userManager, request.Email, cancellationToken);
+        var result = byPhone is not null
+            ? await signInManager.PasswordSignInAsync(
+                byPhone, request.Password, isPersistent: true, lockoutOnFailure: true)
+            : await signInManager.PasswordSignInAsync(
+                request.Email, request.Password, isPersistent: true, lockoutOnFailure: true);
 
         if (result.Succeeded)
         {
@@ -242,8 +286,8 @@ public static class AuthEndpoints
         // The account owner is told by email instead.
         if (result.IsLockedOut)
         {
-            var user = await userManager.FindByEmailAsync(request.Email);
-            if (user is not null)
+            var user = byPhone ?? await userManager.FindByEmailAsync(request.Email);
+            if (user?.Email is not null)
             {
                 var (subject, body) = AccountLetters.Locked(user.Language);
                 await emailSender.SendAsync(
@@ -258,7 +302,7 @@ public static class AuthEndpoints
         // Only somebody who knows the password is told the account is suspended; anybody else
         // gets the same answer as for an address with no account (PDPA, PRD 8).
         if (result.IsNotAllowed
-            && await userManager.FindByEmailAsync(request.Email) is { SuspendedAt: not null } suspended
+            && (byPhone ?? await userManager.FindByEmailAsync(request.Email)) is { SuspendedAt: not null } suspended
             && !await userManager.IsLockedOutAsync(suspended))
         {
             if (await userManager.CheckPasswordAsync(suspended, request.Password))
@@ -270,6 +314,25 @@ public static class AuthEndpoints
         }
 
         return ApiProblem.Of(StatusCodes.Status401Unauthorized, AuthErrorCodes.InvalidCredentials);
+    }
+
+    /// <summary>The user name of an account that signed up with a phone and no address.</summary>
+    internal static string PhoneUserName(string normalizedPhone) => $"tel-{normalizedPhone}";
+
+    /// <summary>
+    /// The account a typed phone number signs in to: the one that signed up with it. Something
+    /// with an "@" in it is an address and is left to Identity, which finds those by itself.
+    /// </summary>
+    private static async Task<AppUser?> FindByPhoneAsync(
+        UserManager<AppUser> userManager, string typed, CancellationToken cancellationToken)
+    {
+        if (typed.Contains('@') || PhoneNumbers.Normalize(typed) is not { } phone)
+        {
+            return null;
+        }
+
+        return await userManager.Users.SingleOrDefaultAsync(
+            user => user.UserName == PhoneUserName(phone), cancellationToken);
     }
 
     private static async Task<NoContent> LogoutAsync(SignInManager<AppUser> signInManager)

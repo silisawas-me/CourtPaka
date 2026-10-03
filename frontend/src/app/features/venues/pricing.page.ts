@@ -17,6 +17,7 @@ import { Venue, VenueService } from '../../core/venues/venue.service';
 import { bandsOf, gridOf, openHours, paint, PriceGrid } from './price-grid';
 import { VenueCatalog } from './venue-catalog';
 import { VenueCourts } from './venue-courts';
+import { VenueStaff } from './venue-staff';
 import { VenuePolicy } from './venue-policy';
 import { VenueHours } from './venue-hours';
 
@@ -33,7 +34,7 @@ const PRICE_STEP = 10;
  */
 @Component({
   selector: 'app-pricing-page',
-  imports: [BahtPipe, VenueHours, VenueCourts, VenueCatalog, VenuePolicy],
+  imports: [BahtPipe, VenueHours, VenueCourts, VenueStaff, VenueCatalog, VenuePolicy],
   templateUrl: './pricing.page.html',
   styleUrl: './pricing.page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -59,10 +60,14 @@ export class PricingPage {
   /** Venues the prices were copied to, and any that refused them (with why). */
   protected readonly copied = signal<{ name: string; error: string | null }[]>([]);
 
-  /** The section's two tabs, as artboard c has them: prices, and the hours they apply to. */
   /** The section's tabs: prices and hours, then the rest of the venue's setup (thai-fit). */
-  protected readonly tabs = ['prices', 'hours', 'courts', 'catalog', 'policy'] as const;
+  protected readonly tabs = ['prices', 'hours', 'courts', 'staff', 'catalog', 'policy'] as const;
   protected readonly tab = signal<(typeof this.tabs)[number]>('prices');
+
+  /** Staff is the owner's alone (US-14): every door behind it is OwnerOnly at the server. */
+  protected readonly shownTabs = computed(() =>
+    this.tabs.filter((one) => one !== 'staff' || this.venue()?.role === 'Owner'),
+  );
 
   /** A week saved on the hours tab opens or shuts hours, so the grid is read again. */
   protected reload(): void {

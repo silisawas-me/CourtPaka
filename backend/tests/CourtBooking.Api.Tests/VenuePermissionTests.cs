@@ -266,10 +266,10 @@ public sealed class VenuePermissionTests(ApiTestFixture api)
         Assert.Equal(expected, await response.ErrorCodeAsync());
     }
 
+    // No address at all is an invitation by link (thai-fit T1) — StaffLinkInvitationTests.
     [Theory]
-    [InlineData(null)]
-    [InlineData("")]
     [InlineData("not an address")]
+    [InlineData("bom@")]
     public async Task A_malformed_invitation_address_is_refused_with_a_code(string? email)
     {
         var owner = await scenario.SignedInClientAsync();
