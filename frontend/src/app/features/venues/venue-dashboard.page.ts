@@ -7,16 +7,18 @@ import { ApiError, errorKey } from '../../core/http/api-error';
 import { plainDate, venueToday } from '../../core/i18n/plain-date';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { Dashboard, VenueDashboardService } from '../../core/venues/venue-dashboard.service';
+import { CloseDrawer } from './close-drawer';
 import { RevenuePanel } from './revenue-panel';
 
 /**
  * The owner app's revenue section (PR-5, PRD US-15): the panel over the last fourteen days, and
- * nothing else — the design draws nothing else.
+ * beside it the drawer's count by shift (thai-fit T2, "ปิดยอด").
  */
 @Component({
   selector: 'app-venue-dashboard-page',
-  imports: [RevenuePanel, MatCardModule, MatProgressBarModule],
+  imports: [RevenuePanel, CloseDrawer, MatCardModule, MatProgressBarModule],
   templateUrl: './venue-dashboard.page.html',
+  styleUrl: './venue-dashboard.page.scss',
 })
 export class VenueDashboardPage {
   private readonly dashboards = inject(VenueDashboardService);
@@ -24,6 +26,10 @@ export class VenueDashboardPage {
   protected readonly i18n = inject(TranslationService);
 
   readonly venueId = input.required<string>();
+
+  /** Which half is on screen: the fortnight or the drawer's count. */
+  protected readonly tab = signal<'overview' | 'close'>('overview');
+  protected readonly tabs = ['overview', 'close'] as const;
 
   protected readonly figures = signal<Dashboard | null>(null);
   protected readonly loading = signal(true);

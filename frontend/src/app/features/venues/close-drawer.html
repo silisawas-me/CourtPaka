@@ -1,0 +1,224 @@
+<!-- Counting the drawer by shift (thai-fit T2): the day, its money, the cash, the count. -->
+<div class="close" data-testid="close-drawer">
+  <div class="bar">
+    <div class="day" role="group" [attr.aria-label]="dayLabel()">
+      <button
+        type="button"
+        class="step"
+        data-testid="close-earlier"
+        [attr.aria-label]="i18n.t('bookingList.earlier')"
+        (click)="walk(-1)"
+      >
+        ‹
+      </button>
+      <span class="day-label"
+        >{{ dayLabel() }}
+        @if (day() === today) {
+          <span class="muted">· {{ i18n.t('bookingList.today') }}</span>
+        }
+      </span>
+      <button
+        type="button"
+        class="step"
+        data-testid="close-later"
+        [disabled]="day() === today"
+        [attr.aria-label]="i18n.t('bookingList.later')"
+        (click)="walk(1)"
+      >
+        ›
+      </button>
+    </div>
+
+    <div class="shifts" role="list" [attr.aria-label]="i18n.t('closing.shifts')">
+      @for (one of counts(); track one.closedAt; let i = $index) {
+        <span class="shift" role="listitem" [attr.data-testid]="'close-count-' + i">
+          {{ i18n.t(one.endsDay ? 'closing.closeOfDay' : 'closing.shift') }}
+          {{ clock(one.from) }}–{{ clock(one.closedAt) }}
+          @if (one.closedBy) {
+            · {{ one.closedBy }}
+          }
+          <span class="chip" [class]="'chip ' + standing(one)">
+            {{ i18n.t('closing.' + standing(one)) }}
+            @if (one.differenceBaht !== 0) {
+              ฿{{ abs(one.differenceBaht) | baht: i18n.locale() }}
+            }
+          </span>
+        </span>
+      }
+      @if (money()?.openShift; as shift) {
+        <span class="shift open" role="listitem" data-testid="close-open-shift">
+          {{ i18n.t('closing.openShift') }} {{ clock(shift.from) }}–
+          <span class="chip waiting">{{ i18n.t('closing.notCounted') }}</span>
+        </span>
+      }
+    </div>
+  </div>
+
+  @if (pageError(); as key) {
+    <p class="form-error" data-testid="close-error">{{ i18n.t(key) }}</p>
+  }
+
+  @if (money(); as m) {
+    <div class="cards">
+      <div class="card total">
+        <span class="card-label">{{ i18n.t('closing.takenToday') }}</span>
+        <span class="card-baht" data-testid="close-taken"
+          >฿{{ m.takenBaht | baht: i18n.locale() }}</span
+        >
+      </div>
+      @for (one of methods; track one.method) {
+        <div class="card" [attr.data-testid]="'close-method-' + one.method">
+          <span class="card-label">{{ i18n.t('money.method.' + one.method) }}</span>
+          <span class="card-baht">฿{{ $any(m)[one.key] | baht: i18n.locale() }}</span>
+          <span class="card-note">{{
+            i18n.t(one.inTill ? 'closing.inTill' : 'closing.notInTill')
+          }}</span>
+        </div>
+      }
+    </div>
+
+    <div class="split">
+      <section class="panel" [attr.aria-label]="i18n.t('closing.cashTitle')">
+        <div class="panel-head">
+          <h2>{{ i18n.t('closing.cashTitle') }}</h2>
+          <span class="muted">{{ m.cashReceipts.length }} {{ i18n.t('closing.rows') }}</span>
+        </div>
+        <ul class="rows">
+          @for (one of m.cashReceipts; track one.id) {
+            <li>
+              <span class="time">{{ clock(one.receivedAt) }}</span>
+              <span
+                >{{ i18n.t(kindOf(one)) }}
+                @if (one.note) {
+                  <span class="muted"> · {{ one.note }}</span>
+                }
+              </span>
+              <span class="baht">฿{{ one.amountBaht | baht: i18n.locale() }}</span>
+            </li>
+          } @empty {
+            <li class="muted">{{ i18n.t('closing.noCash') }}</li>
+          }
+        </ul>
+        <p class="sum">
+          {{ i18n.t('closing.in') }} <b>฿{{ m.cashBaht | baht: i18n.locale() }}</b> ·
+          {{ i18n.t('closing.out') }}
+          <b class="out">฿{{ cashOutBaht() | baht: i18n.locale() }}</b>
+        </p>
+      </section>
+
+      <section class="panel" [attr.aria-label]="i18n.t('closing.countTitle')">
+        @if (closed(); as c) {
+          <h2>{{ i18n.t('closing.dayClosed') }}</h2>
+          <dl class="sums" data-testid="close-closed">
+            <dt>{{ i18n.t('closing.expected') }}</dt>
+            <dd>฿{{ c.expectedCashBaht | baht: i18n.locale() }}</dd>
+            <dt>{{ i18n.t('closing.counted') }}</dt>
+            <dd>฿{{ c.countedCashBaht | baht: i18n.locale() }}</dd>
+          </dl>
+          <div class="difference" [class]="'difference ' + standing(c)">
+            <span>{{ i18n.t('closing.' + standing(c)) }}</span>
+            <span class="big">฿{{ abs(c.differenceBaht) | baht: i18n.locale() }}</span>
+          </div>
+        } @else if (m.openShift; as shift) {
+          <h2>{{ i18n.t('closing.countTitle') }}</h2>
+          <label class="field">
+            <span>{{ i18n.t('closing.float') }}</span>
+            <input
+              inputmode="decimal"
+              data-testid="close-float"
+              [value]="floatText()"
+              (input)="floatTyped.set($any($event.target).value)"
+            />
+          </label>
+          <dl class="sums">
+            <dt>{{ i18n.t('closing.float') }}</dt>
+            <dd>฿{{ floatBaht() | baht: i18n.locale() }}</dd>
+            <dt>+ {{ i18n.t('closing.cashIn') }}</dt>
+            <dd>฿{{ shift.cashInBaht | baht: i18n.locale() }}</dd>
+            <dt>− {{ i18n.t('closing.cashOut') }}</dt>
+            <dd>฿{{ shift.cashOutBaht | baht: i18n.locale() }}</dd>
+            <dt class="strong">{{ i18n.t('closing.expected') }}</dt>
+            <dd class="strong" data-testid="close-expected">
+              ฿{{ expected() | baht: i18n.locale() }}
+            </dd>
+          </dl>
+          <label class="field">
+            <span>{{ i18n.t('closing.counted') }}</span>
+            <input
+              class="counted"
+              inputmode="decimal"
+              data-testid="close-counted"
+              [value]="countedTyped()"
+              (input)="countedTyped.set($any($event.target).value)"
+            />
+          </label>
+          @if (difference(); as diff) {
+            <div class="difference" [class]="'difference ' + (diff < 0 ? 'short' : 'over')">
+              <span>{{ i18n.t(diff < 0 ? 'closing.short' : 'closing.over') }}</span>
+              <span class="big" data-testid="close-difference"
+                >฿{{ abs(diff) | baht: i18n.locale() }}</span
+              >
+            </div>
+          } @else if (countedBaht() !== null) {
+            <div class="difference even">
+              <span>{{ i18n.t('closing.even') }}</span>
+              <span class="big" data-testid="close-difference">฿0</span>
+            </div>
+          }
+          <label class="field">
+            <span>{{ i18n.t('closing.note') }}</span>
+            <input
+              data-testid="close-note"
+              maxlength="400"
+              [value]="note()"
+              (input)="note.set($any($event.target).value)"
+            />
+          </label>
+          @if (formError(); as key) {
+            <p class="form-error" data-testid="close-form-error">{{ i18n.t(key) }}</p>
+          }
+          <div class="actions">
+            <button
+              type="button"
+              class="main"
+              data-testid="close-shift"
+              [disabled]="countedBaht() === null || busy()"
+              (click)="count(false)"
+            >
+              {{ i18n.t('closing.handOver') }}
+            </button>
+            <button
+              type="button"
+              data-testid="close-day"
+              [disabled]="countedBaht() === null || busy()"
+              (click)="count(true)"
+            >
+              {{ i18n.t('closing.closeDay') }}
+            </button>
+          </div>
+          <p class="muted small">{{ i18n.t('closing.hint') }}</p>
+        }
+      </section>
+    </div>
+
+    @if (m.leads.length > 0) {
+      <section class="panel" data-testid="close-leads">
+        <h2>{{ i18n.t('closing.leadsTitle') }}</h2>
+        <ul class="leads">
+          @for (lead of m.leads; track $index) {
+            <li>
+              <span class="chip waiting">{{ i18n.t('closing.lead.' + lead.kind) }}</span>
+              <b>฿{{ lead.amountBaht | baht: i18n.locale() }}</b>
+              @if (lead.at) {
+                <span class="muted">{{ clock(lead.at) }}</span>
+              }
+              @if (lead.note) {
+                <span class="muted">· {{ lead.note }}</span>
+              }
+            </li>
+          }
+        </ul>
+      </section>
+    }
+  }
+</div>

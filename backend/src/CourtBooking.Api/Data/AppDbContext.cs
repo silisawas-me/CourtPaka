@@ -915,9 +915,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             closing.Property(c => c.CountedCashBaht).HasPrecision(10, 2);
             closing.Property(c => c.DifferenceBaht).HasPrecision(10, 2);
             closing.Property(c => c.Note).HasMaxLength(DailyClosing.NoteMaxLength);
-            // A day is counted once. The database is what makes two people pressing at the same
-            // time into one count rather than two.
-            closing.HasIndex(c => new { c.VenueId, c.Date }).IsUnique();
+            // A day is closed once, though a shift may be counted before it (thai-fit T2). The
+            // database is what makes two people closing the day at the same time into one close.
+            closing.HasIndex(c => new { c.VenueId, c.Date })
+                .IsUnique()
+                .HasFilter("\"EndsDay\"")
+                .HasDatabaseName("IX_DailyClosings_VenueId_Date_EndsDay");
+            closing.HasIndex(c => new { c.VenueId, c.Date, c.ClosedAt });
             closing.HasOne(c => c.Venue)
                 .WithMany()
                 .HasForeignKey(c => c.VenueId)

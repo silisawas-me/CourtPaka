@@ -1,3 +1,5 @@
+import { VenuePermission } from '../core/venues/venue.service';
+
 /** The shell stands on "every venue" rather than on one: the owner's overview (badPaka Owner App). */
 export const ALL_VENUES = 'all';
 
@@ -11,6 +13,11 @@ export interface VenueLink {
   readonly fragment?: string;
   /** Drawn only for somebody who owns the venue: money and prices are the owner's (US-14). */
   readonly ownerOnly?: boolean;
+  /**
+   * Drawn for somebody holding this permission at the venue (an Owner holds every one). The same
+   * permission the section's API asks for, so the menu never offers a door the server shuts.
+   */
+  readonly needs?: VenuePermission;
   /** Also where a page further down this list is — the timeline and "now" are both the schedule. */
   readonly alsoAt?: readonly (readonly string[])[];
 }
@@ -31,6 +38,12 @@ export const VENUE_SECTIONS: readonly VenueLink[] = [
     alsoAt: [['now'], ['bookings']],
   },
   { to: ['pricing'], label: 'nav.section.pricing', testId: 'nav-pricing', ownerOnly: true },
-  { to: ['dashboard'], label: 'nav.section.revenue', testId: 'nav-dashboard', ownerOnly: true },
+  // Revenue and the drawer's count: whoever the venue trusts with the numbers (ViewReports).
+  {
+    to: ['dashboard'],
+    label: 'nav.section.revenue',
+    testId: 'nav-dashboard',
+    needs: 'ViewReports',
+  },
   { to: ['packages'], label: 'nav.section.members', testId: 'nav-packages' },
 ];

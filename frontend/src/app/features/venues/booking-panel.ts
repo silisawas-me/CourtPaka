@@ -30,7 +30,13 @@ import { whoIs } from './now-board';
 import { span } from './timeline';
 
 /** The three ways the panel takes money, left to right as the design draws them. */
-const PAY_WITH: readonly PaymentMethod[] = ['PromptPay', 'Card', 'Cash'];
+const PAY_WITH: readonly PaymentMethod[] = [
+  'PromptPay',
+  'Card',
+  'Cash',
+  'BankTransfer',
+  'TrueMoney',
+];
 
 /** How a refund goes back, the transfer first because that is how most do (PRD US-18). */
 const REFUND_WITH: readonly RefundMethod[] = ['Transfer', 'Cash'];

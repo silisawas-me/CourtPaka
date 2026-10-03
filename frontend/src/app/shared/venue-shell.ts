@@ -4,7 +4,7 @@ import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { catchError, filter, map, of, startWith } from 'rxjs';
 import { venueToday } from '../core/i18n/plain-date';
 import { TranslationService } from '../core/i18n/translation.service';
-import { Venue, VenueService } from '../core/venues/venue.service';
+import { Venue, VenuePermission, VenueService } from '../core/venues/venue.service';
 import { ALL_VENUES, VENUE_SECTIONS, VenueLink } from './venue-nav';
 
 import { WalkIn } from '../features/venues/walk-in';
@@ -139,7 +139,7 @@ export class VenueShell {
     const onAll = this.onAll();
 
     return VENUE_SECTIONS.flatMap((link) => {
-      if (link.ownerOnly && !this.isOwner()) {
+      if ((link.ownerOnly && !this.isOwner()) || (link.needs && !this.holds(link.needs))) {
         return [];
       }
 
@@ -205,7 +205,18 @@ export class VenueShell {
   });
 
   private firstFor(link: VenueLink): Venue | undefined {
-    return this.mine().find((venue) => !link.ownerOnly || venue.role === 'Owner');
+    return this.mine().find(
+      (venue) =>
+        (!link.ownerOnly || venue.role === 'Owner') && (!link.needs || mayAt(venue, link.needs)),
+    );
+  }
+
+  /** Whether they hold a permission at the venue on screen, or — on the overview — at any. */
+  private holds(permission: VenuePermission): boolean {
+    const current = this.current();
+    return current
+      ? mayAt(current, permission)
+      : this.mine().some((venue) => mayAt(venue, permission));
   }
 
   private door(link: VenueLink, path: unknown[], on: boolean): Door {
@@ -252,4 +263,9 @@ function isAt(link: VenueLink, here: Here): boolean {
       section.fragment && section.to[0] === segment && section.fragment === here.fragment,
   );
   return !claimed;
+}
+
+/** An Owner holds every permission; anyone else holds what the venue gave them. */
+function mayAt(venue: Venue, permission: VenuePermission): boolean {
+  return venue.role === 'Owner' || venue.permissions.includes(permission);
 }

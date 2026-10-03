@@ -53,7 +53,7 @@ with sync_playwright() as p:
     )
     # The bar above it would be a second navigation saying the same thing.
     check("the top bar stands down on a desk", not desk.locator("mat-toolbar.bar").is_visible())
-    check("the bottom bar is for thumbs, not desks", not desk.locator(".tabs").is_visible())
+    check("the bottom bar is for thumbs, not desks", not desk.locator("nav.tabs").is_visible())
 
     # Every door leads where it says, which is the only thing a list of links can get wrong —
     # so the page it lands on is named here, not merely required to be one of this venue's.
@@ -167,8 +167,8 @@ with sync_playwright() as p:
     sign_in(phone, OWNER)
     phone.goto(f"{BASE}/venues/{venue_id}/timeline")
     phone.wait_for_selector("[data-testid=tab-schedule]")
-    check("the sections lie along the bottom on a phone", phone.locator(".tabs").is_visible(), phone)
-    check("the phone has the same four sections", phone.locator(".tabs .tab").count() == 4)
+    check("the sections lie along the bottom on a phone", phone.locator("nav.tabs").is_visible(), phone)
+    check("the phone has the same four sections", phone.locator("nav.tabs .tab").count() == 4)
     check("the sidebar is not drawn on a phone", not phone.locator(".side").is_visible())
     check(
         "the schedule's tab is marked as the one being read",
@@ -176,7 +176,7 @@ with sync_playwright() as p:
     )
     phone.click("[data-testid=tab-dashboard]")
     phone.wait_for_url(f"{BASE}/venues/{venue_id}/dashboard**")
-    check("a tab carries the thumb to that page", phone.locator(".tabs").is_visible(), phone)
+    check("a tab carries the thumb to that page", phone.locator("nav.tabs").is_visible(), phone)
 
     browser.close()
 

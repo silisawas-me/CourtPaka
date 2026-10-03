@@ -495,6 +495,74 @@ public sealed class CounterMoneyTests(ApiTestFixture api)
         Assert.Equal(nameof(PaymentState.Received), paid.PaymentState);
     }
 
+    /// <summary>
+    /// A shift hands the drawer over without closing the day (thai-fit T2): its count covers what
+    /// came in since the last count, the next shift counts only what came after it, and money
+    /// taken between them stays today's.
+    /// </summary>
+    [Fact]
+    public async Task A_shift_counts_its_own_drawer_and_the_day_stays_open()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, morning) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        await Take(owner, venue.Id, morning.Id, 100m, nameof(PaymentMethod.Cash));
+
+        var first = await VenueScenario.ReadAsync<DailyClosingResponse>(
+            await owner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/money/closing",
+                new CloseDayRequest(500m, 600m, null, EndsDay: false)));
+        Assert.False(first.EndsDay);
+        Assert.Equal(600m, first.ExpectedCashBaht);
+        Assert.Equal(0m, first.DifferenceBaht);
+
+        // The evening shift takes money after the hand-over: it is still today's.
+        var (_, evening) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 19);
+        await Take(owner, venue.Id, evening.Id, 150m, nameof(PaymentMethod.Cash));
+
+        var open = await Money(owner, venue.Id);
+        Assert.Null(open.Closed);
+        Assert.Equal(250m, open.CashBaht);
+        Assert.Equal(150m, open.OpenShift!.CashInBaht);
+        Assert.Single(open.Counts!);
+
+        // The close counts only the evening's cash on top of the float it was handed.
+        var close = await VenueScenario.ReadAsync<DailyClosingResponse>(
+            await owner.PostAsJsonAsync(
+                $"/api/venues/{venue.Id}/money/closing",
+                new CloseDayRequest(600m, 740m, "ทอนผิดสิบบาท")));
+        Assert.True(close.EndsDay);
+        Assert.Equal(750m, close.ExpectedCashBaht);
+        Assert.Equal(-10m, close.DifferenceBaht);
+
+        var closed = await Money(owner, venue.Id);
+        Assert.NotNull(closed.Closed);
+        Assert.Null(closed.OpenShift);
+        Assert.Equal([false, true], closed.Counts!.Select(count => count.EndsDay));
+
+        // A closed day takes no more counts, shift or close.
+        var again = await owner.PostAsJsonAsync(
+            $"/api/venues/{venue.Id}/money/closing",
+            new CloseDayRequest(0m, 0m, null, EndsDay: false));
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+        Assert.Equal(MoneyErrorCodes.AlreadyClosed, await again.ErrorCodeAsync());
+    }
+
+    /// <summary>Money moved by bank transfer and TrueMoney is counted apart and not in the till.</summary>
+    [Fact]
+    public async Task Transfer_and_TrueMoney_are_counted_apart_from_the_till()
+    {
+        var (owner, venue, courts) = await scenario.BookableVenueAsync();
+        var (_, booking) = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
+        await Take(owner, venue.Id, booking.Id, 60m, nameof(PaymentMethod.BankTransfer));
+        await Take(owner, venue.Id, booking.Id, 40m, nameof(PaymentMethod.TrueMoney));
+
+        var money = await Money(owner, venue.Id);
+        Assert.Equal(60m, money.BankTransferBaht);
+        Assert.Equal(40m, money.TrueMoneyBaht);
+        Assert.Equal(0m, money.CashBaht);
+        Assert.Equal(0m, money.OpenShift!.CashInBaht);
+    }
+
     private static async Task<VenueBookingResponse> Take(
         HttpClient client, Guid venueId, Guid bookingId, decimal amount, string method) =>
         await VenueScenario.ReadAsync<VenueBookingResponse>(

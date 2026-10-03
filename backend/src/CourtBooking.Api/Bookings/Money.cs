@@ -12,6 +12,15 @@ public enum PaymentMethod
     Cash = 1,
     PromptPay = 2,
     Card = 3,
+
+    /// <summary>
+    /// Straight into the venue's bank account, not through the PromptPay QR (docs/plan/thai-fit.md
+    /// T3). Not in the till.
+    /// </summary>
+    BankTransfer = 4,
+
+    /// <summary>TrueMoney Wallet (T3). Not in the till.</summary>
+    TrueMoney = 5,
 }
 
 /// <summary>
@@ -94,8 +103,15 @@ public sealed class DailyClosing
     /// <summary>The venue's own day (PRD BR-10), not the reader's.</summary>
     public required DateOnly Date { get; init; }
 
-    /// <summary>What was in the till before the day started.</summary>
+    /// <summary>What was in the till before this count's shift started.</summary>
     public required decimal OpeningFloatBaht { get; init; }
+
+    /// <summary>
+    /// Whether this count closes the venue's day (docs/plan/thai-fit.md T2). A day can be counted
+    /// several times — a shift hands the drawer to the next — and only the last count closes it:
+    /// money taken after that belongs to tomorrow. A count that is not the last moves nothing.
+    /// </summary>
+    public required bool EndsDay { get; init; }
 
     /// <summary>What the day's cash says should be there: the float, plus cash in, less cash out.</summary>
     public required decimal ExpectedCashBaht { get; init; }
@@ -344,10 +360,12 @@ public static class Takings
         DateOnly day,
         CancellationToken cancellationToken)
     {
+        // Only the count that closes a day moves where the day ends; a shift's count does not.
         var counts = await database.DailyClosings
             .AsNoTracking()
             .Where(closing =>
                 closing.VenueId == venueId
+                && closing.EndsDay
                 && (closing.Date == day || closing.Date == day.AddDays(-1)))
             .Select(closing => new { closing.Date, closing.ClosedAt })
             .ToListAsync(cancellationToken);

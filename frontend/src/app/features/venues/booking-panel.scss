@@ -217,11 +217,12 @@
 }
 
 .pay {
-  display: flex;
+  // Three a row: PromptPay, card and cash first, the bank and TrueMoney under them (thai-fit T3).
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 
   button {
-    flex: 1;
     padding: 10px 0;
     border: 1px solid var(--mat-sys-outline-variant);
     border-radius: 10px;
