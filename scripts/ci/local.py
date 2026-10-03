@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 # The flows the workflow itself runs (ci.yml, job `flows`). The rest exist, but these six are the
 # gate. Since the booker's pages were taken out (docs/plan/cut-booker.md) the six are the venue's.
-FLOWS = ["doors", "venue_shell", "close_drawer", "counter_money", "walk_in", "now_board", "timeline", "booking_list", "slips", "venue_setup", "staff_passcode", "late_night"]
+FLOWS = ["doors", "venue_shell", "close_drawer", "counter_money", "walk_in", "now_board", "timeline", "booking_list", "slips", "receipts", "venue_setup", "staff_passcode", "late_night"]
 
 
 class Check:

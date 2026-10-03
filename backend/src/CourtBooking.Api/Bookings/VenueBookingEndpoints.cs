@@ -1,4 +1,5 @@
 using CourtBooking.Api.Data;
+using CourtBooking.Api.Documents;
 using CourtBooking.Api.Http;
 using CourtBooking.Api.Localization;
 using CourtBooking.Api.Observability;
@@ -80,6 +81,9 @@ public static class VenueBookingEndpoints
 
         // Find a caller's booking on any day, and read one booking's story (the booking list).
         bookings.MapBookingLookupEndpoints();
+
+        // What its receipt would say: a preview until the accountant answers Q1 (thai-fit T6).
+        bookings.MapReceiptPreviewEndpoints();
 
         bookings.MapRefundEndpoints();
         // Money taken at the desk, in parts and in the form it arrived (PRD US-26).
