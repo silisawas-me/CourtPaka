@@ -1,20 +1,4 @@
-<!-- Artboard c: the section's two tabs — prices, and the opening hours they are painted onto. -->
-<div class="tabs" role="tablist">
-  @for (one of shownTabs(); track one) {
-    <button
-      type="button"
-      role="tab"
-      class="tab"
-      [class.on]="tab() === one"
-      [attr.aria-selected]="tab() === one"
-      [attr.data-testid]="'pricing-tab-' + one"
-      (click)="tab.set($any(one))"
-    >
-      {{ i18n.t('pricing.tab.' + one) }}
-    </button>
-  }
-</div>
-
+<!-- Prices & setup: the tab is `?tab=` and the top bar draws the tabs, as the artboards put them. -->
 @if (tab() === 'courts') {
   <app-venue-courts [venueId]="venueId()" [canManage]="canManage()" />
 } @else if (tab() === 'staff') {

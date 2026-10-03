@@ -43,6 +43,7 @@
           [class.on]="pill.on"
           [attr.aria-current]="pill.on ? 'page' : null"
           [routerLink]="pill.path"
+          [queryParams]="keptTab()"
           [attr.data-testid]="pill.testId"
           >{{ pill.testId === 'pill-all' ? i18n.t(pill.label) : pill.label }}</a
         >
@@ -63,6 +64,22 @@
           [routerLink]="view.path"
           [attr.data-testid]="view.testId"
           >{{ i18n.t(view.label) }}</a
+        >
+      }
+    </nav>
+  }
+
+  @if (tabs().length > 0) {
+    <nav class="pills views" data-testid="section-tabs" [attr.aria-label]="i18n.t(title())">
+      @for (one of tabs(); track one.testId) {
+        <a
+          class="pill"
+          [class.on]="one.on"
+          [attr.aria-current]="one.on ? 'page' : null"
+          [routerLink]="one.path"
+          [queryParams]="one.query"
+          [attr.data-testid]="one.testId"
+          >{{ i18n.t(one.label) }}</a
         >
       }
     </nav>
