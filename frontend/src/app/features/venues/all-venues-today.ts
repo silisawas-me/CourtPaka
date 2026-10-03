@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ClockPipe } from '../../core/i18n/clock.pipe';
 import { RouterLink } from '@angular/router';
 import { errorKey } from '../../core/http/api-error';
 import { BahtPipe } from '../../core/i18n/baht.pipe';
@@ -16,7 +17,7 @@ import { OwnerToday, VenueService, VenueToday } from '../../core/venues/venue.se
  */
 @Component({
   selector: 'app-all-venues-today',
-  imports: [BahtPipe, RouterLink],
+  imports: [BahtPipe, RouterLink, ClockPipe],
   templateUrl: './all-venues-today.html',
   styleUrl: './all-venues-today.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

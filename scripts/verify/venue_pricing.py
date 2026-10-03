@@ -1,4 +1,4 @@
-"""Prices and peak hours, opening hours and grace (owner app PR-4, 2c) against the running stack."""
+"""Prices and peak hours, and opening hours (owner app PR-4, thai-fit T4) against the running stack."""
 
 import datetime
 
@@ -88,7 +88,7 @@ with sync_playwright() as p:
     # A gap cannot be painted — every open hour always carries a tier — so the refusal the old
     # editor could provoke is no longer a thing a venue can do from this page.
 
-    # 5b. Opening hours and the grace for latecomers, on the section's second tab (artboard c).
+    # 5b. Opening hours on the section's second tab, as the thai-fit artboard draws it.
     page.goto(BASE + venue_url + "/pricing")
     page.click("[data-testid=pricing-tab-hours]")
     page.wait_for_selector("[data-testid=opening-hours]")
@@ -103,12 +103,6 @@ with sync_playwright() as p:
     page.wait_for_selector("[data-testid=hours-result]")
     check("the page says so", page.locator("[data-testid=hours-result]").count() == 1, page)
 
-    page.click("[data-testid=grace-30]")
-    with page.expect_response(lambda r: r.url.endswith("/grace")) as grace:
-        page.click("[data-testid=grace-save]")
-    mine = [v for v in page.request.get(f"{BASE}/api/venues/mine").json() if f"/venues/{v['id']}" == venue_url][0]
-    check("the grace for latecomers is saved", grace.value.status == 204 and mine["graceMinutes"] == 30, page)
-    page.request.put(f"{api}/grace", data={"minutes": 15})
     ensure_bookable(browser, venue_url.rsplit("/", 1)[-1])
 
     # 6. Staff read the prices and cannot change them.

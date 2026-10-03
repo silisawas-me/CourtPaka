@@ -146,6 +146,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             // Same reason as Booking.Arrival: a venue that existed before this waits fifteen
             // minutes like everybody else, not zero (PRD US-24).
             venue.Property(v => v.GraceMinutes).HasDefaultValue(VenueDecisions.DefaultGraceMinutes);
+            venue.ToTable(table => table.HasCheckConstraint(
+                "CK_Venues_DayStartsInTheSmallHours",
+                $"\"DayStartsHour\" BETWEEN 0 AND {Localization.VenueClock.LatestDayStart}"));
 
             // The CLR default of an int is 0, and a venue that asks for nothing up front holds
             // hours for nothing. Said here so that every venue already on the platform keeps

@@ -186,11 +186,12 @@ public static class ShopEndpoints
     private static async Task<Ok<ShopSaleResponse[]>> SalesAsync(
         Guid venueId,
         DateOnly? date,
+        CurrentVenue venue,
         AppDbContext database,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var day = date ?? PlatformRequirements.BangkokToday(timeProvider);
+        var day = date ?? VenueClock.Today(timeProvider, venue.DayStartsHour);
 
         // The till's day, not midnight to midnight: a tube sold after the count belongs to the
         // same day as the money it was paid with, or the shop's book and the drawer's disagree

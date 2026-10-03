@@ -35,6 +35,14 @@ public sealed class Venue
     public int GraceMinutes { get; set; } = VenueDecisions.DefaultGraceMinutes;
 
     /// <summary>
+    /// The hour this venue's day starts (thai-fit T4, <see cref="Localization.VenueClock"/>): 0 for a
+    /// venue that closes by midnight, 2 for one that has stayed open until 02:00. It only ever
+    /// rises — once Friday's 01:00 has been sold as Friday's, moving the line back would file it
+    /// under Saturday — and no day may open before it, or one hour would belong to two days.
+    /// </summary>
+    public int DayStartsHour { get; set; }
+
+    /// <summary>
     /// How much of a booking's price has to arrive before its hours are held, as a percentage
     /// (PRD US-28). All of it unless the venue says otherwise, which is how the system has always
     /// worked; asking for less is what makes the rest of the price something the desk collects.

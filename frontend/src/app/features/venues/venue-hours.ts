@@ -8,27 +8,33 @@ import {
   output,
   signal,
 } from '@angular/core';
-import { concatMap, from, Observable, of, switchMap, toArray } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
+import { of, switchMap } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { errorKey } from '../../core/http/api-error';
+import { clockHour } from '../../core/i18n/clock.pipe';
 import { plainDate, venueToday } from '../../core/i18n/plain-date';
 import { TranslationService } from '../../core/i18n/translation.service';
-import { CourtService, OpeningHoursDay, Weekday } from '../../core/venues/court.service';
+import { CourtService, OpeningHoursDay, Weekday, WEEKDAYS } from '../../core/venues/court.service';
 import { PricingService } from '../../core/venues/pricing.service';
-import { Venue, VenueService } from '../../core/venues/venue.service';
-import { dayIsValid, latestWeek, pricesCovering } from './hours-rules';
-
-/** The grace presets the design offers beside − and +, in minutes (0–60 is what the server takes). */
-const GRACE_PRESETS = [0, 10, 15, 30, 60] as const;
-const GRACE_MAX = 60;
-const GRACE_STEP = 5;
+import { Venue } from '../../core/venues/venue.service';
+import {
+  dayIsValid,
+  dayStartFor,
+  LATEST_CLOSE,
+  latestWeek,
+  opensTooEarly,
+  pricesCovering,
+} from './hours-rules';
 
 /**
- * Opening hours and the wait for latecomers, in the pricing section (artboard c of
- * docs/plan/owner-complete.md): the week by day, from a date, and how many minutes after an hour
- * starts nobody having come counts. Saving a week that opens an hour nobody has priced prices it
- * from its nearest hour that day first (`pricesCovering`), because the server refuses an open
- * hour without a price and the price grid paints only hours that are open.
+ * Opening hours, as the "เวลาเปิด-ปิด" artboard of docs/plan/thai-fit.md draws them: one card, a
+ * row per day of open – close, and a day may close past midnight (T4). Friday until 02:00 is
+ * Friday's hours 24 and 25 — the row says "ข้ามเที่ยงคืน" and the note at the foot says what that
+ * means for bookings and the drawer.
+ *
+ * Saving a week that opens an hour nobody has priced prices it from its nearest hour that day
+ * first (`pricesCovering`): the server refuses an open hour without a price, and the price grid
+ * paints only hours that are open.
  */
 @Component({
   selector: 'app-venue-hours',
@@ -39,176 +45,144 @@ const GRACE_STEP = 5;
 export class VenueHours {
   private readonly courts = inject(CourtService);
   private readonly pricing = inject(PricingService);
-  private readonly venues = inject(VenueService);
   protected readonly i18n = inject(TranslationService);
 
   readonly venueId = input.required<string>();
   readonly venue = input<Venue | null>(null);
   readonly canManage = input(false);
-  /** The owner's other venues, which "ใช้กับทุกสาขา" gives this week too. */
-  readonly others = input<readonly Venue[]>([]);
 
   /** A week was saved, so the price grid's open hours changed. */
   readonly saved = output<void>();
 
   protected readonly openHours = Array.from({ length: 24 }, (_, hour) => hour);
-  protected readonly closeHours = Array.from({ length: 24 }, (_, hour) => hour + 1);
-  protected readonly presets = GRACE_PRESETS;
-  protected readonly today = plainDate(venueToday());
+  protected readonly closeHours = Array.from({ length: LATEST_CLOSE }, (_, hour) => hour + 1);
 
+  private readonly today = plainDate(venueToday());
   protected readonly week = signal<OpeningHoursDay[] | null>(null);
-  protected readonly from = signal(plainDate(venueToday()));
+  /** The week is saved from today, or from the date of a week already published ahead. */
+  private readonly from = signal(this.today);
   protected readonly loadError = signal<string | null>(null);
   protected readonly busy = signal(false);
-  protected readonly result = signal<{ text: string; error: boolean }[]>([]);
+  protected readonly result = signal<{ text: string; error: boolean } | null>(null);
 
-  protected readonly grace = signal(15);
-  protected readonly graceSaved = signal(false);
-  protected readonly graceError = signal<string | null>(null);
+  private readonly startsNow = computed(() => this.venue()?.dayStartsHour ?? 0);
 
   protected readonly weekValid = computed(() => (this.week() ?? []).every(dayIsValid));
+  protected readonly tooEarly = computed(() => opensTooEarly(this.week() ?? [], this.startsNow()));
+
+  /** The artboard's example, about the first day that runs past midnight (Friday if none does). */
+  protected readonly example = computed(() => {
+    const late = (this.week() ?? []).find((day) => (day.closesHour ?? 0) > 24);
+    const day = late?.day ?? 'Friday';
+    const closes = late?.closesHour ?? 26;
+    return this.i18n
+      .t('hours.example')
+      .replaceAll('{day}', this.dayName(day))
+      .replaceAll('{from}', clockHour(closes - 1, true))
+      .replaceAll('{to}', clockHour(closes, true));
+  });
 
   constructor() {
     effect(() => this.load(this.venueId()));
-    effect(() => {
-      const minutes = this.venue()?.graceMinutes;
-      if (minutes !== undefined) {
-        this.grace.set(minutes);
-      }
-    });
   }
 
   protected dayName(day: Weekday): string {
     return this.i18n.t(`hours.day.${day}`);
   }
 
-  protected hourLabel(hour: number): string {
-    return `${String(hour).padStart(2, '0')}:00`;
+  /** "16:00"; a close at 24 is midnight, and past it the hour is the next day's (artboard). */
+  protected closeLabel(day: Weekday, hour: number): string {
+    if (hour < 24) {
+      return clockHour(hour, true);
+    }
+    if (hour === 24) {
+      return `24:00 ${this.i18n.t('hours.midnight')}`;
+    }
+    const next = WEEKDAYS[(WEEKDAYS.indexOf(day) + 1) % 7];
+    return this.i18n
+      .t('hours.nextDay')
+      .replace('{t}', clockHour(hour, true))
+      .replace('{day}', this.dayName(next));
   }
 
-  /** Closing at 24 is midnight, and the artboard says so beside the number. */
-  protected closeLabel(hour: number): string {
-    return hour === 24
-      ? `${this.hourLabel(hour)} ${this.i18n.t('hours.midnight')}`
-      : this.hourLabel(hour);
+  protected openLabel(hour: number): string {
+    return clockHour(hour, true);
   }
 
-  protected setOpens(day: Weekday, value: string): void {
-    this.edit(day, { opensHour: Number(value) });
+  protected late(day: OpeningHoursDay): boolean {
+    return (day.closesHour ?? 0) > 24;
+  }
+
+  /** The open list carries "shut" too: a day the venue does not open is chosen where it opens. */
+  protected setOpens(day: OpeningHoursDay, value: string): void {
+    if (value === '') {
+      this.edit(day.day, { opensHour: null, closesHour: null });
+      return;
+    }
+    const opens = Number(value);
+    this.edit(day.day, {
+      opensHour: opens,
+      closesHour: day.closesHour !== null && day.closesHour > opens ? day.closesHour : opens + 1,
+    });
   }
 
   protected setCloses(day: Weekday, value: string): void {
     this.edit(day, { closesHour: Number(value) });
   }
 
-  /** Open on a shut day as the day before it opens (else 08–23), or shut an open one. */
-  protected toggle(day: OpeningHoursDay): void {
-    if (day.opensHour === null) {
-      const open = (this.week() ?? []).find((one) => one.opensHour !== null);
-      this.edit(day.day, {
-        opensHour: open?.opensHour ?? 8,
-        closesHour: open?.closesHour ?? 23,
-      });
-    } else {
-      this.edit(day.day, { opensHour: null, closesHour: null });
-    }
-  }
-
   protected save(): void {
     const week = this.week();
-    if (!week || !this.weekValid() || this.busy()) {
+    if (!week || !this.weekValid() || this.tooEarly() || this.busy()) {
       return;
     }
     this.busy.set(true);
-    this.result.set([]);
-    this.publish(this.venueId(), week).subscribe((line) => {
-      this.busy.set(false);
-      this.result.set([line]);
-      if (!line.error) {
-        this.saved.emit();
-      }
-    });
-  }
-
-  /** The same week at every other venue this person owns, each saved (and refused) on its own. */
-  protected saveEverywhere(): void {
-    const week = this.week();
-    if (!week || !this.weekValid() || this.busy()) {
-      return;
-    }
-    this.busy.set(true);
-    this.result.set([]);
-    from([{ id: this.venueId(), name: this.venue()?.name ?? '' }, ...this.others()])
+    this.result.set(null);
+    const venueId = this.venueId();
+    this.pricing
+      .prices(venueId)
       .pipe(
-        concatMap((venue) =>
-          this.publish(venue.id, week).pipe(
-            map((line) => ({ ...line, text: `${venue.name}: ${line.text}` })),
-          ),
-        ),
-        toArray(),
+        switchMap((prices) => {
+          const covered = pricesCovering(prices?.bands ?? [], week);
+          const priced =
+            covered && covered.added > 0
+              ? this.pricing.setPrices(venueId, covered.bands).pipe(map(() => covered.added))
+              : of(0);
+          return priced.pipe(
+            switchMap((added) =>
+              this.courts.setOpeningHours(venueId, this.from(), week).pipe(map(() => added)),
+            ),
+          );
+        }),
       )
-      .subscribe((lines) => {
-        this.busy.set(false);
-        this.result.set(lines);
-        this.saved.emit();
+      .subscribe({
+        next: (added) => {
+          this.busy.set(false);
+          this.result.set({
+            text:
+              added > 0
+                ? this.i18n.t('hours.savedPriced').replace('{n}', String(added))
+                : this.i18n.t('hours.saved'),
+            error: false,
+          });
+          this.saved.emit();
+        },
+        error: (failure: unknown) => {
+          this.busy.set(false);
+          this.result.set({ text: this.i18n.t(errorKey(failure)), error: true });
+        },
       });
   }
 
-  protected nudgeGrace(by: number): void {
-    this.grace.update((minutes) => Math.max(0, Math.min(GRACE_MAX, minutes + by * GRACE_STEP)));
-    this.graceSaved.set(false);
-  }
-
-  protected pickGrace(minutes: number): void {
-    this.grace.set(minutes);
-    this.graceSaved.set(false);
-  }
-
-  protected saveGrace(): void {
-    this.graceError.set(null);
-    this.venues.setGrace(this.venueId(), this.grace()).subscribe({
-      next: () => this.graceSaved.set(true),
-      error: (failure: unknown) => this.graceError.set(errorKey(failure)),
-    });
-  }
-
-  /**
-   * One venue's week: its prices first when the week opens an hour it has not priced, then the
-   * week itself. Answers one line to show, whichever way it went.
-   */
-  private publish(
-    venueId: string,
-    week: readonly OpeningHoursDay[],
-  ): Observable<{ text: string; error: boolean }> {
-    return this.pricing.prices(venueId).pipe(
-      switchMap((prices) => {
-        const covered = pricesCovering(prices?.bands ?? [], week);
-        const priced =
-          covered && covered.added > 0
-            ? this.pricing.setPrices(venueId, covered.bands).pipe(map(() => covered.added))
-            : of(0);
-        return priced.pipe(
-          switchMap((added) =>
-            this.courts.setOpeningHours(venueId, this.from(), week).pipe(map(() => added)),
-          ),
-        );
-      }),
-      map((added) => ({
-        text:
-          added > 0
-            ? this.i18n.t('hours.savedPriced').replace('{n}', String(added))
-            : this.i18n.t('hours.saved'),
-        error: false,
-      })),
-      catchError((failure: unknown) => of({ text: this.i18n.t(errorKey(failure)), error: true })),
-    );
+  /** Where the day would start once saved, for the line that says why an early day is refused. */
+  protected dayStart(): string {
+    return clockHour(dayStartFor(this.week() ?? [], this.startsNow()), true);
   }
 
   private edit(day: Weekday, change: Partial<OpeningHoursDay>): void {
     this.week.update((week) =>
       (week ?? []).map((one) => (one.day === day ? { ...one, ...change } : one)),
     );
-    this.result.set([]);
+    this.result.set(null);
   }
 
   private load(venueId: string): void {

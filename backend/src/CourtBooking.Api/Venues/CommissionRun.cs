@@ -58,7 +58,10 @@ public static class CommissionRun
         CancellationToken cancellationToken)
     {
         var cutOff = CutOff(month);
-        var until = PlatformRequirements.BangkokHour(FirstOfNext(month), 0);
+        // The month ends where the venue's day does: Friday 31st's 01:00 is still the 31st at a
+        // venue open until 02:00 (thai-fit T4).
+        var dayStartsHour = await VenueDay.DayStartsHourAsync(database, venueId, cancellationToken);
+        var until = VenueClock.Window(FirstOfNext(month), dayStartsHour).From;
 
         var billed = database.CommissionInvoiceLines.Select(line => line.BookingId);
 
@@ -130,7 +133,7 @@ public static class CommissionRun
 
             billable.Add(new Billable(
                 booking.Id,
-                PlatformRequirements.BangkokDateAndHour(booking.FirstStart).Date,
+                VenueClock.DayAndHour(booking.FirstStart, dayStartsHour).Date,
                 kept));
         }
 

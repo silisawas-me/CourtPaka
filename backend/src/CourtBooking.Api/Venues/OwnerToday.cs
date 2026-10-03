@@ -92,7 +92,10 @@ public static class OwnerToday
         var venues = new List<VenueTodayResponse>(readable.Length);
         foreach (var member in readable)
         {
-            venues.Add(await ReadAsync(database, member.Venue!, today, now, cancellationToken));
+            // Each venue's own day: one open until 02:00 is still on yesterday at 01:00 (thai-fit T4).
+            var itsToday = VenueClock.Today(timeProvider, member.Venue!.DayStartsHour);
+            today = itsToday < today ? itsToday : today;
+            venues.Add(await ReadAsync(database, member.Venue!, itsToday, now, cancellationToken));
         }
 
         // No product event yet: PRD 8.1 names every event the code sends and this page is not in
@@ -124,8 +127,7 @@ public static class OwnerToday
         var (lastWeek, _, _) = await VenueDashboard.TodayAsync(
             database, venue.Id, today.AddDays(-7), now.AddDays(-7), cancellationToken);
 
-        var since = PlatformRequirements.BangkokHour(today, 0);
-        var until = PlatformRequirements.BangkokHour(today.AddDays(1), 0);
+        var (since, until) = VenueClock.Window(today, venue.DayStartsHour);
 
         // Today's bookings with their hours, read as the check-in door reads them. An hour that
         // runs into today counts: a game begun at a quarter to midnight is on the floor at ten

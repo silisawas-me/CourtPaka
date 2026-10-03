@@ -62,7 +62,22 @@ const VENUE_CLOCK = new Intl.DateTimeFormat('en-GB', {
  * not one that has ended (PRD US-13) — which a browser in another zone would otherwise judge by
  * its own clock.
  */
-export function venueNow(at: Date = new Date()): { date: string; hour: number; minute: number } {
+export function venueNow(
+  at: Date = new Date(),
+  dayStartsHour = 0,
+): { date: string; hour: number; minute: number } {
   const [hour, minute] = VENUE_CLOCK.format(at).split(':').map(Number);
-  return { date: PLAIN_DATE.format(at), hour, minute };
+  const date = PLAIN_DATE.format(at);
+  // A venue open past midnight is still on yesterday until its day starts (thai-fit T4): 01:00
+  // Saturday is Friday's hour 25 at a venue whose day starts at 02:00.
+  return hour < dayStartsHour
+    ? { date: shiftPlainDate(date, -1), hour: hour + 24, minute }
+    : { date, hour, minute };
+}
+
+/** A plain date some days away, counted on the calendar rather than in hours. */
+export function shiftPlainDate(date: string, days: number): string {
+  const day = fromPlainDate(date)!;
+  day.setDate(day.getDate() + days);
+  return plainDate(day);
 }

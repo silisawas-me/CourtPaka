@@ -129,7 +129,12 @@ public sealed record VenueResponse(
     /// they have no ceiling (PRD US-18). Like the permissions beside it, it belongs to the
     /// reader rather than to the venue — it is what lets the page say so before they type.
     /// </summary>
-    decimal? RefundLimitBaht);
+    decimal? RefundLimitBaht,
+    /// <summary>
+    /// Where this venue's day starts (thai-fit T4): 0 at a venue that closes by midnight. The
+    /// floor screens read "now" against it, so 01:00 Saturday is still Friday's hour 25.
+    /// </summary>
+    int DayStartsHour = 0);
 
 /// <summary>What a venue counts as too often, and which hours it will not lose (PRD US-28).</summary>
 public sealed record RiskRuleResponse(
@@ -397,7 +402,12 @@ public sealed record AvailabilityResponse(
     DateOnly LastBookableDate,
     int? OpensHour,
     int? ClosesHour,
-    CourtAvailabilityResponse[] Courts);
+    CourtAvailabilityResponse[] Courts,
+    /// <summary>
+    /// Where the venue's day starts (thai-fit T4). Hours from 24 are after midnight, and a screen
+    /// that asks "what is now" reads 01:00 as hour 25 of the day before when this is above 1.
+    /// </summary>
+    int DayStartsHour = 0);
 
 public static class AvailabilityErrorCodes
 {

@@ -66,43 +66,54 @@ describe('VenueHours', () => {
     expect(textOf(fixture, 'hours-result')).toContain('1');
   });
 
-  it('names each day in words, and says a 24:00 close is midnight', () => {
+  it('names each day in words, and says where a close at or past midnight lands', () => {
     // The day names once came from a key deleted with the old settings page, and the rows read
     // "settings.day.Monday" until somebody looked (2026-10-03).
     expect(textOf(fixture, 'hours-Monday')).toContain('จันทร์');
-    const closes = elementOf(fixture, 'closes-Monday') as HTMLSelectElement;
-    expect(closes.options[closes.options.length - 1].textContent).toContain('(เที่ยงคืน)');
+    const closes = elementOf<HTMLSelectElement>(fixture, 'closes-Monday')!;
+    const labels = [...closes.options].map((option) => option.textContent!.trim());
+    expect(labels).toContain('24:00 (เที่ยงคืน)');
+    // The artboard's "02:00 ของวันเสาร์": past midnight is the next day's clock (thai-fit T4).
+    expect(labels).toContain('02:00 ของวันอังคาร');
   });
 
-  it('shuts a day, and opens a shut one as the rest of the week opens', () => {
-    clickOn(fixture, 'toggle-Sunday');
-    fixture.detectChanges();
-    expect(elementOf<HTMLSelectElement>(fixture, 'opens-Sunday')!.value).toBe('8');
+  it('closes past midnight: the row says so, and the week is saved with the late hours', () => {
+    choose('closes-Monday', '26');
+    expect(elementOf(fixture, 'late-Monday')).not.toBeNull();
+    expect(textOf(fixture, 'opening-hours')).toContain('จันทร์ 01:00–02:00');
 
-    clickOn(fixture, 'toggle-Monday');
-    fixture.detectChanges();
-    expect(elementOf<HTMLSelectElement>(fixture, 'opens-Monday')!.disabled).toBe(true);
+    clickOn(fixture, 'hours-save');
+    httpMock.expectOne('/api/venues/v1/prices').flush({
+      id: 'p1',
+      createdAt: '2026-01-01T00:00:00Z',
+      bands: [{ day: 'Monday', fromHour: 8, toHour: 26, bahtPerHour: 180 }],
+    });
+    const week = httpMock.expectOne(
+      (request) => request.method === 'PUT' && request.url === '/api/venues/v1/opening-hours',
+    );
+    expect(week.request.body.days.find((one: { day: string }) => one.day === 'Monday')).toEqual({
+      day: 'Monday',
+      opensHour: 8,
+      closesHour: 26,
+    });
+    week.flush({});
   });
 
-  it('refuses a day that closes before it opens', () => {
-    choose('closes-Monday', '6');
-    expect(elementOf(fixture, 'hours-invalid')).not.toBeNull();
+  it('refuses a day that opens before the night before has closed', () => {
+    choose('closes-Monday', '26');
+    choose('opens-Tuesday', '1');
+    expect(elementOf(fixture, 'hours-too-early')).not.toBeNull();
     expect(elementOf<HTMLButtonElement>(fixture, 'hours-save')!.disabled).toBe(true);
+
+    choose('opens-Tuesday', '2');
+    expect(elementOf(fixture, 'hours-too-early')).toBeNull();
   });
 
-  it('sets the grace for latecomers', () => {
-    expect(textOf(fixture, 'grace-minutes')).toContain('15');
-    clickOn(fixture, 'grace-more');
-    clickOn(fixture, 'grace-more');
-    fixture.detectChanges();
-    expect(textOf(fixture, 'grace-minutes')).toContain('25');
-    clickOn(fixture, 'grace-30');
-    clickOn(fixture, 'grace-save');
+  it('shuts a day from where it opens, and opens a shut one for an hour to start with', () => {
+    choose('opens-Monday', '');
+    expect(elementOf<HTMLSelectElement>(fixture, 'closes-Monday')!.disabled).toBe(true);
 
-    const grace = httpMock.expectOne('/api/venues/v1/grace');
-    expect(grace.request.body).toEqual({ minutes: 30 });
-    grace.flush(null);
-    fixture.detectChanges();
-    expect(elementOf(fixture, 'grace-saved')).not.toBeNull();
+    choose('opens-Sunday', '9');
+    expect(elementOf<HTMLSelectElement>(fixture, 'closes-Sunday')!.value).toBe('10');
   });
 });

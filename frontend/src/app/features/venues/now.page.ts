@@ -7,11 +7,13 @@ import {
   inject,
   input,
   signal,
+  untracked,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { WalkInEvents } from '../../core/venues/walk-in.events';
 import { errorKey } from '../../core/http/api-error';
 import { BahtPipe } from '../../core/i18n/baht.pipe';
+import { ClockPipe, clockHour } from '../../core/i18n/clock.pipe';
 import { venueNow } from '../../core/i18n/plain-date';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { Availability, PublicVenueService } from '../../core/venues/public-venue.service';
@@ -34,7 +36,7 @@ export const NOW_REFRESH_MS = 30_000;
  */
 @Component({
   selector: 'app-now-page',
-  imports: [BahtPipe],
+  imports: [BahtPipe, ClockPipe],
   templateUrl: './now.page.html',
   styleUrl: './now.page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -48,8 +50,12 @@ export class NowPage {
   readonly venueId = input.required<string>();
 
   private readonly walkIns = inject(WalkInEvents);
-  private readonly clock = signal(venueNow());
+  /** The wall clock, ticking; the venue's day and hour come with the grid (thai-fit T4). */
+  private readonly tick = signal(new Date());
   private readonly grid = signal<Availability | null>(null);
+  private readonly clock = computed(() => venueNow(this.tick(), this.grid()?.dayStartsHour ?? 0));
+  /** The venue's date alone, so a new minute or a new grid is not a new day. */
+  private readonly venueDay = computed(() => this.clock().date);
   private readonly day = signal<VenueBooking[] | null>(null);
 
   protected readonly pageError = signal<string | null>(null);
@@ -100,7 +106,13 @@ export class NowPage {
   protected readonly round = Math.round;
 
   constructor() {
-    effect(() => this.read(this.venueId(), { first: true }));
+    // A new venue day is a new floor: at midnight, or when the grid says 01:00 is still
+    // yesterday's at a venue open past it (thai-fit T4).
+    effect(() => {
+      const venueId = this.venueId();
+      this.venueDay();
+      untracked(() => this.read(venueId, { first: true }));
+    });
     effect(() => {
       this.shop.items(this.venueId()).subscribe({
         next: (items) => this.items.set(items.filter((item) => !item.withdrawnAt)),
@@ -119,12 +131,12 @@ export class NowPage {
     // while nobody is looking — a hidden tab asking every thirty seconds is load for no reader.
     const tick = setInterval(() => {
       const before = this.clock().date;
-      this.clock.set(venueNow());
-      if (document.visibilityState !== 'visible') {
+      this.tick.set(new Date());
+      // A new day is read by the effect above; the same day only needs its bookings again.
+      if (document.visibilityState !== 'visible' || this.clock().date !== before) {
         return;
       }
-      // Past midnight it is another day's floor, grid and all.
-      this.read(this.venueId(), { first: this.clock().date !== before });
+      this.read(this.venueId(), { first: false });
     }, NOW_REFRESH_MS);
     inject(DestroyRef).onDestroy(() => clearInterval(tick));
   }
@@ -153,7 +165,7 @@ export class NowPage {
   protected nextLabel(hour: number | null): string {
     return hour === null
       ? this.i18n.t('now.freeToClose')
-      : this.i18n.t('now.nextAt').replace('{t}', `${hour}:00`);
+      : this.i18n.t('now.nextAt').replace('{t}', clockHour(hour));
   }
 
   protected checkIn(booking: VenueBooking): void {

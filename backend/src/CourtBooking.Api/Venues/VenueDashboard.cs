@@ -226,13 +226,18 @@ public static class VenueDashboard
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var since = PlatformRequirements.BangkokHour(first, 0);
-        var until = PlatformRequirements.BangkokHour(last.AddDays(1), 0);
+        // Days are the venue's own: a venue open until 02:00 counts Friday's last hours on Friday
+        // (thai-fit T4).
+        var dayStartsHour = await VenueDay.DayStartsHourAsync(database, venueId, cancellationToken);
+        var since = VenueClock.Window(first, dayStartsHour).From;
+        var until = VenueClock.Window(last, dayStartsHour).Until;
 
-        var kept = await KeptByDayAsync(database, venueId, since, until, now, cancellationToken);
+        var kept = await KeptByDayAsync(
+            database, venueId, since, until, dayStartsHour, now, cancellationToken);
         var hours = await HoursByDayAsync(
-            database, venueId, first, last, since, until, cancellationToken);
-        var shopByDay = await ShopByDayAsync(database, venueId, since, until, cancellationToken);
+            database, venueId, first, last, since, until, dayStartsHour, cancellationToken);
+        var shopByDay = await ShopByDayAsync(
+            database, venueId, since, until, dayStartsHour, cancellationToken);
 
         var days = Enumerable.Range(0, last.DayNumber - first.DayNumber + 1)
             .Select(offset => first.AddDays(offset))
@@ -305,6 +310,7 @@ public static class VenueDashboard
         Guid venueId,
         DateTimeOffset since,
         DateTimeOffset until,
+        int dayStartsHour,
         CancellationToken cancellationToken)
     {
         var sales = await database.ShopSales
@@ -321,13 +327,13 @@ public static class VenueDashboard
         {
             if (sale.SoldAt >= since && sale.SoldAt < until)
             {
-                var day = PlatformRequirements.BangkokDateAndHour(sale.SoldAt).Date;
+                var day = VenueClock.DayAndHour(sale.SoldAt, dayStartsHour).Date;
                 byDay[day] = byDay.GetValueOrDefault(day) + sale.TotalBaht;
             }
 
             if (sale.CancelledAt is { } back && back >= since && back < until)
             {
-                var day = PlatformRequirements.BangkokDateAndHour(back).Date;
+                var day = VenueClock.DayAndHour(back, dayStartsHour).Date;
                 byDay[day] = byDay.GetValueOrDefault(day) - sale.TotalBaht;
             }
         }
@@ -407,11 +413,14 @@ public static class VenueDashboard
     {
         var length = last.DayNumber - first.DayNumber + 1;
         var priorFirst = first.AddDays(-length);
-        var since = PlatformRequirements.BangkokHour(priorFirst, 0);
-        var until = PlatformRequirements.BangkokHour(first, 0);
+        var dayStartsHour = await VenueDay.DayStartsHourAsync(database, venueId, cancellationToken);
+        var since = VenueClock.Window(priorFirst, dayStartsHour).From;
+        var until = VenueClock.Window(first, dayStartsHour).From;
 
-        var kept = await KeptByDayAsync(database, venueId, since, until, now, cancellationToken);
-        var shop = await ShopByDayAsync(database, venueId, since, until, cancellationToken);
+        var kept = await KeptByDayAsync(
+            database, venueId, since, until, dayStartsHour, now, cancellationToken);
+        var shop = await ShopByDayAsync(
+            database, venueId, since, until, dayStartsHour, cancellationToken);
 
         return kept.Values.Sum(day => day.Online + day.Staff) + shop.Values.Sum();
     }
@@ -520,6 +529,7 @@ public static class VenueDashboard
         Guid venueId,
         DateTimeOffset since,
         DateTimeOffset until,
+        int dayStartsHour,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
@@ -601,7 +611,7 @@ public static class VenueDashboard
                 booking.Taken,
                 booking.DepositBaht,
                 booking.PaidWithHours);
-            var day = PlatformRequirements.BangkokDateAndHour(booking.FirstStart).Date;
+            var day = VenueClock.DayAndHour(booking.FirstStart, dayStartsHour).Date;
             var so_far = byDay.GetValueOrDefault(day);
 
             byDay[day] = so_far with
@@ -638,7 +648,8 @@ public static class VenueDashboard
             DateOnly last,
             DateTimeOffset since,
             DateTimeOffset until,
-            CancellationToken cancellationToken)
+            int dayStartsHour,
+        CancellationToken cancellationToken)
     {
         // The timelines once for the whole range, then each day is drawn from them in memory.
         // Lifted closures are read too: the hours before the lift were shut (US-15).
@@ -670,7 +681,7 @@ public static class VenueDashboard
             .ToListAsync(cancellationToken);
 
         var usedByDay = used
-            .Select(slot => (slot.CourtId, At: PlatformRequirements.BangkokDateAndHour(slot.StartsAt)))
+            .Select(slot => (slot.CourtId, At: VenueClock.DayAndHour(slot.StartsAt, dayStartsHour)))
             .ToLookup(slot => slot.At.Date, slot => (slot.CourtId, slot.At.Hour));
 
         var byDay = new Dictionary<DateOnly, HourUse[]>();
@@ -685,7 +696,8 @@ public static class VenueDashboard
                 VenueTimeline.OpeningHoursOn(schedules, date),
                 bands: [],
                 taken: new HashSet<(Guid, int)>(),
-                asItWas: true);
+                asItWas: true,
+                dayStartsHour: dayStartsHour);
 
             var usedThatDay = usedByDay[date].Distinct().ToArray();
             byDay[date] =
@@ -718,13 +730,14 @@ public static class VenueDashboard
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var since = PlatformRequirements.BangkokHour(today, 0);
-        var until = PlatformRequirements.BangkokHour(today.AddDays(1), 0);
+        var dayStartsHour = await VenueDay.DayStartsHourAsync(database, venueId, cancellationToken);
+        var (since, until) = VenueClock.Window(today, dayStartsHour);
 
-        var kept = (await KeptByDayAsync(database, venueId, since, until, now, cancellationToken))
+        var kept = (await KeptByDayAsync(
+                database, venueId, since, until, dayStartsHour, now, cancellationToken))
             .GetValueOrDefault(today);
         var hours = await HoursByDayAsync(
-            database, venueId, today, today, since, until, cancellationToken);
+            database, venueId, today, today, since, until, dayStartsHour, cancellationToken);
 
         return (kept.Online + kept.Staff, kept.Bookings, hours.GetValueOrDefault(today) ?? []);
     }

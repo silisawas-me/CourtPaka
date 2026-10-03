@@ -145,6 +145,9 @@ public sealed class CurrentVenue
     /// </summary>
     public int GraceMinutes { get; set; } = VenueDecisions.DefaultGraceMinutes;
 
+    /// <summary>Where this venue's day starts (thai-fit T4), carried for the same reason.</summary>
+    public int DayStartsHour { get; set; }
+
     public VenueMembership Require() =>
         Membership ?? throw new InvalidOperationException("No venue membership was resolved for this request.");
 }
@@ -191,6 +194,7 @@ public sealed class VenuePermissionHandler(AppDbContext database, CurrentVenue c
             currentVenue.Membership = found;
             currentVenue.Status = found?.Venue?.Status;
             currentVenue.GraceMinutes = found?.Venue?.GraceMinutes ?? VenueDecisions.DefaultGraceMinutes;
+            currentVenue.DayStartsHour = found?.Venue?.DayStartsHour ?? 0;
         }
 
         var membership = currentVenue.Membership;

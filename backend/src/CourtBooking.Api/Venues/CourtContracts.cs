@@ -53,6 +53,12 @@ public static class CourtErrorCodes
     public const string MissingDay = "opening_hours.missing_day";
     public const string NeverOpen = "opening_hours.never_open";
 
+    /// <summary>
+    /// A day opens before the venue's day starts — before the hour some night is still selling as
+    /// the day before's (thai-fit T4). The answer carries <c>dayStartsHour</c>.
+    /// </summary>
+    public const string OpensBeforeLastNightCloses = "opening_hours.opens_before_last_night_closes";
+
     public const string InvalidClosureReason = "closure.invalid_reason";
 
     /// <summary>The range is backwards, is not whole hours, or has already been and gone.</summary>

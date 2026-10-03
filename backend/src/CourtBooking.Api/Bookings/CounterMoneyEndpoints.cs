@@ -356,11 +356,12 @@ public static class CounterMoneyEndpoints
     private static async Task<Ok<DayMoneyResponse>> DayAsync(
         Guid venueId,
         DateOnly? date,
+        CurrentVenue venue,
         AppDbContext database,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var day = date ?? PlatformRequirements.BangkokToday(timeProvider);
+        var day = date ?? VenueClock.Today(timeProvider, venue.DayStartsHour);
         var (from, until) = await Takings.TillDayAsync(database, venueId, day, cancellationToken);
 
         var receipts = await database.PaymentReceipts
@@ -614,7 +615,7 @@ public static class CounterMoneyEndpoints
         ILoggerFactory loggers,
         CancellationToken cancellationToken)
     {
-        var today = PlatformRequirements.BangkokToday(timeProvider);
+        var today = VenueClock.Today(timeProvider, venue.DayStartsHour);
         var day = date ?? today;
 
         if (day > today)
@@ -740,7 +741,9 @@ public static class CounterMoneyEndpoints
         DateTimeOffset receivedAt,
         CancellationToken cancellationToken)
     {
-        var receivedOn = PlatformRequirements.BangkokDateAndHour(receivedAt).Date;
+        // The venue's day: cash taken at 01:00 Saturday by a venue open until 02:00 is Friday's.
+        var receivedOn = VenueClock.DayAndHour(
+            receivedAt, await VenueDay.DayStartsHourAsync(database, venueId, cancellationToken)).Date;
         await QueueForTheDayAsync(database, venueId, receivedOn, cancellationToken);
 
         // Only the close of the day sends money to tomorrow; a shift's count does not (thai-fit T2).
@@ -836,8 +839,8 @@ public static class CounterMoneyEndpoints
         DateOnly day,
         CancellationToken cancellationToken)
     {
-        var from = PlatformRequirements.BangkokHour(day, 0);
-        var until = PlatformRequirements.BangkokHour(day.AddDays(1), 0);
+        var (from, until) = VenueClock.Window(
+            day, await VenueDay.DayStartsHourAsync(database, venueId, cancellationToken));
 
         var owed = await database.Bookings
             .AsNoTracking()

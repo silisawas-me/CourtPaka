@@ -22,9 +22,9 @@
           @if (court.state === 'playing' || court.state === 'due') {
             <p class="court-who">{{ who(court.booking) ?? i18n.t('booker.deleted') }}</p>
             <p class="court-detail">
-              {{ i18n.t('board.kind.' + court.booking.kind) }} · {{ court.from }}:00–{{
-                court.to
-              }}:00
+              {{ i18n.t('board.kind.' + court.booking.kind) }} · {{ court.from | clock }}–{{
+                court.to | clock
+              }}
             </p>
             <div class="court-foot">
               <div
@@ -98,7 +98,7 @@
       }
       @for (one of arriving(); track one.booking.bookingId) {
         <div class="arrival" [attr.data-testid]="'now-arrival-' + one.booking.bookingId">
-          <span class="arrival-time">{{ one.hour }}:00</span>
+          <span class="arrival-time">{{ one.hour | clock }}</span>
           <span class="arrival-who">
             <span class="arrival-name">{{ who(one.booking) ?? i18n.t('booker.deleted') }}</span>
             <span class="arrival-meta"
@@ -125,7 +125,7 @@
       }
       @for (court of dueNow(); track court.booking.bookingId) {
         <div class="arrival late" [attr.data-testid]="'now-due-' + court.booking.bookingId">
-          <span class="arrival-time">{{ court.from }}:00</span>
+          <span class="arrival-time">{{ court.from | clock }}</span>
           <span class="arrival-who">
             <span class="arrival-name">{{ who(court.booking) ?? i18n.t('booker.deleted') }}</span>
             <span class="arrival-meta">{{ court.name }} · {{ i18n.t('now.notChecked') }}</span>

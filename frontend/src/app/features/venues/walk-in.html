@@ -42,11 +42,11 @@
             [attr.data-testid]="'walk-in-start-' + hour"
             (click)="pickStart(hour)"
           >
-            @if (hour === nowHour) {
+            @if (hour === nowHour()) {
               <!-- The hour the clock is in: somebody standing here can have the rest of it. -->
               {{ i18n.t('walkIn.fromNow') }}
             }
-            {{ hour }}:00
+            {{ hour | clock }}
           </button>
         }
       </div>

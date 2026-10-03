@@ -1,3 +1,4 @@
+import { clockHour } from '../../core/i18n/clock.pipe';
 import { VenueBooking } from '../../core/venues/venue-bookings.service';
 import { span } from './timeline';
 
@@ -39,14 +40,12 @@ export function stateOf(booking: VenueBooking, nowMs: number): RowState {
 
 /** Whether the booking's first hour has begun, on the Bangkok clock the slots are written in. */
 function startedBy(booking: VenueBooking, nowMs: number): boolean {
+  // An hour of the venue's day may be 24 or more — after midnight (thai-fit T4) — so the instant
+  // is the day's midnight plus the hours, not a time written into the date.
   const at = (slot: { date: string; hour: number }) =>
-    `${slot.date}T${String(slot.hour).padStart(2, '0')}`;
-  const first = [...booking.slots].sort((a, b) => at(a).localeCompare(at(b)))[0];
-  if (!first) {
-    return false;
-  }
-  const startsAt = Date.parse(`${at(first)}:00:00+07:00`);
-  return nowMs >= startsAt;
+    Date.parse(`${slot.date}T00:00:00+07:00`) + slot.hour * 3_600_000;
+  const first = Math.min(...booking.slots.map(at));
+  return booking.slots.length > 0 && nowMs >= first;
 }
 
 /** Whether a row belongs under a filter. Owing reads the server's door, never `toPayBaht > 0`. */
@@ -94,7 +93,7 @@ export function timeOf(booking: VenueBooking): string {
     return '';
   }
   const { from, to } = span(booking);
-  return `${String(from).padStart(2, '0')}:00–${String(to).padStart(2, '0')}:00`;
+  return `${clockHour(from, true)}–${clockHour(to, true)}`;
 }
 
 /** The courts a booking is on, in the order the venue names them. */

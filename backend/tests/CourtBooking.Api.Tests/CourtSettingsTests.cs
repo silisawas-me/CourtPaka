@@ -386,7 +386,7 @@ public sealed class CourtSettingsTests(ApiTestFixture api)
 
     [Theory]
     [InlineData(22, 6, CourtErrorCodes.InvalidHours)] // Closes before it opens.
-    [InlineData(6, 25, CourtErrorCodes.InvalidHours)] // Past midnight at the end of the day.
+    [InlineData(6, 31, CourtErrorCodes.InvalidHours)] // Past 06:00 the next morning (thai-fit T4 stops there).
     [InlineData(-1, 22, CourtErrorCodes.InvalidHours)]
     [InlineData(6, 6, CourtErrorCodes.InvalidHours)] // Open for no hours at all.
     public async Task Hours_that_describe_no_open_time_are_refused(int opens, int closes, string expected)

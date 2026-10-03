@@ -28,7 +28,6 @@
     [venueId]="venueId()"
     [venue]="venue()"
     [canManage]="canManage()"
-    [others]="others()"
     (saved)="reload()"
   />
 } @else {
@@ -103,7 +102,7 @@
         <div class="week-grid" [style.--hours]="week.hours.length" role="grid">
           <span class="corner" role="columnheader"></span>
           @for (hour of week.hours; track hour) {
-            <span class="hour" role="columnheader">{{ hour }}</span>
+            <span class="hour" role="columnheader">{{ hour % 24 }}</span>
           }
           @for (day of days; track day) {
             <span class="day" role="rowheader">{{ dayName(day) }}</span>
@@ -115,7 +114,7 @@
                   role="gridcell"
                   [class]="'cell tier-' + (tier < 3 ? tier : 'n')"
                   [disabled]="!canManage()"
-                  [attr.aria-label]="dayName(day) + ' ' + hour + ':00 ฿' + week.tiers[tier]"
+                  [attr.aria-label]="dayName(day) + ' ' + (hour | clock) + ' ฿' + week.tiers[tier]"
                   [attr.data-testid]="'cell-' + day + '-' + hour"
                   (pointerdown)="press(day, hour)"
                   (pointerenter)="pass(day, hour)"
@@ -126,7 +125,9 @@
                 <span
                   class="cell shut"
                   role="gridcell"
-                  [attr.aria-label]="dayName(day) + ' ' + hour + ':00 ' + i18n.t('pricing.shut')"
+                  [attr.aria-label]="
+                    dayName(day) + ' ' + (hour | clock) + ' ' + i18n.t('pricing.shut')
+                  "
                 ></span>
               }
             }

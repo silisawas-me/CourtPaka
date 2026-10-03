@@ -38,7 +38,7 @@
       <span></span>
       @for (hour of hours(); track hour) {
         <span class="hour"
-          >{{ hour }}:00
+          >{{ hour | clock }}
           @if (peak().has(hour)) {
             <span class="peak" aria-hidden="true"></span>
           }
@@ -67,8 +67,8 @@
                   ' ' +
                   row.name +
                   ' ' +
-                  cell.hour +
-                  ':00 ฿' +
+                  (cell.hour | clock) +
+                  ' ฿' +
                   cell.baht
                 "
                 [attr.data-testid]="'open-' + row.courtId + '-' + cell.hour"
@@ -96,7 +96,7 @@
                   }
                   {{ block.name }}
                 </span>
-                <span class="block-time">{{ block.from }}:00–{{ block.to }}:00</span>
+                <span class="block-time">{{ block.from | clock }}–{{ block.to | clock }}</span>
               </button>
             }
           </div>

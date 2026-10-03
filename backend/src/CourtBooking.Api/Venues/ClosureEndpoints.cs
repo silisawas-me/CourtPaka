@@ -215,7 +215,7 @@ public static class ClosureEndpoints
                         court.Name,
                         date,
                         fromHour,
-                        toHour == 0 ? CourtValidation.LatestClosingHour : toHour,
+                        toHour == 0 ? CourtValidation.Midnight : toHour,
                         booking.First().Status.ToString());
                 })
                 .OrderBy(clash => clash.Date)

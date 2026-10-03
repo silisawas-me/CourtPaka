@@ -89,13 +89,16 @@ public static class PlatformDashboard
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var since = PlatformRequirements.BangkokHour(first, 0);
-        var until = PlatformRequirements.BangkokHour(last.AddDays(1), 0);
+        // Wide enough for every venue's day (thai-fit T4); each booking is then kept by its own
+        // venue's day below.
+        var since = VenueClock.Window(first, 0).From;
+        var until = VenueClock.Window(last, VenueClock.LatestDayStart).Until;
 
         var venues = await database.Venues
             .AsNoTracking()
-            .Select(venue => new { venue.Id, venue.Code, venue.Name, venue.Status })
+            .Select(venue => new { venue.Id, venue.Code, venue.Name, venue.Status, venue.DayStartsHour })
             .ToListAsync(cancellationToken);
+        var dayStarts = venues.ToDictionary(venue => venue.Id, venue => venue.DayStartsHour);
 
         // From the hours in the range, like a venue's own dashboard: a booking is found by any
         // hour inside it, then kept only if its first hour is (US-15).
@@ -131,7 +134,12 @@ public static class PlatformDashboard
             .ToListAsync(cancellationToken);
 
         var played = bookings
-            .Where(booking => booking.FirstStart >= since && booking.FirstStart < until)
+            .Where(booking =>
+            {
+                var day = VenueClock.DayAndHour(
+                    booking.FirstStart, dayStarts.GetValueOrDefault(booking.VenueId)).Date;
+                return day >= first && day <= last;
+            })
             .ToLookup(booking => booking.VenueId);
 
         var lines = venues

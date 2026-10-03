@@ -79,7 +79,9 @@ public static class PublicVenueEndpoints
         CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
-        var today = PlatformRequirements.BangkokToday(timeProvider);
+        // The venue's day, so a venue open until 02:00 still shows Friday at 01:00 (thai-fit T4).
+        var today = VenueClock.Today(
+            timeProvider, await VenueDay.DayStartsHourAsync(database, venueId, cancellationToken));
         var asked = date ?? today;
 
         var invalid = Availability.ValidateDate(asked, today);

@@ -7,7 +7,9 @@ import {
   inject,
   input,
   signal,
+  untracked,
 } from '@angular/core';
+import { ClockPipe } from '../../core/i18n/clock.pipe';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { errorKey } from '../../core/http/api-error';
 import { venueNow } from '../../core/i18n/plain-date';
@@ -37,7 +39,7 @@ import {
  */
 @Component({
   selector: 'app-timeline-page',
-  imports: [BookingPanel],
+  imports: [BookingPanel, ClockPipe],
   templateUrl: './timeline.page.html',
   styleUrl: './timeline.page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -50,8 +52,12 @@ export class TimelinePage {
 
   readonly venueId = input.required<string>();
 
-  private readonly clock = signal(venueNow());
+  /** The wall clock, ticking; what day and hour that is at this venue comes with the grid. */
+  private readonly tick = signal(new Date());
   protected readonly grid = signal<Availability | null>(null);
+  private readonly clock = computed(() => venueNow(this.tick(), this.grid()?.dayStartsHour ?? 0));
+  /** The venue's date alone, so a new minute or a new grid is not a new day. */
+  private readonly venueDay = computed(() => this.clock().date);
   private readonly day = signal<VenueBooking[] | null>(null);
 
   /** Where the window starts once somebody walked it; until then it follows the clock. */
@@ -107,7 +113,7 @@ export class TimelinePage {
 
   protected readonly nowLabel = computed(() => {
     const { hour, minute } = this.clock();
-    return `${hour}:${String(minute).padStart(2, '0')}`;
+    return `${hour % 24}:${String(minute).padStart(2, '0')}`;
   });
 
   protected readonly selected = computed<VenueBooking | null>(() => {
@@ -117,7 +123,13 @@ export class TimelinePage {
   });
 
   constructor() {
-    effect(() => this.read(this.venueId(), { first: true }));
+    // Read again whenever the venue's day changes: at midnight, or — at a venue open past it —
+    // when the grid first says 01:00 is still yesterday's (thai-fit T4).
+    effect(() => {
+      const venueId = this.venueId();
+      this.venueDay();
+      untracked(() => this.read(venueId, { first: true }));
+    });
     this.walkIns.sold.pipe(takeUntilDestroyed()).subscribe(({ venueId }) => {
       if (venueId === this.venueId()) {
         this.read(venueId, { first: true });
@@ -126,9 +138,10 @@ export class TimelinePage {
 
     const tick = setInterval(() => {
       const before = this.clock().date;
-      this.clock.set(venueNow());
-      if (document.visibilityState === 'visible') {
-        this.read(this.venueId(), { first: this.clock().date !== before });
+      this.tick.set(new Date());
+      // A new day is read by the effect above; the same day only needs its bookings again.
+      if (document.visibilityState === 'visible' && this.clock().date === before) {
+        this.read(this.venueId(), { first: false });
       }
     }, NOW_REFRESH_MS);
     inject(DestroyRef).onDestroy(() => clearInterval(tick));
