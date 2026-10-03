@@ -7,31 +7,29 @@ import {
   input,
   signal,
 } from '@angular/core';
-import { forkJoin, Observable } from 'rxjs';
+import { Observable } from 'rxjs';
 import { errorKey } from '../../core/http/api-error';
-import { AppDateTimePipe } from '../../core/i18n/app-date.pipe';
 import { TranslationService } from '../../core/i18n/translation.service';
 import {
+  StaffPasscode,
   VENUE_PERMISSIONS,
-  VenueInvitation,
   VenueMember,
   VenuePermission,
   VenueService,
 } from '../../core/venues/venue.service';
 
 /** What the artboard ticks for somebody new: the desk, and nothing that touches money or setup. */
-const INVITE_DEFAULT: readonly VenuePermission[] = ['ManageBookings'];
+const ADD_DEFAULT: readonly VenuePermission[] = ['ManageBookings'];
 
 /**
- * Who works at this branch (docs/plan/thai-fit.md T1, artboard "พนักงาน"): their permissions and
- * refund limit, and inviting somebody new. Staff at a Thai court often have only LINE and a phone,
- * so an invitation needs a name, not an address — the server hands back a link once, which the
- * owner sends over LINE or copies. The owner alone sees this tab: every door behind it is
- * OwnerOnly at the server.
+ * Who works at this branch, as the "พนักงาน (เพิ่มแล้วเข้าได้เลย · passcode)" artboard draws it
+ * (docs/plan/thai-fit.md T1, the owner's decision of 2026-10-03): their permissions and refund
+ * limit, and adding somebody — a name, the phone they sign in with, what they may do. They can
+ * work at once with the six-digit passcode shown here once; a lost one is replaced with "ตั้ง
+ * passcode ใหม่". The owner alone sees this tab: every door behind it is OwnerOnly at the server.
  */
 @Component({
   selector: 'app-venue-staff',
-  imports: [AppDateTimePipe],
   templateUrl: './venue-staff.html',
   styleUrls: ['./venue-settings-tab.scss', './venue-staff.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -41,12 +39,11 @@ export class VenueStaff {
   protected readonly i18n = inject(TranslationService);
 
   readonly venueId = input.required<string>();
-  /** The branch's name, which the LINE message says the invitation is from. */
+  /** Kept for the page that hosts the tab. */
   readonly venueName = input('');
 
   protected readonly permissions = VENUE_PERMISSIONS;
   protected readonly members = signal<VenueMember[]>([]);
-  protected readonly invitations = signal<VenueInvitation[]>([]);
   protected readonly error = signal<string | null>(null);
   protected readonly busy = signal(false);
   /** The member whose "remove" was pressed once, waiting for the second press. */
@@ -56,28 +53,20 @@ export class VenueStaff {
 
   protected readonly name = signal('');
   protected readonly phone = signal('');
-  protected readonly email = signal('');
-  protected readonly granted = signal<readonly VenuePermission[]>(INVITE_DEFAULT);
-  /** The invitation just made, with the link the server shows this once. */
-  protected readonly made = signal<VenueInvitation | null>(null);
+  protected readonly granted = signal<readonly VenuePermission[]>(ADD_DEFAULT);
+  /** The passcode just made, for one person, shown once (only its hash is kept). */
+  protected readonly made = signal<StaffPasscode | null>(null);
+  protected readonly hidden = signal(false);
   protected readonly copied = signal(false);
 
-  protected readonly canInvite = computed(
-    () => (this.name().trim() !== '' || this.email().trim() !== '') && !this.busy(),
+  protected readonly canAdd = computed(
+    () => this.name().trim() !== '' && this.phone().trim() !== '' && !this.busy(),
   );
 
-  /** What LINE opens with: who is inviting, to where, and the link on a line of its own. */
-  protected readonly lineUrl = computed(() => {
-    const link = this.made()?.link;
-    if (!link) {
-      return null;
-    }
-    const text = [
-      `${this.i18n.t('staff.invite.message')} ${this.venueName()}`.trim(),
-      this.i18n.t('staff.invite.messageTail'),
-      link,
-    ].join('\n');
-    return `https://line.me/R/msg/text/?${encodeURIComponent(text)}`;
+  /** "482 913": two groups of three, easier to read out at the counter. */
+  protected readonly shownCode = computed(() => {
+    const code = this.made()?.passcode ?? '';
+    return this.hidden() ? '••• •••' : `${code.slice(0, 3)} ${code.slice(3)}`;
   });
 
   constructor() {
@@ -89,6 +78,7 @@ export class VenueStaff {
     return member.name || member.email || member.phone || '';
   }
 
+  /** The line under the name: the phone a passcode account signs in with, else the address. */
   protected contact(member: VenueMember): string {
     const known = [member.email, member.phone].filter(Boolean).join(' · ');
     return known || this.i18n.t('staff.noContact');
@@ -135,46 +125,46 @@ export class VenueStaff {
     );
   }
 
-  protected invite(): void {
-    if (!this.canInvite()) {
+  protected add(): void {
+    if (!this.canAdd()) {
       return;
     }
     this.made.set(null);
-    this.copied.set(false);
     this.run(
-      this.venues.invite(this.venueId(), {
-        name: this.name().trim() || null,
-        phone: this.phone().trim() || null,
-        email: this.email().trim() || null,
+      this.venues.addStaff(this.venueId(), {
+        name: this.name().trim(),
+        phone: this.phone().trim(),
         permissions: this.granted(),
       }),
-      (invitation) => {
-        this.made.set(invitation as VenueInvitation);
+      (added) => {
+        this.show(added);
         this.name.set('');
         this.phone.set('');
-        this.email.set('');
-        this.granted.set(INVITE_DEFAULT);
+        this.granted.set(ADD_DEFAULT);
       },
     );
   }
 
+  /** A new passcode for somebody who lost theirs; the old one stops working at once. */
+  protected newPasscode(member: VenueMember): void {
+    this.run(this.venues.newPasscode(this.venueId(), member.userId), (fresh) => this.show(fresh));
+  }
+
   protected copy(): void {
-    const link = this.made()?.link;
-    if (!link) {
+    const code = this.made()?.passcode;
+    if (!code) {
       return;
     }
-    navigator.clipboard?.writeText(link).then(
+    navigator.clipboard?.writeText(code).then(
       () => this.copied.set(true),
       () => this.copied.set(false),
     );
   }
 
-  protected revoke(invitation: VenueInvitation): void {
-    this.run(this.venues.revokeInvitation(this.venueId(), invitation.id), () => {
-      if (this.made()?.id === invitation.id) {
-        this.made.set(null);
-      }
-    });
+  private show(answer: StaffPasscode): void {
+    this.made.set(answer);
+    this.hidden.set(false);
+    this.copied.set(false);
   }
 
   private save(member: VenueMember, door: Observable<void>): void {
@@ -199,14 +189,8 @@ export class VenueStaff {
   }
 
   private read(venueId: string): void {
-    forkJoin({
-      members: this.venues.members(venueId),
-      invitations: this.venues.invitations(venueId),
-    }).subscribe({
-      next: ({ members, invitations }) => {
-        this.members.set(members);
-        this.invitations.set(invitations);
-      },
+    this.venues.members(venueId).subscribe({
+      next: (members) => this.members.set(members),
       error: (failure: unknown) => this.error.set(errorKey(failure)),
     });
   }

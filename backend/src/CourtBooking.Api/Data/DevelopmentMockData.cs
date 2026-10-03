@@ -172,7 +172,9 @@ public static class DevelopmentMockData
                 if (!history && branch.Code == "ARI01")
                 {
                     await filler.TillTodayAsync(
-                        await EnsureStaffAsync(users, cancellationToken), cancellationToken);
+                        await EnsureStaffAsync(
+                            users, database, options.Value.PrivacyPolicyVersion, now, cancellationToken),
+                        cancellationToken);
                 }
             }
             catch (Exception failure) when (failure is not OperationCanceledException)
@@ -194,23 +196,34 @@ public static class DevelopmentMockData
         ("ฝน", "staff-fon@mock.badpaka.test", "0951114408", VenuePermissions.ManageBookings, 0m),
     ];
 
-    /// <summary>The staff accounts, made once. Like the bookers they cannot be mailed: nobody is there.</summary>
+    /// <summary>The passcode every mock staff member signs in with locally (thai-fit T1).</summary>
+    public const string StaffPasscode = "123456";
+
+    /// <summary>
+    /// The staff accounts, made once, the way an owner adds staff now: a phone and a passcode, no
+    /// address. ปุ้ย and บอม have signed in before (they accepted the policy); ฝน has not, so the
+    /// staff board shows her as not signed in yet, as the design does. An account the older mock
+    /// data made with an address is turned into one, so the ids the drawer refers to stay.
+    /// </summary>
     private static async Task<Dictionary<string, Guid>> EnsureStaffAsync(
         UserManager<AppUser> users,
+        AppDbContext database,
+        string policyVersion,
+        DateTimeOffset now,
         CancellationToken cancellationToken)
     {
         var found = new Dictionary<string, Guid>();
         foreach (var one in Staff)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var user = await users.FindByEmailAsync(one.Email);
+            var userName = AuthEndpoints.PhoneUserName(one.Phone);
+            var user = await users.Users.SingleOrDefaultAsync(u => u.UserName == userName, cancellationToken)
+                       ?? await users.FindByEmailAsync(one.Email);
             if (user is null)
             {
                 user = new AppUser
                 {
-                    UserName = one.Email,
-                    Email = one.Email,
-                    EmailConfirmed = false,
+                    UserName = userName,
                     DisplayName = one.Name,
                     PhoneNumber = one.Phone,
                     Language = SupportedLanguages.Thai,
@@ -219,8 +232,30 @@ public static class DevelopmentMockData
                 if (!made.Succeeded)
                 {
                     throw new InvalidOperationException(
-                        $"Could not make {one.Email}: {string.Join(", ", made.Errors.Select(error => error.Description))}");
+                        $"Could not make {one.Name}: {string.Join(", ", made.Errors.Select(error => error.Description))}");
                 }
+
+                await Passcodes.SetAsync(users, user, StaffPasscode);
+            }
+            else if (!Passcodes.Is(user))
+            {
+                user.UserName = userName;
+                user.Email = null;
+                user.EmailConfirmed = false;
+                user.PhoneNumber = one.Phone;
+                await users.UpdateNormalizedUserNameAsync(user);
+                await users.UpdateNormalizedEmailAsync(user);
+                await Passcodes.SetAsync(users, user, StaffPasscode);
+            }
+
+            var signedInBefore = one.Name != "ฝน";
+            if (signedInBefore && !await database.UserConsents.AnyAsync(c => c.UserId == user.Id, cancellationToken))
+            {
+                database.UserConsents.Add(new UserConsent
+                {
+                    UserId = user.Id, Type = ConsentType.PrivacyPolicy, Version = policyVersion, AcceptedAt = now,
+                });
+                await database.SaveChangesAsync(cancellationToken);
             }
 
             found[one.Name] = user.Id;

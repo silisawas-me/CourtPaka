@@ -12,13 +12,16 @@ export const authGuard: CanActivateFn = (_route, state) => {
   const auth = inject(AuthService);
   const router = inject(Router);
 
-  return auth
-    .whenReady()
-    .pipe(
-      map(
-        (user) =>
-          user !== null ||
-          router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } }),
-      ),
-    );
+  return auth.whenReady().pipe(
+    map((user) => {
+      if (user === null) {
+        return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
+      }
+      // Staff an owner added have accepted nothing yet: the policy comes first (PDPA).
+      if (user.needsConsent && !state.url.startsWith('/welcome')) {
+        return router.createUrlTree(['/welcome'], { queryParams: { returnUrl: state.url } });
+      }
+      return true;
+    }),
+  );
 };

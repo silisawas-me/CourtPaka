@@ -17,17 +17,19 @@ const OWNER = {
   permissions: ['VerifySlip', 'ManageBookings', 'CloseCourt', 'ViewReports', 'ManageSettings'],
   refundLimitBaht: null,
 };
-const BOM = {
+const FON = {
   userId: 'u1',
   email: '',
-  name: 'บอม',
-  phone: '0867777710',
+  name: 'ฝน',
+  phone: '0951114408',
   role: 'Staff',
   permissions: ['ManageBookings'],
-  refundLimitBaht: 300,
+  refundLimitBaht: 0,
+  usesPasscode: true,
+  neverSignedIn: true,
 };
 
-describe('VenueStaff (thai-fit T1)', () => {
+describe('VenueStaff (thai-fit T1, passcode)', () => {
   let httpMock: HttpTestingController;
 
   beforeEach(() => {
@@ -38,34 +40,66 @@ describe('VenueStaff (thai-fit T1)', () => {
 
   afterEach(() => httpMock.verify());
 
-  function open(invitations: unknown[] = []) {
+  function open() {
     const fixture = TestBed.createComponent(VenueStaff);
     fixture.componentRef.setInput('venueId', 'v1');
-    fixture.componentRef.setInput('venueName', 'อารีย์');
     fixture.detectChanges();
-    answer(invitations);
+    answer();
     fixture.detectChanges();
     return fixture;
   }
 
-  function answer(invitations: unknown[] = []): void {
-    httpMock.expectOne('/api/venues/v1/members').flush([OWNER, BOM]);
-    httpMock.expectOne('/api/venues/v1/invitations').flush(invitations);
+  function answer(members: unknown[] = [OWNER, FON]): void {
+    httpMock.expectOne('/api/venues/v1/members').flush(members);
   }
 
-  it('shows somebody with no address by name and phone, and changes what they may do', () => {
+  it('lists staff by name and the phone they sign in with, and who has not signed in yet', () => {
     const fixture = open();
 
-    expect(textOf(fixture, 'staff-u1')).toContain('บอม');
-    expect(textOf(fixture, 'staff-u1')).toContain('0867777710');
-    // The owner's row has no boxes to untick: the owner has every permission, always.
+    expect(textOf(fixture, 'staff-u1')).toContain('ฝน');
+    expect(textOf(fixture, 'staff-u1')).toContain('0951114408');
+    expect(elementOf(fixture, 'staff-fresh-u1')).not.toBeNull();
+    // The owner has every permission and no passcode to reset.
+    expect(elementOf(fixture, 'staff-passcode-u0')).toBeNull();
     expect(elementOf(fixture, 'staff-remove-u0')).toBeNull();
+  });
 
-    clickOn(fixture, 'staff-perm-u1-VerifySlip');
-    const change = httpMock.expectOne('/api/venues/v1/members/u1/permissions');
-    expect(change.request.body).toEqual({ permissions: ['ManageBookings', 'VerifySlip'] });
-    change.flush(null);
+  it('adds somebody and shows the passcode once, in two groups of three', () => {
+    const fixture = open();
+    expect((elementOf(fixture, 'add-staff') as HTMLButtonElement).disabled).toBe(true);
+
+    type(fixture, 'add-name', 'ฝน');
+    type(fixture, 'add-phone', '095-111-4408');
+    fixture.detectChanges();
+    clickOn(fixture, 'add-staff');
+
+    const added = httpMock.expectOne('/api/venues/v1/staff');
+    expect(added.request.body).toEqual({
+      name: 'ฝน',
+      phone: '095-111-4408',
+      permissions: ['ManageBookings'],
+    });
+    added.flush({ member: FON, passcode: '482913' });
     answer();
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'staff-passcode')).toBe('482 913');
+    clickOn(fixture, 'staff-hide');
+    fixture.detectChanges();
+    expect(textOf(fixture, 'staff-passcode')).not.toContain('482');
+  });
+
+  it('sets a new passcode for somebody who lost theirs', () => {
+    const fixture = open();
+
+    clickOn(fixture, 'staff-passcode-u1');
+    httpMock
+      .expectOne({ method: 'POST', url: '/api/venues/v1/members/u1/passcode' })
+      .flush({ member: FON, passcode: '135790' });
+    answer();
+    fixture.detectChanges();
+
+    expect(textOf(fixture, 'staff-passcode')).toBe('135 790');
   });
 
   it('asks twice before taking somebody off the branch', () => {
@@ -78,69 +112,6 @@ describe('VenueStaff (thai-fit T1)', () => {
 
     clickOn(fixture, 'staff-remove-u1');
     httpMock.expectOne({ method: 'DELETE', url: '/api/venues/v1/members/u1' }).flush(null);
-    answer();
-  });
-
-  it('makes a link for a name and a phone, and offers it to LINE', () => {
-    const fixture = open();
-    expect((elementOf(fixture, 'invite-create') as HTMLButtonElement).disabled).toBe(true);
-
-    type(fixture, 'invite-name', 'ฝน');
-    type(fixture, 'invite-phone', '095-444-4408');
-    fixture.detectChanges();
-    clickOn(fixture, 'invite-create');
-
-    const invite = httpMock.expectOne('/api/venues/v1/invitations');
-    expect(invite.request.body).toEqual({
-      name: 'ฝน',
-      phone: '095-444-4408',
-      email: null,
-      permissions: ['ManageBookings'],
-    });
-    const link = 'http://localhost/venue-invitation?invitationId=i9&token=abc';
-    invite.flush({
-      id: 'i9',
-      email: null,
-      name: 'ฝน',
-      phone: '0954444408',
-      permissions: ['ManageBookings'],
-      expiresAt: '2026-10-17T10:00:00Z',
-      link,
-    });
-    answer([
-      {
-        id: 'i9',
-        email: null,
-        name: 'ฝน',
-        phone: '0954444408',
-        permissions: ['ManageBookings'],
-        expiresAt: '2026-10-17T10:00:00Z',
-      },
-    ]);
-    fixture.detectChanges();
-
-    expect(textOf(fixture, 'invite-link')).toBe(link);
-    const line = (elementOf(fixture, 'invite-line') as HTMLAnchorElement).href;
-    expect(line.startsWith('https://line.me/R/msg/text/?')).toBe(true);
-    expect(decodeURIComponent(line)).toContain(link);
-    expect(decodeURIComponent(line)).toContain('อารีย์');
-    expect(textOf(fixture, 'invitation-i9')).toContain('ฝน');
-  });
-
-  it('takes a pending link back', () => {
-    const fixture = open([
-      {
-        id: 'i9',
-        email: null,
-        name: 'ฝน',
-        phone: null,
-        permissions: ['ManageBookings'],
-        expiresAt: '2026-10-17T10:00:00Z',
-      },
-    ]);
-
-    clickOn(fixture, 'invitation-revoke-i9');
-    httpMock.expectOne({ method: 'DELETE', url: '/api/venues/v1/invitations/i9' }).flush(null);
     answer();
   });
 });

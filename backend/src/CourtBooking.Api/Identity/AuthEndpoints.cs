@@ -28,6 +28,12 @@ public static class AuthEndpoints
         auth.MapGet("/me", GetCurrentUserAsync).RequireAuthorization();
         auth.MapPut("/me/language", ChangeLanguageAsync).RequireAuthorization();
         auth.MapPut("/me/phone", ChangePhoneAsync).RequireAuthorization();
+        // Staff added with a passcode (thai-fit T1): accept the policy on first sign-in, and
+        // change the passcode whenever they like. Rate-limited like sign-in: both take a secret.
+        auth.MapPost("/me/consent", ConsentAsync).RequireAuthorization();
+        auth.MapPost("/me/passcode", ChangePasscodeAsync)
+            .RequireAuthorization()
+            .RequireRateLimiting(RateLimitPolicies.Auth);
         auth.MapLineLoginEndpoints();
         // Rate-limited like sign-in: it takes a password (PDPA, PRD 8).
         auth.MapPost("/me/delete", AccountDeletion.DeleteAsync)
@@ -344,7 +350,9 @@ public static class AuthEndpoints
     private static async Task<Results<Ok<CurrentUserResponse>, NotFound>> GetCurrentUserAsync(
         ClaimsPrincipal principal,
         UserManager<AppUser> userManager,
-        IOptions<AppOptions> options)
+        AppDbContext database,
+        IOptions<AppOptions> options,
+        CancellationToken cancellationToken)
     {
         // Read through to the row: verification state gates booking, so a stale copy is not good enough.
         var user = await userManager.GetUserAsync(principal);
@@ -366,7 +374,86 @@ public static class AuthEndpoints
             user.PasswordHash is not null,
             signsInWithLine,
             BookingEligibility.MissingFor(user.EmailConfirmed, signsInWithLine, user.PhoneNumber),
-            user.DisplayName));
+            user.DisplayName,
+            Passcodes.Is(user),
+            await Passcodes.NeedsConsentAsync(
+                database, user, options.Value.PrivacyPolicyVersion, cancellationToken)));
+    }
+
+    /// <summary>
+    /// The privacy policy accepted by the person themselves, on their first sign-in (PDPA): an
+    /// owner who added them cannot accept it for them. A new row, never an edit (UserConsent).
+    /// </summary>
+    private static async Task<Results<NoContent, ProblemHttpResult, NotFound>> ConsentAsync(
+        ConsentRequest request,
+        ClaimsPrincipal principal,
+        UserManager<AppUser> userManager,
+        AppDbContext database,
+        IOptions<AppOptions> options,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        if (request.PrivacyPolicyVersion != options.Value.PrivacyPolicyVersion)
+        {
+            return ApiProblem.Of(StatusCodes.Status409Conflict, AuthErrorCodes.PrivacyPolicyOutdated);
+        }
+
+        if (await userManager.GetUserAsync(principal) is not { } user)
+        {
+            return TypedResults.NotFound();
+        }
+
+        if (await Passcodes.NeedsConsentAsync(database, user, request.PrivacyPolicyVersion, cancellationToken))
+        {
+            database.UserConsents.Add(new UserConsent
+            {
+                UserId = user.Id,
+                Type = ConsentType.PrivacyPolicy,
+                Version = request.PrivacyPolicyVersion,
+                AcceptedAt = timeProvider.GetUtcNow(),
+            });
+            await database.SaveChangesAsync(cancellationToken);
+        }
+
+        return TypedResults.NoContent();
+    }
+
+    /// <summary>
+    /// A passcode account changes its own passcode: the one it has, then six new digits. The
+    /// session goes on — it is the person who just proved the old one — but every other ends.
+    /// </summary>
+    private static async Task<Results<NoContent, ProblemHttpResult, NotFound>> ChangePasscodeAsync(
+        ChangePasscodeRequest request,
+        ClaimsPrincipal principal,
+        UserManager<AppUser> userManager,
+        SignInManager<AppUser> signInManager)
+    {
+        if (await userManager.GetUserAsync(principal) is not { } user)
+        {
+            return TypedResults.NotFound();
+        }
+
+        if (!Passcodes.Is(user))
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.NoPasscode);
+        }
+
+        if (!Passcodes.IsValid(request.New))
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.InvalidPasscode);
+        }
+
+        // Counted like a sign-in, so the form is not a way round the lockout.
+        var checkedCurrent = await signInManager.CheckPasswordSignInAsync(
+            user, request.Current ?? string.Empty, lockoutOnFailure: true);
+        if (!checkedCurrent.Succeeded)
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, AuthErrorCodes.WrongPasscode);
+        }
+
+        await Passcodes.SetAsync(userManager, user, request.New!);
+        await signInManager.RefreshSignInAsync(user);
+        return TypedResults.NoContent();
     }
 
     /// <summary>

@@ -65,6 +65,12 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    // The first sign-in of staff an owner added: the privacy policy, accepted by them (thai-fit T1).
+    path: 'welcome',
+    loadComponent: () => import('./features/auth/welcome.page').then((m) => m.WelcomePage),
+    canActivate: [authGuard],
+  },
+  {
     path: 'account',
     loadComponent: () => import('./features/auth/account.page').then((m) => m.AccountPage),
     canActivate: [authGuard],

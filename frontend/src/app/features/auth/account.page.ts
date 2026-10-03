@@ -73,6 +73,34 @@ export class AccountPage {
     });
   }
 
+  protected readonly passcodeNow = signal('');
+  protected readonly passcodeNext = signal('');
+  protected readonly savingPasscode = signal(false);
+  protected readonly passcodeSaved = signal(false);
+  protected readonly passcodeError = signal<string | null>(null);
+
+  /** The staff member's own new passcode; the server checks both (thai-fit T1). */
+  protected savePasscode(): void {
+    if (this.savingPasscode()) {
+      return;
+    }
+    this.savingPasscode.set(true);
+    this.passcodeSaved.set(false);
+    this.passcodeError.set(null);
+    this.auth.changePasscode(this.passcodeNow(), this.passcodeNext()).subscribe({
+      next: () => {
+        this.savingPasscode.set(false);
+        this.passcodeSaved.set(true);
+        this.passcodeNow.set('');
+        this.passcodeNext.set('');
+      },
+      error: (failure: unknown) => {
+        this.savingPasscode.set(false);
+        this.passcodeError.set(errorKey(failure));
+      },
+    });
+  }
+
   protected savePhone(): void {
     if (this.savingPhone()) {
       return;
