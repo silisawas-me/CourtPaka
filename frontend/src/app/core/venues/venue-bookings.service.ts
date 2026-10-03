@@ -213,6 +213,32 @@ export interface DayMoney {
   counts: DailyClosing[];
   /** The drawer since the last count, while the day is still open. */
   openShift: OpenShift | null;
+  /** Every movement of the day's money, in and out, oldest first (the drawer page's list). */
+  lines?: MoneyLine[];
+  /** When the venue opened that day: where its first shift is said to start. */
+  opensHour?: number | null;
+}
+
+/** One movement of money, as data the drawer page words (thai-fit T2). */
+export interface MoneyLine {
+  at: string;
+  /** True for money leaving: a refund, a bill paid from the drawer, a sale handed back. */
+  out: boolean;
+  /** In: Court · Sale · Package. Out: Refunded · PaidOut · SaleTakenBack. */
+  kind: string;
+  method: PaymentMethod;
+  amountBaht: number;
+  who: string | null;
+  courts: string | null;
+  bookingKind: string | null;
+  /** Deposit or Rest, where a booking was paid in more than one go. */
+  part: string | null;
+  items: { name: string; quantity: number }[] | null;
+  packageHours: number | null;
+  spendKind: string | null;
+  note: string | null;
+  by: string | null;
+  bookingId?: string | null;
 }
 
 /** The shift running now: from the last count, the cash it has taken and paid out. */

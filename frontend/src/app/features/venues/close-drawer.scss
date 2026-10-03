@@ -1,4 +1,5 @@
-/* The drawer's count, off the "ปิดยอด" artboard (thai-fit T2). */
+/* The "ปิดยอด" artboard (thai-fit T2), measure for measure: a bar of day and shifts, six tiles,
+   the cash list beside the count, and the leads under them. */
 :host {
   display: block;
   min-width: 0;
@@ -14,7 +15,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px 12px;
+  gap: 12px;
 }
 
 .day {
@@ -41,7 +42,7 @@
 }
 
 .day-label {
-  padding: 0 12px;
+  padding: 0 14px;
   line-height: 42px;
   font-weight: 600;
   white-space: nowrap;
@@ -69,13 +70,16 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 8px 14px;
   border: 1px solid var(--mat-sys-outline-variant);
   border-radius: 10px;
   background: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: inherit;
   font-size: 13px;
+  cursor: pointer;
 
-  &.open {
+  &.on {
     border: 2px solid var(--mat-sys-on-surface);
     font-weight: 600;
   }
@@ -84,6 +88,8 @@
 .chip {
   padding: 2px 8px;
   border-radius: 5px;
+  background: var(--mat-sys-surface-container);
+  color: var(--mat-sys-on-surface-variant);
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
@@ -105,35 +111,40 @@
   }
 }
 
-.cards {
+.tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
   gap: 12px;
+
+  @media (min-width: 75rem) {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
 }
 
-.card {
+.tile {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 14px 16px;
+  min-width: 0;
+  padding: 16px 18px;
   border: 1px solid var(--mat-sys-outline-variant);
   border-radius: 14px;
   background: var(--mat-sys-surface);
 }
 
-.card-label,
-.card-note {
+.tile-label,
+.tile-note {
   font-size: 12px;
   color: var(--mat-sys-on-surface-variant);
 }
 
-.card-baht {
-  font: 800 24px var(--font-display);
+.tile-baht {
+  font: 800 28px var(--font-display);
 }
 
 .split {
   display: grid;
-  gap: 16px;
+  gap: 18px;
   align-items: start;
 
   @media (min-width: 60rem) {
@@ -141,10 +152,11 @@
   }
 }
 
-.panel {
+.card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
+  min-width: 0;
   padding: 18px 20px;
   border: 1px solid var(--mat-sys-outline-variant);
   border-radius: 14px;
@@ -157,50 +169,93 @@
   }
 }
 
-.panel-head {
+.card-head {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: baseline;
-  font-size: 12px;
+  gap: 4px 12px;
+
+  .muted {
+    font-size: 12px;
+  }
 }
 
 .rows {
-  margin: 0;
+  margin: -6px 0 0;
   padding: 0;
   list-style: none;
   // A busy day is dozens of rows: they scroll inside the card, the count stays beside them.
-  max-height: 28rem;
+  max-height: 32rem;
   overflow-y: auto;
 
   li {
     display: grid;
-    grid-template-columns: 52px minmax(0, 1fr) auto;
+    grid-template-columns: 58px minmax(0, 1fr) 96px;
     gap: 10px;
-    padding: 8px 0;
+    align-items: baseline;
+    padding: 9px 0;
     border-bottom: 1px solid color-mix(in srgb, var(--mat-sys-outline-variant) 60%, transparent);
-    font-size: 13px;
+  }
+
+  .empty {
+    display: block;
   }
 }
 
-.time,
-.baht {
-  font-family: var(--font-mono);
-}
-
 .time {
+  font: 12.5px var(--font-mono);
   color: var(--mat-sys-on-surface-variant);
 }
 
+.what {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  .muted {
+    font-size: 12px;
+  }
+}
+
+.what-main {
+  font-weight: 500;
+}
+
+.baht {
+  font: 13px var(--font-mono);
+  text-align: right;
+}
+
+.out .baht,
+.sum .out {
+  color: var(--status-waiting-ink);
+}
+
 .sum {
-  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px;
   font-size: 13px;
 
   b {
     font-family: var(--font-mono);
   }
+}
 
-  .out {
-    color: var(--status-waiting-ink);
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--mat-sys-primary);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
   }
 }
 
@@ -212,7 +267,7 @@
   color: var(--mat-sys-on-surface-variant);
 
   input {
-    height: 42px;
+    height: 40px;
     padding: 0 12px;
     border: 1px solid var(--mat-sys-outline-variant);
     border-radius: 9px;
@@ -231,7 +286,7 @@
 .sums {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 6px 12px;
+  gap: 8px 12px;
   margin: 0;
   font-size: 13px;
 
@@ -260,6 +315,10 @@
   border-radius: 12px;
   font-weight: 600;
 
+  .big {
+    font: 800 24px var(--font-display);
+  }
+
   &.short {
     background: var(--status-waiting-soft);
     color: var(--status-waiting-ink);
@@ -276,50 +335,59 @@
   }
 }
 
-.big {
-  font: 800 24px var(--font-display);
-}
+.main {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
 
-.actions {
-  display: grid;
-  gap: 8px;
-
-  button {
-    height: 46px;
-    border: 1px solid var(--mat-sys-outline-variant);
-    border-radius: 10px;
-    background: var(--mat-sys-surface);
-    color: var(--mat-sys-on-surface);
-    font: inherit;
-    font-weight: 600;
-    cursor: pointer;
-
-    &.main {
-      border-color: var(--mat-sys-primary);
-      background: var(--mat-sys-primary);
-      color: var(--mat-sys-on-primary);
-    }
-
-    &:disabled {
-      opacity: 0.45;
-      cursor: default;
-    }
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
   }
 }
 
 .leads {
+  display: grid;
+  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
+
+  @media (min-width: 60rem) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.lead {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  font-size: 13px;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--kind-walkin-line);
+  border-radius: 12px;
 
-  li {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
+  .muted {
+    font-size: 12px;
   }
+
+  &.none {
+    border: 1px dashed var(--mat-sys-outline-variant);
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+.lead-title {
+  font-weight: 600;
+}
+
+.form-error {
+  margin: 0;
 }

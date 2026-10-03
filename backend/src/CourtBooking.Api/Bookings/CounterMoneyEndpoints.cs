@@ -75,7 +75,11 @@ public sealed record DayMoneyResponse(
     /// <summary>Every count of the day so far, shifts and the close, in the order they were made.</summary>
     DailyClosingResponse[]? Counts = null,
     /// <summary>The drawer since the last count: what the shift now open has taken and paid out.</summary>
-    OpenShiftResponse? OpenShift = null);
+    OpenShiftResponse? OpenShift = null,
+    /// <summary>Every movement of the day's money, in and out, as the drawer page lists it.</summary>
+    MoneyLineResponse[]? Lines = null,
+    /// <summary>When the venue opened that day, which is where its first shift is said to start.</summary>
+    int? OpensHour = null);
 
 /// <summary>
 /// The shift still running (thai-fit T2): from the last count (or the start of the venue's day)
@@ -469,7 +473,10 @@ public static class CounterMoneyEndpoints
             By(PaymentMethod.BankTransfer),
             By(PaymentMethod.TrueMoney),
             counts,
-            openShift));
+            openShift,
+            await MoneyLines.ForDayAsync(database, venueId, day, cashOut, cancellationToken),
+            (await CourtEndpoints.ScheduleOnAsync(database, venueId, day, cancellationToken))?
+                .Days.SingleOrDefault(one => one.Day == day.DayOfWeek)?.OpensHour));
     }
 
     /// <summary>
@@ -555,7 +562,9 @@ public static class CounterMoneyEndpoints
                 record.AmountBaht,
                 record.RecordedAt,
                 record.BookingId,
-                null))
+                null,
+                null,
+                record.RecordedByUserId))
             .ToListAsync(cancellationToken);
 
         var paidOut = await database.Spends
@@ -571,7 +580,9 @@ public static class CounterMoneyEndpoints
                 spend.AmountBaht,
                 spend.RecordedAt,
                 null,
-                spend.Note))
+                spend.Note,
+                spend.Kind,
+                spend.RecordedByUserId))
             .ToListAsync(cancellationToken);
 
         // A sale taken back hands the money back across the counter. Nothing was bought, so there

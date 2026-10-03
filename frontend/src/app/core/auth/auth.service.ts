@@ -17,6 +17,8 @@ export interface CurrentUser {
    */
   isPlatformAdmin: boolean;
   phoneNumber: string | null;
+  /** The name the counter knows them by, where they have one. */
+  displayName?: string | null;
   invitationId?: string;
   invitationToken?: string;
   /** False for a LINE account: deleting it is confirmed at LINE instead of with a password. */

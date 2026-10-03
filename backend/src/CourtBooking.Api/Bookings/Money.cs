@@ -181,7 +181,11 @@ public sealed record CashOut(
     decimal AmountBaht,
     DateTimeOffset At,
     Guid? BookingId,
-    string? Note);
+    string? Note,
+    /// <summary>What a pay-out was for, so the drawer page can say "ค่าซ่อม" (thai-fit T2).</summary>
+    SpendKind? SpendKind = null,
+    /// <summary>Who wrote it down.</summary>
+    Guid? ByUserId = null);
 
 /// <summary>
 /// What a venue is owed and what it has taken (PRD US-26, 6.2). One place, because the number on
