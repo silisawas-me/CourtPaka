@@ -1226,5 +1226,12 @@
   "error.auth.no_passcode": "This account uses a password, not a passcode",
   "error.venue.staff_needs_name": "Give the staff member a name",
   "error.venue.not_a_passcode_account": "This account has its own password; a passcode cannot be set for it",
-  "error.venue.phone_has_another_account": "This phone already belongs to another account"
+  "error.venue.phone_has_another_account": "This phone already belongs to another account",
+  "catalog.sold": "Sold",
+  "catalog.offerNamePlaceholder": "e.g. 5 daytime hours",
+  "catalog.itemNamePlaceholder": "e.g. towel",
+  "catalog.unitPlaceholder": "piece",
+  "catalog.col.name": "Name",
+  "catalog.col.price": "Price",
+  "catalog.col.left": "Left"
 }

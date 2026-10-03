@@ -1,24 +1,27 @@
-<!-- Packages and shop items (thai-fit "แพ็กเกจ & สินค้า"). -->
+<!-- The "แพ็กเกจ & สินค้า" artboard (thai-fit): the packages on sale, then the counter's shelf. -->
 <div class="settings-tab" data-testid="venue-catalog">
   @if (error(); as key) {
     <p class="form-error" data-testid="catalog-error">{{ i18n.t(key) }}</p>
   }
 
   <section class="card list-card" [attr.aria-label]="i18n.t('catalog.packages')">
-    <div class="card-head">
+    <div class="head-line">
       <h2>{{ i18n.t('catalog.packages') }}</h2>
-      <p class="muted">{{ i18n.t('catalog.packagesHint') }}</p>
+      <span class="muted">{{ i18n.t('catalog.packagesHint') }}</span>
     </div>
     <ul class="list">
       @for (one of offers(); track one.typeId) {
-        <li class="row" [attr.data-testid]="'offer-' + one.typeId">
-          <span class="name grow">{{ one.name }}</span>
-          <span class="muted">{{ one.hours }} {{ i18n.t('timeline.hr') }}</span>
-          <span>฿{{ one.priceBaht | baht: i18n.locale() }}</span>
-          <span class="muted"
+        <li class="offer-row" [attr.data-testid]="'offer-' + one.typeId">
+          <span class="name">{{ one.name }}</span>
+          <span class="mono">{{ one.hours }} {{ i18n.t('timeline.hr') }}</span>
+          <span class="mono">฿{{ one.priceBaht | baht: i18n.locale() }}</span>
+          <span class="mono muted"
             >฿{{ one.bahtPerHour | baht: i18n.locale() }}/{{ i18n.t('timeline.hr') }}</span
           >
           <span class="muted">{{ one.validForDays }} {{ i18n.t('catalog.days') }}</span>
+          <span class="muted" [attr.data-testid]="'offer-sold-' + one.typeId"
+            >{{ i18n.t('catalog.sold') }} {{ one.sold ?? 0 }}</span
+          >
           @if (canManage()) {
             <button
               type="button"
@@ -35,13 +38,14 @@
       }
     </ul>
     @if (canManage()) {
-      <div class="add">
-        <label class="field grow"
+      <div class="add-row offer-add">
+        <label class="field"
           >{{ i18n.t('catalog.offerName') }}
           <input
             class="input"
             data-testid="offer-name"
             maxlength="100"
+            [placeholder]="i18n.t('catalog.offerNamePlaceholder')"
             [value]="offerName()"
             (input)="offerName.set($any($event.target).value)"
           />
@@ -49,10 +53,9 @@
         <label class="field"
           >{{ i18n.t('catalog.hours') }}
           <input
-            class="input"
+            class="input mono"
             data-testid="offer-hours"
             inputmode="numeric"
-            size="5"
             [value]="offerHours()"
             (input)="offerHours.set($any($event.target).value)"
           />
@@ -60,10 +63,10 @@
         <label class="field"
           >{{ i18n.t('catalog.price') }}
           <input
-            class="input"
+            class="input mono"
             data-testid="offer-price"
             inputmode="decimal"
-            size="7"
+            placeholder="850"
             [value]="offerPrice()"
             (input)="offerPrice.set($any($event.target).value)"
           />
@@ -71,10 +74,9 @@
         <label class="field"
           >{{ i18n.t('catalog.validDays') }}
           <input
-            class="input"
+            class="input mono"
             data-testid="offer-days"
             inputmode="numeric"
-            size="5"
             [value]="offerDays()"
             (input)="offerDays.set($any($event.target).value)"
           />
@@ -93,25 +95,33 @@
   </section>
 
   <section class="card list-card" [attr.aria-label]="i18n.t('catalog.items')">
-    <div class="card-head">
+    <div class="head-line">
       <h2>{{ i18n.t('catalog.items') }}</h2>
-      <p class="muted">{{ i18n.t('catalog.itemsHint') }}</p>
+      <span class="muted">{{ i18n.t('catalog.itemsHint') }}</span>
+    </div>
+    <div class="item-row item-cols" aria-hidden="true">
+      <span>{{ i18n.t('catalog.col.name') }}</span>
+      <span>{{ i18n.t('catalog.col.price') }}</span>
+      <span>{{ i18n.t('catalog.col.left') }}</span>
+      <span></span>
     </div>
     <ul class="list">
       @for (one of onShelf(); track one.itemId) {
-        <li class="row" [attr.data-testid]="'item-' + one.itemId">
-          <span class="name grow"
+        <li class="item-row" [attr.data-testid]="'item-' + one.itemId">
+          <span class="name"
             >{{ one.name }}
             @if (one.runningLow) {
-              <span class="chip state-closedNow">{{ i18n.t('catalog.low') }}</span>
+              <span class="chip low">{{ i18n.t('catalog.low') }}</span>
             }
           </span>
-          <span>฿{{ one.priceBaht | baht: i18n.locale() }}</span>
-          <span class="muted" [attr.data-testid]="'item-left-' + one.itemId">
+          <span class="mono">฿{{ one.priceBaht | baht: i18n.locale() }}</span>
+          <span [attr.data-testid]="'item-left-' + one.itemId">
             @if (one.left !== null) {
-              {{ one.left }} {{ one.unit }}
+              <span class="mono" [class.low-left]="one.runningLow"
+                >{{ one.left }} {{ one.unit }}</span
+              >
             } @else {
-              {{ i18n.t('catalog.notCounted') }}
+              <span class="muted">{{ i18n.t('catalog.notCounted') }}</span>
             }
           </span>
           @if (canManage()) {
@@ -137,14 +147,13 @@
             </span>
           }
           @if (restocking() === one.itemId) {
-            <div class="add grow" [attr.data-testid]="'restock-form-' + one.itemId">
+            <div class="restock" [attr.data-testid]="'restock-form-' + one.itemId">
               <label class="field"
                 >{{ i18n.t('catalog.quantity') }} ({{ one.unit }})
                 <input
-                  class="input"
+                  class="input mono"
                   data-testid="restock-qty"
                   inputmode="numeric"
-                  size="6"
                   [value]="restockQty()"
                   (input)="restockQty.set($any($event.target).value)"
                 />
@@ -152,10 +161,9 @@
               <label class="field"
                 >{{ i18n.t('catalog.cost') }}
                 <input
-                  class="input"
+                  class="input mono"
                   data-testid="restock-cost"
                   inputmode="decimal"
-                  size="8"
                   [value]="restockCost()"
                   (input)="restockCost.set($any($event.target).value)"
                 />
@@ -180,13 +188,14 @@
       }
     </ul>
     @if (canManage()) {
-      <div class="add">
-        <label class="field grow"
+      <div class="add-row item-add">
+        <label class="field"
           >{{ i18n.t('catalog.itemName') }}
           <input
             class="input"
             data-testid="item-name"
             maxlength="100"
+            [placeholder]="i18n.t('catalog.itemNamePlaceholder')"
             [value]="itemName()"
             (input)="itemName.set($any($event.target).value)"
           />
@@ -194,10 +203,9 @@
         <label class="field"
           >{{ i18n.t('catalog.price') }}
           <input
-            class="input"
+            class="input mono"
             data-testid="item-price"
             inputmode="decimal"
-            size="7"
             [value]="itemPrice()"
             (input)="itemPrice.set($any($event.target).value)"
           />
@@ -208,12 +216,12 @@
             class="input"
             data-testid="item-unit"
             maxlength="20"
-            size="8"
+            [placeholder]="i18n.t('catalog.unitPlaceholder')"
             [value]="itemUnit()"
             (input)="itemUnit.set($any($event.target).value)"
           />
         </label>
-        <label class="field check"
+        <label class="check"
           ><input
             type="checkbox"
             data-testid="item-counted"

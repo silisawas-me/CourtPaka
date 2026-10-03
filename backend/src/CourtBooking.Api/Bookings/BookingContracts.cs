@@ -584,7 +584,9 @@ public sealed record PackageTypeResponse(
     decimal BahtPerHour,
     int ValidForDays,
     /// <summary>When it came off the board, or null while it is still on it.</summary>
-    DateTimeOffset? WithdrawnAt);
+    DateTimeOffset? WithdrawnAt,
+    /// <summary>How many have been sold, which the board shows beside each offer.</summary>
+    int Sold = 0);
 
 /// <summary>Selling one to somebody standing at the counter (PRD US-31).</summary>
 public sealed record SellPackageRequest(

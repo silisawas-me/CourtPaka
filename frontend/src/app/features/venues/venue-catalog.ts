@@ -24,7 +24,7 @@ import { ShopItem, ShopService } from '../../core/venues/shop.service';
   selector: 'app-venue-catalog',
   imports: [BahtPipe],
   templateUrl: './venue-catalog.html',
-  styleUrl: './venue-settings-tab.scss',
+  styleUrls: ['./venue-settings-tab.scss', './venue-catalog.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class VenueCatalog {
@@ -45,9 +45,9 @@ export class VenueCatalog {
 
   /** A new offer on the board. */
   protected readonly offerName = signal('');
-  protected readonly offerHours = signal('10');
+  protected readonly offerHours = signal('5');
   protected readonly offerPrice = signal('');
-  protected readonly offerDays = signal('90');
+  protected readonly offerDays = signal('60');
 
   /** A new item on the shelf. */
   protected readonly itemName = signal('');

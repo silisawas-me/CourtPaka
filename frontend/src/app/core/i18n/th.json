@@ -1226,5 +1226,12 @@
   "error.auth.no_passcode": "บัญชีนี้ใช้รหัสผ่าน ไม่ใช่ passcode",
   "error.venue.staff_needs_name": "ใส่ชื่อของพนักงาน",
   "error.venue.not_a_passcode_account": "บัญชีนี้ใช้รหัสผ่านของเจ้าของบัญชีเอง ตั้ง passcode ให้ไม่ได้",
-  "error.venue.phone_has_another_account": "เบอร์นี้ใช้กับบัญชีอื่นอยู่แล้ว"
+  "error.venue.phone_has_another_account": "เบอร์นี้ใช้กับบัญชีอื่นอยู่แล้ว",
+  "catalog.sold": "ขาย",
+  "catalog.offerNamePlaceholder": "เช่น 5 ชั่วโมงช่วงกลางวัน",
+  "catalog.itemNamePlaceholder": "เช่น ผ้าเช็ดตัว",
+  "catalog.unitPlaceholder": "ผืน",
+  "catalog.col.name": "ชื่อ",
+  "catalog.col.price": "ราคา",
+  "catalog.col.left": "เหลือ"
 }
