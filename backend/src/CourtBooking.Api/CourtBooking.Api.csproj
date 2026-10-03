@@ -11,4 +11,9 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The pictures the local mock data's waiting slips carry (thai-fit T5); never read elsewhere. -->
+    <EmbeddedResource Include="Data/MockSlips/*.png" LogicalName="MockSlips.%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

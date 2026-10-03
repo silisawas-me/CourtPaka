@@ -31,6 +31,13 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    // The schedule's slip view (thai-fit T5): the slips waiting, the picture, the answer.
+    path: 'venues/:venueId/slips',
+    data: { venueShell: true },
+    loadComponent: () => import('./features/venues/slips.page').then((m) => m.SlipsPage),
+    canActivate: [authGuard],
+  },
+  {
     // The court schedule of one branch, as the owner app draws it: tracks and the booking panel.
     path: 'venues/:venueId/timeline',
     data: { venueShell: true },

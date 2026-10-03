@@ -20,8 +20,11 @@ interface Door {
   readonly on: boolean;
 }
 
-/** The schedule's three views, left to right: the tracks, the floor this minute, the list. */
-const SCHEDULE_VIEWS = ['timeline', 'now', 'bookings'] as const;
+/**
+ * The schedule's views, left to right: the tracks, the floor this minute, the list, and the slips
+ * waiting (thai-fit T5) — the last only for who may check them.
+ */
+const SCHEDULE_VIEWS = ['timeline', 'now', 'bookings', 'slips'] as const;
 
 /** The pages whose sections are tabs on the top bar, and what their tabs are called. */
 const SECTION_TABS: Record<string, { tabs: readonly string[]; label: string; testId: string }> = {
@@ -202,14 +205,18 @@ export class VenueShell {
       : venues;
   });
 
-  /** The timeline, the board of right now, and the list: three ways of reading one schedule. */
+  /** The timeline, the board of right now, the list and the slips: one schedule, four readings. */
   protected readonly views = computed(() => {
     const segment = this.here().segment;
     if (this.onAll() || !SCHEDULE_VIEWS.some((view) => view === segment)) {
       return [];
     }
 
-    return SCHEDULE_VIEWS.map((view) => ({
+    // A slip is somebody's bank account: the view is for who holds VerifySlip (PDPA), as the
+    // server's queue is.
+    const venue = this.current();
+    const checksSlips = venue ? mayAt(venue, 'VerifySlip') : false;
+    return SCHEDULE_VIEWS.filter((view) => view !== 'slips' || checksSlips).map((view) => ({
       path: ['/venues', this.venueId(), view],
       label: `nav.view.${view}`,
       testId: `view-${view}`,

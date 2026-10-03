@@ -35,7 +35,7 @@ export const VENUE_SECTIONS: readonly VenueLink[] = [
     to: ['timeline'],
     label: 'nav.section.schedule',
     testId: 'nav-schedule',
-    alsoAt: [['now'], ['bookings']],
+    alsoAt: [['now'], ['bookings'], ['slips']],
   },
   { to: ['pricing'], label: 'nav.section.pricing', testId: 'nav-pricing', ownerOnly: true },
   // Revenue and the drawer's count: whoever the venue trusts with the numbers (ViewReports).

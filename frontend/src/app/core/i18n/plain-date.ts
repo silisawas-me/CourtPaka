@@ -81,3 +81,8 @@ export function shiftPlainDate(date: string, days: number): string {
   day.setDate(day.getDate() + days);
   return plainDate(day);
 }
+
+/** A moment on a Bangkok wall, "17:42" — when a slip arrived, when a game starts. */
+export function venueClock(at: string | Date): string {
+  return VENUE_CLOCK.format(typeof at === 'string' ? new Date(at) : at);
+}
