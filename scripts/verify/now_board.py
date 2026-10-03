@@ -90,6 +90,18 @@ with sync_playwright() as p:
           "50" in desk.locator(f"[data-testid=now-left-{court_id}]").inner_text())
     check("nobody on the court is queueing at the desk as well",
           desk.locator(f"[data-testid=now-arrival-{booking_id}]").count() == 0)
+
+    # A free court is a door, as an empty hour on the timeline is: the walk-in opens on it now.
+    free = desk.locator("[data-testid^=now-book-]").first
+    if free.count():
+        free_court = free.get_attribute("data-testid").removeprefix("now-book-")
+        free.click()
+        desk.wait_for_selector("[data-testid=walk-in]")
+        check("tapping a free court opens the walk-in on that court at this hour",
+              "on" in (desk.locator(f"[data-testid=walk-in-court-{free_court}]").get_attribute("class") or "")
+              and "on" in (desk.locator(f"[data-testid=walk-in-start-{hour}]").get_attribute("class") or ""),
+              desk)
+        desk.click("[data-testid=walk-in-close]")
     # The quick sale is tiles of what the shop sells, as the design draws them: a tap adds one,
     # and one of three ways to pay takes the money, with no booking attached.
     tile = desk.locator("[data-testid^=quick-]:not([data-testid^=quick-pay]):not([data-testid^=quick-count])").first

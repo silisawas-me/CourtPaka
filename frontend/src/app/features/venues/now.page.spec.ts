@@ -2,6 +2,7 @@ import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { venueNow } from '../../core/i18n/plain-date';
 import { clickOn, elementOf, pageProviders, textOf } from '../../testing/dom';
+import { WalkInEvents } from '../../core/venues/walk-in.events';
 import { NowPage } from './now.page';
 
 describe('NowPage', () => {
@@ -104,6 +105,16 @@ describe('NowPage', () => {
     expect(elementOf(fixture, 'now-court-c1')?.classList).toContain('free');
     expect(textOf(fixture, 'now-court-c1')).toContain('200');
     expect(elementOf(fixture, 'now-nobody-arriving')).not.toBeNull();
+  });
+
+  it('opens the walk-in on a free court at this hour when its card is tapped', () => {
+    render([]);
+    const asked: unknown[] = [];
+    TestBed.inject(WalkInEvents).open.subscribe((one) => asked.push(one));
+
+    clickOn(fixture, 'now-book-c1');
+
+    expect(asked).toEqual([{ venueId: 'v1', courtId: 'c1', hour }]);
   });
 
   it('sells from the tiles: a tap adds one, and a way to pay takes the money with no booking', () => {

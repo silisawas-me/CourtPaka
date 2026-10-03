@@ -44,6 +44,7 @@
 }
 
 .court {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -85,6 +86,27 @@
       transparent 8px 16px
     );
     color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+/* A free court's door covers the card, so the whole card is what is pressed. */
+.court-hit {
+  position: absolute;
+  inset: 0;
+  // Above the words drawn after it, or a tap on them never reaches the door.
+  z-index: 1;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+
+  &:hover {
+    background: color-mix(in srgb, var(--mat-sys-primary) 6%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 2px;
   }
 }
 

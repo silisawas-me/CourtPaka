@@ -852,7 +852,7 @@
   "now.quickSell": "Quick sell",
   "now.notChecked": "Not checked in",
   "now.ready": "Ready to book",
-  "now.openCourt": "Tap + Walk-in to open the court",
+  "now.openCourt": "Tap to book this court",
   "now.shutCard": "Shut",
   "now.outside": "Outside hours",
   "now.leftMin": "{n} min left",

@@ -852,7 +852,7 @@
   "now.quickSell": "ขายด่วน",
   "now.notChecked": "ยังไม่เช็กอิน",
   "now.ready": "พร้อมให้จอง",
-  "now.openCourt": "กด + Walk-in เพื่อเปิดคอร์ต",
+  "now.openCourt": "แตะเพื่อจองคอร์ตนี้",
   "now.shutCard": "ปิดอยู่",
   "now.outside": "นอกเวลาเปิด",
   "now.leftMin": "เหลือ {n} นาที",
