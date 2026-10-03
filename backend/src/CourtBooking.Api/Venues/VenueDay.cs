@@ -25,6 +25,7 @@ public sealed class VenueDay
         IReadOnlyList<Court> courts,
         int? opensHour,
         int? closesHour,
+        int dayStartsHour,
         IReadOnlySet<Guid> inUse,
         IReadOnlySet<(Guid CourtId, int Hour)> shut,
         IReadOnlyDictionary<(Guid CourtId, int Hour), decimal?> prices,
@@ -34,6 +35,7 @@ public sealed class VenueDay
         Courts = courts;
         OpensHour = opensHour;
         ClosesHour = closesHour;
+        DayStartsHour = dayStartsHour;
         this.inUse = inUse;
         this.shut = shut;
         this.prices = prices;
@@ -48,6 +50,9 @@ public sealed class VenueDay
     public int? OpensHour { get; }
 
     public int? ClosesHour { get; }
+
+    /// <summary>Where this venue's day starts (thai-fit T4); its hours run up to 24 + this.</summary>
+    public int DayStartsHour { get; }
 
     /// <summary>The hours the venue is open that day, which are the columns of the grid.</summary>
     public IEnumerable<int> Hours =>
@@ -115,15 +120,19 @@ public sealed class VenueDay
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
+        var dayStartsHour = await DayStartsHourAsync(database, venueId, cancellationToken);
         var statusChanges = await CourtEndpoints.StatusChangesAsync(
             database, venueId, date, cancellationToken);
         var week = await CourtEndpoints.ScheduleOnAsync(database, venueId, date, cancellationToken);
-        var closures = await ClosuresOnAsync(database, venueId, date, cancellationToken);
+        var closures = await ClosuresOnAsync(database, venueId, date, dayStartsHour, cancellationToken);
         var prices = await PricingEndpoints.InForcePricesAsync(database, venueId, cancellationToken);
         var courtIds = courts.Select(court => court.Id).ToArray();
-        var taken = await BookedSlots.OnAsync(database, courtIds, date, now, cancellationToken);
+        var taken = await BookedSlots.OnAsync(
+            database, courtIds, date, dayStartsHour, now, cancellationToken);
 
-        return Build(date, courts, statusChanges, closures, week, prices?.Bands ?? [], taken);
+        return Build(
+            date, courts, statusChanges, closures, week, prices?.Bands ?? [], taken,
+            dayStartsHour: dayStartsHour);
     }
 
     /// <summary>The rule itself, with everything it needs already read. Pure, so it is testable.</summary>
@@ -135,7 +144,8 @@ public sealed class VenueDay
         OpeningHoursSchedule? week,
         IReadOnlyCollection<PriceBand> bands,
         IReadOnlySet<(Guid CourtId, int Hour)> taken,
-        bool asItWas = false)
+        bool asItWas = false,
+        int dayStartsHour = 0)
     {
         var day = week?.Days.SingleOrDefault(entry => entry.Day == date.DayOfWeek);
         var ordered = courts
@@ -181,7 +191,7 @@ public sealed class VenueDay
         }
 
         return new VenueDay(
-            date, ordered, day?.OpensHour, day?.ClosesHour, inUse, shut, prices, taken);
+            date, ordered, day?.OpensHour, day?.ClosesHour, dayStartsHour, inUse, shut, prices, taken);
     }
 
     /// <summary>
@@ -193,10 +203,10 @@ public sealed class VenueDay
         AppDbContext database,
         Guid venueId,
         DateOnly date,
+        int dayStartsHour,
         CancellationToken cancellationToken)
     {
-        var from = PlatformRequirements.BangkokHour(date, 0);
-        var until = PlatformRequirements.BangkokHour(date.AddDays(1), 0);
+        var (from, until) = VenueClock.Window(date, dayStartsHour);
 
         return await database.CourtClosures
             .AsNoTracking()
@@ -207,6 +217,16 @@ public sealed class VenueDay
                 && closure.EndsAt > from)
             .ToListAsync(cancellationToken);
     }
+
+    /// <summary>Where a venue's day starts (thai-fit T4), for a caller that has not read the venue.</summary>
+    public static Task<int> DayStartsHourAsync(
+        AppDbContext database,
+        Guid venueId,
+        CancellationToken cancellationToken) =>
+        database.Venues
+            .Where(venue => venue.Id == venueId)
+            .Select(venue => venue.DayStartsHour)
+            .FirstOrDefaultAsync(cancellationToken);
 
     private static decimal? PriceFor(IReadOnlyCollection<PriceBand> bands, DayOfWeek day, int hour) =>
         bands

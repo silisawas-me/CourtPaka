@@ -6,6 +6,7 @@ import {
   inject,
   input,
   signal,
+  untracked,
 } from '@angular/core';
 import { errorKey } from '../../core/http/api-error';
 import { BahtPipe } from '../../core/i18n/baht.pipe';
@@ -47,8 +48,14 @@ export class CloseDrawer {
 
   readonly venueId = input.required<string>();
 
-  protected readonly today = venueNow().date;
-  protected readonly day = signal(this.today);
+  /**
+   * The venue's today. The calendar's until the server answers: at 01:00 a venue open until
+   * 02:00 is still counting Friday's drawer (thai-fit T4), so the first read asks for no date
+   * and the server says which day it is.
+   */
+  protected readonly today = signal(venueNow().date);
+  protected readonly day = signal(this.today());
+  private settled = false;
   protected readonly money = signal<DayMoney | null>(null);
   protected readonly pageError = signal<string | null>(null);
   protected readonly busy = signal(false);
@@ -103,13 +110,21 @@ export class CloseDrawer {
   );
 
   constructor() {
-    effect(() => this.read(this.venueId(), this.day()));
+    effect(() => {
+      const venueId = this.venueId();
+      const day = this.day();
+      untracked(() => {
+        if (this.money()?.date !== day || !this.settled) {
+          this.read(venueId, this.settled ? day : null);
+        }
+      });
+    });
   }
 
   protected walk(by: number): void {
     const at = fromPlainDate(this.day()) ?? new Date();
     const next = plainDate(new Date(at.getFullYear(), at.getMonth(), at.getDate() + by));
-    if (next <= this.today) {
+    if (next <= this.today()) {
       this.day.set(next);
     }
   }
@@ -170,10 +185,17 @@ export class CloseDrawer {
       });
   }
 
-  private read(venueId: string, date: string): void {
+  private read(venueId: string, date: string | null): void {
     this.pageError.set(null);
     this.bookings.money(venueId, date).subscribe({
-      next: (money) => this.money.set(money),
+      next: (money) => {
+        this.money.set(money);
+        if (!this.settled) {
+          this.settled = true;
+          this.today.set(money.date);
+          this.day.set(money.date);
+        }
+      },
       error: (failure: unknown) => {
         this.money.set(null);
         this.pageError.set(errorKey(failure));

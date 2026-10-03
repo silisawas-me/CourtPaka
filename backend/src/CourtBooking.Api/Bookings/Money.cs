@@ -320,7 +320,8 @@ public static class Takings
         alreadyCounted ? receivedOn.AddDays(1) : receivedOn;
     /// When a day's takings start and stop being that day's (PRD US-26).
     ///
-    /// A day is midnight to midnight until somebody counts the till. Once they have, that count
+    /// A day runs from the venue's day start (midnight, unless it stays open past it — thai-fit
+    /// T4) to the next one until somebody counts the till. Once they have, that count
     /// is the end of it: money taken afterwards belongs to the next day, because the drawer it
     /// went into has already been counted and written down, and a count that can still move is
     /// not a count. The day after it picks that money up, which is why a day also starts at the
@@ -332,10 +333,10 @@ public static class Takings
     public static (DateTimeOffset From, DateTimeOffset Until) TillDay(
         DateOnly day,
         DateTimeOffset? closedYesterday,
-        DateTimeOffset? closedToday)
+        DateTimeOffset? closedToday,
+        int dayStartsHour = 0)
     {
-        var midnight = PlatformRequirements.BangkokHour(day, 0);
-        var nextMidnight = PlatformRequirements.BangkokHour(day.AddDays(1), 0);
+        var (midnight, nextMidnight) = VenueClock.Window(day, dayStartsHour);
 
         // Never past its own midnight, either end. A count can come days late — a venue catching
         // up on a week it never closed — and a window that ran to the moment of counting would
@@ -373,7 +374,8 @@ public static class Takings
         return TillDay(
             day,
             counts.SingleOrDefault(one => one.Date == day.AddDays(-1))?.ClosedAt,
-            counts.SingleOrDefault(one => one.Date == day)?.ClosedAt);
+            counts.SingleOrDefault(one => one.Date == day)?.ClosedAt,
+            await VenueDay.DayStartsHourAsync(database, venueId, cancellationToken));
     }
 
     /// <summary>

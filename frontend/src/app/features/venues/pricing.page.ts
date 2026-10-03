@@ -15,6 +15,7 @@ import { CourtService, Weekday, WEEKDAYS } from '../../core/venues/court.service
 import { PricingService } from '../../core/venues/pricing.service';
 import { Venue, VenueService } from '../../core/venues/venue.service';
 import { bandsOf, gridOf, openHours, paint, PriceGrid } from './price-grid';
+import { ClockPipe } from '../../core/i18n/clock.pipe';
 import { VenueCatalog } from './venue-catalog';
 import { VenueCourts } from './venue-courts';
 import { VenueStaff } from './venue-staff';
@@ -34,7 +35,7 @@ const PRICE_STEP = 10;
  */
 @Component({
   selector: 'app-pricing-page',
-  imports: [BahtPipe, VenueHours, VenueCourts, VenueStaff, VenueCatalog, VenuePolicy],
+  imports: [BahtPipe, ClockPipe, VenueHours, VenueCourts, VenueStaff, VenueCatalog, VenuePolicy],
   templateUrl: './pricing.page.html',
   styleUrl: './pricing.page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -31,6 +31,11 @@ export interface Availability {
   opensHour: number | null;
   closesHour: number | null;
   courts: CourtAvailability[];
+  /**
+   * Where the venue's day starts (thai-fit T4): 0 unless it stays open past midnight. Hours 24
+   * and up are after midnight, and "now" at 01:00 is the day before's hour 25 when this is 2.
+   */
+  dayStartsHour?: number;
 }
 
 /**

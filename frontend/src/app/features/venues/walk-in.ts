@@ -10,6 +10,7 @@ import {
   viewChild,
   afterNextRender,
 } from '@angular/core';
+import { ClockPipe } from '../../core/i18n/clock.pipe';
 import { errorKey } from '../../core/http/api-error';
 import { BahtPipe } from '../../core/i18n/baht.pipe';
 import { venueNow } from '../../core/i18n/plain-date';
@@ -32,7 +33,7 @@ const PAYMENTS: readonly CounterPayment[] = ['Transfer', 'Cash'];
  */
 @Component({
   selector: 'app-walk-in',
-  imports: [BahtPipe],
+  imports: [BahtPipe, ClockPipe],
   templateUrl: './walk-in.html',
   styleUrl: './walk-in.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -52,8 +53,9 @@ export class WalkIn {
   protected readonly payments = PAYMENTS;
   protected readonly lengths = WALK_IN_HOURS;
 
-  private readonly today = venueNow();
-  protected readonly nowHour = this.today.hour;
+  /** The venue's day and hour now; corrected once the grid says where the day starts (T4). */
+  private readonly today = signal(venueNow());
+  protected readonly nowHour = computed(() => this.today().hour);
   protected readonly day = signal<Availability | null>(null);
   protected readonly loadError = signal<string | null>(null);
 
@@ -74,7 +76,7 @@ export class WalkIn {
       return [];
     }
     // The tapped hour is on offer even when it is further off than the usual first few.
-    const options = startOptions(day, this.today.hour);
+    const options = startOptions(day, this.today().hour);
     const asked = this.at()?.hour;
     return asked !== undefined && !options.includes(asked)
       ? [...options, asked].sort((left, right) => left - right)
@@ -106,21 +108,30 @@ export class WalkIn {
   );
 
   constructor() {
-    afterNextRender(() => {
-      this.venues.availability(this.venueId(), this.today.date, true).subscribe({
-        next: (day) => {
-          this.day.set(day);
-          const at = this.at();
-          this.start.set(
-            at && this.starts().includes(at.hour) ? at.hour : (this.starts()[0] ?? null),
-          );
-          // The tapped court, if it is free for the hour: what is left to ask is who and how.
-          if (at && this.courts().some((court) => court.id === at.courtId && court.free)) {
-            this.court.set(at.courtId);
-          }
-        },
-        error: (failure: unknown) => this.loadError.set(errorKey(failure)),
-      });
+    afterNextRender(() => this.load());
+  }
+
+  private load(): void {
+    this.venues.availability(this.venueId(), this.today().date, true).subscribe({
+      next: (day) => {
+        // At 01:00 a venue open until 02:00 is still selling yesterday (thai-fit T4).
+        const now = venueNow(new Date(), day.dayStartsHour ?? 0);
+        if (now.date !== this.today().date) {
+          this.today.set(now);
+          this.load();
+          return;
+        }
+        this.day.set(day);
+        const at = this.at();
+        this.start.set(
+          at && this.starts().includes(at.hour) ? at.hour : (this.starts()[0] ?? null),
+        );
+        // The tapped court, if it is free for the hour: what is left to ask is who and how.
+        if (at && this.courts().some((court) => court.id === at.courtId && court.free)) {
+          this.court.set(at.courtId);
+        }
+      },
+      error: (failure: unknown) => this.loadError.set(errorKey(failure)),
     });
   }
 
@@ -158,7 +169,7 @@ export class WalkIn {
       .takeAtCounter(this.venueId(), {
         slots: Array.from({ length: this.hours() }, (_, index) => ({
           courtId: court,
-          date: this.today.date,
+          date: this.today().date,
           hour: start + index,
         })),
         customerName: this.name().trim(),

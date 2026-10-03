@@ -1,3 +1,4 @@
+import { clockHour } from '../i18n/clock.pipe';
 import { BookingSlot } from './booking.service';
 
 /**
@@ -30,5 +31,5 @@ export function courtsOf(slots: BookingSlot[]): string {
 }
 
 function clock(hour: number): string {
-  return `${String(hour).padStart(2, '0')}:00`;
+  return clockHour(hour, true);
 }

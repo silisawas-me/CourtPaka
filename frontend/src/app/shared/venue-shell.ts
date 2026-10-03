@@ -2,7 +2,7 @@ import { Component, computed, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { catchError, filter, map, of, startWith } from 'rxjs';
-import { venueToday } from '../core/i18n/plain-date';
+import { fromPlainDate, venueNow } from '../core/i18n/plain-date';
 import { TranslationService } from '../core/i18n/translation.service';
 import { Venue, VenuePermission, VenueService } from '../core/venues/venue.service';
 import { ALL_VENUES, VENUE_SECTIONS, VenueLink } from './venue-nav';
@@ -98,7 +98,9 @@ export class VenueShell {
    * overview is always today, so the day is said rather than picked.
    */
   protected readonly todayLabel = computed(() => {
-    const day = venueToday();
+    // The venue's day: at 01:00 a venue open until 02:00 is still on yesterday (thai-fit T4).
+    const starts = this.current()?.dayStartsHour ?? 0;
+    const day = fromPlainDate(venueNow(new Date(), starts).date)!;
     const date = new Intl.DateTimeFormat(this.i18n.locale(), { day: 'numeric', month: 'short' });
     return `${this.i18n.t(`overview.weekday.${day.getDay()}`)} ${date.format(day)}`;
   });

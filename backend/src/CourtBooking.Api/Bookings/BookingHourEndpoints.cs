@@ -52,6 +52,7 @@ internal static class BookingHourEndpoints
         Guid bookingId,
         AppDbContext database,
         TimeProvider timeProvider,
+        CurrentVenue venue,
         CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
@@ -63,13 +64,13 @@ internal static class BookingHourEndpoints
         }
 
         var status = BookedSlots.StatusAt(booking, now);
-        var today = PlatformRequirements.BangkokToday(timeProvider);
+        var today = VenueClock.Today(timeProvider, venue.DayStartsHour);
 
         ExtendOptionResponse? extend = null;
         if (BookingHours.NextHour(booking, status, now) is { } next
             && BookingHours.SameCourt(booking, status, now) is { } sameCourt)
         {
-            var (date, hour) = PlatformRequirements.BangkokDateAndHour(next);
+            var (date, hour) = VenueClock.DayAndHour(next, venue.DayStartsHour);
             var asked = new[] { new BookingSlotRequest(Guid.Empty, date, hour) };
 
             // The same window and the same clock the counter sells any other hour under
@@ -90,7 +91,7 @@ internal static class BookingHourEndpoints
         if (movable.Count > 0 && !BookingHours.OnTwoCourtsAtOnce(movable))
         {
             var hours = movable
-                .Select(slot => PlatformRequirements.BangkokDateAndHour(slot.StartsAt))
+                .Select(slot => VenueClock.DayAndHour(slot.StartsAt, venue.DayStartsHour))
                 .ToList();
 
             var day = await VenueDay.LoadAsync(
@@ -114,7 +115,7 @@ internal static class BookingHourEndpoints
                 await CounterMoneyEndpoints.TakenAsync(database, bookingId, cancellationToken),
                 lastHour))
         {
-            var (date, hour) = PlatformRequirements.BangkokDateAndHour(lastHour.StartsAt);
+            var (date, hour) = VenueClock.DayAndHour(lastHour.StartsAt, venue.DayStartsHour);
             shorten = new ShortenOptionResponse(date, hour, lastHour.CourtId, lastHour.BahtPerHour);
         }
 
@@ -279,11 +280,11 @@ internal static class BookingHourEndpoints
         }
 
         var courtId = request?.CourtId ?? sameCourt;
-        var (date, hour) = PlatformRequirements.BangkokDateAndHour(next);
+        var (date, hour) = VenueClock.DayAndHour(next, venue.DayStartsHour);
         var asked = new[] { new BookingSlotRequest(courtId, date, hour) };
 
         if (BookingValidation.Validate(
-                asked, now, PlatformRequirements.BangkokToday(timeProvider), BookingChannel.Staff)
+                asked, now, VenueClock.Today(timeProvider, venue.DayStartsHour), BookingChannel.Staff)
             is { } invalid)
         {
             return ApiProblem.Of(StatusCodes.Status400BadRequest, invalid);
@@ -482,7 +483,7 @@ internal static class BookingHourEndpoints
         // Grouped by the venue's own day, because a booking that has been run on past midnight
         // holds hours on two of them, and a day's read model only answers for its own (BR-10).
         var byDate = moving
-            .Select(slot => PlatformRequirements.BangkokDateAndHour(slot.StartsAt))
+            .Select(slot => VenueClock.DayAndHour(slot.StartsAt, venue.DayStartsHour))
             .GroupBy(when => when.Date)
             .ToDictionary(day => day.Key, day => day.Select(when => when.Hour).ToArray());
 
@@ -614,13 +615,9 @@ internal static class BookingHourEndpoints
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        await BookedSlots.ReleaseLapsedAsync(
-            database,
-            claiming,
-            PlatformRequirements.BangkokHour(date, 0),
-            PlatformRequirements.BangkokHour(date.AddDays(1), 0),
-            now,
-            cancellationToken);
+        var (from, until) = VenueClock.Window(
+            date, await VenueDay.DayStartsHourAsync(database, venueId, cancellationToken));
+        await BookedSlots.ReleaseLapsedAsync(database, claiming, from, until, now, cancellationToken);
 
         return await VenueDay.LoadAsync(database, venueId, date, now, cancellationToken);
     }

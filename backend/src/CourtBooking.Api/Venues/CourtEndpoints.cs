@@ -225,6 +225,13 @@ public static class CourtEndpoints
             return ApiProblem.Of(StatusCodes.Status400BadRequest, invalid);
         }
 
+        // A week that runs past midnight moves where the venue's day starts (thai-fit T4); a day
+        // that would open before that line is refused, with the line, so the screen can say where.
+        if (CourtValidation.DayStartFor(week, currentVenue.DayStartsHour, out var dayStartsHour) is { } early)
+        {
+            return ApiProblem.Of(StatusCodes.Status400BadRequest, early, "dayStartsHour", dayStartsHour);
+        }
+
         var created = OpeningHoursSchedule.Create(
             venueId,
             request.EffectiveFrom,
@@ -242,7 +249,21 @@ public static class CourtEndpoints
         }
 
         database.OpeningHoursSchedules.Add(created);
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
         await database.SaveChangesAsync(cancellationToken);
+        if (dayStartsHour != currentVenue.DayStartsHour)
+        {
+            // Only ever up (GREATEST), so two weeks saved at once cannot pull the line back down.
+            await database.Venues
+                .Where(venue => venue.Id == venueId)
+                .ExecuteUpdateAsync(
+                    set => set.SetProperty(
+                        venue => venue.DayStartsHour,
+                        venue => venue.DayStartsHour > dayStartsHour ? venue.DayStartsHour : dayStartsHour),
+                    cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
 
         return TypedResults.Ok(ToResponse(created, created.EffectiveFrom <= today));
     }

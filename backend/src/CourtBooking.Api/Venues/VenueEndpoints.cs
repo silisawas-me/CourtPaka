@@ -943,7 +943,8 @@ public static class VenueEndpoints
                 venue.Risk.PeakFromHour,
                 venue.Risk.PeakUntilHour),
             venue.GraceMinutes,
-            membership.RefundCeiling);
+            membership.RefundCeiling,
+            venue.DayStartsHour);
 
     private static VenueMemberResponse ToResponse(VenueMembership membership) =>
         new(

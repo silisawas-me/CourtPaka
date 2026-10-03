@@ -13,7 +13,7 @@
       </button>
       <span class="day-label"
         >{{ dayLabel() }}
-        @if (day() === today) {
+        @if (day() === today()) {
           <span class="muted">· {{ i18n.t('bookingList.today') }}</span>
         }
       </span>
@@ -21,7 +21,7 @@
         type="button"
         class="step"
         data-testid="close-later"
-        [disabled]="day() === today"
+        [disabled]="day() === today()"
         [attr.aria-label]="i18n.t('bookingList.later')"
         (click)="walk(1)"
       >

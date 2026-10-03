@@ -51,7 +51,7 @@
           <div class="heat-row heat-hours" role="row">
             <span role="columnheader"></span>
             @for (hour of hours(); track hour) {
-              <span class="heat-hour" role="columnheader">{{ hour }}:00</span>
+              <span class="heat-hour" role="columnheader">{{ hour | clock }}</span>
             }
             <span class="heat-rev-head" role="columnheader">{{ i18n.t('overview.revenue') }}</span>
           </div>
@@ -78,7 +78,7 @@
                     role="cell"
                     [class.full]="use.percent > 60"
                     [style.--use]="use.percent"
-                    [attr.aria-label]="hour + ':00 ' + use.percent + '%'"
+                    [attr.aria-label]="(hour | clock) + ' ' + use.percent + '%'"
                     >{{ use.percent }}%</span
                   >
                 } @else {

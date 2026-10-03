@@ -56,7 +56,9 @@ export class BookingsPage {
   /** The day on screen, from `?date=`; today when there is none. */
   readonly date = input<string>();
 
-  protected readonly today = computed(() => venueNow().date);
+  /** Where this venue's day starts, from its grid (thai-fit T4): 01:00 is yesterday's at 2. */
+  private readonly dayStarts = signal(0);
+  protected readonly today = computed(() => venueNow(new Date(), this.dayStarts()).date);
   protected readonly day = computed(() => this.date() ?? this.today());
 
   private readonly rows = signal<VenueBooking[] | null>(null);
@@ -190,8 +192,10 @@ export class BookingsPage {
       },
     });
     this.venues.availability(venueId, date, true).subscribe({
-      next: (grid) =>
-        this.courts.set(grid.courts.map((court) => ({ courtId: court.courtId, name: court.name }))),
+      next: (grid) => {
+        this.courts.set(grid.courts.map((court) => ({ courtId: court.courtId, name: court.name })));
+        this.dayStarts.set(grid.dayStartsHour ?? 0);
+      },
       error: () => this.courts.set([]),
     });
   }

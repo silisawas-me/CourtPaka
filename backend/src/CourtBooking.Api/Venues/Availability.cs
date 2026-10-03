@@ -63,6 +63,7 @@ public static class Availability
             today.AddDays(BookableDaysAhead),
             day.OpensHour,
             day.ClosesHour,
-            rows);
+            rows,
+            day.DayStartsHour);
     }
 }

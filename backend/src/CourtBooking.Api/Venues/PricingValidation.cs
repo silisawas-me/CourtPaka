@@ -42,8 +42,7 @@ public static class PricingValidation
             }
 
             // A band always has hours; only a weekday may be closed.
-            var invalidHours = CourtValidation.ValidateHours(
-                band.FromHour, band.ToHour, closedAllowed: false);
+            var invalidHours = CourtValidation.ValidateBandHours(band.FromHour, band.ToHour);
             if (invalidHours is not null)
             {
                 return invalidHours;

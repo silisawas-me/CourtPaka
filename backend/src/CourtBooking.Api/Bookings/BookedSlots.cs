@@ -367,7 +367,8 @@ public static class BookedSlots
             cancellationToken);
 
     /// <summary>
-    /// The court-hours of one Bangkok day that a booker cannot take, as an hour per court. It asks
+    /// The court-hours of one venue day that a booker cannot take, as an hour per court — 24 and
+    /// up for the hours after midnight of a venue that stays open late (thai-fit T4). It asks
     /// by court rather than by venue so the query reads the (CourtId, StartsAt) index and never
     /// walks a venue's whole booking history to answer a question about one day.
     /// </summary>
@@ -375,6 +376,7 @@ public static class BookedSlots
         AppDbContext database,
         IReadOnlyCollection<Guid> courtIds,
         DateOnly date,
+        int dayStartsHour,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
@@ -383,8 +385,7 @@ public static class BookedSlots
             return [];
         }
 
-        var from = PlatformRequirements.BangkokHour(date, 0);
-        var until = PlatformRequirements.BangkokHour(date.AddDays(1), 0);
+        var (from, until) = VenueClock.Window(date, dayStartsHour);
 
         var slots = await Active(database, now)
             .Where(slot =>
@@ -395,7 +396,7 @@ public static class BookedSlots
         // Every row is inside the day, so the hour is the distance from its start. Thailand has no
         // daylight saving, which is what makes that arithmetic and a timezone lookup agree.
         return slots
-            .Select(slot => (slot.CourtId, (int)(slot.StartsAt - from).TotalHours))
+            .Select(slot => (slot.CourtId, dayStartsHour + (int)(slot.StartsAt - from).TotalHours))
             .ToHashSet();
     }
 }

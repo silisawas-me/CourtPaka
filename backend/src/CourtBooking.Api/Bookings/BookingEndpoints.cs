@@ -390,7 +390,10 @@ public static class BookingEndpoints
         CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
-        var today = PlatformRequirements.BangkokToday(timeProvider);
+        // The venue's day, not the calendar's: at 01:00 Saturday a venue open until 02:00 is
+        // still selling Friday (thai-fit T4).
+        var today = VenueClock.Today(
+            timeProvider, await VenueDay.DayStartsHourAsync(database, request.VenueId, cancellationToken));
         var bookerId = CallerId.Of(principal);
         var slots = request.Slots ?? [];
 
@@ -559,11 +562,13 @@ public static class BookingEndpoints
         // Hours whose hold is over go back on sale before the day is read, because the database's
         // view of them is what decides whether this booking can have them (PRD 9.2).
         var date = slots.Select(slot => slot.Date).Distinct().Single();
+        var (from, until) = VenueClock.Window(
+            date, await VenueDay.DayStartsHourAsync(database, venueId, cancellationToken));
         var lapsed = await BookedSlots.ReleaseLapsedAsync(
             database,
             [.. slots.Select(slot => slot.CourtId).Distinct()],
-            PlatformRequirements.BangkokHour(date, 0),
-            PlatformRequirements.BangkokHour(date.AddDays(1), 0),
+            from,
+            until,
             now,
             cancellationToken);
         Expired(loggers, lapsed);

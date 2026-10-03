@@ -1,29 +1,25 @@
-/* Artboard "เวลาเปิด-ปิด" (thai-fit): one white card, a row per day — day, open – close, state —
-   and a grey note at its foot. The wait for latecomers sits in its own card under it. */
+/* The "เวลาเปิด-ปิด" artboard (thai-fit T4), measure for measure: a white card with a header
+   line, rows of 110px day · 130px open · dash · 200px close · tag, and a warm grey note. */
 :host {
   display: block;
   min-width: 0;
 }
 
-.hours-layout {
-  display: grid;
-  gap: 1rem;
-  align-items: start;
-
-  @media (min-width: 64rem) {
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  }
-}
-
 .card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  min-width: 0;
-  padding: 1.1rem 1.25rem;
+  overflow: hidden;
   border: 1px solid var(--mat-sys-outline-variant);
   border-radius: 14px;
   background: var(--mat-sys-surface);
+}
+
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
 
   h2 {
     margin: 0;
@@ -32,57 +28,10 @@
   }
 }
 
-/* The week's card is a list edge to edge, as the artboard draws it. */
-[data-testid='opening-hours'] {
-  gap: 0;
-  padding: 0;
-  overflow: hidden;
-
-  .card-head {
-    padding: 16px 18px;
-    border-bottom: 1px solid var(--mat-sys-outline-variant);
-  }
-
-  .form-error,
-  .success,
-  .actions {
-    padding: 12px 18px 0;
-  }
-
-  .actions {
-    padding-bottom: 16px;
-  }
-}
-
-.card-head {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem 1rem;
-}
-
-.hint {
-  flex: 1 1 14rem;
+.hint,
+.muted {
   color: var(--mat-sys-on-surface-variant);
   font-size: 12px;
-}
-
-.from {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 12px;
-  color: var(--mat-sys-on-surface-variant);
-
-  input {
-    height: 36px;
-    padding: 0 0.6rem;
-    border: 1px solid var(--mat-sys-outline-variant);
-    border-radius: 9px;
-    font: 500 13px var(--font-mono);
-    color: var(--mat-sys-on-surface);
-  }
 }
 
 .days {
@@ -99,11 +48,8 @@
   padding: 10px 18px;
   border-bottom: 1px solid color-mix(in srgb, var(--mat-sys-outline-variant) 60%, transparent);
 
-  .day {
-    grid-column: 1 / -1;
-  }
-
-  .state {
+  .day,
+  .tag {
     grid-column: 1 / -1;
   }
 
@@ -111,7 +57,7 @@
     grid-template-columns: 110px 130px 24px 200px minmax(0, 1fr);
 
     .day,
-    .state {
+    .tag {
       grid-column: auto;
     }
   }
@@ -128,9 +74,12 @@
   }
 
   &.shut select {
-    background: var(--mat-sys-surface-container-high);
     color: var(--mat-sys-on-surface-variant);
   }
+}
+
+.day {
+  font-weight: 600;
 }
 
 .dash {
@@ -138,133 +87,66 @@
   text-align: center;
 }
 
-.day {
-  font-weight: 600;
-}
+.tag:empty {
+  display: none;
 
-.state {
-  justify-self: start;
-  padding: 2px 8px;
-  border: 0;
-  border-radius: 5px;
-  background: var(--mat-sys-surface-container-high);
-  color: var(--mat-sys-on-surface-variant);
-  font-size: 12px;
-  cursor: pointer;
-
-  &.open {
-    background: var(--status-playing-soft);
-    color: var(--status-playing-ink);
+  @media (min-width: 40rem) {
+    display: block;
   }
 }
 
+/* The artboard's blue chip: a fact about the day, not a state of a booking. */
+.chip {
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: var(--status-confirmed-soft);
+  color: var(--status-confirmed-ink);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .note {
-  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   padding: 14px 18px;
   background: color-mix(in srgb, var(--mat-sys-surface-container) 40%, var(--mat-sys-surface));
   font-size: 13px;
-  color: var(--mat-sys-on-surface);
+
+  .muted {
+    font-size: 13px;
+  }
 }
 
-.actions {
+.foot {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 0.6rem;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+
+  p {
+    flex: 1 1 14rem;
+    margin: 0;
+  }
 }
 
-.primary,
-.secondary {
-  min-height: 2.75rem;
-  padding: 0 1.25rem;
-  border-radius: var(--mat-sys-corner-medium);
-  font: var(--mat-sys-label-large);
+.primary {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
 
   &:disabled {
     opacity: 0.45;
     cursor: default;
-  }
-}
-
-.primary {
-  border: 0;
-  background: var(--mat-sys-primary);
-  color: var(--mat-sys-on-primary);
-}
-
-.secondary {
-  border: 1px solid var(--mat-sys-outline-variant);
-  background: var(--mat-sys-surface);
-  color: var(--mat-sys-on-surface);
-}
-
-.success,
-.form-error {
-  margin: 0;
-}
-
-.stepper {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.step {
-  width: 2.75rem;
-  height: 2.75rem;
-  border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: 12px;
-  background: var(--mat-sys-surface);
-  color: var(--mat-sys-on-surface);
-  font-size: 1.25rem;
-  cursor: pointer;
-
-  &.dark {
-    border-color: var(--mat-sys-inverse-surface);
-    background: var(--mat-sys-inverse-surface);
-    color: #fff;
-  }
-
-  &:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-}
-
-.minutes {
-  flex: 1;
-  text-align: center;
-  font-family: var(--font-display);
-  font-size: 2.5rem;
-  font-weight: 800;
-
-  small {
-    font-family: inherit;
-    font-size: 0.95rem;
-    font-weight: 500;
-    color: var(--mat-sys-on-surface-variant);
-  }
-}
-
-.presets {
-  display: flex;
-  gap: 0.4rem;
-
-  button {
-    flex: 1;
-    min-height: 2.5rem;
-    border: 1px solid var(--mat-sys-outline-variant);
-    border-radius: 10px;
-    background: var(--mat-sys-surface);
-    color: var(--mat-sys-on-surface);
-    font: 500 13px var(--font-mono);
-    cursor: pointer;
-
-    &.on {
-      border-color: var(--mat-sys-inverse-surface);
-      background: var(--mat-sys-inverse-surface);
-      color: #fff;
-    }
   }
 }

@@ -23,6 +23,24 @@ export function dayIsValid(day: OpeningHoursDay): boolean {
   );
 }
 
+/** The latest a venue may close: 06:00 the next morning, as hour 30 of the day it opened (T4). */
+export const LATEST_CLOSE = 30;
+
+/**
+ * Where the venue's day has to start for this week (thai-fit T4): as far past midnight as its
+ * latest night runs, and never earlier than where it already starts — the server only lets the
+ * line rise, so Friday's 01:00 already sold stays Friday's.
+ */
+export function dayStartFor(week: readonly OpeningHoursDay[], startsNow = 0): number {
+  return Math.max(startsNow, ...week.map((day) => (day.closesHour ?? 0) - 24));
+}
+
+/** The days that would open before the night before has finished (the server refuses them too). */
+export function opensTooEarly(week: readonly OpeningHoursDay[], startsNow = 0): boolean {
+  const line = dayStartFor(week, startsNow);
+  return week.some((day) => day.opensHour !== null && day.opensHour < line);
+}
+
 /**
  * The price list with a price for every hour the new week opens (artboard c): the server refuses
  * to open an hour nobody has priced, and the price grid only paints hours that are open — so an
@@ -55,7 +73,7 @@ export function pricesCovering(
         continue;
       }
       let price: number | null = null;
-      for (let step = 1; step < 24 && price === null; step++) {
+      for (let step = 1; step < LATEST_CLOSE && price === null; step++) {
         price = priceAt(day.day, hour - step) ?? priceAt(day.day, hour + step);
       }
       added.push({

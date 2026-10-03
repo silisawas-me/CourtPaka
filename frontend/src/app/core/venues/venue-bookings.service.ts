@@ -324,8 +324,11 @@ export class VenueBookingsService {
   }
 
   /** What a day took, by the form it came in, and whether it has been counted (PRD US-26). */
-  money(venueId: string, date: string): Observable<DayMoney> {
-    return this.http.get<DayMoney>(`/api/venues/${venueId}/money`, { params: { date } });
+  /** A day's money; with no date, the server's own today for the venue (thai-fit T4). */
+  money(venueId: string, date: string | null): Observable<DayMoney> {
+    return this.http.get<DayMoney>(`/api/venues/${venueId}/money`, {
+      params: date ? { date } : {},
+    });
   }
 
   /** Counts the till and writes it down. The server works out what should be there. */

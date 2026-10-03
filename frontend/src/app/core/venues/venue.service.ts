@@ -71,6 +71,11 @@ export interface Venue extends VenueAddress {
    * where they have no ceiling. Beside the permissions because it is one of them.
    */
   refundLimitBaht: number | null;
+  /**
+   * Where this venue's day starts (thai-fit T4): 0 unless it has stayed open past midnight, in
+   * which case its day starts at the hour that night ended, and no day may open before it.
+   */
+  dayStartsHour?: number;
 }
 
 /** What a venue counts as too often, and which hours it will not lose (PRD US-28). */

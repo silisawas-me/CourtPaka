@@ -14,19 +14,20 @@ public sealed record BookingSlotResponse(
 {
     /// <summary>
     /// A booking's hours as a reader sees them: in the order they are played, and named in the
-    /// venue's own day rather than the reader's (PRD BR-10).
+    /// venue's own day rather than the reader's (PRD BR-10) — Friday's 01:00 is Friday hour 25 at
+    /// a venue that stays open late (thai-fit T4).
     /// </summary>
     public static BookingSlotResponse[] Of(
         Booking booking,
-        IReadOnlyDictionary<Guid, string> courtNames) =>
+        IReadOnlyDictionary<Guid, string> courtNames,
+        int dayStartsHour = 0) =>
         [
             .. booking.Slots
                 .OrderBy(slot => slot.StartsAt)
                 .ThenBy(slot => courtNames.GetValueOrDefault(slot.CourtId))
                 .Select(slot =>
                 {
-                    var (date, hour) = Localization.PlatformRequirements.BangkokDateAndHour(
-                        slot.StartsAt);
+                    var (date, hour) = Localization.VenueClock.DayAndHour(slot.StartsAt, dayStartsHour);
                     return new BookingSlotResponse(
                         slot.CourtId,
                         courtNames.GetValueOrDefault(slot.CourtId, string.Empty),

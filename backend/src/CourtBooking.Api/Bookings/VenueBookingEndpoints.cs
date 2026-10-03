@@ -100,8 +100,7 @@ public static class VenueBookingEndpoints
         CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
-        var from = PlatformRequirements.BangkokHour(date, 0);
-        var until = PlatformRequirements.BangkokHour(date.AddDays(1), 0);
+        var (from, until) = VenueClock.Window(date, venue.DayStartsHour);
 
         var day = await ReadManyAsync(
             database,
@@ -736,7 +735,7 @@ public static class VenueBookingEndpoints
         var slots = request.Slots ?? [];
 
         if (BookingValidation.Validate(
-                slots, now, PlatformRequirements.BangkokToday(timeProvider), BookingChannel.Staff)
+                slots, now, VenueClock.Today(timeProvider, venue.DayStartsHour), BookingChannel.Staff)
             is { } invalid)
         {
             return ApiProblem.Of(StatusCodes.Status400BadRequest, invalid);
@@ -912,10 +911,11 @@ public static class VenueBookingEndpoints
             .Where(court => court.VenueId == venueId)
             .ToDictionaryAsync(court => court.Id, court => court.Name, cancellationToken);
 
-        // How long this venue waits for somebody before they have not come (PRD US-24).
-        var graceMinutes = await database.Venues
+        // How long this venue waits for somebody before they have not come (PRD US-24), and
+        // where its day starts, which names the hours after midnight (thai-fit T4).
+        var terms = await database.Venues
             .Where(venue => venue.Id == venueId)
-            .Select(venue => venue.GraceMinutes)
+            .Select(venue => new { venue.GraceMinutes, venue.DayStartsHour })
             .SingleAsync(cancellationToken);
 
         var bookingIds = found.Select(row => row.Booking.Id).ToArray();
@@ -955,7 +955,8 @@ public static class VenueBookingEndpoints
                     byOwner,
                     sentBack.GetValueOrDefault(row.Booking.Id),
                     taken.GetValueOrDefault(row.Booking.Id),
-                    graceMinutes,
+                    terms.GraceMinutes,
+                    terms.DayStartsHour,
                     now)),
         ];
     }
@@ -970,6 +971,7 @@ public static class VenueBookingEndpoints
         decimal sentBackBaht,
         decimal takenBaht,
         int graceMinutes,
+        int dayStartsHour,
         DateTimeOffset now)
     {
         var status = BookedSlots.StatusAt(booking, now);
@@ -996,7 +998,7 @@ public static class VenueBookingEndpoints
             booking.RefundDueBaht,
             sentBackBaht,
             Refunds.OutstandingOf(booking.RefundDueBaht, sentBackBaht),
-            BookingSlotResponse.Of(booking, courtNames),
+            BookingSlotResponse.Of(booking, courtNames, dayStartsHour),
             Doors(booking, status, byOwner, takenBaht, outstanding, graceMinutes, now));
     }
 

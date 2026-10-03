@@ -1,3 +1,4 @@
+import { clockHour } from '../../core/i18n/clock.pipe';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -100,7 +101,7 @@ export class BookingPanel {
       return '';
     }
     const { from, to } = span(booking);
-    return `${whoIs(booking)} · ${courtsOf(booking)} · ${from}:00–${to}:00`;
+    return `${whoIs(booking)} · ${courtsOf(booking)} · ${clockHour(from)}–${clockHour(to)}`;
   });
 
   /** What cancelling does to the hours, and — when nothing came in — to the money (artboard b2). */
@@ -113,8 +114,8 @@ export class BookingPanel {
     const freed = this.i18n
       .t('timeline.freedAt')
       .replace('{courts}', courtsOf(booking))
-      .replace('{from}', `${from}:00`)
-      .replace('{to}', `${to}:00`);
+      .replace('{from}', clockHour(from))
+      .replace('{to}', clockHour(to));
     return booking.takenBaht > 0 ? freed : `${this.i18n.t('timeline.nothingPaid')} · ${freed}`;
   });
 
@@ -146,7 +147,7 @@ export class BookingPanel {
       return '';
     }
     const { from, to, hours } = span(booking);
-    return `${courtsOf(booking)} · ${from}:00–${to}:00 · ${hours} ${this.i18n.t('timeline.hr')}`;
+    return `${courtsOf(booking)} · ${clockHour(from)}–${clockHour(to)} · ${hours} ${this.i18n.t('timeline.hr')}`;
   });
 
   /** Other courts, and whether the booking's hours are free on each (the server's answer). */
