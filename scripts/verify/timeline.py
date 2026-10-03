@@ -30,7 +30,9 @@ with sync_playwright() as p:
     sign_in(desk, OWNER)
     api = f"{BASE}/api/venues/{venue_id}"
 
-    # A walk-in on the last free hour that has not ended — tomorrow's, after closing.
+    # A walk-in on the last free hour that has not started yet — tomorrow's, after closing. Not
+    # one already under way: no-show is the server's door, on the server's clock, and an hour that
+    # began more than the grace ago would have it open whatever the pinned browser says.
     now_hour = datetime.datetime.now(BANGKOK).hour
     found = None
     for ahead in (0, 1):
@@ -41,7 +43,7 @@ with sync_playwright() as p:
                 (court["courtId"], one["hour"])
                 for court in day["courts"]
                 for one in reversed(court["hours"])
-                if one["status"] == "Free" and (ahead > 0 or one["hour"] + 1 > now_hour)
+                if one["status"] == "Free" and (ahead > 0 or one["hour"] > now_hour)
             ),
             None,
         )
