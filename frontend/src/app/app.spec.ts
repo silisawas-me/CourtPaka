@@ -115,6 +115,7 @@ describe("A venue's own shell", () => {
         // A venue's page is a venue's page because the route says so, not because its URL has an
         // id in it.
         { path: 'venues/:venueId/timeline', children: [], data: { venueShell: true } },
+        { path: 'venues/:venueId/dashboard', children: [], data: { venueShell: true } },
         { path: 'venues/apply', children: [] },
       ]),
     }).compileComponents();
@@ -193,6 +194,20 @@ describe("A venue's own shell", () => {
     expect(elementOf(fixture, 'pill-all')?.classList).toContain('on');
     // Revenue opens at a venue this person owns, never at one where they only work.
     expect(elementOf(fixture, 'nav-dashboard')?.getAttribute('href')).toBe('/venues/v1/dashboard');
+  });
+
+  it('puts the tabs of revenue on the top bar, as links that keep the branch', async () => {
+    await router.navigateByUrl('/venues/v1/dashboard?tab=close');
+    fixture.detectChanges();
+    await showShell();
+
+    expect(elementOf(fixture, 'revenue-tab-close')?.classList).toContain('on');
+    expect(elementOf(fixture, 'revenue-tab-overview')?.getAttribute('href')).toBe(
+      '/venues/v1/dashboard',
+    );
+    expect(elementOf(fixture, 'revenue-tab-close')?.getAttribute('href')).toBe(
+      '/venues/v1/dashboard?tab=close',
+    );
   });
 
   it("keeps the owner's sections from somebody who only works at the venue", async () => {

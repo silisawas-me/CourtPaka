@@ -63,7 +63,12 @@ export class PricingPage {
 
   /** The section's tabs: prices and hours, then the rest of the venue's setup (thai-fit). */
   protected readonly tabs = ['prices', 'hours', 'courts', 'staff', 'catalog', 'policy'] as const;
-  protected readonly tab = signal<(typeof this.tabs)[number]>('prices');
+  /** `?tab=` picks the tab; the top bar draws them (the artboards put them beside the branches). */
+  readonly tabParam = input<string | undefined>(undefined, { alias: 'tab' });
+  protected readonly tab = computed<(typeof this.tabs)[number]>(() => {
+    const asked = this.tabParam();
+    return this.shownTabs().find((one) => one === asked) ?? 'prices';
+  });
 
   /** Staff is the owner's alone (US-14): every door behind it is OwnerOnly at the server. */
   protected readonly shownTabs = computed(() =>

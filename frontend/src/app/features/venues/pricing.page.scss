@@ -220,31 +220,3 @@
   background: var(--mat-sys-surface);
   color: var(--mat-sys-on-surface);
 }
-
-/* The section's tabs (artboard c). */
-.tabs {
-  display: flex;
-  align-self: flex-start;
-  width: fit-content;
-  max-width: 100%;
-  flex-wrap: wrap;
-  padding: 4px;
-  border-radius: 12px;
-  background: #efe8dc;
-}
-
-.tab {
-  padding: 0.55rem 1rem;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--mat-sys-on-surface-variant);
-  font: var(--mat-sys-label-large);
-  cursor: pointer;
-
-  &.on {
-    background: var(--mat-sys-surface);
-    color: var(--mat-sys-on-surface);
-    font-weight: 600;
-  }
-}

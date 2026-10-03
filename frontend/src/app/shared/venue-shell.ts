@@ -23,6 +23,16 @@ interface Door {
 /** The schedule's three views, left to right: the tracks, the floor this minute, the list. */
 const SCHEDULE_VIEWS = ['timeline', 'now', 'bookings'] as const;
 
+/** The pages whose sections are tabs on the top bar, and what their tabs are called. */
+const SECTION_TABS: Record<string, { tabs: readonly string[]; label: string; testId: string }> = {
+  dashboard: { tabs: ['overview', 'close'], label: 'revenue.tab', testId: 'revenue-tab' },
+  pricing: {
+    tabs: ['prices', 'hours', 'courts', 'staff', 'catalog', 'policy'],
+    label: 'pricing.tab',
+    testId: 'pricing-tab',
+  },
+};
+
 /** One venue in the switch along the top bar, or "every venue". */
 interface Pill {
   readonly path: unknown[];
@@ -35,6 +45,7 @@ interface Pill {
 interface Here {
   readonly segment: string | null;
   readonly fragment: string | null;
+  readonly tab: string | null;
 }
 
 /**
@@ -206,6 +217,34 @@ export class VenueShell {
     }));
   });
 
+  /**
+   * The tabs of revenue and of prices & setup, on the top bar as the artboards draw them (beside
+   * the branches, like the schedule's views). Each is `?tab=` on its page, so a tab is a link.
+   */
+  protected readonly tabs = computed(() => {
+    const { segment, tab } = this.here();
+    const set = segment === null || this.onAll() ? undefined : SECTION_TABS[segment];
+    if (!set) {
+      return [];
+    }
+    const owner = this.current()?.role === 'Owner';
+    const shown = set.tabs.filter((one) => one !== 'staff' || owner);
+    const on = tab && shown.includes(tab) ? tab : shown[0];
+    return shown.map((one) => ({
+      path: ['/venues', this.venueId(), segment],
+      query: { tab: one === shown[0] ? null : one },
+      label: `${set.label}.${one}`,
+      testId: `${set.testId}-${one}`,
+      on: one === on,
+    }));
+  });
+
+  /** The tab a branch switch keeps: the drawer of one branch becomes the drawer of the other. */
+  protected readonly keptTab = computed(() => {
+    const tab = this.here().tab;
+    return tab ? { tab } : {};
+  });
+
   private firstFor(link: VenueLink): Venue | undefined {
     return this.mine().find(
       (venue) =>
@@ -236,10 +275,12 @@ export class VenueShell {
 /** The venue page segment and fragment of a URL like `/venues/{id}/settings#prices`. */
 function hereIn(url: string): Here {
   const [path, fragment] = url.split('#');
-  const segments = path.split('?')[0].split('/').filter(Boolean);
+  const [route, query] = path.split('?');
+  const segments = route.split('/').filter(Boolean);
   return {
     segment: segments[0] === 'venues' && segments.length >= 2 ? (segments[2] ?? '') : null,
     fragment: fragment ?? null,
+    tab: new URLSearchParams(query ?? '').get('tab'),
   };
 }
 

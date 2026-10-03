@@ -27,9 +27,9 @@ export class VenueDashboardPage {
 
   readonly venueId = input.required<string>();
 
-  /** Which half is on screen: the fortnight or the drawer's count. */
-  protected readonly tab = signal<'overview' | 'close'>('overview');
-  protected readonly tabs = ['overview', 'close'] as const;
+  /** `?tab=close` is the drawer's count; anything else is the fortnight. The top bar draws the tabs. */
+  readonly tabParam = input<string | undefined>(undefined, { alias: 'tab' });
+  protected readonly tab = computed(() => (this.tabParam() === 'close' ? 'close' : 'overview'));
 
   protected readonly figures = signal<Dashboard | null>(null);
   protected readonly loading = signal(true);
