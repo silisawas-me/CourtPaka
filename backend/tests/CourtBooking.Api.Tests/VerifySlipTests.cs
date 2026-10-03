@@ -12,17 +12,22 @@ public sealed class VerifySlipTests(ApiTestFixture api) : IClassFixture<ApiTestF
     private readonly VenueScenario scenario = new(api);
 
     [Fact]
-    public async Task The_queue_holds_what_is_waiting_oldest_first()
+    public async Task The_queue_holds_what_is_waiting_soonest_to_play_first()
     {
         var (owner, venue, courts) = await scenario.BookableVenueAsync(courts: 2);
-        var first = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
-        var second = await scenario.WaitingBookingAsync(venue.Id, courts[1], 19);
+        // The later game's slip arrives first; the queue still puts the earlier game on top,
+        // because that is the one about to be asked about at the desk (thai-fit T5).
+        var later = await scenario.WaitingBookingAsync(venue.Id, courts[1], 19);
+        var sooner = await scenario.WaitingBookingAsync(venue.Id, courts[0], 18);
 
         var queue = await QueueAsync(owner, venue.Id);
 
-        Assert.Equal([first.Booking.Id, second.Booking.Id], queue.Select(item => item.BookingId));
+        Assert.Equal([sooner.Booking.Id, later.Booking.Id], queue.Select(item => item.BookingId));
         Assert.All(queue, item => Assert.Equal(200m, item.TotalBaht));
         Assert.All(queue, item => Assert.False(item.SameSlipSeenBefore));
+        Assert.All(queue, item => Assert.Equal(TimeSpan.FromHours(1), item.EndsAt - item.StartsAt));
+        Assert.Single(queue[0].Courts);
+        Assert.NotEqual(queue[0].Courts, queue[1].Courts);
     }
 
     [Fact]

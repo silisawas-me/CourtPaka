@@ -1,0 +1,235 @@
+<!-- The "ตรวจสลิป" artboard (thai-fit T5): the queue, the picture, the answer. -->
+<div class="slips" data-testid="slips">
+  <section class="queue" [attr.aria-label]="i18n.t('slipQueue.title')">
+    <h2>
+      {{ i18n.t('slips.waiting').replace('{n}', '' + (queue()?.length ?? 0)) }}
+    </h2>
+    @if (loadError(); as key) {
+      <p class="form-error" data-testid="slips-error">{{ i18n.t(key) }}</p>
+    }
+    @if (done(); as said) {
+      <p class="success" role="status" data-testid="slips-done">
+        {{ i18n.t(said.key).replace('{name}', said.name) }}
+      </p>
+    }
+    @for (slip of queue() ?? []; track slip.bookingId) {
+      <button
+        type="button"
+        class="slip-row"
+        [class.on]="slip === chosen()"
+        [attr.aria-pressed]="slip === chosen()"
+        [attr.data-testid]="'slip-' + slip.bookingId"
+        (click)="choose(slip)"
+      >
+        <span class="who">{{ nameOf(slip) }}</span>
+        <span class="mono">฿{{ slip.depositBaht | baht: i18n.locale() }}</span>
+        <span class="muted small">
+          {{ i18n.t('slips.sent').replace('{t}', clock(slip.slipUploadedAt)) }} ·
+          {{ slip.courts.join(', ') }} · {{ i18n.t('slips.plays') }}
+          @switch (dayOf(slip)) {
+            @case ('today') {}
+            @case ('tomorrow') {
+              {{ i18n.t('slips.tomorrow') }}
+            }
+            @default {
+              {{ dayOf(slip) | appDate: i18n.locale() }}
+            }
+          }
+          {{ clock(slip.startsAt) }}
+        </span>
+        <span class="flags">
+          @if (slip.sameSlipSeenBefore) {
+            <span class="chip same" [attr.data-testid]="'slip-same-' + slip.bookingId">{{
+              i18n.t('slipQueue.sameSlip')
+            }}</span>
+          }
+          @if (slip.playsSoon) {
+            <span class="chip soon">{{ i18n.t('slipQueue.playsSoon') }}</span>
+          }
+        </span>
+      </button>
+    } @empty {
+      @if (queue()) {
+        <p class="muted" data-testid="slips-empty">{{ i18n.t('slipQueue.empty') }}</p>
+      }
+    }
+    @if ((queue()?.length ?? 0) > 1) {
+      <p class="muted small">{{ i18n.t('slips.order') }}</p>
+    }
+  </section>
+
+  @if (chosen(); as slip) {
+    <section class="card picture" [attr.aria-label]="i18n.t('slipQueue.slipAlt')">
+      @switch (picture().state) {
+        @case ('loading') {
+          <div class="frame muted">…</div>
+        }
+        @case ('failed') {
+          <div class="frame muted" data-testid="slip-picture-error">
+            {{ i18n.t('slipQueue.slipMissing') }}
+          </div>
+        }
+      }
+      @if (picture(); as shown) {
+        @if (shown.state === 'shown') {
+          @if (shown.pdf) {
+            <div class="frame muted">PDF</div>
+          } @else {
+            <button
+              type="button"
+              class="frame image"
+              [class.zoomed]="zoomed()"
+              [attr.aria-label]="i18n.t('slips.zoom')"
+              (click)="zoomed.set(!zoomed())"
+            >
+              <img data-testid="slip-image" [src]="shown.url" [alt]="i18n.t('slipQueue.slipAlt')" />
+            </button>
+          }
+          <a [href]="shown.url" target="_blank" rel="noopener" data-testid="slip-file">{{
+            i18n.t('slips.openFull')
+          }}</a>
+        }
+      }
+    </section>
+
+    <section class="card decide" [attr.aria-label]="i18n.t('slips.decide')">
+      <div class="head">
+        <span class="name-big">{{ nameOf(slip) }}</span>
+        <span class="muted">
+          {{ slip.courts.join(', ') }} ·
+          @switch (dayOf(slip)) {
+            @case ('today') {
+              {{ i18n.t('slips.today') }}
+            }
+            @case ('tomorrow') {
+              {{ i18n.t('slips.tomorrow') }}
+            }
+            @default {
+              {{ dayOf(slip) | appDate: i18n.locale() }}
+            }
+          }
+          {{ hoursOf(slip) }} · {{ i18n.t('slips.asked') }} ฿{{
+            slip.depositBaht | baht: i18n.locale()
+          }}
+        </span>
+        @if (slip.depositBaht < slip.totalBaht) {
+          <span class="muted small">{{
+            i18n
+              .t('slips.depositNote')
+              .replace('{total}', (slip.totalBaht | baht: i18n.locale()) ?? '')
+          }}</span>
+        }
+      </div>
+
+      @if (slip.sameSlipSeenBefore) {
+        <p class="warn-box" data-testid="slip-same-warning">
+          {{ i18n.t('slipQueue.sameSlipWarning') }}
+        </p>
+      }
+
+      <div class="auto" data-testid="slip-auto-check">
+        <span class="auto-head"
+          ><b>{{ i18n.t('slips.auto') }}</b
+          ><span class="chip off">{{ i18n.t('slips.autoOff') }}</span></span
+        >
+        <span class="muted small">{{ i18n.t('slips.autoWhen') }}</span>
+        <span class="auto-rows">
+          <span>{{ i18n.t('slips.auto.amount') }}</span
+          ><span class="mono">—</span> <span>{{ i18n.t('slips.auto.account') }}</span
+          ><span class="mono">—</span> <span>{{ i18n.t('slips.auto.reference') }}</span
+          ><span class="mono">—</span>
+        </span>
+      </div>
+
+      <label class="field"
+        >{{ i18n.t('slips.amount') }}
+        <input
+          class="input mono"
+          data-testid="slip-amount"
+          inputmode="decimal"
+          [value]="amount()"
+          (input)="amount.set($any($event.target).value)"
+        />
+      </label>
+
+      @if (error(); as key) {
+        <p class="form-error" data-testid="slip-error">{{ i18n.t(key) }}</p>
+      }
+
+      @if (!rejecting()) {
+        <button
+          type="button"
+          class="main"
+          data-testid="slip-confirm"
+          [disabled]="busy()"
+          (click)="confirm(slip)"
+        >
+          {{ i18n.t('slips.confirm') }}
+          @if (amountBaht(); as baht) {
+            · ฿{{ baht | baht: i18n.locale() }}
+          }
+        </button>
+        <button
+          type="button"
+          class="reject"
+          data-testid="slip-reject-open"
+          (click)="rejecting.set(true)"
+        >
+          {{ i18n.t('slips.reject') }}
+        </button>
+        <p class="muted small">{{ i18n.t('slips.rejectNote') }}</p>
+      } @else {
+        <div class="reject-form" data-testid="slip-reject-form">
+          <label class="field"
+            >{{ i18n.t('slipQueue.reason') }}
+            <textarea
+              class="input reason"
+              data-testid="slip-reason"
+              maxlength="500"
+              rows="2"
+              [placeholder]="i18n.t('slips.reasonPlaceholder')"
+              [value]="reason()"
+              (input)="reason.set($any($event.target).value)"
+            ></textarea>
+          </label>
+          <span class="field">{{ i18n.t('slipQueue.moneyQuestion') }}</span>
+          <div class="pair">
+            <button
+              type="button"
+              data-testid="slip-received-yes"
+              [class.on]="received() === true"
+              [attr.aria-pressed]="received() === true"
+              (click)="received.set(true)"
+            >
+              {{ i18n.t('slipQueue.moneyReceived') }}
+            </button>
+            <button
+              type="button"
+              data-testid="slip-received-no"
+              [class.on]="received() === false"
+              [attr.aria-pressed]="received() === false"
+              (click)="received.set(false)"
+            >
+              {{ i18n.t('slipQueue.moneyNotReceived') }}
+            </button>
+          </div>
+          @if (received()) {
+            <p class="muted small">{{ i18n.t('slipQueue.refundNote') }}</p>
+          }
+          <button
+            type="button"
+            class="reject solid"
+            data-testid="slip-reject"
+            [disabled]="busy()"
+            (click)="reject(slip)"
+          >
+            {{ i18n.t('slipQueue.rejectConfirm') }}
+          </button>
+          <button type="button" data-testid="slip-reject-back" (click)="rejecting.set(false)">
+            {{ i18n.t('courts.cancel') }}
+          </button>
+        </div>
+      }
+    </section>
+  }
+</div>

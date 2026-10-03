@@ -178,6 +178,13 @@ public static class DevelopmentMockData
                             users, database, options.Value.PrivacyPolicyVersion, now, cancellationToken),
                         cancellationToken);
                 }
+
+                // Slips waiting to be checked, as the "ตรวจสลิป" artboard draws them (thai-fit T5).
+                if (!history && branch.Code == "ARI01")
+                {
+                    await filler.SlipsWaitingAsync(
+                        scope.ServiceProvider.GetRequiredService<ISlipStore>(), cancellationToken);
+                }
             }
             catch (Exception failure) when (failure is not OperationCanceledException)
             {
@@ -1145,6 +1152,151 @@ public static class DevelopmentMockData
             // Paid by scanning the venue's QR at the desk: into the account, not the drawer.
             var ploy = Counter("คุณพลอย", At(10).AddMinutes(3), bom, CounterPayment.Transfer);
             Paid(ploy, ploy.TotalBaht, PaymentMethod.PromptPay, At(10).AddMinutes(3), bom);
+
+            await database.SaveChangesAsync(cancellationToken);
+        }
+
+        /// <summary>
+        /// Three app bookings whose slips wait for the desk, as the slip artboard draws them: คุณแพร
+        /// for two hours, คุณพลอย whose picture is the very file an earlier booking sent (the
+        /// "สลิปซ้ำ" flag), and คุณเจ. Written while none waits here, so a check that empties the
+        /// queue finds it full again on the next start. The games are the artboard's evening (19:00,
+        /// 20:00), today while that is ahead and tomorrow once it is not, and each slip's picture
+        /// shows the booking's own price (Data/MockSlips, one per person and price).
+        /// </summary>
+        public async Task SlipsWaitingAsync(ISlipStore store, CancellationToken cancellationToken)
+        {
+            if (await database.Bookings.AnyAsync(
+                    booking => booking.VenueId == venue.Id && booking.Status == BookingStatus.PendingVerification,
+                    cancellationToken))
+            {
+                return;
+            }
+
+            var days = new[] { today, today.AddDays(1) };
+            var ids = courts.Select(court => court.Id).ToArray();
+            var (since, until) = (PlatformRequirements.BangkokHour(today, 0), PlatformRequirements.BangkokHour(today.AddDays(2), 0));
+            var taken = (await database.BookingSlots
+                    .Where(slot => slot.IsActive && ids.Contains(slot.CourtId)
+                                   && slot.StartsAt >= since && slot.StartsAt < until)
+                    .Select(slot => new { slot.CourtId, slot.StartsAt })
+                    .ToListAsync(cancellationToken))
+                .Select(slot => (slot.CourtId, slot.StartsAt))
+                .ToHashSet();
+            var nextHour = (int)Math.Ceiling((now - since).TotalHours) + 1;
+
+            // A court free for this many hours around the evening hour the artboard draws, today if
+            // that is still ahead and tomorrow if not; failing that, the first room from the next hour.
+            (DateOnly Date, int Court, int Hour)? Room(int hours, int evening)
+            {
+                bool Free(DateOnly date, int court, int hour) =>
+                    hour + hours <= ClosesHour
+                    && Enumerable.Range(hour, hours).All(one =>
+                        !taken.Contains((courts[court - 1].Id, PlatformRequirements.BangkokHour(date, one))));
+
+                // The evening hour itself, then the hours around it: a full 19:00 gives way to 18:00.
+                int[] around = [evening, evening - 1, evening + 1, evening - 2, evening + 2];
+                foreach (var date in days)
+                {
+                    foreach (var hour in around.Where(hour => date != today || hour >= nextHour))
+                    {
+                        for (var court = 1; court <= courts.Count; court++)
+                        {
+                            if (Free(date, court, hour))
+                            {
+                                return (date, court, hour);
+                            }
+                        }
+                    }
+                }
+
+                foreach (var date in days)
+                {
+                    var first = date == today ? Math.Max(OpensHour, nextHour) : OpensHour;
+                    for (var hour = first; hour + hours <= ClosesHour; hour++)
+                    {
+                        for (var court = 1; court <= courts.Count; court++)
+                        {
+                            if (Free(date, court, hour))
+                            {
+                                return (date, court, hour);
+                            }
+                        }
+                    }
+                }
+
+                return null;
+            }
+
+            // The picture whose amount is the booking's price, so the desk sees the two agree; one
+            // of the person's others where none was drawn for that price (an hour off the evening).
+            var resources = typeof(DevelopmentMockData).Assembly.GetManifestResourceNames();
+            string PictureFor(string who, decimal total) =>
+                resources.FirstOrDefault(one => one == $"MockSlips.{who}-{total:0}.png")
+                ?? resources.First(one => one.StartsWith($"MockSlips.{who}-", StringComparison.Ordinal));
+
+            PaymentSlip Slip(Guid bookingId, Guid by, DateTimeOffset at, StoredSlip file, Guid? same)
+            {
+                var slip = new PaymentSlip
+                {
+                    BookingId = bookingId, UploadedByUserId = by, UploadedAt = at, StoredName = file.Name,
+                    ContentType = "image/png", ByteSize = file.ByteSize, Sha256 = file.Sha256,
+                    SameBytesAsSlipId = same,
+                };
+                database.PaymentSlips.Add(slip);
+                return slip;
+            }
+
+            // คุณพลอย's file was first sent two days ago, for a booking the venue has since confirmed.
+            var earlier = await database.Bookings
+                .Where(booking =>
+                    booking.VenueId == venue.Id && booking.Channel == BookingChannel.Online
+                    && booking.Status == BookingStatus.Confirmed && booking.CreatedAt < now.AddDays(-1))
+                .OrderByDescending(booking => booking.CreatedAt)
+                .Select(booking => new { booking.Id, booking.BookerUserId })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            foreach (var (name, who, hours, evening, minutesAgo) in new[]
+                     {
+                         ("คุณแพร", "prae", 2, 19, 38),
+                         ("คุณพลอย", "ploy", 1, 19, 25),
+                         ("คุณเจ", "jay", 1, 20, 14),
+                     })
+            {
+                if (Room(hours, evening) is not { } room)
+                {
+                    break;
+                }
+
+                var range = Enumerable.Range(room.Hour, hours).ToArray();
+                foreach (var hour in range)
+                {
+                    taken.Add((courts[room.Court - 1].Id, PlatformRequirements.BangkokHour(room.Date, hour)));
+                }
+
+                var bookerId = bookers.GetValueOrDefault(name, bookers.Values.First());
+                var sent = now.AddMinutes(-minutesAgo);
+                var booking = Booking.Hold(
+                    venue.Id, bookerId, policyId, Priced(room.Court, room.Date, range), 100,
+                    DepositReason.VenueTerms, sent.AddMinutes(-4));
+                booking.StatusChanges.Add(BookingTransitions.Record(
+                    booking.Id, BookingStatus.Held, BookingStatus.PendingVerification, bookerId, sent));
+                booking.Status = BookingStatus.PendingVerification;
+                database.Bookings.Add(booking);
+
+                await using var picture = typeof(DevelopmentMockData).Assembly
+                    .GetManifestResourceStream(PictureFor(who, booking.TotalBaht))!;
+                var file = await store.SaveAsync(picture, "image/png", cancellationToken);
+
+                // The same bytes again: the earlier booking's slip is the one this one repeats.
+                Guid? same = null;
+                if (who == "ploy" && earlier?.BookerUserId is { } earlierBooker)
+                {
+                    same = Slip(earlier.Id, earlierBooker, now.AddDays(-2), file, null).Id;
+                }
+
+                Slip(booking.Id, bookerId, sent, file, same);
+            }
 
             await database.SaveChangesAsync(cancellationToken);
         }

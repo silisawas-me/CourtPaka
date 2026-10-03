@@ -270,8 +270,9 @@ public sealed record RejectSlipRequest(
 
 /// <summary>
 /// One booking waiting for the venue to look at its slip (PRD US-12). It names the booker by the
-/// address they signed up with — or, for a LINE account that has none, by the phone number they
-/// gave instead (PRD US-01); nothing else about them is the venue's business here.
+/// name they gave and the address they signed up with — or, for a LINE account that has none, by
+/// the phone number they gave instead (PRD US-01); nothing else about them is the venue's business
+/// here.
 /// </summary>
 public sealed record SlipQueueItemResponse(
     Guid BookingId,
@@ -286,7 +287,13 @@ public sealed record SlipQueueItemResponse(
     DateTimeOffset SlipUploadedAt,
     DateTimeOffset StartsAt,
     bool PlaysSoon,
-    bool SameSlipSeenBefore);
+    bool SameSlipSeenBefore,
+    /// <summary>The name the desk calls them by, where they gave one (thai-fit T5).</summary>
+    string? BookerName,
+    /// <summary>When the last hour ends, so the row can say "19:00–21:00".</summary>
+    DateTimeOffset EndsAt,
+    /// <summary>The courts it is on, by name, so the row says which.</summary>
+    string[] Courts);
 
 /// <summary>
 /// The venue turning a booking away (PRD US-13, 6.1). Which answers are needed depends on where

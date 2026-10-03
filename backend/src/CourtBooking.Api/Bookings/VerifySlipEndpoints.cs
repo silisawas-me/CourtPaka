@@ -55,8 +55,9 @@ public static class VerifySlipEndpoints
     }
 
     /// <summary>
-    /// What is waiting, oldest first — the order a queue is worked through, and the order that
-    /// keeps the booker who has waited longest from waiting longer still (PRD US-12).
+    /// What is waiting, the soonest to be played first (thai-fit T5, the slip artboard): a slip
+    /// whose court is on in half an hour is the one somebody at the desk is about to be asked
+    /// about. Two that play at the same hour go in the order they arrived.
     /// </summary>
     private static async Task<Ok<SlipQueueItemResponse[]>> QueueAsync(
         Guid venueId,
@@ -81,7 +82,15 @@ public static class VerifySlipEndpoints
                 booking.DepositBaht,
                 BookerEmail = booking.Booker!.Email,
                 BookerPhone = booking.Booker.PhoneNumber,
+                // What the desk calls them ("คุณแพร"); gone with the account (PDPA).
+                BookerName = booking.Booker.DeletedAt == null ? booking.Booker.DisplayName : null,
                 StartsAt = booking.Slots.Min(slot => slot.StartsAt),
+                EndsAt = booking.Slots.Max(slot => slot.EndsAt),
+                Courts = booking.Slots
+                    .Select(slot => slot.Court!.Name)
+                    .Distinct()
+                    .OrderBy(name => name)
+                    .ToList(),
                 Latest = database.PaymentSlips
                     .Where(slip => slip.BookingId == booking.Id)
                     .OrderByDescending(slip => slip.UploadedAt)
@@ -89,9 +98,10 @@ public static class VerifySlipEndpoints
                     .Select(slip => new { slip.UploadedAt, slip.SameBytesAsSlipId })
                     .FirstOrDefault(),
             })
-            // A booking reaches this queue by a slip arriving, so there is always one to sort by,
-            // and sorting in the database is what makes the ceiling above mean the oldest.
-            .OrderBy(booking => booking.Latest!.UploadedAt)
+            // Sorting in the database is what makes the ceiling above mean the soonest. A booking
+            // reaches this queue by a slip arriving, so there is always one to break a tie with.
+            .OrderBy(booking => booking.StartsAt)
+            .ThenBy(booking => booking.Latest!.UploadedAt)
             .Take(MaxWaiting)
             .ToListAsync(cancellationToken);
 
@@ -108,7 +118,10 @@ public static class VerifySlipEndpoints
                 // Said plainly rather than left to the page to work out, so the venue's view and
                 // the platform's reports cannot disagree about what "soon" means.
                 booking.StartsAt - now <= SoonToPlay,
-                booking.Latest.SameBytesAsSlipId != null))
+                booking.Latest.SameBytesAsSlipId != null,
+                booking.BookerName,
+                booking.EndsAt,
+                [.. booking.Courts]))
             .ToArray();
 
         return TypedResults.Ok(queue);
