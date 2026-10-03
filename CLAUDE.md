@@ -9,10 +9,11 @@
 
 ## โครงสร้าง repo
 - **ตอนนี้แอปมีแค่ฝั่งสนาม (2026-09-28, `docs/plan/cut-booker.md`):** หน้าของผู้จองใน frontend ถูกลบทั้งหมด (ค้นหาสนาม, grid จอง, หน้าจ่ายเงิน, การจองของฉัน, คิวรอ) พร้อม LINE และการสมัครเอง · **backend ยังอยู่ครบ** เพราะฝั่งสนามอ่าน grid การจอง สลิป และคิวรอผ่าน API ชุดเดียวกัน — หัวข้อด้านล่างที่พูดถึงหน้าจอผู้จองจึงเป็นเรื่องของ API เท่านั้น · หน้าแรกมี **สองประตู** `/login?as=admin` (เจ้าของ/ผู้จัดการ — ต้องเป็น Owner อย่างน้อยหนึ่งสนาม หรือ platform admin) กับ `/login?as=staff` (สมาชิกของสนามไหนก็ได้) กฎอยู่ใน `features/auth/doors.ts` และ **เป็นการพาไปถูกที่ ไม่ใช่การให้สิทธิ์** (ทุก endpoint ตรวจสิทธิ์ต่อสนามที่ server เหมือนเดิม) · ประตูผิด = logout + ข้อความบอกประตูที่ถูก · หน้า `/register` เหลือทางเข้าเดียวคือจากหน้า login ที่มาจากลิงก์คำเชิญ · **สมัครได้เฉพาะคนที่ถูกเชิญ (owner-complete 3a, ปิด D17):** `App:OpenSignUp` ปิดทุก deployment — `POST /api/auth/register` รับเฉพาะอีเมลที่มีคำเชิญค้างอยู่ (คำเชิญพนักงาน `VenueInvitation` หรือคำเชิญเจ้าของ `OwnerInvitation`) นอกนั้น 403 `auth.invitation_required` และ LINE สมัครไม่ได้เลย · **platform admin เชิญเจ้าของใหม่** ที่ `/admin/venues` (`InviteOwner`, `POST /api/admin/owner-invitations`, อายุ 14 วัน, ใช้แล้วหมด, อีเมล `auth.owner_invitation` ลิงก์ `/register?email=…&as=owner`) → สมัคร/ยืนยัน → ประตูเจ้าของ: คนที่ไม่มีสนามเลยเข้าได้และถูกพาไป `/venues/apply` · compose และ test เปิด `OpenSignUp` เพราะ script/scenario สร้างผู้จองผ่านการสมัคร · อีเมล/LINE ถึงผู้จองยังมีลิงก์ `/bookings/{id}` ซึ่งไม่มีหน้าแล้ว · verify script ที่ต้องมีการจองออนไลน์สร้างผ่าน API (`take_first_free_hour`/`send_slip` ใน harness)
-- `backend/` · .NET 10 solution `CourtBooking.slnx` · `src/CourtBooking.Api` (ASP.NET Core minimal API, EF Core + Npgsql) · `tests/CourtBooking.Api.Tests` (xUnit + Testcontainers PostgreSQL)
-- `frontend/` · Angular 22 (Vitest) · `Caddyfile` ใช้ทั้ง reverse proxy และเสิร์ฟ static
+- **โครงโฟลเดอร์ (2026-10-04, `docs/plan/booker-app.md`):** `api/` (เดิม `backend/`) · `venue/web/` (เดิม `frontend/`) · ที่จะมา: `venue/mobile/` และ `booker/mobile/` (React Native + Expo, native ไม่ใช่ WebView) · `booker/web/` (เว็บคนจอง + LIFF) · `shared/` (ไฟล์ภาษา + type ของ API ใช้ร่วม) · ชื่อ job ใน CI ยังเป็น `backend` / `frontend` (เป็นชื่อ check ที่ต้องผ่านก่อน merge)
+- `api/` · .NET 10 solution `CourtBooking.slnx` · `src/CourtBooking.Api` (ASP.NET Core minimal API, EF Core + Npgsql) · `tests/CourtBooking.Api.Tests` (xUnit + Testcontainers PostgreSQL)
+- `venue/web/` · Angular 22 (Vitest) · `Caddyfile` ใช้ทั้ง reverse proxy และเสิร์ฟ static
 - `docker-compose.yml` · stack สำหรับ local · `.github/workflows/ci.yml` · CI — **repo เป็น public ตั้งแต่ 2026-09-27 นาที Actions จึงฟรีไม่จำกัด** (เปิดเพราะตอนเป็น private โควต้าหมดแล้วทุก job ถูกปฏิเสธ runner มาตั้งแต่ 2026-09-26 — job ที่ถูกปฏิเสธไม่มี `runner_name` ไม่มี step และตายใน 1 วินาที ถ้าเห็นรูปนี้อีกแปลว่าเรื่องบัญชี ไม่ใช่ workflow) · **ห้ามตั้ง self-hosted runner** ตราบที่ repo เป็น public เพราะ fork PR จะรันโค้ดของคนแปลกหน้าบนเครื่องนั้น · ยังไม่มี Actions secret สักตัวและ `default_workflow_permissions` เป็น `read` ถ้าจะเพิ่ม secret ต้องคิดเรื่อง fork PR ก่อน · หนึ่งรันเต็มคือ backend 4 · zap 4 · flows 3 · docker 2 · frontend 1 นาที job `changes` ดูว่าการเปลี่ยนแปลงแตะอะไรแล้วข้าม job ที่ไม่เกี่ยว (แก้แต่ `.md` = 1 นาที ไม่ใช่ 15) · `flows` กับ `zap` **ข้ามเมื่อ PR เป็น draft** เพราะสองตัวนี้ตั้ง stack ทั้งชุด กด ready เมื่อพร้อมแล้วค่อยรัน · ไม่มี base ให้เทียบ (push แรกของ branch / force push) = ตรวจทุกอย่าง · `.github/workflows/ci.yml` อยู่ในทุก pattern แก้ CI เองจึงตรวจครบเสมอ · (backend/frontend/docker + job `zap` ที่เปิด stack เต็มแล้วรัน OWASP ZAP baseline — fail เมื่อมี alert ระดับ High ตาม PRD 8 ผ่าน `scripts/ci/zap_high.py` · NuGet audit fail ที่ Critical ใน `Directory.Build.props` · `npm audit` fail ที่ High)
-- **Header ความปลอดภัยอยู่ใน `frontend/Caddyfile`:** CSP อนุญาต `style-src 'unsafe-inline'` (Material + critical CSS ที่ build inline) และ **hash ของ inline script ที่ build ใส่ให้เปิด stylesheet** (Angular 22.2 ใช้ Beasties: `<link media="print" data-beasties-media="all">` + `<script>` ที่สลับ media — เดิมเป็น `onload` ซึ่งต้องใช้ `'unsafe-hashes'`) — **ถ้า hash ไม่ตรง หน้าเว็บยังดูเหมือนปกติเพราะ critical CSS ถูก inline แต่สไตล์ที่เหลือหายเงียบ ๆ** (เจอหลังอัปเกรด 22.2.1 ใน #131: ป้ายสีชนิดการจองไม่มีสี) · `doors.py` ตรวจว่าไม่มี stylesheet ค้างเป็น `print` · คำนวณ hash ใหม่จาก `dist/.../index.html`: `printf "%s" "<เนื้อ script>" | openssl dgst -sha256 -binary | openssl base64` · สลิปแสดงจาก `blob:` จึงต้องมีใน `img-src` · ถ้าเพิ่มของที่โหลดจากที่อื่น ต้องแก้ CSP ด้วย
+- **Header ความปลอดภัยอยู่ใน `venue/web/Caddyfile`:** CSP อนุญาต `style-src 'unsafe-inline'` (Material + critical CSS ที่ build inline) และ **hash ของ inline script ที่ build ใส่ให้เปิด stylesheet** (Angular 22.2 ใช้ Beasties: `<link media="print" data-beasties-media="all">` + `<script>` ที่สลับ media — เดิมเป็น `onload` ซึ่งต้องใช้ `'unsafe-hashes'`) — **ถ้า hash ไม่ตรง หน้าเว็บยังดูเหมือนปกติเพราะ critical CSS ถูก inline แต่สไตล์ที่เหลือหายเงียบ ๆ** (เจอหลังอัปเกรด 22.2.1 ใน #131: ป้ายสีชนิดการจองไม่มีสี) · `doors.py` ตรวจว่าไม่มี stylesheet ค้างเป็น `print` · คำนวณ hash ใหม่จาก `dist/.../index.html`: `printf "%s" "<เนื้อ script>" | openssl dgst -sha256 -binary | openssl base64` · สลิปแสดงจาก `blob:` จึงต้องมีใน `img-src` · ถ้าเพิ่มของที่โหลดจากที่อื่น ต้องแก้ CSP ด้วย
 - `deploy/` · compose + `.env.example` + คู่มือสำหรับเครื่อง UAT/PRD · `.github/workflows/deploy.yml` · build image ขึ้น GHCR, รัน migration bundle, deploy แล้วตรวจ health (ยังไม่เคยรันจริง รอเครื่อง UAT)
 - **Backup (PRD 8):** `deploy/backup.sh` ดัมป์ผ่าน container `db` เก็บ `KEEP_DAYS` (14) วัน · `deploy/restore-check.sh` กู้ลงฐานชั่วคราวแล้ว**เทียบจำนวนแถวกับฐานจริง** (ไฟล์ที่ไม่ครบจะกลับมาแค่ schema ซึ่งต้องถือว่าพัง) · **ดัมป์ไม่มีไฟล์สลิป** (อยู่ใน volume `api-slips`) ชุด backup ต้องมีทั้งคู่ ไม่งั้นกู้มาแล้วได้การจองที่ไม่มีหลักฐานจ่ายเงิน · ตั้ง cron ตามคู่มือใน `deploy/README.md`
 - `docs/prd.md` · PRD
@@ -142,23 +143,23 @@
 | งาน | คำสั่ง (รันจาก root ของ repo) |
 |---|---|
 | เปิด PostgreSQL สำหรับ dev | `docker compose up -d db` |
-| รัน API (dev, http://localhost:5230) | `dotnet run --project backend/src/CourtBooking.Api` |
-| รัน frontend (dev, http://localhost:4200 proxy `/api` ไป API) | `cd frontend && npm start` |
+| รัน API (dev, http://localhost:5230) | `dotnet run --project api/src/CourtBooking.Api` |
+| รัน frontend (dev, http://localhost:4200 proxy `/api` ไป API) | `cd venue/web && npm start` |
 | รันทั้งระบบเหมือน production (http://localhost:8080) | `docker compose --profile full up -d --build` |
-| ติดตั้ง dependencies | `dotnet restore backend` · `cd backend && dotnet tool restore` · `cd frontend && npm ci` |
-| สร้าง migration ใหม่ | `cd backend && dotnet tool run dotnet-ef migrations add <ชื่อ> --project src/CourtBooking.Api --output-dir Data/Migrations` |
-| Apply migration ลง database | `cd backend && dotnet tool run dotnet-ef database update --project src/CourtBooking.Api` |
-| Test backend ทั้งหมด | `dotnet test backend` |
-| Test backend บางตัว | `dotnet test backend --filter "FullyQualifiedName~HealthEndpointTests"` |
-| Test frontend | `cd frontend && npm test -- --watch=false` |
-| Build (เหมือน CI) | `dotnet build backend -c Release -warnaserror` · `cd frontend && npm run build` |
-| จัดฟอร์แมต frontend (CI เช็ก) | `cd frontend && npm run format` · ตรวจอย่างเดียว `npm run format:check` — **CI fail ถ้าไม่ผ่าน** ต้องรันก่อน push ทุกครั้งที่แก้ไฟล์ใน `frontend/` |
-| Build image arm64 (UAT) | `docker buildx build --platform linux/arm64 backend` |
+| ติดตั้ง dependencies | `dotnet restore api` · `cd api && dotnet tool restore` · `cd venue/web && npm ci` |
+| สร้าง migration ใหม่ | `cd api && dotnet tool run dotnet-ef migrations add <ชื่อ> --project src/CourtBooking.Api --output-dir Data/Migrations` |
+| Apply migration ลง database | `cd api && dotnet tool run dotnet-ef database update --project src/CourtBooking.Api` |
+| Test backend ทั้งหมด | `dotnet test api` |
+| Test backend บางตัว | `dotnet test api --filter "FullyQualifiedName~HealthEndpointTests"` |
+| Test frontend | `cd venue/web && npm test -- --watch=false` |
+| Build (เหมือน CI) | `dotnet build api -c Release -warnaserror` · `cd venue/web && npm run build` |
+| จัดฟอร์แมต frontend (CI เช็ก) | `cd venue/web && npm run format` · ตรวจอย่างเดียว `npm run format:check` — **CI fail ถ้าไม่ผ่าน** ต้องรันก่อน push ทุกครั้งที่แก้ไฟล์ใน `venue/web/` |
+| Build image arm64 (UAT) | `docker buildx build --platform linux/arm64 api` |
 | Load test (PRD 8) | ดู `scripts/load/README.md` — k6 ผ่าน docker · บัญชีทดสอบจาก `scripts/load/provision_accounts.py` (local เท่านั้น) · ผลจริงต้องวัดบนเครื่อง PRD |
 | รันทุกอย่างที่ CI รัน ในเครื่อง | `python scripts/ci/local.py` (13 check ~195 วิ) · `--quick` ข้ามของที่ต้องตั้ง stack (7 check ~113 วิ) — ใช้ก่อน push จะได้ไม่ต้องรอ CI บอก |
 | ตรวจ health | `GET /api/health/live` (process) · `GET /api/health/ready` (รวม database) |
 | ตรวจ flow จริงบนเบราว์เซอร์ | `python scripts/verify/account_deletion.py` · `admin_complaints.py` · `all_venues_today.py` · `booker_mail.py` · `caretaker.py` · `commission.py` · `counter_money.py` · `doors.py` · `fits_a_phone.py` · `now_board.py` · `owner_invite.py` · `packages.py` · `platform_admin.py` · `platform_users.py` · `pwa.py` · `timeline.py` · `booking_list.py` · `slips.py` · `receipts.py` · `close_drawer.py` · `venue_setup.py` · `staff_passcode.py` · `late_night.py` · `venue_dashboard.py` · `venue_pricing.py` · `venue_shell.py` · `walk_in.py` (ต้องเปิด stack ด้วย `--profile full` ก่อน ดู `scripts/verify/README.md`) |
-| วาดรูปสนามของหน้า sign-in ใหม่ | `python scripts/gen_court.py` แล้ววางผลลัพธ์ทั้งก้อน **และ viewBox ที่บรรทัดท้าย** ลงใน `frontend/src/app/shared/court-art.ts` (ห้ามแก้พิกัดด้วยมือ) |
+| วาดรูปสนามของหน้า sign-in ใหม่ | `python scripts/gen_court.py` แล้ววางผลลัพธ์ทั้งก้อน **และ viewBox ที่บรรทัดท้าย** ลงใน `venue/web/src/app/shared/court-art.ts` (ห้ามแก้พิกัดด้วยมือ) |
 
 ## วิธีทำงาน
 - **ทำงานจากเป้าหมาย:** งานแต่ละชิ้นผูกกับ user story / acceptance criteria ใน `docs/prd.md` ถ้า requirement ไม่ชัด ให้ถามก่อนลงมือ

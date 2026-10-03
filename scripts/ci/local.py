@@ -39,10 +39,10 @@ class Check:
 
 
 def checks():
-    web = ROOT / "frontend"
+    web = ROOT / "venue" / "web"
     return [
-        Check("backend", "build", "dotnet build backend -c Release -warnaserror", slow=True),
-        Check("backend", "tests", "dotnet test backend --no-build -c Release", slow=True),
+        Check("backend", "build", "dotnet build api -c Release -warnaserror", slow=True),
+        Check("backend", "tests", "dotnet test api --no-build -c Release", slow=True),
         Check("frontend", "tests", "npm test -- --watch=false", cwd=web),
         Check("frontend", "build", "npm run build", cwd=web),
         Check("frontend", "format", "npm run format:check", cwd=web),

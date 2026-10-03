@@ -25,8 +25,8 @@ docker compose --profile full up -d --build   # ทั้งระบบที�
 ## ทดสอบ
 
 ```bash
-dotnet test backend                    # xUnit + Testcontainers (ต้องมี Docker)
-cd frontend && npm test -- --watch=false
+dotnet test api                    # xUnit + Testcontainers (ต้องมี Docker)
+cd venue/web && npm test -- --watch=false
 python scripts/verify/booking_grid.py  # ขับเบราว์เซอร์จริงบน stack ที่เปิดอยู่
 ```
 

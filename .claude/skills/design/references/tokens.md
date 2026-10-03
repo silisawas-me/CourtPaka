@@ -4,7 +4,7 @@
 
 ## สี — `var(--mat-sys-…)`
 
-ธีมสร้างจากเขียวเดิม `#1d7a4c` ด้วย `ng generate @angular/material:theme-color` (ผลลัพธ์อยู่ใน `frontend/src/_theme-colors.scss` ห้ามแก้มือ) แล้ว **block เดียวใน `styles.scss` เขียนทับทุก token ด้วย palette ของ badPaka** — ค่าจริงอ่านจาก block นั้น ไม่ใช่จาก schematic
+ธีมสร้างจากเขียวเดิม `#1d7a4c` ด้วย `ng generate @angular/material:theme-color` (ผลลัพธ์อยู่ใน `venue/web/src/_theme-colors.scss` ห้ามแก้มือ) แล้ว **block เดียวใน `styles.scss` เขียนทับทุก token ด้วย palette ของ badPaka** — ค่าจริงอ่านจาก block นั้น ไม่ใช่จาก schematic
 
 | ใช้กับ | token | คู่ข้อความ |
 |---|---|---|
@@ -31,7 +31,7 @@
 
 ลำดับที่แอปใช้อยู่: ชื่อแบรนด์/หัวหน้าต้อนรับ = `display-small` · หัวข้อในการ์ด = `title-medium` · เนื้อหา = `body-large` · คำอธิบายรอง = `body-medium` (คู่กับ `.muted`) · ป้าย/ปุ่มเล็ก = `label-large`
 
-## ระยะห่างและโครง — จาก `frontend/src/styles.scss`
+## ระยะห่างและโครง — จาก `venue/web/src/styles.scss`
 
 | class | ทำอะไร |
 |---|---|

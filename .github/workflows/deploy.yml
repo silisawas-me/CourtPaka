@@ -52,7 +52,7 @@ jobs:
       - name: Build and push the API image
         uses: docker/build-push-action@v7
         with:
-          context: backend
+          context: api
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.images.outputs.api }}
@@ -62,7 +62,7 @@ jobs:
       - name: Build and push the web image
         uses: docker/build-push-action@v7
         with:
-          context: frontend
+          context: venue/web
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.images.outputs.web }}
@@ -71,11 +71,11 @@ jobs:
 
       - uses: actions/setup-dotnet@v6
         with:
-          global-json-file: backend/global.json
+          global-json-file: api/global.json
 
       # A self-contained executable that applies migrations without the SDK on the server.
       - name: Build the migration bundle
-        working-directory: backend
+        working-directory: api
         run: |
           dotnet tool restore
           # A self-contained bundle is restored per runtime identifier: without one the build

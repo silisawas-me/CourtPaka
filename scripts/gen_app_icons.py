@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw
 GREEN = (45, 118, 67)  # #2d7643, the badPaka green (--mat-sys-primary)
 WHITE = (255, 255, 255)
 SIZES = [72, 96, 128, 144, 152, 192, 384, 512]
-OUT = pathlib.Path(__file__).resolve().parents[1] / "frontend" / "public" / "icons"
+OUT = pathlib.Path(__file__).resolve().parents[1] / "venue" / "web" / "public" / "icons"
 
 
 def court(size: int) -> Image.Image:

@@ -3,7 +3,7 @@
 เดินทีละข้อจริง ๆ ข้อไหนทำไม่ได้ให้บอกว่าข้าม ไม่ใช่เงียบ
 
 ## หน้าตาและความสม่ำเสมอ
-- [ ] สีทุกค่าเป็น `var(--mat-sys-*)` หรือ `color-mix` จาก token — `grep -nE "#[0-9a-fA-F]{3,6}|rgb\(" frontend/src/app` ไม่ควรเจอของใหม่
+- [ ] สีทุกค่าเป็น `var(--mat-sys-*)` หรือ `color-mix` จาก token — `grep -nE "#[0-9a-fA-F]{3,6}|rgb\(" venue/web/src/app` ไม่ควรเจอของใหม่
 - [ ] ขนาดตัวอักษรทุกที่มาจาก `font: var(--mat-sys-…)` ไม่มี `font-size` ลอย และไม่มี `font-weight` นอกจาก 400/500
 - [ ] ไม่มีฟอนต์ใหม่ ไม่มี `@import` ไปหา Google Fonts ไม่มี icon font/emoji แทนไอคอน
 - [ ] ระยะห่างเป็นทวีคูณ 0.25rem และใช้ primitive (`.stack` `.row` `.columns` `.entry`) แทนการเขียน flex/grid ซ้ำ
@@ -29,7 +29,7 @@
 - [ ] ลำดับหัวข้อ (h1→h2→h3) ไม่ข้ามขั้น และ landmark (`main`/`nav`) ถูกต้อง
 
 ## ทดสอบ
-- [ ] `cd frontend && npm test -- --watch=false` ผ่าน และมี test ใหม่ครอบสิ่งที่เพิ่ม
+- [ ] `cd venue/web && npm test -- --watch=false` ผ่าน และมี test ใหม่ครอบสิ่งที่เพิ่ม
 - [ ] `npm run format` แล้ว `npm run build` ไม่มี budget warning ใหม่ (component style 4 kB / initial 500 kB)
 - [ ] element ที่ test ต้องจับมี `data-testid` และอ่าน control จริงผ่าน `switchIn()`/`controlOf()` ไม่ใช่อ่าน `.checked` จาก host
 - [ ] เปิดของจริงแล้ว: `python scripts/verify/<flow>.py` ผ่าน หรือขับด้วย `webapp-testing`

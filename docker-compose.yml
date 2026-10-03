@@ -26,7 +26,7 @@ services:
 
   api:
     profiles: [full]
-    build: ./backend
+    build: ./api
     environment:
       # This stack is a development one; deployed environments run as Production (PRD 9.3, 9.4).
       ASPNETCORE_ENVIRONMENT: "Development"
@@ -84,7 +84,7 @@ services:
 
   web:
     profiles: [full]
-    build: ./frontend
+    build: ./venue/web
     environment:
       SITE_ADDRESS: ":80"
     ports:
