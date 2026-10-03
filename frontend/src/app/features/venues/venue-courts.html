@@ -1,0 +1,241 @@
+<!-- Courts and closures (thai-fit "คอร์ต & ปิดซ่อม"): the list, then the closure being written. -->
+<div class="settings-tab two" data-testid="venue-courts">
+  <section class="card list-card" [attr.aria-label]="i18n.t('courts.title')">
+    <div class="card-head">
+      <h2>{{ i18n.t('courts.title') }} · {{ courts().length }}</h2>
+    </div>
+    <ul class="list">
+      @for (row of rows(); track row.court.id) {
+        <li class="row" [attr.data-testid]="'court-row-' + row.court.id">
+          @if (renaming() === row.court.id) {
+            <input
+              class="input grow"
+              data-testid="court-rename-input"
+              maxlength="40"
+              [attr.aria-label]="i18n.t('courts.rename')"
+              [value]="renameTo()"
+              (input)="renameTo.set($any($event.target).value)"
+            />
+            <span class="actions">
+              <button
+                type="button"
+                class="small"
+                data-testid="court-rename-save"
+                (click)="rename(row.court)"
+              >
+                {{ i18n.t('courts.save') }}
+              </button>
+              <button type="button" class="small" (click)="renaming.set(null)">
+                {{ i18n.t('courts.cancel') }}
+              </button>
+            </span>
+          } @else {
+            <span class="name">{{ row.court.name }}</span>
+            <span
+              class="chip"
+              [class]="'chip state-' + row.state"
+              [attr.data-testid]="'court-state-' + row.court.id"
+            >
+              {{ i18n.t('courts.state.' + row.state) }}
+            </span>
+            <span class="muted grow">
+              @if (row.shut; as shut) {
+                {{ shut.startHour }}:00–{{ shut.endHour }}:00 · {{ shut.reason }}
+              }
+            </span>
+            @if (canManage()) {
+              <span class="actions">
+                @if (row.state === 'outOfUse') {
+                  <button
+                    type="button"
+                    class="small"
+                    [attr.data-testid]="'court-back-' + row.court.id"
+                    (click)="setInUse(row.court, true)"
+                  >
+                    {{ i18n.t('courts.backInUse') }}
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    class="small"
+                    [attr.data-testid]="'court-rename-' + row.court.id"
+                    (click)="startRename(row.court)"
+                  >
+                    {{ i18n.t('courts.rename') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="small warn"
+                    [attr.data-testid]="'court-close-' + row.court.id"
+                    (click)="openClosing(row.court)"
+                  >
+                    {{ i18n.t('courts.close') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="small"
+                    [attr.data-testid]="'court-retire-' + row.court.id"
+                    (click)="setInUse(row.court, false)"
+                  >
+                    {{ i18n.t('courts.retire') }}
+                  </button>
+                }
+              </span>
+            }
+          }
+        </li>
+      }
+    </ul>
+    @if (canManage()) {
+      <div class="add">
+        <input
+          class="input grow"
+          data-testid="court-new-name"
+          maxlength="40"
+          [placeholder]="i18n.t('courts.newPlaceholder')"
+          [attr.aria-label]="i18n.t('courts.add')"
+          [value]="newName()"
+          (input)="newName.set($any($event.target).value)"
+        />
+        <button
+          type="button"
+          class="main"
+          data-testid="court-add"
+          [disabled]="!newName().trim() || busy()"
+          (click)="add()"
+        >
+          + {{ i18n.t('courts.add') }}
+        </button>
+      </div>
+    }
+    <p class="muted small pad">{{ i18n.t('courts.explain') }}</p>
+  </section>
+
+  <section class="card form-card" [attr.aria-label]="i18n.t('courts.closeTitle')">
+    @if (closingCourt(); as court) {
+      <h2>{{ i18n.t('courts.closeTitle') }} · {{ court.name }}</h2>
+      <div class="pair">
+        <label class="field"
+          >{{ i18n.t('courts.from') }}
+          <input
+            type="date"
+            class="input"
+            data-testid="closure-starts-on"
+            [value]="startsOn()"
+            (input)="startsOn.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field"
+          >{{ i18n.t('courts.hour') }}
+          <select
+            class="input"
+            data-testid="closure-start-hour"
+            [value]="startHour()"
+            (change)="startHour.set(+$any($event.target).value)"
+          >
+            @for (hour of hours.slice(0, 24); track hour) {
+              <option [value]="hour" [selected]="hour === startHour()">{{ hour }}:00</option>
+            }
+          </select>
+        </label>
+        <label class="field"
+          >{{ i18n.t('courts.until') }}
+          <input
+            type="date"
+            class="input"
+            data-testid="closure-ends-on"
+            [value]="endsOn()"
+            (input)="endsOn.set($any($event.target).value)"
+          />
+        </label>
+        <label class="field"
+          >{{ i18n.t('courts.hour') }}
+          <select
+            class="input"
+            data-testid="closure-end-hour"
+            [value]="endHour()"
+            (change)="endHour.set(+$any($event.target).value)"
+          >
+            @for (hour of hours.slice(1); track hour) {
+              <option [value]="hour" [selected]="hour === endHour()">{{ hour }}:00</option>
+            }
+          </select>
+        </label>
+      </div>
+      <label class="field"
+        >{{ i18n.t('courts.reason') }}
+        <input
+          class="input"
+          data-testid="closure-reason"
+          maxlength="200"
+          [placeholder]="i18n.t('courts.reasonPlaceholder')"
+          [value]="reason()"
+          (input)="reason.set($any($event.target).value)"
+        />
+      </label>
+
+      @if (blocking().length > 0) {
+        <div class="warn-box" data-testid="closure-blocking">
+          <b>{{ i18n.t('courts.blocked') }} {{ blocking().length }}</b>
+          @for (one of blocking(); track one.bookingId) {
+            <span
+              >{{ one.date }} · {{ one.courtName }} · {{ one.fromHour }}:00–{{
+                one.toHour
+              }}:00</span
+            >
+          }
+          <span class="muted small">{{ i18n.t('courts.blockedHint') }}</span>
+          <a
+            [routerLink]="['/venues', venueId(), 'bookings']"
+            [queryParams]="{ date: blocking()[0].date }"
+          >
+            {{ i18n.t('courts.openList') }} ›
+          </a>
+        </div>
+      } @else if (error(); as key) {
+        <p class="form-error" data-testid="courts-error">{{ i18n.t(key) }}</p>
+      }
+
+      <div class="row-buttons">
+        <button
+          type="button"
+          class="main"
+          data-testid="closure-save"
+          [disabled]="!reason().trim() || busy()"
+          (click)="close()"
+        >
+          {{ i18n.t('courts.closeNow') }}
+        </button>
+        <button type="button" (click)="closing.set(null)">{{ i18n.t('courts.cancel') }}</button>
+      </div>
+    } @else {
+      <h2>{{ i18n.t('courts.closuresTitle') }}</h2>
+      <ul class="list">
+        @for (one of standing(); track one.id) {
+          <li class="row" [attr.data-testid]="'closure-' + one.id">
+            <span class="name">{{ courtName(one.courtId) }}</span>
+            <span class="muted grow"
+              >{{ one.startsOn }} {{ one.startHour }}:00 – {{ one.endsOn }} {{ one.endHour }}:00 ·
+              {{ one.reason }}</span
+            >
+            @if (canManage()) {
+              <button
+                type="button"
+                class="small"
+                [attr.data-testid]="'closure-lift-' + one.id"
+                (click)="lift(one)"
+              >
+                {{ i18n.t('courts.lift') }}
+              </button>
+            }
+          </li>
+        } @empty {
+          <li class="muted pad">{{ i18n.t('courts.noClosures') }}</li>
+        }
+      </ul>
+      @if (error(); as key) {
+        <p class="form-error" data-testid="courts-error">{{ i18n.t(key) }}</p>
+      }
+    }
+  </section>
+</div>
