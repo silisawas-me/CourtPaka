@@ -47,6 +47,7 @@ export class NowPage {
 
   readonly venueId = input.required<string>();
 
+  private readonly walkIns = inject(WalkInEvents);
   private readonly clock = signal(venueNow());
   private readonly grid = signal<Availability | null>(null);
   private readonly day = signal<VenueBooking[] | null>(null);
@@ -108,13 +109,11 @@ export class NowPage {
     });
 
     // A walk-in sold from the top bar is on a court now (owner app PR-3).
-    inject(WalkInEvents)
-      .sold.pipe(takeUntilDestroyed())
-      .subscribe(({ venueId }) => {
-        if (venueId === this.venueId()) {
-          this.read(venueId, { first: false });
-        }
-      });
+    this.walkIns.sold.pipe(takeUntilDestroyed()).subscribe(({ venueId }) => {
+      if (venueId === this.venueId()) {
+        this.read(venueId, { first: false });
+      }
+    });
 
     // The clock moves the bars and the minutes; the floor is read again less often, and never
     // while nobody is looking — a hidden tab asking every thirty seconds is load for no reader.
@@ -128,6 +127,11 @@ export class NowPage {
       this.read(this.venueId(), { first: this.clock().date !== before });
     }, NOW_REFRESH_MS);
     inject(DestroyRef).onDestroy(() => clearInterval(tick));
+  }
+
+  /** A tap on a free court: the walk-in opens on it at this hour (the frame holds the modal). */
+  protected bookAt(courtId: string): void {
+    this.walkIns.open.next({ venueId: this.venueId(), courtId, hour: this.clock().hour });
   }
 
   protected stateLabel(state: CourtNow['state']): string {

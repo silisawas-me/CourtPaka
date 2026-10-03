@@ -48,6 +48,15 @@
               {{ court.state === 'free' ? i18n.t('now.ready') : stateLabel(court.state) }}
             </p>
             @if (court.state === 'free') {
+              <!-- The whole card is the door: a free court this hour is sold from here, as an
+                   empty hour on the timeline is (the walk-in opens on this court and hour). -->
+              <button
+                type="button"
+                class="court-hit"
+                [attr.aria-label]="i18n.t('timeline.bookHere') + ' ' + court.name"
+                [attr.data-testid]="'now-book-' + court.courtId"
+                (click)="bookAt(court.courtId)"
+              ></button>
               <p class="court-detail">
                 {{ i18n.t('now.openCourt') }}
                 @if (court.baht !== null) {
