@@ -56,7 +56,7 @@ with sync_playwright() as p:
 
     desk.wait_for_selector(f"[data-testid=close-count-{len(after['counts']) - 1}]")
     check("the next shift is handed what the last one counted",
-          desk.locator("[data-testid=close-float]").input_value() == str(shift["countedCashBaht"]).rstrip("0").rstrip("."),
+          float(desk.locator("[data-testid=close-float]").input_value()) == float(shift["countedCashBaht"]),
           desk)
 
     browser.close()
