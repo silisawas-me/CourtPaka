@@ -14,6 +14,8 @@ export interface PackageType {
   validForDays: number;
   /** When it came off the board, or null while it is still on it. */
   withdrawnAt: string | null;
+  /** How many have been sold. */
+  sold?: number;
 }
 
 /** One movement of hours, in or out. The balance is their sum, never a stored number. */

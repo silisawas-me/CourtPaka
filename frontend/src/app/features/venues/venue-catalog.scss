@@ -1,0 +1,134 @@
+/* The "แพ็กเกจ & สินค้า" artboard's measures: a header line with its hint on the right, rows as
+   columns, the shelf's column names, and each add form as one row on a warm strip. */
+.head-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+
+  h2 {
+    margin: 0;
+  }
+
+  .muted {
+    font-size: 12px;
+  }
+}
+
+.offer-row,
+.item-row {
+  display: grid;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 12px 18px;
+  border-bottom: 1px solid color-mix(in srgb, var(--mat-sys-outline-variant) 60%, transparent);
+  grid-template-columns: minmax(0, 1fr) auto;
+
+  > .name {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 60rem) {
+  .offer-row {
+    grid-template-columns: minmax(0, 1.4fr) 70px 90px 100px 80px 70px 90px;
+
+    > .name {
+      grid-column: auto;
+    }
+  }
+
+  .item-row {
+    grid-template-columns: minmax(0, 1.4fr) 80px 110px 200px;
+
+    > .name {
+      grid-column: auto;
+    }
+  }
+}
+
+.item-cols {
+  display: none;
+  padding-block: 9px;
+  background: color-mix(in srgb, var(--mat-sys-surface-container) 40%, var(--mat-sys-surface));
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 12px;
+
+  @media (min-width: 60rem) {
+    display: grid;
+  }
+}
+
+.name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.mono {
+  font: 13px var(--font-mono);
+}
+
+.chip.low {
+  background: var(--status-waiting-soft);
+  color: var(--status-waiting-ink);
+  font-weight: 400;
+}
+
+.low-left {
+  color: var(--status-waiting-ink);
+}
+
+.add-row {
+  display: grid;
+  gap: 10px;
+  align-items: end;
+  padding: 14px 18px;
+  background: color-mix(in srgb, var(--mat-sys-surface-container) 40%, var(--mat-sys-surface));
+
+  @media (min-width: 60rem) {
+    &.offer-add {
+      grid-template-columns: minmax(0, 1.4fr) 90px 110px 100px auto;
+    }
+
+    &.item-add {
+      grid-template-columns: minmax(0, 1.4fr) 110px 120px 130px auto;
+    }
+  }
+
+  .main {
+    height: 40px;
+  }
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  font-size: 13px;
+
+  input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--mat-sys-primary);
+  }
+}
+
+.restock {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  align-items: end;
+  gap: 8px;
+}
+
+/* The buttons sit at the end of a column every row shares, so prices line up whatever a row offers. */
+.offer-row > button,
+.item-row > .actions {
+  justify-self: end;
+}

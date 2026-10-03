@@ -60,8 +60,13 @@ public static class PackageEndpoints
                 .Where(one => one.VenueId == venueId)
                 .OrderBy(one => one.WithdrawnAt != null)
                 .ThenBy(one => one.PriceBaht)
+                .Select(one => new
+                {
+                    Offer = one,
+                    Sold = database.HourPackages.Count(package => package.PackageTypeId == one.Id),
+                })
                 .ToListAsync(cancellationToken))
-            .Select(Drawn)
+            .Select(row => Drawn(row.Offer, row.Sold))
             .ToArray());
 
     /// <summary>Puts an offer on the board.</summary>
@@ -647,7 +652,9 @@ public static class PackageEndpoints
             StatusCodes.Status409Conflict, code ?? PackageErrorCodes.RunOut),
     };
 
-    private static PackageTypeResponse Drawn(PackageType offer) =>
+    private static PackageTypeResponse Drawn(PackageType offer) => Drawn(offer, 0);
+
+    private static PackageTypeResponse Drawn(PackageType offer, int sold) =>
         new(
             offer.Id,
             offer.Name,
@@ -655,5 +662,6 @@ public static class PackageEndpoints
             offer.PriceBaht,
             Packages.PerHour(offer.PriceBaht, offer.Hours),
             offer.ValidForDays,
-            offer.WithdrawnAt);
+            offer.WithdrawnAt,
+            sold);
 }

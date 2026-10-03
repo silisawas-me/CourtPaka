@@ -89,6 +89,8 @@ public static class DevelopmentMockData
         ("ชมรม / ทีม 32 ชม.", 32, 5_000m, 60),
     ];
 
+    private const string RentalName = "เช่าไม้แบด";
+
     private static readonly (string Name, decimal Baht, string Unit)[] Goods =
     [
         ("ลูกแบด (หลอด 12 ลูก)", 850m, "หลอด"),
@@ -1200,8 +1202,21 @@ public static class DevelopmentMockData
 
         private async Task<ShopItem[]> EnsureShopAsync(CancellationToken cancellationToken)
         {
+            // A racquet to rent, which the design's shelf has and nobody counts (US-32).
+            if (!await database.ShopItems.AnyAsync(
+                    item => item.VenueId == venue.Id && item.Name == RentalName, cancellationToken))
+            {
+                database.ShopItems.Add(new ShopItem
+                {
+                    VenueId = venue.Id, Name = RentalName, PriceBaht = 50m, Unit = "ครั้ง", Counted = false,
+                    CreatedAt = now.AddMinutes(1), CreatedByUserId = ownerId,
+                });
+                await database.SaveChangesAsync(cancellationToken);
+            }
+
+            // The goods the mock sells are the counted ones, in the design's order.
             var items = await database.ShopItems
-                .Where(item => item.VenueId == venue.Id && item.WithdrawnAt == null)
+                .Where(item => item.VenueId == venue.Id && item.WithdrawnAt == null && item.Counted)
                 .OrderBy(item => item.CreatedAt)
                 .ToArrayAsync(cancellationToken);
             if (items.Length > 0)

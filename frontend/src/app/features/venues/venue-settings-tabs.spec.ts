@@ -90,6 +90,8 @@ describe('settings tabs (thai-fit)', () => {
 
     type(fixture, 'offer-name', '10 ชั่วโมง');
     type(fixture, 'offer-price', '1800');
+    type(fixture, 'offer-hours', '10');
+    type(fixture, 'offer-days', '90');
     clickOn(fixture, 'offer-add');
     const offer = httpMock.expectOne('/api/venues/v1/packages/types');
     expect(offer.request.body).toEqual({
